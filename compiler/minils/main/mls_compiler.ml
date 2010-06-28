@@ -30,6 +30,8 @@ let parse_implementation prog_name lexbuf =
   { p with Mls_parsetree.p_modname = prog_name }
 *)
 let compile pp p =
+  vhdl_simpl := !vhdl_simpl or (List.mem "vhdl" !target_languages);
+
   (* Clocking *)
   let p = pass "Clocking" true Clocking.program p pp in
 
@@ -47,8 +49,14 @@ let compile pp p =
   let p =
     pass "Automata minimization checks" true Tomato.tomato_checks p pp in
 
+  let p =
+    pass "Reset elimination" !vhdl_simpl Mls2vhdl.AddRst.program p pp in
+
   (* Normalization to maximize opportunities *)
   let p = pass "Normalization" true Normalize.program p pp in
+
+  let p =
+    pass "Call simplification" !vhdl_simpl Mls2vhdl.SimpCalls.program p pp in
 
   (* Scheduling *)
   let p = pass "Scheduling" true Schedule.program p pp in

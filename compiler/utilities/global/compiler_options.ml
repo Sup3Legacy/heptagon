@@ -82,6 +82,8 @@ let add_inlined_node s = inline := s :: !inline
 
 let flatten = ref false
 
+let vhdl_simpl = ref false
+
 let tomato = ref false
 
 let tomato_nodes : qualname list ref = ref []
@@ -116,3 +118,4 @@ and doc_assert = "<node>\t\tInsert run-time assertions for boolean node <node>"
 and doc_inline = "<node>\t\tInline node <node>"
 and doc_itfusion = "\t\tEnable iterator fusion."
 and doc_tomato = "\t\tEnable automata minimization."
+and doc_vhdlsimpl = "\t\tEnable VHDL simplifications (debug)"

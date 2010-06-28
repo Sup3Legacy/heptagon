@@ -90,8 +90,9 @@ let main () =
         "-noinit", Arg.Clear init, doc_noinit;
         "-fti", Arg.Set full_type_info, doc_full_type_info;
         "-itfusion", Arg.Set do_iterator_fusion, doc_itfusion;
+        "-vhdlsimpl", Arg.Set vhdl_simpl, doc_vhdlsimpl;
       ]
-      (compile compile_impl)
+      (Hept_compiler.compile compile_impl)
       errmsg;
   with
     | Errors.Error -> exit 2;;
