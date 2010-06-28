@@ -31,8 +31,6 @@ let tys = ref []
 let zero = Ve_const (mk_static_exp (Sbool false))
 let one = Ve_const (mk_static_exp (Sbool true))
 
-let unimplemented s = failwith ("Unimplemented " ^ s)
-
 let mk_o on = "o_" ^ on
 
 let mk_arg s = "arg" ^ s
@@ -406,7 +404,7 @@ let eqname eq = match eq.eq_lhs with
 
 let trans_opname opn = match opn with
   | Name id | Modname { qual = "Pervasives"; id = id; } -> id
-  | Modname _ -> unimp ("operator " ^ fullname opn)
+  | Modname _ -> unimplemented ("operator " ^ fullname opn)
 
 let trans_ty bty = match bty with
   | Tid x when x = pint -> Vt_int
@@ -511,7 +509,7 @@ let translate modn p =
   (* TODO: clean *)
   tys := p.p_types;
   modname := String.capitalize modn;
-  if List.length p.p_opened > 0 then unimp "modules";
+  if List.length p.p_opened > 0 then unimplemented "modules";
   let env = mk_env p in
   let res =
     Right (package_of_types p)
