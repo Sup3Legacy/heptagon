@@ -124,23 +124,20 @@ end
 
 let eval_static_size se = Static.int_of_static_exp NamesEnv.empty se
 
-let rec mk_name_bty bty = match bty with
-  | Tid (Name s | Modname { id = s; }) ->
-      (try
-         let table =
-           [
-             ("int", "integer");
-             ("bool", "bit");
-           ] in
-         List.assoc s table
-       with Not_found -> s)
-  | Tarray (bty, se) ->
-      Printf.sprintf "array_%d_%s" (eval_static_size se) (mk_name_bty bty)
-  | Tprod _ -> assert false
-
 (** {2 Translation from MiniLS programs to VHDL programs} *)
 
-let trans_ty bty = Vt_id (Name (mk_name_bty bty))
+let rec trans_ty ty = match ty with
+  | Tid (Name s | Modname { id = s; }) ->
+      Vt_id (Name (try
+                     let table =
+                       [
+                         ("int", "integer");
+                         ("bool", "bit");
+                       ] in
+                     List.assoc s table
+                   with Not_found -> s))
+  | Tarray (ty, i) -> Vt_array (eval_static_size i - 1, trans_ty ty)
+  | Tprod _ -> assert false
 
 let signal_of_vardec mode vd =
   { vs_name = name vd.v_ident; vs_polarity = Some mode;
@@ -500,7 +497,10 @@ let tb_node nd =
                                        vp_body = process_body; }] }; }
 
 let package_of_types p =
-  let tydl = List.map trans_ty_dec p.p_types in
+  let tydl =
+    [
+      { vty_name = "integer_vector"; vty_desc = Vty_vector Vt_int; };
+    ] @ List.map trans_ty_dec p.p_types in
 
   { vpack_name = "types";
     vpack_decls = List.map (fun tyd -> Vd_type tyd) tydl; }

@@ -45,6 +45,7 @@ type vhdl_type =
   | Vt_ulogic
   | Vt_boolean
   | Vt_int
+  | Vt_array of int * vhdl_type
   | Vt_id of longname (* TODO: longname *)
 
 type polarity =
@@ -62,7 +63,7 @@ and vty_desc =
   | Vty_opaque
   | Vty_enum of name list
   | Vty_record of (name * vhdl_type) list
-  | Vty_array of int * vhdl_type
+  | Vty_vector of vhdl_type
 
 type decl =
   | Vd_signal of signal_decl
@@ -83,6 +84,7 @@ type expr =
   | Ve_record of (longname * expr) list
   | Ve_field of expr * longname
   | Ve_array of expr list
+  | Ve_concat of expr * expr
 
 type instr =
   | Vi_null
@@ -167,6 +169,7 @@ let rec pp_type fmt ty = match ty with
   | Vt_int -> fprintf fmt "integer"
       (* TODO: real longname *)
   | Vt_id ln -> pp_longname fmt ln
+  | Vt_array (size, ty) -> fprintf fmt "%a_vector (0 to %d)" pp_type ty size
 
 let pp_polarity fmt pol = match pol with
   | Vp_in -> fprintf fmt "in"
@@ -188,8 +191,8 @@ let pp_ty_desc fmt desc = match desc with
   | Vty_record ntyl ->
       let pp fmt (n, ty) = fprintf fmt "%a : %a;" pp_name n pp_type ty in
       fprintf fmt "@\n@[<v 2>record@\n%a@]@\nend record" (pp_list pp) ntyl
-  | Vty_array (i, ty) ->
-      fprintf fmt "@\n@[<v 2>array (0 to %d) of %a@]" (i - 1) pp_type ty
+  | Vty_vector ty ->
+      fprintf fmt "@\n@[<v 2>array (integer range <>) of %a@]" pp_type ty
 
 let pp_ty_decl fmt { vty_name = name; vty_desc = desc; } =
   fprintf fmt "@[<v 2>type %a is %a@]" pp_name name pp_ty_desc desc
@@ -259,6 +262,7 @@ let rec pp_expr fmt e = match e with
         | [x] -> fprintf fmt "%d => %a" i pp_expr x
         | h :: t -> fprintf fmt "%d => %a,@ %a" i pp_expr h (pp (i + 1)) t in
       fprintf fmt "(@[%a@])" (pp 0) el
+  | Ve_concat (l, r) -> fprintf fmt "@[%a & %a@]" pp_expr l pp_expr r
 
 let rec pp_instr fmt instr = match instr with
   | Vi_null -> fprintf fmt "null"
