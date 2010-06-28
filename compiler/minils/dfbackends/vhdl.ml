@@ -13,7 +13,7 @@ open Types
 
 exception Unimplemented of string
 
-let unimp s = raise (Unimplemented s)
+let unimplemented s = raise (Unimplemented s)
 
 (** {2 Preliminaries and utilities} *)
 
@@ -82,6 +82,7 @@ type expr =
   | Ve_funcall of name * expr list
   | Ve_record of (qualname * expr) list
   | Ve_field of expr * qualname
+  | Ve_array of expr list
 
 type instr =
   | Vi_null
@@ -253,6 +254,12 @@ let rec pp_expr fmt e = match e with
   | Ve_record fel ->
       let pp fmt (n, e) = fprintf fmt "%a => %a" pp_qualname n pp_expr e in
       fprintf fmt "(@[%a@])" (pp_list_sep pp ",") fel
+  | Ve_array el ->
+      let rec pp i fmt el = match el with
+        | [] -> ()
+        | [x] -> fprintf fmt "%d => %a" i pp_expr x
+        | h :: t -> fprintf fmt "%d => %a,@ %a" i pp_expr h (pp (i + 1)) t in
+      fprintf fmt "(@[%a@])" (pp 0) el
 
 let rec pp_instr fmt instr = match instr with
   | Vi_null -> fprintf fmt "null"
