@@ -90,6 +90,9 @@ val add_inlined_node : string -> unit
 (* Inline every node. *)
 val flatten : bool ref
 
+(* Enable VHDL simplifications even for non-vhdl targets *)
+val vhdl_simpl : bool ref
+
 (* Z/3Z back-end mode *)
 val set_sigali : unit -> unit
 

@@ -94,6 +94,7 @@ let main () =
         "-targetpath", Arg.String set_target_path, doc_target_path;
         "-noinit", Arg.Clear init, doc_noinit;
         "-fti", Arg.Set full_type_info, doc_full_type_info;
+        "-vhdlsimpl", Arg.Set vhdl_simpl, doc_vhdlsimpl;
       ]
       (Hept_compiler.compile compile_impl)
       errmsg;

@@ -40,7 +40,8 @@ let write_obc_file p =
 let targets = [ "c", Obc_no_params Cmain.program;
                 "obc", Obc write_obc_file;
                 "obc_np", Obc_no_params write_obc_file;
-                "epo", Minils write_object_file ]
+                "epo", Minils write_object_file;
+                "vhdl", Minils_no_params Mls2vhdl.program]
 
 let generate_target p s =
   let print_unfolded p_list =

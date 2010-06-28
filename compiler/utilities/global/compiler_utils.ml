@@ -94,6 +94,7 @@ and doc_target_path =
 and doc_noinit = "\t\tDisable initialization analysis"
 and doc_assert = "<node>\t\tInsert run-time assertions for boolean node <node>"
 and doc_inline = "<node>\t\tInline node <node>"
+and doc_vhdlsimpl = "\t\tEnable transformations needed by VHDL (debug)"
 
 let errmsg = "Options are:"
 

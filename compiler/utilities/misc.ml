@@ -87,6 +87,8 @@ let add_inlined_node s = inline := Names.mk_longname s :: !inline
 
 let flatten = ref false
 
+let vhdl_simpl = ref false
+
 (* Backward compatibility *)
 let set_sigali () = add_target_language "z3z";;
 
