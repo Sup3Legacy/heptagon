@@ -85,6 +85,7 @@ type expr =
   | Ve_field of expr * longname
   | Ve_array of expr list
   | Ve_concat of expr * expr
+  | Ve_slice of int * int * expr
 
 type instr =
   | Vi_null
@@ -263,6 +264,7 @@ let rec pp_expr fmt e = match e with
         | h :: t -> fprintf fmt "%d => %a,@ %a" i pp_expr h (pp (i + 1)) t in
       fprintf fmt "(@[%a@])" (pp 0) el
   | Ve_concat (l, r) -> fprintf fmt "@[%a & %a@]" pp_expr l pp_expr r
+  | Ve_slice (low, high, e) -> fprintf fmt "%a(%d to %d)" pp_expr e low high
 
 let rec pp_instr fmt instr = match instr with
   | Vi_null -> fprintf fmt "null"
