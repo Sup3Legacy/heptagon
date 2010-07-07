@@ -133,7 +133,7 @@ let rec trans_ty ty = match ty with
       Vt_id
         { qual = "Pervasives";
           name =
-            try let table = [ ("int", "integer"); ("bool", "bit");
+            try let table = [ ("int", "integer"); ("bool", "std_logic");
                             ] in
             List.assoc s table with Not_found -> s; }
   | Tarray (ty, i) -> Vt_array (eval_static_size i - 1, trans_ty ty)
@@ -178,7 +178,7 @@ let rec trad_exp e = match e.e_desc with
   | Eapp ({ a_op = Efun ln; }, el, None) ->
       let table =
         [
-          ("Pervasives.&",  ("and", false));
+          ("Pervasives.&",   ("and", false));
           ("Pervasives.not", ("not", false));
           ("Pervasives.or",  ("or",  false));
           ("Pervasives.+",   ("+",   false));
@@ -198,7 +198,7 @@ let rec trad_exp e = match e.e_desc with
           Printf.eprintf "Unknown operator %s\n" (fullname ln);
           assert false in
 
-      let mk e = if need_conv then Ve_funcall ("to_bit", [e]) else e in
+      let mk e = if need_conv then Ve_funcall ("to_logic", [e]) else e in
 
       (match el with
          | [l; r] -> mk (Ve_bop (vhdl_op, trad_exp l, trad_exp r))
@@ -326,7 +326,7 @@ let param_signals eq (n, sigs) = match eq.eq_rhs.e_desc with
             if List.exists (fun (n, _) -> n = mk_arg (name vn)) sigs
             then yl else (mk_arg (name vn), trans_ty bty) :: yl
         | _ -> assert false (* call not simplified? *) in
-      (n + 1, (mk_ck n, Vt_ulogic) :: List.fold_right add_sig yl [] @ sigs)
+      (n + 1, (mk_ck n, Vt_logic) :: List.fold_right add_sig yl [] @ sigs)
   | _ -> (n, sigs)
 
 let trad_node env nd =
@@ -405,7 +405,7 @@ let trans_opname opn = match opn with
 let trans_ty bty = match bty with
   | Tid x when x = pint -> Vt_int
   | Tid x when x = pfloat -> unimplemented "float type"
-  | Tid x when x = pbool -> Vt_bit
+  | Tid x when x = pbool -> Vt_logic
   | Tid qn -> Vt_id qn
   | Tprod _ -> unimplemented "trans_opname: product types"
   | Tarray _ -> unimplemented "trans_opname: array types"
@@ -462,6 +462,8 @@ let tb_node nd =
     Vi_seq [Vi_assgn (name ck_n, zero);
             Vi_assgn (name hr_n, one);
             Vi_assgn (name rs_n, zero);
+            wait_i;
+            Vi_assgn (name hr_n, zero);
             wait_i;
             Vi_assgn (name ck_n, one);
             Vi_assgn (name hr_n, zero);

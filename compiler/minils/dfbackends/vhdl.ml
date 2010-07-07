@@ -41,8 +41,7 @@ let modname = ref ""
 type name = string
 
 type vhdl_type =
-  | Vt_bit
-  | Vt_ulogic
+  | Vt_logic
   | Vt_boolean
   | Vt_int
   | Vt_id of qualname
@@ -164,9 +163,8 @@ let pp_list_end f ends fmt l =
   pp_list f fmt l
 
 let rec pp_type fmt ty = match ty with
-  | Vt_bit -> fprintf fmt "bit"
   | Vt_boolean -> fprintf fmt "boolean"
-  | Vt_ulogic -> fprintf fmt "std_ulogic"
+  | Vt_logic -> fprintf fmt "std_logic"
   | Vt_int -> fprintf fmt "integer"
       (* TODO: real longname *)
   | Vt_id ln -> pp_qualname fmt ln
@@ -361,28 +359,6 @@ let pp_entity fmt e =
 let pp_architecture fmt a =
   fprintf fmt "@[@[<v 2>architecture %a of %a is@ "
     pp_name a.va_name pp_name a.va_component;
-
-  (* Hack: we'll need this function in all cases, and we cannot use our own
-     AST because of implicit boolean->bit conversions. *)
-  let arr = ["function to_bit(b : boolean) return bit is";
-             "begin";
-             "  if b then";
-             "    return '1';";
-             "  else";
-             "    return '0';";
-             "  end if;";
-             "end to_bit;";
-             "";
-             "function to_logic(b : boolean) return std_ulogic is";
-             "begin";
-             "  if b then";
-             "    return '1';";
-             "  else";
-             "    return '0';";
-             "  end if;";
-             "end to_logic;"] in
-  List.iter (fprintf fmt "%s@\n") arr;
-
   pp_decls fmt a.va_decls;
   fprintf fmt "@]@\n@[<v 2>begin@\n";
   pp_list_sep pp_def ";" fmt a.va_body;
@@ -398,8 +374,24 @@ let pp_component fmt c =
   fprintf fmt "@."
 
 let pp_package fmt p =
-  fprintf fmt "@[@[<v 2>package %a is@\n%a@]@\nend package %a;@]"
-    pp_name p.vpack_name pp_decls p.vpack_decls pp_name p.vpack_name;
+  fprintf fmt "library ieee;@\n";
+  fprintf fmt "use ieee.std_logic_1164.all;@\n@\n";
+  fprintf fmt "@[@[<v 2>package %a is@\n%a"
+    pp_name p.vpack_name pp_decls p.vpack_decls;
+  (* Small built-in function for bool->logic conversion. *)
+  fprintf fmt "@ function to_logic(b : boolean) return std_logic;";
+  fprintf fmt "@]@\nend package %a;@]" pp_name p.vpack_name;
+  fprintf fmt "@\n";
+  fprintf fmt "@[@[<v 2>package body %a is@\n" pp_name p.vpack_name;
+  fprintf fmt "function to_logic(b : boolean) return std_logic is@\n";
+  fprintf fmt "begin@\n";
+  fprintf fmt "  if b then@\n";
+  fprintf fmt "    return '1';@\n";
+  fprintf fmt "  else@\n";
+  fprintf fmt "    return '0';@\n";
+  fprintf fmt "  end if;@\n";
+  fprintf fmt "end function to_logic;@\n";
+  fprintf fmt "@]end package body %a;@]@\n" pp_name p.vpack_name;
   fprintf fmt "@."
 
 let print_component f c = f (c.vc_name ^ ".vhd") pp_component c
@@ -432,10 +424,10 @@ and rs_n = Idents.fresh "rst"
 and hr_n = Idents.fresh "hw_rst"
 
 let clock_signal = { vs_name = Idents.name ck_n; vs_polarity = Some Vp_in;
-                     vs_type = Vt_ulogic; }
+                     vs_type = Vt_logic; }
 
 let hwrst_signal = { vs_name = Idents.name hr_n; vs_polarity = Some Vp_in;
-                     vs_type = Vt_bit; }
+                     vs_type = Vt_logic; }
 
 let native_signals =
   [
@@ -445,4 +437,4 @@ let native_signals =
 
 let base_signals =
   native_signals @ [{ vs_name = Idents.name rs_n; vs_polarity = Some Vp_in;
-                      vs_type = Vt_bit; };]
+                      vs_type = Vt_logic; };]
