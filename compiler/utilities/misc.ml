@@ -107,7 +107,6 @@ let rec assocd value = function
       else
         assocd value l
 
-
 (** { 3 Compiler iterators } *)
 
 (** Mapfold *)

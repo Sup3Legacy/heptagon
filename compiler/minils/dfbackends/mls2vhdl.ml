@@ -25,6 +25,7 @@ open Mls_utils
 open Errors
 open Clocks
 open Global_printer
+open Location
 
 (* TODO: find a better way to access type information *)
 let tys = ref []
@@ -34,51 +35,61 @@ let tys = ref []
 let zero = Ve_const (mk_static_exp (Sbool false))
 let one = Ve_const (mk_static_exp (Sbool true))
 
-let mk_o on = "o_" ^ on
+let mk_o_s on = "o_" ^ on
+let mk_o on = Vl_var (mk_o_s on)
 
-let mk_arg s = "arg" ^ s
+let mk_arg_s s = "arg" ^ s
+let mk_arg s = Vl_var (mk_arg_s s)
 
-let mk_ck n = "arg_ck_" ^ string_of_int n
-let mk_rs n = "arg_rs_" ^ string_of_int n
+let mk_ck_s n = "arg_ck_" ^ string_of_int n
+let mk_ck n = Vl_var (mk_ck_s n)
 
-let ren_o s = { s with vs_name = mk_o s.vs_name; }
+let mk_rs_n n = "arg_rs_" ^ string_of_int n
+let mk_rs n = Vl_var (mk_rs_n n)
+
+let ren_o s = { s with vs_name = mk_o_s s.vs_name; }
 
 let bool_t = Tid pbool
 
 let rst_e = mk_exp ~ty:bool_t (Evar rs_n)
 
+let eval_static_size se = Static.int_of_static_exp QualEnv.empty se
+
 module AddRst =
 struct
   open Mls_mapfold
 
-  let mk_or_rst e =
-    { rst_e with
-        e_desc = Eapp (mk_app (Efun { qual = "Pervasives"; name = "or"; }),
-                       [rst_e; e],
-                       None); }
+  let mk_or_rst ro = match ro with
+    | None -> rst_e
+    | Some x ->
+        let e_x = mk_exp ~ty:bool_t (Evar x) in
+        { rst_e with
+            e_desc = Eapp (mk_app (Efun { qual = "Pervasives"; name = "or"; }),
+                           [rst_e; e_x],
+                           None); }
 
-  let add_rst_edesc funs () edesc = match edesc with
-    | Efby (Some c, e) ->
-        let (e', ()) = Mls_mapfold.exp funs () e in
-        (Eapp (mk_app Eifthenelse,
-               [rst_e;
-                { e with e_desc = Econst c; };
-                { e with e_desc = Efby (Some c, e'); }],
-               None),
-         ())
-    | Eapp (app, e_list, Some x) ->
-        let (e_list, ()) = mapfold (Mls_mapfold.exp funs) () e_list in
-        (Eapp (app,
-               mk_or_rst (mk_exp ~ty:bool_t (Evar x)) :: e_list,
-               None),
-         ())
-    | Eiterator (it, app, se, e_list, Some x) ->
-        let (e_list, ()) = mapfold (Mls_mapfold.exp funs) () e_list in
-        (Eiterator (it, app, se,
-                    mk_or_rst (mk_exp ~ty:bool_t (Evar x)) :: e_list,
-                    None),
-         ())
-    | _ -> raise Fallback
+  let add_rst_edesc funs () edesc =
+    let (edesc, ()) = Mls_mapfold.edesc funs () edesc in
+    match edesc with
+      | Efby (Some c, e) ->
+          (Eapp (mk_app Eifthenelse,
+                 [rst_e;
+                  { e with e_desc = Econst c; };
+                  { e with e_desc = Efby (Some c, e); }],
+                 None),
+           ())
+      | Eapp ({ a_op = Enode _; } as app, e_list, ro) ->
+          (Eapp (app,
+                 mk_or_rst ro :: e_list,
+                 None),
+           ())
+      | Eiterator (it, ({ a_op = Enode _; } as app), se, e_list, ro) ->
+          let rst_arr =
+            let rst_e = mk_or_rst ro in
+            let app = mk_app ~params:[se] Earray_fill in
+            mk_exp ~ty:(Tarray (bool_t, se)) (Eapp (app, [rst_e], None)) in
+          (Eiterator (it, app, se, rst_arr :: e_list, None), ())
+      | _ -> raise Fallback
 
   let add_rst_node_dec funs () nd =
     let (nd, ()) = Mls_mapfold.node_dec funs () nd in
@@ -124,7 +135,149 @@ struct
     fst (Mls_mapfold.program funs empty_acc p)
 end
 
-let eval_static_size se = Static.int_of_static_exp QualEnv.empty se
+module InlineIterators =
+struct
+  open Mls_mapfold
+
+  let empty_acc = ([], [])
+
+  let rec gen f init i = match i with
+    | -1 -> init
+    | n -> f i (gen f init (i - 1))
+
+  let inline_iterator_eq funs (varl, equs) eq =
+    let (eq, (varl, equs)) = Mls_mapfold.eq funs (varl, equs) eq in
+    match eq.eq_rhs.e_desc with
+      | Eiterator (it, app, ssize, y_l, rst) ->
+          let ty_r = match (it, eq.eq_rhs.e_ty) with
+            | (Imapfold, (Tprod [Tarray (ty, _); _] | ty)) -> ty
+            | (_, (Tarray (ty, _) | ty)) -> ty in
+
+          let ck = eq.eq_rhs.e_ck in
+
+          let n = eval_static_size ssize in
+
+          let select i e =
+            let app = mk_app ~params:[mk_static_exp (Sint i)] Eselect in
+            mk_exp ~ty:ty_r ~clock:e.e_ck (Eapp (app, [e], None)) in
+
+          (* creates y_1(i), ..., y_m(i) *)
+          let mk_args y_l i = List.map (select i) y_l in
+
+          let mk_new_var s =
+            let z = Idents.fresh s in
+            (z,
+             mk_var_dec ~clock:ck z ty_r,
+             mk_exp ~ty:ty_r ~clock:ck (Evar z)) in
+          let mk_new_z () = mk_new_var "z" in
+
+          (match it with
+             | Ifoldi -> unimplemented "ifoldi"
+             | Imap ->
+                 (*
+                    x = map f<<n>> (y_1, ..., y_m);
+
+                    -->
+
+                    z_1 = f(y_1(1), ..., y_m(1));
+                    ...
+                    z_n = f(y_1(n), ..., y_m(n));
+                    x = [z_1, ..., z_n];
+                 *)
+
+                 let mk_eq i (z_l, (varl, equs)) =
+                   let (z, z_var, z_e) = mk_new_z () in
+                   let exp_f =
+                     mk_exp ~ty:ty_r ~clock:ck
+                       (Eapp (app, mk_args y_l i, rst)) in
+                   (z_e :: z_l,
+                    (z_var :: varl, mk_equation (Evarpat z) exp_f :: equs)) in
+
+                 let (zl, (varl, equs)) =
+                   gen mk_eq ([], (varl, equs)) (n - 1) in
+                 let new_eq_e =
+                   { eq.eq_rhs with
+                       e_desc = Eapp (mk_app Earray, zl, None); } in
+                 ({ eq with eq_rhs = new_eq_e; }, (varl, equs))
+
+             | Ifold ->
+                 (*
+                    x = fold f<<n>> (y_1, ..., y_m, acc);
+
+                    -->
+
+                    z_1 = f(y_1(n), ..., y_m(n), acc);
+                    ...
+                    z_n = f(y_1(1), ..., y_m(1), z_(n - 1));
+                    x = z_n;
+                 *)
+                 let (y_l, acc) = split_last y_l in
+
+                 let add_eq i (z_prev, varl, equs) =
+                   let (z, z_var, z_e) = mk_new_z () in
+                   let exp_f =
+                     mk_exp ~ty:ty_r ~clock:ck
+                       (Eapp (app, (mk_args y_l i) @ [z_prev], rst)) in
+                   let new_eq = mk_equation (Evarpat z) exp_f in
+                   (z_e, z_var :: varl, new_eq :: equs) in
+
+                 let (z_last, varl, equs) =
+                   gen add_eq (acc, varl, equs) (n - 1) in
+                 ({ eq with eq_rhs = z_last; }, (varl, equs))
+
+             | Imapfold ->
+                 (*
+                   (x, acc_r) = mapfold f<<n>> (y_1, ..., y_m, acc);
+
+                   -->
+
+                    z_1, acc_1 = f(y_1(n), ..., y_m(n), acc);
+                    ...
+                    z_n, acc_n = f(y_1(1), ..., y_m(1), acc_(n - 1));
+                    x = [z_1, ..., z_n];
+                    acc_r = acc_n;
+                 *)
+                 let (y_l, acc) = split_last y_l in
+
+                 let add_eq i (acc_prev, res_l, var_l, eq_l) =
+                   let (z, z_var, z_e) = mk_new_z () in
+                   let (acc, acc_var, acc_e) = mk_new_var "acc" in
+                   let exp_f =
+                     mk_exp
+                       ~ty:(match eq.eq_rhs.e_ty with
+                                  | Tprod [_; ty] -> Tprod [ty_r; ty]
+                                  | _ -> assert false)
+                       ~clock:ck
+                       (Eapp (app, (mk_args y_l i) @ [acc_prev], rst)) in
+                   let new_eq =
+                     mk_equation (Etuplepat [Evarpat z; Evarpat acc]) exp_f in
+                   (acc_e, z_e :: res_l, z_var :: acc_var :: var_l,
+                    new_eq :: eq_l) in
+
+                 let (acc_last, resl, varl, equs) =
+                   gen add_eq (acc, [], varl, equs) (n - 1) in
+                 (match eq.eq_lhs with
+                    | Etuplepat [Evarpat x; Evarpat acc] ->
+                        (mk_equation
+                           (Evarpat x)
+                           (mk_exp
+                              ~ty:(Tarray (ty_r, ssize))
+                              (Eapp (mk_app Earray, resl, None))),
+                         (varl, mk_equation (Evarpat acc) acc_last :: equs))
+                    | _ -> assert false))
+      | _ -> (eq, (varl, equs))
+
+  let inline_iterator_node_dec funs acc nd =
+    let (nd, (varl, equs)) = Mls_mapfold.node_dec funs acc nd in
+    ({ nd with n_local = varl @ nd.n_local; n_equs = equs @ nd.n_equs; },
+     empty_acc)
+
+  let program p =
+    let funs = { Mls_mapfold.defaults with
+                   eq = inline_iterator_eq;
+                   node_dec = inline_iterator_node_dec; } in
+    fst (Mls_mapfold.program funs empty_acc p)
+end
 
 (** {2 Translation from MiniLS programs to VHDL programs} *)
 
@@ -151,49 +304,42 @@ let interface_signals_of_node nd =
 
 let rec guard_exp ck = match ck with
   | Cbase | Cvar { contents = Cindex _; } ->
-      Ve_funcall ("rising_edge", [Ve_var (name ck_n)])
+      Ve_funcall ("rising_edge", [mk_vare (name ck_n)])
   | Con (ck, ln, n) ->
       Ve_bop ("and",
               Ve_bop ("=",
                       Ve_const (mk_static_exp (Sconstructor ln)),
-                      Ve_var (name n)),
+                      mk_vare (name n)),
               guard_exp ck)
   | Cvar { contents = Clink ck; } -> guard_exp ck
 
 let rec make_clock ck = match ck with
-  | Cbase -> Ve_var (name ck_n)
+  | Cbase -> mk_vare (name ck_n)
   | Con (ck, ln, n) ->
       Ve_bop ("and",
               Ve_funcall ("to_logic",
                           [Ve_bop ("=",
                                    Ve_const (mk_static_exp (Sconstructor ln)),
-                                   Ve_var (name n))]),
+                                   mk_vare (name n))]),
               make_clock ck)
   | Cvar lr -> (match !lr with Clink ck -> make_clock ck | _ -> assert false)
       (* I do not know what Cindex constructors are! *)
 
 let rec trad_exp e = match e.e_desc with
   | Econst c -> Ve_const c
-  | Evar n -> Ve_var (name n)
-  | Eapp ({ a_op = Efun ln; }, el, None) ->
-      let table =
-        [
-          ("Pervasives.&",   ("and", false));
-          ("Pervasives.not", ("not", false));
-          ("Pervasives.or",  ("or",  false));
-          ("Pervasives.+",   ("+",   false));
-          ("Pervasives.-",   ("-",   false));
-          ("Pervasives.*",   ("*",   false));
-          ("Pervasives./",   ("/",   false));
-          ("Pervasives.<",   ("<",    true));
-          ("Pervasives.<=",  ("<=",   true));
-          ("Pervasives.>=",  (">=",   true));
-          ("Pervasives.>",   (">",    true));
-          ("Pervasives.=",   ("=",    true));
-          ("Pervasives.<>",  ("<>",   true));
-        ] in
+  | Evar n -> mk_vare (name n)
+  | Ewhen (e, _, _) -> trad_exp e
+  | Estruct lnel -> Ve_record (List.map (fun (ln, e) -> (ln, trad_exp e)) lnel)
+  | Eapp ({ a_op = op; a_params = pl; }, el, None) -> trad_app e op pl el
+  | Eapp (_, _, Some _) -> assert false
+  | Eiterator _ -> assert false
+  | Emerge _ | Efby _ -> assert false
+
+and trad_app e op pl el = match op, el, pl with
+  | Enode _, _, _ -> assert false
+  | Efun ln, _, _ ->
       let (vhdl_op, need_conv) =
-        try List.assoc (fullname ln) table
+        try List.assoc (fullname ln) op_table
         with Not_found ->
           Printf.eprintf "Unknown operator %s\n" (fullname ln);
           assert false in
@@ -203,20 +349,31 @@ let rec trad_exp e = match e.e_desc with
       (match el with
          | [l; r] -> mk (Ve_bop (vhdl_op, trad_exp l, trad_exp r))
          | [e] -> mk (Ve_uop (vhdl_op, trad_exp e))
-         | _ -> failwith "trad_exp: operator arity > 2")
-  | Eapp ({ a_op = Efield; a_params = [{ se_desc = Svar fn; }]; }, [e], None) ->
+         | l ->
+             Printf.eprintf "VHDL: unknown operator %s in\n"
+               (fullname ln);
+             raise Error)
+  | Econcat, [l; r], _ -> Ve_concat (trad_exp l, trad_exp r)
+  | Earray, _, _ -> Ve_array (List.map trad_exp el)
+  | Eselect, [e], sl ->
+      let il = List.map eval_static_size sl in
+      Ve_array_index (trad_exp e, il)
+  | Eselect_slice, [e], [low; high] ->
+      Ve_slice (eval_static_size low, eval_static_size high, trad_exp e)
+  | Earray_fill, [e], [ssize] ->
+      let n = eval_static_size ssize in
+      Ve_array_repeat (n, trad_exp e)
+  | Efield, [e], [{ se_desc = Svar fn; }] ->
       Ve_field (trad_exp e, fn)
-  | Ewhen (e, _, _) -> trad_exp e
-  | Estruct lnel -> Ve_record (List.map (fun (ln, e) -> (ln, trad_exp e)) lnel)
   | _ ->
-      Format.eprintf "trad_exp: unsupported MiniLS expression %a@."
+      Format.eprintf "trad_exp: unexpected expression %a@."
         Mls_printer.print_exp e;
       assert false
 
 let rec trad_cexpr e dst = match e.e_desc with
   | Emerge (n, cel) | Ewhen ({ e_desc = Emerge (n, cel); }, _, _) ->
       let trad_cl (c, e) = (mk_static_exp (Sconstructor c), trad_cexpr e dst) in
-      Vi_case (Ve_var (name n), List.map trad_cl cel)
+      Vi_case (mk_vare (name n), List.map trad_cl cel)
   | _ -> Vi_affect (dst, trad_exp e)
 
 let trad_eq eq (n, is) = match (eq.eq_lhs, eq.eq_rhs.e_desc) with
@@ -225,7 +382,7 @@ let trad_eq eq (n, is) = match (eq.eq_lhs, eq.eq_rhs.e_desc) with
       let ck_assgn = Vi_assgn (mk_ck n, make_clock eq.eq_rhs.e_ck) in
 
       let mk_assgn e = match e.e_desc with
-        | Evar vn -> Vi_assgn (mk_arg (name vn), Ve_var (name vn))
+        | Evar vn -> Vi_assgn (mk_arg (name vn), mk_vare (name vn))
         | _ ->
             Printf.eprintf "Non-variable node argument\n";
             assert false in
@@ -242,17 +399,17 @@ let trad_eq eq (n, is) = match (eq.eq_lhs, eq.eq_rhs.e_desc) with
         end if;
       *)
       let (i_c, i_stm) =
-        (guard_exp eq.eq_rhs.e_ck, Vi_assgn (name vn, trad_exp e)) in
+        (guard_exp eq.eq_rhs.e_ck, Vi_assgn (Vl_var (name vn), trad_exp e)) in
 
       (n, (match co with
              | None -> Vi_if (i_c, i_stm, [], None)
              | Some c ->
                  Vi_if (Ve_bop ("=",
-                                Ve_var (Idents.name hr_n),
-                                Ve_const (mk_static_exp (Sbool true))),
-                        Vi_assgn (name vn, Ve_const c),
+                                mk_vare (Idents.name hr_n),
+                                one),
+                        Vi_assgn (Vl_var (name vn), Ve_const c),
                         [(i_c, i_stm)], None)) :: is)
-  | (Evarpat vn, _) -> (n, trad_cexpr eq.eq_rhs (name vn) :: is)
+  | (Evarpat vn, _) -> (n, trad_cexpr eq.eq_rhs (Vl_var (name vn)) :: is)
 
 
 (* env maps component names to arg lists *)
@@ -272,13 +429,13 @@ let gather_port_map env eq (n, pdecls, pbinds, pmaps) =
             | Evar vn -> name vn
             | _ -> assert false in
           List.map extr yl in
-        let xl = List.map name (Vars.vars_pat [] pat) in
+        let xl = List.rev (List.map name (Vars.vars_pat [] pat)) in
 
         let snames = List.map (fun s -> s.vs_name) sigs in
 
         let bindings =
-          List.combine snames (mk_ck n :: name hr_n
-                               :: List.map mk_arg yl @ xl) in
+          List.combine snames (mk_ck_s n :: name hr_n
+                               :: List.map mk_arg_s yl @ xl) in
 
         (* FIXME: shortnames *)
         let new_pmap =
@@ -323,10 +480,10 @@ let param_signals eq (n, sigs) = match eq.eq_rhs.e_desc with
       let add_sig y yl = match (y.e_ty, y.e_desc) with
         | (bty, Evar vn) ->
             (* TODO: more efficient *)
-            if List.exists (fun (n, _) -> n = mk_arg (name vn)) sigs
-            then yl else (mk_arg (name vn), trans_ty bty) :: yl
+            if List.exists (fun (n, _) -> n = mk_arg_s (name vn)) sigs
+            then yl else (mk_arg_s (name vn), trans_ty bty) :: yl
         | _ -> assert false (* call not simplified? *) in
-      (n + 1, (mk_ck n, Vt_logic) :: List.fold_right add_sig yl [] @ sigs)
+      (n + 1, (mk_ck_s n, Vt_logic) :: List.fold_right add_sig yl [] @ sigs)
   | _ -> (n, sigs)
 
 let trad_node env nd =
@@ -352,7 +509,7 @@ let trad_node env nd =
 
   let body =
     let mk_assg vd =
-      Vi_assgn (mk_o (name vd.v_ident), Ve_var (name vd.v_ident)) in
+      Vi_assgn (mk_o (name vd.v_ident), mk_vare (name vd.v_ident)) in
     snd (List.fold_right trad_eq nd.n_equs (1, []))
     @ (List.map mk_assg nd.n_output) in
 
@@ -459,25 +616,26 @@ let tb_node nd =
   (** The test-bench initializes (reset) our component/class, and then
       indefinitely repeats clock cycles. *)
   let process_body =
-    Vi_seq [Vi_assgn (name ck_n, zero);
-            Vi_assgn (name hr_n, one);
-            Vi_assgn (name rs_n, zero);
+    Vi_seq [Vi_assgn (Vl_var (name ck_n), zero);
+            Vi_assgn (Vl_var (name hr_n), one);
+            Vi_assgn (Vl_var (name rs_n), one);
             wait_i;
-            Vi_assgn (name hr_n, zero);
+            Vi_assgn (Vl_var (name hr_n), zero);
+            Vi_assgn (Vl_var (name rs_n), zero);
             wait_i;
-            Vi_assgn (name ck_n, one);
-            Vi_assgn (name hr_n, zero);
+            Vi_assgn (Vl_var (name ck_n), one);
+            Vi_assgn (Vl_var (name hr_n), zero);
             wait_i;
-            Vi_assgn (name ck_n, zero);
+            Vi_assgn (Vl_var (name ck_n), zero);
             wait_i;
-            Vi_loop (Vi_seq [Vi_assgn (name ck_n, one);
+            Vi_loop (Vi_seq [Vi_assgn (Vl_var (name ck_n), one);
                              wait_i;
-                             Vi_assgn (name ck_n, zero);
+                             Vi_assgn (Vl_var (name ck_n), zero);
                              wait_i])] in
 
   (** Correct instantiation for our component. *)
   let comp_inst =
-    let mk_bind vd = (mk_o (name vd.v_ident), mk_o (name vd.v_ident)) in
+    let mk_bind vd = (mk_o_s (name vd.v_ident), mk_o_s (name vd.v_ident)) in
     let bindl =
       (name ck_n, name ck_n)
       :: (name hr_n, name hr_n)

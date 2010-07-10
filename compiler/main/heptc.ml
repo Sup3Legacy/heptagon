@@ -71,6 +71,7 @@ let main () =
     Arg.parse
       [
         "-v",Arg.Set verbose, doc_verbose;
+        "-vhdlsimpl", Arg.Set vhdl_simpl, "";
         "-version", Arg.Unit show_version, doc_version;
         "-i", Arg.Set print_types, doc_print_types;
         "-I", Arg.String add_include, doc_include;

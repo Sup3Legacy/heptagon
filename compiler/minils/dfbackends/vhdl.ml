@@ -73,7 +73,7 @@ type decl =
 type const = Types.static_exp
 
 type expr =
-  | Ve_var of name
+  | Ve_lhs of lhs
   | Ve_const of const
   | Ve_uop of string * expr
   | Ve_bop of string * expr * expr
@@ -85,6 +85,12 @@ type expr =
   | Ve_array of expr list
   | Ve_concat of expr * expr
   | Ve_slice of int * int * expr
+  | Ve_array_repeat of int * expr
+  | Ve_array_index of expr * int list
+
+and lhs =
+  | Vl_var of string
+  | Vl_arr of lhs * expr
 
 type instr =
   | Vi_null
@@ -92,10 +98,10 @@ type instr =
   | Vi_wait_ns of int (** /!\ Non-synthetizable construct. Time in ns. *)
   | Vi_if of expr * instr * (expr * instr) list * instr option
   | Vi_loop of instr
+  | Vi_for of string * int * instr
   | Vi_seq of instr list
-  | Vi_assgn of name * expr (* signals *)
-  | Vi_assgn_guarded of name * (expr * expr) list (* guard * body *)
-  | Vi_affect of name * expr (* variables *)
+  | Vi_assgn of lhs * expr (* signals *)
+  | Vi_affect of lhs * expr (* variables *)
   | Vi_case of expr * (const * instr) list
 
 type process_def = { vp_name : name option;
@@ -241,8 +247,12 @@ let rec pp_const fmt c = match c.se_desc with
         Global_printer.print_static_exp c;
       assert false
 
-let rec pp_expr fmt e = match e with
-  | Ve_var vn -> pp_name fmt vn
+let rec pp_lhs fmt lhs = match lhs with
+  | Vl_var vn -> pp_name fmt vn
+  | Vl_arr (lhs, e) -> fprintf fmt "%a(%a)" pp_lhs lhs pp_expr e
+
+and pp_expr fmt e = match e with
+  | Ve_lhs lhs -> pp_lhs fmt lhs
   | Ve_const c -> pp_const fmt c
   | Ve_uop (op, e) -> fprintf fmt "(%s %a)" op pp_expr e
   | Ve_bop (op, l, r) -> fprintf fmt "(%a %s %a)" pp_expr l op pp_expr r
@@ -264,6 +274,10 @@ let rec pp_expr fmt e = match e with
       fprintf fmt "(@[%a@])" (pp 0) el
   | Ve_concat (l, r) -> fprintf fmt "@[%a & %a@]" pp_expr l pp_expr r
   | Ve_slice (low, high, e) -> fprintf fmt "%a(%d to %d)" pp_expr e low high
+  | Ve_array_repeat (_, e) -> fprintf fmt "(others => %a)" pp_expr e
+  | Ve_array_index (e, il) ->
+      let pp_index fmt i = fprintf fmt "(%d)" i in
+      fprintf fmt "%a%a" pp_expr e (pp_list pp_index) il
 
 let rec pp_instr fmt instr = match instr with
   | Vi_null -> fprintf fmt "null"
@@ -278,18 +292,8 @@ let rec pp_instr fmt instr = match instr with
       fprintf fmt "@[@[<v 2>if %a then@ %a;@]@\n%aend if@]"
         pp_expr c pp_instr t (pp_list pp) il
   | Vi_wait e -> fprintf fmt "wait until @[%a@]" pp_expr e
-  | Vi_assgn (n, e) -> fprintf fmt "%a <= %a" pp_name n pp_expr e
-  | Vi_affect (n, e) -> fprintf fmt "%a := %a" pp_name n pp_expr e
-  | Vi_assgn_guarded (vn, []) ->
-      Printf.eprintf "Ill-formed guarded assignment to %s\n" vn;
-      assert false
-  | Vi_assgn_guarded (n, clauses) ->
-      let pp_guard fmt (exp, guard) =
-        fprintf fmt "%a when @[(%a)@]" pp_expr guard pp_expr exp in
-
-      fprintf fmt "@[%a <= @[" pp_name n;
-      pp_list_sep pp_guard " else" fmt clauses;
-      fprintf fmt "@]@]"
+  | Vi_assgn (lhs, e) -> fprintf fmt "%a <= %a" pp_lhs lhs pp_expr e
+  | Vi_affect (lhs, e) -> fprintf fmt "%a := %a" pp_lhs lhs pp_expr e
   | Vi_case (e, cll) ->
       let pp_cl fmt (c, i) =
         fprintf fmt "when %a => %a;" pp_const c pp_instr i in
@@ -299,6 +303,9 @@ let rec pp_instr fmt instr = match instr with
       fprintf fmt "@]@\nend case@]"
   | Vi_seq il -> pp_list_sep pp_instr ";" fmt il;
   | Vi_loop i -> fprintf fmt "@[@[<v 2>loop@\n%a;@]@\nend loop@]" pp_instr i
+  | Vi_for (vn, i, instr) ->
+      fprintf fmt "@[@[<v 2>for %s in 0 to %d loop@ %a;@]@\nend loop@]"
+        vn (i - 1) pp_instr instr;
   | Vi_wait_ns ns -> fprintf fmt "wait for %d ns" ns
 
 let pp_def fmt stm =
@@ -438,3 +445,23 @@ let native_signals =
 let base_signals =
   native_signals @ [{ vs_name = Idents.name rs_n; vs_polarity = Some Vp_in;
                       vs_type = Vt_logic; };]
+
+let op_table =
+        [
+          ("Pervasives.&",   ("and", false));
+          ("Pervasives.not", ("not", false));
+          ("Pervasives.or",  ("or",  false));
+          ("Pervasives.+",   ("+",   false));
+          ("Pervasives.-",   ("-",   false));
+          ("Pervasives.*",   ("*",   false));
+          ("Pervasives./",   ("/",   false));
+          ("Pervasives.<",   ("<",    true));
+          ("Pervasives.<=",  ("<=",   true));
+          ("Pervasives.>=",  (">=",   true));
+          ("Pervasives.>",   (">",    true));
+          ("Pervasives.=",   ("=",    true));
+          ("Pervasives.<>",  ("<>",   true));
+        ]
+
+(* handy function for creating an exp from a variable name *)
+let mk_vare vn = Ve_lhs (Vl_var vn)
