@@ -31,6 +31,10 @@ let compile pp p =
   let p = do_pass Normalize.program "Normalization" p pp true in
 
   let p =
+    do_pass Mls2vhdl.InlineIterators.program "Iterator inlining" p pp
+      !vhdl_simpl in
+
+  let p =
     do_pass Mls2vhdl.SimpCalls.program "Call simplification" p pp !vhdl_simpl in
 
   (* Scheduling *)
