@@ -86,7 +86,7 @@ type expr =
   | Ve_concat of expr * expr
   | Ve_slice of int * int * expr
   | Ve_array_repeat of int * expr
-  | Ve_array_index of expr * int list
+  | Ve_array_index of expr * expr list
 
 and lhs =
   | Vl_var of string
@@ -276,7 +276,7 @@ and pp_expr fmt e = match e with
   | Ve_slice (low, high, e) -> fprintf fmt "%a(%d to %d)" pp_expr e low high
   | Ve_array_repeat (_, e) -> fprintf fmt "(others => %a)" pp_expr e
   | Ve_array_index (e, il) ->
-      let pp_index fmt i = fprintf fmt "(%d)" i in
+      let pp_index fmt ei = fprintf fmt "(%a)" pp_expr ei in
       fprintf fmt "%a%a" pp_expr e (pp_list pp_index) il
 
 let rec pp_instr fmt instr = match instr with

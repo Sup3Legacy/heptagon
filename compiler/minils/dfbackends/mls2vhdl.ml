@@ -30,6 +30,8 @@ open Location
 (* TODO: find a better way to access type information *)
 let tys = ref []
 
+let mk_c cd = Ve_const (mk_static_exp cd)
+
 (** {3 Conventions} *)
 
 let zero = Ve_const (mk_static_exp (Sbool false))
@@ -356,8 +358,10 @@ and trad_app e op pl el = match op, el, pl with
   | Econcat, [l; r], _ -> Ve_concat (trad_exp l, trad_exp r)
   | Earray, _, _ -> Ve_array (List.map trad_exp el)
   | Eselect, [e], sl ->
-      let il = List.map eval_static_size sl in
-      Ve_array_index (trad_exp e, il)
+      let cl =
+        let mk c = Ve_const (mk_static_exp (Sint (eval_static_size c))) in
+        List.map mk sl in
+      Ve_array_index (trad_exp e, cl)
   | Eselect_slice, [e], [low; high] ->
       Ve_slice (eval_static_size low, eval_static_size high, trad_exp e)
   | Earray_fill, [e], [ssize] ->
@@ -374,6 +378,35 @@ let rec trad_cexpr e dst = match e.e_desc with
   | Emerge (n, cel) | Ewhen ({ e_desc = Emerge (n, cel); }, _, _) ->
       let trad_cl (c, e) = (mk_static_exp (Sconstructor c), trad_cexpr e dst) in
       Vi_case (mk_vare (name n), List.map trad_cl cel)
+
+  | Eapp ({ a_op = Eselect_dyn; }, arr :: def :: idxl, None) ->
+      let rec acc idxl boundl (guardl, idxel) = match (idxl, boundl) with
+        | ([], _) -> (guardl, idxel)
+        | (idx :: idxl, bound :: bounds) ->
+            let idxe = trad_exp idx in
+            let b_i = eval_static_size bound in
+            let guard = Ve_bop ("and",
+                                Ve_bop(">", idxe, mk_c (Sint 0)),
+                                Ve_bop("<", idxe, mk_c (Sint b_i))) in
+            acc idxl boundl (guard :: guardl, idxe :: idxel)
+        | (l, r) ->
+            Printf.eprintf "%d %d\n" (List.length l) (List.length r);
+            assert false in
+      let (guardl, indl) = acc idxl (Mls_utils.bounds_list arr.e_ty) ([], []) in
+      let guard = fold_right_1 (fun l r -> Ve_bop ("and", l, r)) guardl in
+      let else_branch = Vi_affect (dst, trad_exp def) in
+      Vi_if (guard, Vi_affect (dst, Ve_array_index (trad_exp arr, indl)),
+             [], Some else_branch)
+
+  | Eapp ({ a_op = Eupdate; a_params = idxl; }, [arr; newval], None) ->
+      let mk_lhs idx lhs =
+        Vl_arr (lhs, mk_c (Sint (eval_static_size idx))) in
+      let lhs = List.fold_right mk_lhs idxl dst in
+      Vi_seq [
+        Vi_affect (dst, trad_exp arr);
+        Vi_affect (lhs, trad_exp newval);
+      ]
+
   | _ -> Vi_affect (dst, trad_exp e)
 
 let trad_eq eq (n, is) = match (eq.eq_lhs, eq.eq_rhs.e_desc) with

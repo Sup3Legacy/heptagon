@@ -189,3 +189,8 @@ let assert_2min = function
 let assert_3 = function
   | [v1; v2; v3] -> v1, v2, v3
   | l -> _arity_error 3 l
+
+let rec fold_right_1 f l = match l with
+  | [] -> invalid_arg "fold_right_1: empty list"
+  | [x] -> x
+  | h :: t -> f h (fold_right_1 f t)

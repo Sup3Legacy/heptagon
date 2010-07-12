@@ -67,6 +67,7 @@ val mapi: (int -> 'a -> 'b) -> 'a list -> 'b list
 val mapi2: (int -> 'a -> 'b -> 'c) -> 'a list -> 'b list -> 'c list
 val mapi3: (int -> 'a -> 'b -> 'c -> 'd) ->
   'a list -> 'b list -> 'c list -> 'd list
+
 val fold_righti : (int -> 'a -> 'b -> 'b) -> 'a list -> 'b -> 'b
 
 (** Functions to decompose a list into a tuple *)
@@ -76,3 +77,6 @@ val assert_1min : 'a list -> 'a * 'a list
 val assert_2 : 'a list -> 'a * 'a
 val assert_2min : 'a list -> 'a * 'a * 'a list
 val assert_3 : 'a list -> 'a * 'a * 'a
+
+(** Right fold for non-empty lists. fold_right_1 f [x] -> x. *)
+val fold_right_1 : ('a -> 'a -> 'a) -> 'a list -> 'a
