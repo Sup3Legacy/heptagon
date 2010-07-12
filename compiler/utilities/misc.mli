@@ -173,7 +173,6 @@ val assocd : 'b -> ('a * 'b) list -> 'a
 val make_list_compare : ('a -> 'a -> int) -> 'a list -> 'a list -> int
 
 
-
 (** Ast iterators *)
 exception Fallback
 
@@ -190,3 +189,6 @@ val mapi: (int -> 'a -> 'b) -> 'a list -> 'b list
 val mapi2: (int -> 'a -> 'b -> 'c) -> 'a list -> 'b list -> 'c list
 val mapi3: (int -> 'a -> 'b -> 'c -> 'd) ->
   'a list -> 'b list -> 'c list -> 'd list
+
+(** Right fold for non-empty lists. fold_right_1 f [x] -> x. *)
+val fold_right_1 : ('a -> 'a -> 'a) -> 'a list -> 'a

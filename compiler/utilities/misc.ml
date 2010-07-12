@@ -259,3 +259,8 @@ let mapi3 f l1 l2 l3 =
           (f i v1 v2 v3)::(aux (i+1) l1 l2 l3)
   in
     aux 0 l1 l2 l3
+
+let rec fold_right_1 f l = match l with
+  | [] -> invalid_arg "fold_right_1: empty list"
+  | [x] -> x
+  | h :: t -> f h (fold_right_1 f t)
