@@ -45,7 +45,7 @@ type vhdl_type =
   | Vt_boolean
   | Vt_int
   | Vt_id of qualname
-  | Vt_array of int * vhdl_type
+  | Vt_array of int list * vhdl_type
 
 type polarity =
   | Vp_in
@@ -62,7 +62,7 @@ and vty_desc =
   | Vty_opaque
   | Vty_enum of qualname list
   | Vty_record of (name * vhdl_type) list
-  | Vty_vector of vhdl_type
+  | Vty_vector of int * vhdl_type (* dimension * type *)
 
 type decl =
   | Vd_signal of signal_decl
@@ -171,8 +171,15 @@ let rec pp_type fmt ty = match ty with
   | Vt_logic -> fprintf fmt "std_logic"
   | Vt_int -> fprintf fmt "integer"
       (* TODO: real longname *)
-  | Vt_id ln -> pp_qualname fmt ln
-  | Vt_array (size, ty) -> fprintf fmt "%a_vector (0 to %d)" pp_type ty size
+  | Vt_id qn -> pp_qualname fmt qn
+  | Vt_array ([], _) -> assert false
+  | Vt_array ([size], ty) -> fprintf fmt "%a_vector (0 to %d)" pp_type ty size
+  | Vt_array ([s1; s2], ty) ->
+      fprintf fmt "%a_matrix (0 to %d, 0 to %d)" pp_type ty s1 s2
+  | Vt_array (sl, ty) ->
+      let n = List.length sl in
+      let f fmt size = fprintf fmt "0 to %d" size in
+      fprintf fmt "%a_mat%d (%a)" pp_type ty n (pp_list_sep f ", ") sl
 
 let pp_polarity fmt pol = match pol with
   | Vp_in -> fprintf fmt "in"
@@ -194,8 +201,15 @@ let pp_ty_desc fmt desc = match desc with
   | Vty_record ntyl ->
       let pp fmt (n, ty) = fprintf fmt "%a : %a;" pp_name n pp_type ty in
       fprintf fmt "@\n@[<v 2>record@\n%a@]@\nend record" (pp_list pp) ntyl
-  | Vty_vector ty ->
-      fprintf fmt "@\n@[<v 2>array (integer range <>) of %a@]" pp_type ty
+  | Vty_vector (dims, ty) ->
+      assert (dims > 0);
+      let buf = Buffer.create 50 in
+      Buffer.add_string buf "integer range <>";
+      for j = dims downto 2 do
+        Buffer.add_string buf ", integer range <>";
+      done;
+      fprintf fmt "@\n@[<v 2>array (%s) of %a@]"
+        (Buffer.contents buf) pp_type ty
 
 let pp_ty_decl fmt { vty_name = name; vty_desc = desc; } =
   fprintf fmt "@[<v 2>type %a is %a@]" pp_name name pp_ty_desc desc

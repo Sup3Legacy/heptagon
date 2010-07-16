@@ -80,3 +80,5 @@ val assert_3 : 'a list -> 'a * 'a * 'a
 
 (** Right fold for non-empty lists. fold_right_1 f [x] -> x. *)
 val fold_right_1 : ('a -> 'a -> 'a) -> 'a list -> 'a
+
+val gen : (int -> 'a -> 'a) -> 'a -> int -> 'a

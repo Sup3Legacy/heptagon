@@ -194,3 +194,8 @@ let rec fold_right_1 f l = match l with
   | [] -> invalid_arg "fold_right_1: empty list"
   | [x] -> x
   | h :: t -> f h (fold_right_1 f t)
+
+let rec gen f init i = match i with
+  | -1 -> init
+  | n -> f i (gen f init (i - 1))
+

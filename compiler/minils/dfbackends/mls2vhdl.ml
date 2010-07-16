@@ -33,6 +33,16 @@ let tys = ref []
 
 let mk_c cd = Ve_const (mk_static_exp cd)
 
+(* Ugly hack: holds the maximum array dimension found in the whole program. *)
+let max_dim = ref 1
+
+let check_dim d = if d > !max_dim then max_dim := d
+
+let check_dim_e e =
+  let bl = Mls_utils.bounds_list e.e_ty in
+  check_dim (List.length bl)
+
+
 (** {3 Conventions} *)
 
 let zero = Ve_const (mk_static_exp (Sbool false))
@@ -284,16 +294,26 @@ end
 
 (** {2 Translation from MiniLS programs to VHDL programs} *)
 
-let rec trans_ty ty = match ty with
+let rec trans_ty_acc acc ty = match ty with
+  | Tarray (ty, s) -> trans_ty_acc (eval_static_size s - 1 :: acc) ty
   | Tid { name = s; } ->
-      Vt_id
-        { qual = "Pervasives";
-          name =
-            try let table = [ ("int", "integer"); ("bool", "std_logic");
-                            ] in
-            List.assoc s table with Not_found -> s; }
-  | Tarray (ty, i) -> Vt_array (eval_static_size i - 1, trans_ty ty)
-  | Tprod _ -> assert false
+      let scal_ty =
+        Vt_id
+          { qual = "Pervasives";
+            name =
+              try
+                let table =
+                  [
+                    ("int", "integer");
+                    ("bool", "std_logic");
+                  ] in
+                List.assoc s table with Not_found -> s; } in
+      (match acc with
+         | [] -> scal_ty
+         | _ -> check_dim (List.length acc); Vt_array (acc, scal_ty))
+  | Tprod _ -> unimplemented "tprod"
+
+and trans_ty ty = trans_ty_acc [] ty
 
 let signal_of_vardec mode vd =
   { vs_name = name vd.v_ident; vs_polarity = Some mode;
@@ -692,11 +712,25 @@ let tb_node nd =
                                        vp_body = process_body; }] }; }
 
 let package_of_types p =
-  let tydl =
+  let mk_arr_decls n =
+    let s = match n with
+      | 0 -> "vector"
+      | 1 -> "matrix"
+      | _ -> "mat" ^ (string_of_int n) in
     [
-      { vty_name = "integer_vector"; vty_desc = Vty_vector Vt_int; };
-    ]
-    @ List.map trans_ty_dec p.p_types in
+      { vty_name = "std_logic_" ^ s; vty_desc = Vty_vector (n, Vt_logic); };
+      { vty_name = "integer_" ^ s; vty_desc = Vty_vector (n, Vt_int); };
+    ] in
+
+  let tydl = ref [
+    { vty_name = "integer_vector"; vty_desc = Vty_vector (1, Vt_int); };
+  ] in
+
+  for i = 2 to !max_dim do
+    tydl := mk_arr_decls i @ !tydl;
+  done;
+
+  let tydl = !tydl @ List.map trans_ty_dec p.p_types in
 
   { vpack_name = "types";
     vpack_decls = List.map (fun tyd -> Vd_type tyd) tydl; }
@@ -707,9 +741,12 @@ let translate modn p =
   modname := String.capitalize modn;
   if List.length p.p_opened > 0 then unimplemented "modules";
   let env = mk_env p in
+  let nodes_trad = List.map (fun nd -> Left (trad_node env nd)) p.p_nodes in
   let res =
-    Right (package_of_types p)
-    :: List.map (fun nd -> Left (trad_node env nd)) p.p_nodes in
+    nodes_trad @ [Right (package_of_types p)] in (* needs to be called after
+                                                    processing of nodes, depends
+                                                    on a side effect computing
+                                                    maximum array dimension.  *)
   (match !Compiler_options.simulation_node with
      | None -> []
      | Some qn ->
