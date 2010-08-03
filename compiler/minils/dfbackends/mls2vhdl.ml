@@ -26,6 +26,7 @@ open Errors
 open Clocks
 open Global_printer
 open Location
+open Clocks
 
 (* TODO: find a better way to access type information *)
 let tys = ref []
@@ -367,7 +368,7 @@ and trad_app e op pl el = match op, el, pl with
   | Earray_fill, [e], [ssize] ->
       let n = eval_static_size ssize in
       Ve_array_repeat (n, trad_exp e)
-  | Efield, [e], [{ se_desc = Svar fn; }] ->
+  | Efield, [e], [{ se_desc = Sconstructor fn; }] ->
       Ve_field (trad_exp e, fn)
   | _ ->
       Format.eprintf "trad_exp: unexpected expression %a@."
@@ -694,7 +695,8 @@ let package_of_types p =
   let tydl =
     [
       { vty_name = "integer_vector"; vty_desc = Vty_vector Vt_int; };
-    ] @ List.map trans_ty_dec p.p_types in
+    ]
+    @ List.map trans_ty_dec p.p_types in
 
   { vpack_name = "types";
     vpack_decls = List.map (fun tyd -> Vd_type tyd) tydl; }

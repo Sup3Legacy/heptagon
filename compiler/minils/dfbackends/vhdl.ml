@@ -149,10 +149,8 @@ let pp_name fmt name =
     if String.length name > 0 && name.[0] = '_' then "h" ^ name else name in
   fprintf fmt "%s" real_name
 
-let pp_qualname fmt ({ qual = modn; name = id; } as qn) =
-  if modn <> !modname
-  then fprintf fmt "work.types.%a" pp_name id
-  else Global_printer.print_qualname fmt qn
+let pp_qualname fmt ({ qual = qual; name = name;} as qn) =
+  if name = !modname then pp_name fmt name else pp_name fmt (fullname qn)
 
 let rec pp_list f fmt l = match l with
   | [] -> ()
@@ -388,7 +386,7 @@ let pp_package fmt p =
   (* Small built-in function for bool->logic conversion. *)
   fprintf fmt "@ function to_logic(b : boolean) return std_logic;";
   fprintf fmt "@]@\nend package %a;@]" pp_name p.vpack_name;
-  fprintf fmt "@\n";
+  fprintf fmt "@\n@\n";
   fprintf fmt "@[@[<v 2>package body %a is@\n" pp_name p.vpack_name;
   fprintf fmt "function to_logic(b : boolean) return std_logic is@\n";
   fprintf fmt "begin@\n";
@@ -398,7 +396,7 @@ let pp_package fmt p =
   fprintf fmt "    return '0';@\n";
   fprintf fmt "  end if;@\n";
   fprintf fmt "end function to_logic;@\n";
-  fprintf fmt "@]end package body %a;@]@\n" pp_name p.vpack_name;
+  fprintf fmt "@]@\nend package body %a;@]@\n" pp_name p.vpack_name;
   fprintf fmt "@."
 
 let print_component f c = f (c.vc_name ^ ".vhd") pp_component c
