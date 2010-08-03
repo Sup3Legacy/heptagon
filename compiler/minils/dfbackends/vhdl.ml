@@ -151,7 +151,8 @@ let pp_name fmt name =
 
 let pp_longname fmt longname = match longname with
   | Modname { qual = modn; id = id; } when modn = !modname ->
-      fprintf fmt "work.types.%a" pp_name id
+      (* fprintf fmt "work.types.%a" pp_name id *)
+      fprintf fmt "%a" pp_name id
   | _ -> pp_name fmt (fullname longname)
 
 let rec pp_list f fmt l = match l with
@@ -387,7 +388,7 @@ let pp_package fmt p =
   (* Small built-in function for bool->logic conversion. *)
   fprintf fmt "@ function to_logic(b : boolean) return std_logic;";
   fprintf fmt "@]@\nend package %a;@]" pp_name p.vpack_name;
-  fprintf fmt "@\n";
+  fprintf fmt "@\n@\n";
   fprintf fmt "@[@[<v 2>package body %a is@\n" pp_name p.vpack_name;
   fprintf fmt "function to_logic(b : boolean) return std_logic is@\n";
   fprintf fmt "begin@\n";
@@ -397,7 +398,7 @@ let pp_package fmt p =
   fprintf fmt "    return '0';@\n";
   fprintf fmt "  end if;@\n";
   fprintf fmt "end function to_logic;@\n";
-  fprintf fmt "@]end package body %a;@]@\n" pp_name p.vpack_name;
+  fprintf fmt "@]@\nend package body %a;@]@\n" pp_name p.vpack_name;
   fprintf fmt "@."
 
 let print_component f c = f (c.vc_name ^ ".vhd") pp_component c
@@ -425,14 +426,14 @@ let bench_name n = n ^ "_tb"
 (** [period] is the clock's period in nanoseconds. It should always be > 1. *)
 let period = 2
 
-let ck_n = Ident.fresh "clk"
-and rs_n = Ident.fresh "rst"
-and hr_n = Ident.fresh "hw_rst"
+let ck_n = Idents.fresh "clk"
+and rs_n = Idents.fresh "rst"
+and hr_n = Idents.fresh "hw_rst"
 
-let clock_signal = { vs_name = Ident.name ck_n; vs_polarity = Some Vp_in;
+let clock_signal = { vs_name = Idents.name ck_n; vs_polarity = Some Vp_in;
                      vs_type = Vt_logic; }
 
-let hwrst_signal = { vs_name = Ident.name hr_n; vs_polarity = Some Vp_in;
+let hwrst_signal = { vs_name = Idents.name hr_n; vs_polarity = Some Vp_in;
                      vs_type = Vt_logic; }
 
 let native_signals =
@@ -442,7 +443,7 @@ let native_signals =
   ]
 
 let base_signals =
-  native_signals @ [{ vs_name = Ident.name rs_n; vs_polarity = Some Vp_in;
+  native_signals @ [{ vs_name = Idents.name rs_n; vs_polarity = Some Vp_in;
                       vs_type = Vt_logic; };]
 
 let op_table =

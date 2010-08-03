@@ -15,7 +15,7 @@
 open Names
 open Misc
 open Minils
-open Ident
+open Idents
 open Types
 open Initial
 open Static
@@ -23,6 +23,7 @@ open Vhdl
 open Signature
 open Mls_utils
 open Location
+open Clocks
 
 (* TODO: find a better way to access type information *)
 let tys = ref []
@@ -111,7 +112,7 @@ struct
   let simp_calls_edesc funs (vars, equs) edesc = match edesc with
     | Eapp ({ a_op = Enode nn; } as app, e_list, None) ->
         let add_eq (vars, equs) e =
-          let arg = Ident.fresh "arg" in
+          let arg = Idents.fresh "arg" in
           let e_arg = mk_exp ~exp_ty:e.e_ty (Evar arg) in
           let vd_arg = mk_var_dec arg e.e_ty
           and eq_arg = mk_equation (Evarpat arg) e in
@@ -165,7 +166,7 @@ struct
           let mk_args y_l i = List.map (select i) y_l in
 
           let mk_new_var s =
-            let z = Ident.fresh s in
+            let z = Idents.fresh s in
             (z,
              mk_var_dec ~clock:ck z ty_r,
              mk_exp ~exp_ty:ty_r ~clock:ck (Evar z)) in
@@ -366,7 +367,7 @@ and trad_app e op pl el = match op, el, pl with
   | Earray_fill, [e], [ssize] ->
       let n = eval_static_size ssize in
       Ve_array_repeat (n, trad_exp e)
-  | Efield, [e], [{ se_desc = Svar fn; }] ->
+  | Efield, [e], [{ se_desc = Sconstructor fn; }] ->
       Ve_field (trad_exp e, fn)
   | _ ->
       Printf.eprintf "Unexpected expression:\n";
@@ -437,7 +438,7 @@ let trad_eq eq (n, is) = match (eq.eq_lhs, eq.eq_rhs.e_desc) with
              | None -> Vi_if (i_c, i_stm, [], None)
              | Some c ->
                  Vi_if (Ve_bop ("=",
-                                mk_vare (Ident.name hr_n),
+                                mk_vare (Idents.name hr_n),
                                 one),
                         Vi_assgn (Vl_var (name vn), Ve_const c),
                         [(i_c, i_stm)], None)) :: is)
@@ -589,14 +590,6 @@ let trans_opname opn = match opn with
   | Name id | Modname { qual = "Pervasives"; id = id; } -> id
   | Modname _ -> unimplemented ("operator " ^ fullname opn)
 
-let trans_ty bty = match bty with
-  | Tid x when x = pint -> Vt_int
-  | Tid x when x = pfloat -> unimplemented "float type"
-  | Tid x when x = pbool -> Vt_logic
-  | Tid ln -> Vt_id ln
-  | Tprod _ -> unimplemented "trans_opname: product types"
-  | Tarray _ -> unimplemented "trans_opname: array types"
-
 let trans_ty_dec tyd =
   let desc = match tyd.t_desc with
     | Type_enum nl -> Vty_enum nl
@@ -689,7 +682,8 @@ let package_of_types p =
   let tydl =
     [
       { vty_name = "integer_vector"; vty_desc = Vty_vector Vt_int; };
-    ] @ List.map trans_ty_dec p.p_types in
+    ]
+    @ List.map trans_ty_dec p.p_types in
 
   { vpack_name = "types";
     vpack_decls = List.map (fun tyd -> Vd_type tyd) tydl; }
