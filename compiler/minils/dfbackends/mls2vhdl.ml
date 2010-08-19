@@ -66,7 +66,11 @@ let bool_t = Tid pbool
 
 let rst_e = mk_exp ~ty:bool_t (Evar rs_n)
 
-let eval_static_size se = Static.int_of_static_exp QualEnv.empty se
+let eval_static_size se =
+  try Static.int_of_static_exp QualEnv.empty se
+  with Instanciation_failed ->
+    Format.eprintf "Instantiation failed: %a@." print_static_exp se;
+    assert false
 
 module AddRst =
 struct
