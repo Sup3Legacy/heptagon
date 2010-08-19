@@ -1,0 +1,23 @@
+(* Allocateur de ressource pour deux demandeurs. *)
+(* Sûreté : non (g0 et g1) *)
+node alloc(r0 : bool; r1 : bool) returns (g0 : bool; g1 : bool)
+let
+  automaton
+    state IDLE0
+      do g0 = false;
+         g1 = false;
+      until r0 then ALLOC0 | (r1 & not r0) then ALLOC1
+    state IDLE1
+      do g0 = false;
+         g1 = false;
+      until r1 then ALLOC1 | (r0 & not r1) then ALLOC0
+    state ALLOC0
+      do g0 = true;
+         g1 = false;
+      until (not r0) then IDLE1
+    state ALLOC1
+      do g0 = false;
+         g1 = true;
+      until (not r1) then IDLE0
+    end;
+tel

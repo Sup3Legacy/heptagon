@@ -1,0 +1,6 @@
+node main() returns (o : bool)
+var tab : bool^3;
+let
+  tab = [true, true, true];
+  o = fold (&)<<3>>(tab, true);
+tel

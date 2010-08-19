@@ -1,0 +1,9 @@
+node main(rst_4 : bool) returns (o : bool)
+var z_10 : bool; z_9 : bool; z_8 : bool; tab : bool^3;
+let
+  tab = [true; true; true];
+  z_8 = tab[0] & true;
+  z_9 = tab[1] & z_8;
+  z_10 = tab[2] & z_9;
+  o = z_10;
+tel

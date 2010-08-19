@@ -1,0 +1,8 @@
+node count<<n:int>>(event : bool^n; rst : bool) returns (count : int)
+var pres : int;
+let
+  count = ( + )(if rst then 0 else 0 fby count, pres);
+  pres =
+    (fold (( + ))<<n>>)
+      ((map (int_of_bool)<<n>>)(event) every rst, 0);
+tel

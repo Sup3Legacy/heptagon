@@ -1,0 +1,83 @@
+type st_2 = IDLE1_1|IDLE0_1|ALLOC1_1|ALLOC0_1
+node alloc(r0 : bool; r1 : bool) returns (g0 : bool; g1 : bool)
+var ns_31 : st_2; nr_30 : bool; ns_29 : st_2; nr_28 : bool; ns_27 : st_2;
+    nr_26 : bool; ns_25 : st_2; nr_24 : bool; ck_23 : st_2; pnr_14 : bool;
+    nr_13 : bool; r_12 : bool; ns_11 : st_2; r_22 : bool; r_21 : bool;
+    r_20 : bool; r_19 : bool; r_18 : bool; r_17 : bool; r_16 : bool;
+    r_15 : bool;
+let
+  r_22 = true fby r_18;
+  r_21 = true fby r_17;
+  r_20 = true fby r_16;
+  r_19 = true fby r_15;
+  r_18 =
+    merge ck_23
+      (ALLOC1_1 -> (false when ALLOC1_1(ck_23)))
+      (ALLOC0_1 -> (r_22 when ALLOC0_1(ck_23)))
+      (IDLE1_1 -> (r_22 when IDLE1_1(ck_23)))
+      (IDLE0_1 -> (r_22 when IDLE0_1(ck_23)));
+  r_17 =
+    merge ck_23
+      (ALLOC1_1 -> (r_21 when ALLOC1_1(ck_23)))
+      (ALLOC0_1 -> (false when ALLOC0_1(ck_23)))
+      (IDLE1_1 -> (r_21 when IDLE1_1(ck_23)))
+      (IDLE0_1 -> (r_21 when IDLE0_1(ck_23)));
+  r_16 =
+    merge ck_23
+      (ALLOC1_1 -> (r_20 when ALLOC1_1(ck_23)))
+      (ALLOC0_1 -> (r_20 when ALLOC0_1(ck_23)))
+      (IDLE1_1 -> (false when IDLE1_1(ck_23)))
+      (IDLE0_1 -> (r_20 when IDLE0_1(ck_23)));
+  r_15 =
+    merge ck_23
+      (ALLOC1_1 -> (r_19 when ALLOC1_1(ck_23)))
+      (ALLOC0_1 -> (r_19 when ALLOC0_1(ck_23)))
+      (IDLE1_1 -> (r_19 when IDLE1_1(ck_23)))
+      (IDLE0_1 -> (false when IDLE0_1(ck_23)));
+  nr_13 =
+    merge ck_23
+      (ALLOC1_1 -> nr_30)(ALLOC0_1 -> nr_28)(IDLE1_1 -> nr_26)
+      (IDLE0_1 -> nr_24);
+  ns_11 =
+    merge ck_23
+      (ALLOC1_1 -> ns_31)(ALLOC0_1 -> ns_29)(IDLE1_1 -> ns_27)
+      (IDLE0_1 -> ns_25);
+  g1 =
+    merge ck_23
+      (ALLOC1_1 -> (true when ALLOC1_1(ck_23)))
+      (ALLOC0_1 -> (false when ALLOC0_1(ck_23)))
+      (IDLE1_1 -> (false when IDLE1_1(ck_23)))
+      (IDLE0_1 -> (false when IDLE0_1(ck_23)));
+  g0 =
+    merge ck_23
+      (ALLOC1_1 -> (false when ALLOC1_1(ck_23)))
+      (ALLOC0_1 -> (true when ALLOC0_1(ck_23)))
+      (IDLE1_1 -> (false when IDLE1_1(ck_23)))
+      (IDLE0_1 -> (false when IDLE0_1(ck_23)));
+  (ns_31, nr_30) =
+    if not((r1 when ALLOC1_1(ck_23)))
+    then ((IDLE0_1 when ALLOC1_1(ck_23)), (true when ALLOC1_1(ck_23)))
+    else ((ALLOC1_1 when ALLOC1_1(ck_23)), (false when ALLOC1_1(ck_23)));
+  (ns_29, nr_28) =
+    if not((r0 when ALLOC0_1(ck_23)))
+    then ((IDLE1_1 when ALLOC0_1(ck_23)), (true when ALLOC0_1(ck_23)))
+    else ((ALLOC0_1 when ALLOC0_1(ck_23)), (false when ALLOC0_1(ck_23)));
+  (ns_27, nr_26) =
+    if (r1 when IDLE1_1(ck_23))
+    then ((ALLOC1_1 when IDLE1_1(ck_23)), (true when IDLE1_1(ck_23)))
+    else if ( & )((r0 when IDLE1_1(ck_23)), not((r1 when IDLE1_1(ck_23))))
+         then ((ALLOC0_1 when IDLE1_1(ck_23)), (true when IDLE1_1(ck_23)))
+         else ((IDLE1_1 when IDLE1_1(ck_23)), (false when IDLE1_1(ck_23)))
+      ;
+  (ns_25, nr_24) =
+    if (r0 when IDLE0_1(ck_23))
+    then ((ALLOC0_1 when IDLE0_1(ck_23)), (true when IDLE0_1(ck_23)))
+    else if ( & )((r1 when IDLE0_1(ck_23)), not((r0 when IDLE0_1(ck_23))))
+         then ((ALLOC1_1 when IDLE0_1(ck_23)), (true when IDLE0_1(ck_23)))
+         else ((IDLE0_1 when IDLE0_1(ck_23)), (false when IDLE0_1(ck_23)))
+      ;
+  ck_23 = IDLE0_1 fby ns_11;
+  pnr_14 = false fby nr_13;
+  r_12 = pnr_14;
+tel
+
