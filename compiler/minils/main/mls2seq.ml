@@ -45,10 +45,23 @@ let targets = [ "c", Obc_no_params Cmain.program;
                 "vhdl", Minils_no_params Mls2vhdl.program]
 
 let generate_target p s =
-  let print_unfolded p_list =
-    comment "Unfolding";
-    if !Compiler_options.verbose then
-      List.iter (Mls_printer.print stderr) p_list in
+  let unfold_params p =
+    let print_programs msg p_list =
+      if !verbose then
+        begin
+          Printf.fprintf stdout "** %s done **\n\n" msg;
+          List.iter (Mls_printer.print stdout) p_list;
+        end in
+    let p_list = Callgraph.program p in
+    print_programs "Unfolding" p_list;
+    if !vhdl_simpl
+    then
+      let p_list = List.map Mls2vhdl.InlineIterators.program p_list in
+      let p_list = List.map Normalize.program p_list in
+      let p_list = List.map Schedule.program p_list in
+      print_programs "Iterator inlining" p_list;
+      p_list
+    else p_list in
 
   let target =
     (try List.assoc s targets
@@ -58,17 +71,18 @@ let generate_target p s =
           convert_fun p
       | Obc convert_fun ->
           let o = Mls2obc.program p in
-            convert_fun o
+          convert_fun o
       | Minils_no_params convert_fun ->
-          let p_list = Callgraph.program p in
-            List.iter convert_fun p_list
+          let p_list = unfold_params p in
+          List.iter convert_fun p_list
       | Obc_no_params convert_fun ->
-          let p_list = Callgraph.program p in
+          let p_list = unfold_params p in
           let o_list = List.map Mls2obc.program p_list in
-          print_unfolded p_list;
-          comment "Translation to Obc";
           if !verbose then
-            List.iter (Obc_printer.print stdout) o_list;
+            begin
+              Printf.fprintf stdout "** Translation to Obc done **\n\n";
+              List.iter (Format.printf "%a@." Obc_printer.print_prog) o_list;
+            end;
           List.iter convert_fun o_list
 
 let program p =
