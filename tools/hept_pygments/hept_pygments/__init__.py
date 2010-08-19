@@ -86,15 +86,16 @@ class VHDLLexer(RegexLexer):
     tokens = {
         'root': [
             (r'--.*\n', Comment),
-            (r'architecture|process|signal|entity|function',
+            (r'architecture|process|signal|entity|function|variable',
               Keyword.Declaration),
             (r'library|use', Keyword.Namespace),
             (r'returns|begin|end|if|then|else|elsif|when|of', Keyword),
-            (r'natural|bit|std_ulogic', Keyword.Type),
+            (r'port|map', Keyword),
+            (r'natural|bit|std_logic|integer', Keyword.Type),
+            (r'\(|\)|;|\||:|\{|\}|,|\'|=>', Punctuation),
             (r'\+|\-|\/|=|&|not|<=|\.', Operator),
             (r'\d+', Number.Integer),
             (r' |\t', Whitespace),
-            (r'\(|\)|;|\||:|\{|\}|,|\'', Punctuation),
             (r'true|false', Literal),
             (r'[A-Z]\w*', String.Symbol),
             (r'\w+', Name)
