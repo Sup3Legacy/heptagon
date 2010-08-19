@@ -412,9 +412,8 @@ let rec trad_cexpr e dst = match e.e_desc with
       Vi_if (guard, Vi_affect (dst, Ve_array_index (trad_exp arr, indl)),
              [], Some else_branch)
 
-  | Eapp ({ a_op = Eupdate; a_params = idxl; }, [arr; newval], None) ->
-      let mk_lhs idx lhs =
-        Vl_arr (lhs, mk_c (Sint (eval_static_size idx))) in
+  | Eapp ({ a_op = Eupdate; a_params = []; }, arr :: newval :: idxl, None) ->
+      let mk_lhs idx lhs = Vl_arr (lhs, trad_exp idx) in
       let lhs = List.fold_right mk_lhs idxl dst in
       Vi_seq [
         Vi_affect (dst, trad_exp arr);
