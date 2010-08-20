@@ -1,0 +1,16 @@
+(* Compteur simple de event reinitialisé à chaque rst. *)
+node count(event : bool; rst : bool) returns (c : int)
+var pres : int;
+let
+  pres = if event then 1 else 0;
+  c = if rst then 0 else (pres + (0 fby c));
+tel
+
+(* EXPECTED: 0, 1, 2, 0, 1... *)
+node main() returns (c : int)
+var evt : bool; rst : bool;
+let
+  evt = false fby  true fby  true fby  true fby  true fby evt;
+  rst = false fby false fby false fby  true fby false fby rst;
+  c   = count(evt, rst);
+tel

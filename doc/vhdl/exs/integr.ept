@@ -1,0 +1,11 @@
+(* Intégration : méthode des rectangles *)
+node integr(t : int; dx : int) returns (x : int)
+let
+  x = 0 -> (t * dx + pre x);
+tel
+
+(* EXPECTED: 0, 10, 37... *)
+node main() returns (x : int)
+let
+  x = integr(5 fby 10 fby 9 fby 0, 2 fby 1 fby 3);
+tel

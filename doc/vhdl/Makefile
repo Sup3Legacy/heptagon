@@ -11,10 +11,10 @@ heptc:
 
 %_vhdl:	%.ept
 	heptc.byte -target vhdl $<
+	rm -rf $(dir $<)/$(notdir $@)
 	mv $(notdir $@) $(dir $<)
 
 gencod.zip:	rapport.pdf heptc $(patsubst %.ept,%_vhdl,$(wildcard exs/*.ept))
-	echo $^
 	zip -r $@ $^
 
 clean:

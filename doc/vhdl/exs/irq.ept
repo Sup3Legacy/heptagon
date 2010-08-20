@@ -1,0 +1,14 @@
+node irq_ctrl<<n : int>>(irq_in, irq_msk : bool^n; irq_en : bool)
+          returns (irq_out : bool)
+var l3, l4 : bool^n; l5 : bool;
+let
+  l3 = map (&)<<n>> (irq_in, l4);
+  l4 = map (not)<<n>> (irq_msk);
+  l5 = fold (or)<<n>> (l3, false);
+  irq_out = l5 & irq_en;
+tel
+
+node main() returns (o : bool)
+let
+  o = irq_ctrl<<3>>(true^3, false^3, true);
+tel

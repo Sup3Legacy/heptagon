@@ -1,0 +1,116 @@
+type i_ram_in = { d : bool^16; a : bool^18; w : bool; req : bool }
+
+(* Je ne peux pas deduire le type de f1, je suppose bool. *)
+type i_ram_out = { irof1 : bool; ack : bool }
+
+(* Je ne peux pas deduire le type de dt (le meme que i_ram_out.f1),
+   je suppose donc bool egalement. *)
+type ram_core = { dt : bool }
+
+type core_ram = { crf1 : bool^18; crf2 : bool^16;
+                  crf3 : bool;
+                  crf4 : bool;
+                  crf5 : bool;
+                  crf6 : bool;
+                  crf7 : bool }
+
+type core_debug = { cdf1 : bool;
+                    cdf2 : bool;
+                    cdf3 : bool;
+                    cdf4 : bool }
+
+
+node i_ram(i_ecsbi : i_ram_in;
+           huii : i_ram_in;
+           txi : i_ram_in;
+           rxi : i_ram_in;
+           rami : ram_core)
+  returns (ecsbo : i_ram_out;
+           huio : i_ram_out;
+           txo : i_ram_out;
+           rxo : i_ram_out;
+           ramo : core_ram;
+           debugo : core_debug;
+           i_ecsb_ack, tx_ack, rx_ack, hui_ack, ram_w : bool)
+var
+   ram_d : bool ^16 (* default = false ^ 16*) ;
+   ram_a : bool ^18 (* default = false ^ 18*) ;
+let
+   automaton (* Arbiter *)
+      state Idle
+        do ram_d = false^16; (* correspond au "default" de ram_d *)
+           ram_a = false^18; (* correspond au "default" de ram_a *)
+
+           i_ecsb_ack = false; (* signal not emitted *)
+           rx_ack = false; (* signal not emitted *)
+           tx_ack = false; (* signal not emitted *)
+           hui_ack = false; (* signal not emitted *)
+
+           ram_w = false; (* signal not emitted *)
+        until i_ecsbi.req then Ecsb_gnt
+            | rxi.req then Rx_gnt
+            | txi.req then Tx_gnt
+            | huii.req then Hiu_gnt
+
+      state Ecsb_gnt
+        do ram_a = i_ecsbi.a;
+           ram_d = i_ecsbi.d;
+           ram_w = i_ecsbi.w; (* correspond a "emit 'ram_w if i_ecsbi.w;" *)
+           i_ecsb_ack = true; (* correspond a "if true do emit 'i_ecsb_ack;" *)
+
+           rx_ack = false; (* signal not emitted *)
+           tx_ack = false; (* signal not emitted *)
+           hui_ack = false; (* signal not emitted *)
+        until rxi.req then Rx_gnt
+            | txi.req then Tx_gnt
+            | huii.req then Hiu_gnt
+            | true then Idle
+
+      state Rx_gnt
+        do ram_w = rxi.w; (* correspond a "emit 'ram_w if rxi.w;" *)
+           rx_ack = true; (* correspond a "if true do emit 'rx_ack;" *)
+
+           ram_d = false^16; (* correspond au "default" de ram_d *)
+           ram_a = false^18; (* correspond au "default" de ram_a *)
+
+           i_ecsb_ack = false; (* signal not emitted *)
+           tx_ack = false; (* signal not emitted *)
+           hui_ack = false; (* signal not emitted *)
+        until txi.req then Tx_gnt
+            | huii.req then Hiu_gnt
+            | true then Idle
+
+      state Tx_gnt
+        do ram_d = txi.d;
+           ram_a = txi.a;
+           ram_w = txi.w; (* correspond a "emit 'ram_w if txi.w;" *)
+           tx_ack = true; (* correspond to "if true do emit 'tx_ack;" *)
+
+           i_ecsb_ack = false; (* signal not emitted *)
+           rx_ack = false; (* signal not emitted *)
+           hui_ack = false; (* signal not emitted *)
+        until huii.req then Hiu_gnt
+            | true then Idle
+
+      state Hiu_gnt
+        do ram_d = huii.d;
+           ram_a = huii.a;
+           ram_w = huii.w; (* correspond a "emit 'ram_w if huii.w;" *)
+           hui_ack = true; (* correspond a "if true do emit 'hui_ack;" *)
+
+           i_ecsb_ack = false; (* signal not emitted *)
+           rx_ack = false; (* signal not emitted *)
+           tx_ack = false; (* signal not emitted *)
+        until i_ecsbi.req then Ecsb_gnt
+            | true then Idle
+   end;
+
+   debugo = { cdf1 = huii.req; cdf2 = rxi.req;
+              cdf3 = txi.req; cdf4 = i_ecsbi.req };
+   ecsbo = { irof1 = rami.dt; ack = i_ecsb_ack };
+   huio = { irof1 = rami.dt; ack = hui_ack };
+   txo = { irof1 = rami.dt; ack = tx_ack };
+   rxo = { irof1 = rami.dt; ack = rx_ack };
+   ramo = { crf1 = ram_a; crf2 = ram_d; crf3 = false; crf4 = not ram_w;
+            crf5 = ram_w; crf6 = false; crf7 = false };
+tel

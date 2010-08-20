@@ -1,0 +1,22 @@
+(* Compte le nombre de ticks entre deux tocks *)
+node ticktock(tick : bool; tock : bool) returns (c : int)
+let
+  automaton
+    state OUTSIDETOCKS
+      do c = 0
+      unless tock then BETWEENTOCKS
+    state BETWEENTOCKS
+      var pres : int;
+      do pres = if tick then 1 else 0;
+         c = (0 fby c) + pres;
+      unless tock then OUTSIDETOCKS
+  end;
+tel
+
+node main() returns (c : int)
+var tick : bool; tock : bool;
+let
+  tick = false fby true fby true fby true fby false;
+  tock = false fby true fby false fby true fby false;
+  c = ticktock(tick, tock);
+tel

@@ -1,0 +1,13 @@
+(* Dérivée. *)
+node deriv(x : int) returns (dx : int)
+let
+  dx = 0 -> (x - pre x);
+tel
+
+(* EXPECTED: 0, 10, 5, -5... *)
+node main() returns (dx : int)
+var x : int;
+let
+  x  = 0 fby 10 fby 15 fby 10 fby x;
+  dx = deriv(x);
+tel

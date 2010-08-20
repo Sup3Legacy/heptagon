@@ -1,0 +1,19 @@
+(* Chaudière : tente d'ajuster actual autour de expected +-= tolerance. *)
+node heat(expected : int; actual : int; tolerance : int) returns (heat : bool)
+let
+  automaton
+    state HIGH
+      do heat = false
+      unless actual <= expected - tolerance then LOW
+    state LOW
+      do heat = true
+      unless actual >= expected + tolerance then HIGH
+  end
+tel
+
+node main() returns (temp : int)
+var h : bool;
+let
+  h = heat(20, temp, 2);
+  temp = 5 fby (if h then temp + 3 else temp - 3);
+tel

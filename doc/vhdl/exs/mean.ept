@@ -1,0 +1,13 @@
+(* Calcule moyenne *)
+node mean(s : int) returns (m : int)
+var nat : int; sum : int;
+let
+  sum = s + (0 fby sum);
+  nat = 1 + (0 fby nat);
+  m = sum / nat;
+tel
+
+node main() returns (c : int)
+let
+  c = mean(0 fby 10 fby 5 fby 9 fby 10);
+tel

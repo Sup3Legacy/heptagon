@@ -1,0 +1,194 @@
+node stopbb(datain, shiftenable : bool) returns (dataout : bool^33)
+var last dataint : bool^33 = false^33;
+    dataoutint : bool^33;
+let
+  dataoutint = dataout;
+  dataout = (false^33) fby dataint;
+  switch shiftenable
+    | true do dataint = [datain] @ dataoutint[0 .. 31];
+    | false do
+  end
+tel
+
+node counter(clrcnt, incrcnt : bool; maxval, defval : int)
+     returns (cnt : int)
+let
+  cnt = 0 -> pre (if clrcnt
+                  then defval
+                  else if incrcnt
+                       then if cnt > maxval
+                            then cnt
+                            else cnt + 1
+                       else cnt);
+tel
+
+(* sampledata : default false;
+   newword : default false; *)
+node rxman(udi, udilast : bool)
+     returns (sampledata : bool; newword : bool)
+var
+  last bitvalidity : bool = true; (* defaults to true *)
+  last parityerror : bool = false; (* defaults to false *)
+  cntsample : int;
+  last clrcntsample : bool; (* defaults to false; *)
+  last incrcntsample : bool = true; (* defaults to true *)
+  last parityvalue : bool = true;
+  incrcntbit : bool; (* defaults to false *)
+  cntbit : int;
+  clrcntbit : bool; (* defaults to false *)
+let
+  cntbit = counter(false fby clrcntbit , false fby incrcntbit, 32, 1);
+  incrcntsample = true;
+  cntsample = counter((udi = not udilast) fby clrcntsample,
+                      incrcntsample, 15, 1);
+  automaton (* SM_decoder *)
+    state Searchsynce
+      var last syncro1 : bool = false;
+      do
+      newword = false; (* default *)
+      incrcntbit = false; (* default *)
+      clrcntbit = false; (* default *)
+      automaton (* SM_SyncSearch *)
+          state Samplepart1e
+            do clrcntsample = (udi = not udilast);
+               sampledata = clrcntsample & cntsample >= 12;
+            until sampledata then Samplepart2e
+                | clrcntsample then Samplepart1e
+
+          state Samplepart2e
+            do clrcntsample = (cntsample <> 13) & (udi = not udilast);
+
+               sampledata = false; (* default *)
+            until cntsample = 13 then Waitsyncende
+                | clrcntsample then Samplepart1e
+
+          state Waitsyncende
+            do clrcntsample = (cntsample = 15);
+
+               sampledata = false; (* default *)
+            until clrcntsample then Oke
+
+          state Oke
+            do syncro1 = true;
+
+               sampledata = false; (* default *)
+        end;
+        until syncro1 then Samplebite
+
+    state Samplebite
+      var last prevvalue2 : bool = false;
+          last syncro2 : bool = false;
+      do
+        newword = false; (* default *)
+        automaton
+          state Idlee
+            do sampledata = false; (* default *)
+               incrcntbit = false; (* default *)
+               clrcntbit = false; (* default *)
+            until cntsample = 3 then Sample1e
+
+          state Sample1e
+            do prevvalue2 = udi;
+
+               sampledata = false; (* default *)
+               incrcntbit = false; (* default *)
+               clrcntbit = false; (* default *)
+            until true then Ws1e
+
+          state Sample2e
+            do parityvalue = udi xor (last parityvalue);
+
+               sampledata = false; (* default *)
+               incrcntbit = false; (* default *)
+               clrcntbit = false; (* default *)
+            until true then Ws2e
+
+          state Ws1e
+            var sample_is_8 : bool;
+            do sample_is_8 = cntsample = 8;
+               bitvalidity = sample_is_8 & (udi <> prevvalue2);
+               sampledata = sample_is_8 & (udi = prevvalue2);
+
+               incrcntbit = false; (* default *)
+               clrcntbit = false; (* default *)
+            until sample_is_8 then Sample2e
+
+          state Ws2e
+            do clrcntsample = cntsample = 10;
+               clrcntbit = clrcntsample & cntbit = 32;
+               incrcntbit = clrcntsample & cntbit <> 32;
+
+               sampledata = false; (* default *)
+            until clrcntbit then Exite | incrcntbit then Idlee
+
+          state Exite
+            do syncro2 = true;
+
+               sampledata = false; (* default *)
+               incrcntbit = false; (* default *)
+               clrcntbit = false; (* default *)
+        end
+
+      until (not bitvalidity) & (cntbit > 2) then Errorstatee
+          | (not bitvalidity) then Searchsynce
+          | syncro2 then Paritychecke
+
+    state Paritychecke
+      var last prevvalue3 : bool = false;
+          last syncro3 : bool = false;
+      do
+        sampledata = false; (* default *)
+        incrcntbit = false; (* default *)
+        clrcntbit = false; (* default *)
+        automaton
+          state Idlee
+            do
+            until cntsample = 3 then Sample1e
+
+          state Ws1e
+            var cntsample_8 : bool;
+            do cntsample_8 = cntsample = 8;
+               bitvalidity = cntsample_8 & (udi <> prevvalue3);
+
+
+            until cntsample_8 then Checke
+
+          state Checke
+            do parityerror = (parityvalue <> udi);
+
+
+            until true then Ws2e
+
+          state Ws2e
+            do clrcntsample = (cntsample = 10);
+            until clrcntsample then Exite
+
+          state Exite
+            do
+               syncro3 = true
+
+          state Sample1e
+            do prevvalue3 = udi;
+            until true then Ws1e
+        end;
+
+        newword = syncro3;
+
+        until not bitvalidity or parityerror then Errorstatee
+            | syncro3 then Searchsynce
+
+    state Errorstatee
+      do sampledata = false; (* default *)
+         incrcntbit = false; (* default *)
+         clrcntbit = false; (* default *)
+         newword = false; (* default *)
+      until true then Searchsynce
+  end
+tel
+
+node rxblock(udi, udilast : bool) returns (data : bool^33; newword : bool)
+var l2 : bool;
+let
+  data = stopbb(udi, l2);
+  (l2, newword) = rxman(udi, udi);
+tel

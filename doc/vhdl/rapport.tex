@@ -159,16 +159,16 @@ celui ayant obtenu la ressource il y a le plus longtemps).
 %\paragraph{Architecture du compilateur}
 \subsection{Architecture du compilateur}
 
-On décrit brièvement l'architecture du compilateur telle que décrite dans
-l'article \cite{lctes08a} : après des phases initiales d'analyse lexicale,
-syntaxique et de typage, le programme \LANG{} est soumis aux vérifications
-traditionnelles des langages synchrones (causalité, etc.). Ensuite, on le
-dépouille progressivement de ses constructions de haut niveau par des
-réécritures successives, jusqu'à arriver à une forme simple qui peut être
-traduite simplement en MiniLS. Le code résultant, après avoir été soumis à
-d'éventuelles optimisations, est mis dans une certaine forme dite ``normale'' et
-ordonnancé avant d'être finalement traduit en code séquentiel. L'architecture du
-compilateur \LANG{} est présenté à la figure \ref{fig:archi}.
+On décrit brièvement l'architecture du compilateur : après des phases initiales
+d'analyse lexicale, syntaxique et de typage, le programme \LANG{} est soumis aux
+vérifications traditionnelles des langages synchrones (causalité,
+etc.). Ensuite, on le dépouille progressivement de ses constructions de haut
+niveau par des réécritures successives, jusqu'à arriver à une forme simple qui
+peut être traduite simplement en MiniLS. Le code résultant, après avoir été
+soumis à d'éventuelles optimisations, est mis dans une certaine forme dite
+``normale'' et ordonnancé avant d'être finalement traduit en code
+séquentiel. L'architecture du compilateur \LANG{} est présenté à la figure
+\ref{fig:archi}.
 
 % Le compilateur est structuré en plusieurs passes effectuant une combinaison
 % d'analyses et de transformations, généralement dans le but d'obtenir un code
@@ -472,9 +472,10 @@ suivantes :
   elle est donc implicitement asynchrone (indépendante des fronts montants de
   l'horloge).
 \item Les partenaires ont exprimé le désir de pouvoir réinitialiser physiquement
-  toute la mémoire lors du bascument d'un signal précis nommé \textbf{hwrst} :
-  on ajoute donc ce signal supplémentaire invisible dans le code MiniLS et on
-  génère le code de réinitialisation correspondant lors du traitement du $fby$.
+  toute la mémoire lors du bascument d'un signal précis nommé
+  \textbf{hwrst}\footnote{Le nom symbolique \textbf{hwrst} est supposé frais.} : on ajoute donc ce signal
+  supplémentaire invisible dans le code MiniLS et on génère le code de
+  réinitialisation correspondant lors du traitement du $fby$.
 \item Pour respecter la sémantique à $\Delta$-cycles de VHDL, il importe de
   faire évoluer la mémoire par un pas du calcul uniquement sur front montant de
   l'horloge.
@@ -595,7 +596,7 @@ concernant la façon de compiler les appels d'un noeud MiniLS qui seront donnée
   \; \mathtt{then} \\
   & & \ind \Assign{x}{y} \\
   & & \mathtt{elsif} \; \GEC{ck} \; \mathtt{then} \\
-  & & \ind \Assign{x}{\TradEq{e}} \\
+  & & \ind \Assign{x}{\TradE{e}} \\
   & & \mathtt{end} \; \mathtt{if}, i \\
 
 
