@@ -142,7 +142,8 @@ comptabilise le nombre de booléens valant \texttt{true} sur son entrée
 calculer le nombre d'évènements observés dans l'instant ; le premier permet de
 traduire les booléens en entiers, et le second d'additioner ceux-ci. Notons
 également l'utilisation de la construction de réinitialisation \texttt{reset},
-actionnée simplement lorsque l'entrée \textit{rst} est vraie.
+actionnée simplement lorsque l'entrée \textit{rst}\footnote{On suppose que le
+  nom \textit{rst} est frais} est vraie.
 
 L'exemple \ref{fig:ex_alloc} présente un automate réalisant l'allocation d'une
 ressource quelconque à deux demandeurs, avec priorité \textit{round-robin} (en
@@ -340,14 +341,13 @@ constructions $every$ dans le but de compiler plus uniformément vers VHDL,
 autrement dit sans nécessiter un traitement ad-hoc de la réinitialisation.
 
 L'idée est d'ajouter à chaque noeud un argument supplémentaire nommé
-\texttt{rst} correspondant à un appel nécessitant une réinitialisation de la
-mémoire\footnote{On suppose évidemment que le nom \texttt{rst} est frais}. La
-passe se charge de modifier les appels de noeuds pour synthétiser l'expression
-correcte, en particulier dans le cas d'une équation de type $(x_1, \dots, x_n) =
-\Every{f}{e}{e}{x}$ où $x$ doit être capable de réinitialiser $f$. Les mémoires
-réinitialisables $\Fby{v}{e}$ doivent bien-entendu être réinitialisées lorsque
-l'argument \texttt{rst} est vrai ; pour cela, il suffit de remplacer ces
-dernières par $\If{rst}{v}{\newline \Pre{e}}$.
+\textit{rst} correspondant à un appel nécessitant une réinitialisation de la
+mémoire. La passe se charge de modifier les appels de noeuds pour synthétiser
+l'expression correcte, en particulier dans le cas d'une équation de type $(x_1,
+\dots, x_n) = \Every{f}{e}{e}{x}$ où $x$ doit être capable de réinitialiser
+$f$. Les mémoires réinitialisables $\Fby{v}{e}$ doivent bien-entendu être
+réinitialisées lorsque l'argument \texttt{rst} est vrai ; pour cela, il suffit
+de remplacer ces dernières par $\If{rst}{v}{\newline \Pre{e}}$.
 
 Les fonctions suivantes effectuent ces deux tâches : $RstE$ traite une
 expression MiniLS, et $RstNode$ ajoute l'argument \texttt{rst} à un noeud et
@@ -473,9 +473,9 @@ suivantes :
   l'horloge).
 \item Les partenaires ont exprimé le désir de pouvoir réinitialiser physiquement
   toute la mémoire lors du bascument d'un signal précis nommé
-  \textbf{hwrst}\footnote{Le nom symbolique \textbf{hwrst} est supposé frais.} : on ajoute donc ce signal
-  supplémentaire invisible dans le code MiniLS et on génère le code de
-  réinitialisation correspondant lors du traitement du $fby$.
+  \textit{hwrst}\footnote{Tout comme \textit{rst}, \textit{hwrst} est frais.} :
+  on ajoute donc ce signal supplémentaire invisible dans le code MiniLS et on
+  génère le code de réinitialisation correspondant lors du traitement du $fby$.
 \item Pour respecter la sémantique à $\Delta$-cycles de VHDL, il importe de
   faire évoluer la mémoire par un pas du calcul uniquement sur front montant de
   l'horloge.
@@ -696,12 +696,14 @@ avec mode d'utilisation (entrée ou sortie).
 
 \[
 \begin{array}{ll}
-  \PS{x = \Fby{v}{e} \Cons eqs}{i} & = \PS{eqs}{i} \\
+  \PS{x = \Fby{v}{e} \Cons eqs}{i} & = \\
+  \ind \PS{eqs}{i} \\
   \PS{(x_1,\dots,x_n) = \App{f}{y_1,\dots,y_n} \Cons eqs}{i} & = \\
   \ind \MA{"clk"}{i} \Cons \MA{y_1}{i} \Cons \dots \Cons \MA{y_n}{i} \\
   \ind \mathtt{::} \; \PS{eqs}{i + 1}
   \\
-  \PS{x = ce \Cons eqs}{i} & = \PS{eqs}{i}
+  \PS{x = ce \Cons eqs}{i} & = \\
+  \ind \PS{eqs}{i}
 \end{array}
 \]
 
@@ -768,7 +770,7 @@ MiniLS normalisé et ordonnancé, et enfin le code VHDL.
 \paragraph{MiniLS normalisé, ordonnancé et simplifié}
 
 Notons que le noeud \textit{compteur} est ici instancié avec son paramètre
-\textbf{n} égal à 4, ceci afin de pouvoir déplier les itérateurs.
+\textit{n} égal à 4, ceci afin de pouvoir déplier les itérateurs.
 
 \small
 \input{compteur2_sched}
