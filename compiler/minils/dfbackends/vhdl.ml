@@ -463,6 +463,7 @@ let op_table =
           ("Pervasives.&",   ("and", false));
           ("Pervasives.not", ("not", false));
           ("Pervasives.or",  ("or",  false));
+          ("Pervasives.xor", ("xor", false));
           ("Pervasives.+",   ("+",   false));
           ("Pervasives.-",   ("-",   false));
           ("Pervasives.*",   ("*",   false));
