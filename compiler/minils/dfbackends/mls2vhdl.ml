@@ -190,6 +190,11 @@ struct
 
           (match it with
              | Ifoldi -> unimplemented "ifoldi"
+             | Imap when is_native_vhdl app.a_op ->
+                 let eq =
+                   { eq with eq_rhs =
+                       { eq.eq_rhs with e_desc = Eapp (app, y_l, rst); }; } in
+                 (eq, (varl, equs))
              | Imap ->
                  (*
                     x = map f<<n>> (y_1, ..., y_m);
