@@ -480,3 +480,8 @@ let op_table =
 
 (* handy function for creating an exp from a variable name *)
 let mk_vare vn = Ve_lhs (Vl_var vn)
+
+let is_native_vhdl op = match op with
+  | Minils.Efun (Modname { qual = "Pervasives"; id = id; }) ->
+      List.mem id ["xor"; "&"; "or"; "not"]
+  | _ -> false
