@@ -1,0 +1,165 @@
+const n : int = 4
+
+type bv_8 = bool^8
+
+type bv_16 = bool^16
+
+type bv_32 = bool^32
+
+type bv_64 = bool^64
+
+type bv_128 = bool^128
+
+type bv_256 = bool^256
+
+node par(acc_in, ld : bool) returns (acc_out, cur : bool)
+let
+  cur = false fby (if ld then acc_in else cur);
+  acc_out = cur;
+tel
+
+node ser_par(ld : bool; in_serial : bool)
+    returns (out_par : bool^n)
+var
+  l1 : bool;
+  l8 : bool^n;
+  l9 : bool^n;
+let
+  (l9, l1) = mapfold par<<n>>(l8, in_serial);
+  out_par = l9;
+  l8 = ld^n;
+tel
+
+node simple_example(start, input1, input2 : bool;
+                    mask : bool^(n + n))
+           returns (done : bool; output : bool^(n + n))
+(* returns(done : bool default = false; Output : bool^(n + n)) *)
+var
+  ld1 : bool; (* default = false; *)
+  ld2 : bool;  (* default = false; *)
+  l1 : bool^n;
+  l2 : bool;
+  l3 : bool;
+  l4 : bool^n;
+  l6 : bool;
+  l7 : bool;
+  l9 : bool^(n + n);
+  l10 : bool^(n + n);
+  l29 : bool^(n + n);
+  last come_from_s3 : bool = false; (* encoding emission on transition S3->S1 *)
+let
+  automaton
+    state State1
+      do (* default values *)
+         ld1 = false;
+         ld2 = false;
+
+         done = come_from_s3;
+         come_from_s3 = (last come_from_s3) fby false;
+      unless start then State2
+
+    state State2
+      var count_s2 : int;
+      do ld1 = true;
+
+         come_from_s3 = false;
+
+         (* default values *)
+         ld2 = false;
+         done = false;
+
+         count_s2 = (0 fby count_s2) + 1;
+         (* sachant que n > 1,
+            "unless count_s2 = n" devient "until count_s2 = n - 1" *)
+      until count_s2 = n - 1 then State3
+
+    state State3
+      var count_s3 : int;
+      do ld2 = true;
+
+         (* default values *)
+         ld1 = false;
+         done = false;
+
+         count_s3 = (0 fby count_s3) + 1;
+         come_from_s3 = true;
+      until count_s3 = n - 1 then State1
+  end;
+  l1 = ser_par(l2, l3);
+  l2 = ld1;
+  l3 = input1;
+  l4 = ser_par(l6, l7);
+  l6 = ld2;
+  l7 = input2;
+  output= l10;
+  l9 = mask;
+  l10 = map (&)<<(n + n)>>(l29, l9);
+  l29 = l1 @ l4;
+tel
+
+node test(a : bv_16; b : bv_16; c : bv_16; i_a : bv_8; i_b : bv_8)
+ returns (o_and : bv_16;
+          o_not : bv_16;
+          o_or : bv_16;
+          o_xor : bv_16;
+          o_l_shift : bv_16;
+          o_r_shift : bv_16;
+          i_plus : bool;
+          i_minus : bool;
+          a_lt_b : bool)
+var
+  l1 : bool^16;
+  l2 : bool^16;
+  l3 : bool^16;
+  l4 : bv_16;
+  l5 : bv_16;
+  l6 : bool^16;
+  l11 : bool^16;
+  l12 : bool^16;
+  l13 : bv_16;
+  l28 : bool^8;
+  l29 : bool^8;
+  l37 : bv_8;
+  l38 : bv_8;
+  l39 : int;
+  l40 : int;
+  l41 : int;
+  l43 : int;
+  l45 : bool^8;
+  l46 : bool^8;
+  l47 : bool;
+  l49 : bool;
+  l50 : bool;
+let
+  l1 = map (&)<<16>>(l4, l5);
+  l6 = map (not)<<16>>(l4);
+  l2 = map (or)<<16>>(l4, l5);
+  l3 = map (xor)<<16>>(l4, l5);
+  l4 = a;
+  l5 = b;
+  o_and = l1;
+  o_not = l6;
+  o_or = l2;
+  o_xor = l3;
+  l11 = Bv.l_shift(l13, 5);
+  l12 = Bv.r_shift(l13, 5);
+  l13 = c;
+  o_l_shift = l11;
+  o_r_shift = l12;
+  l28 = Bv.u_minus(l37, l38);
+  l29 = Bv.u_plus(l37, l38);
+  l37 = i_a;
+  l38 = i_b;
+  l39 = Bv.bin2u(l37);
+  l40 = Bv.bin2u(l38);
+  l41 = l39 + l40;
+  l43 = l39 - l40;
+  l45 = Bv.u2bin(l41);
+  l46 = Bv.u2bin(l43);
+  l47 = Bv.bv_eq(l29, l45);
+  l49 = Bv.bv_eq(l46, l28);
+  i_plus = l47;
+  i_minus = l49;
+  l50 = Bv.bv_lt(l37, l38);
+  a_lt_b = l50;
+tel
