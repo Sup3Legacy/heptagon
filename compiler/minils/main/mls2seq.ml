@@ -51,7 +51,7 @@ let generate_target p s =
           Printf.fprintf stdout "** %s done **\n\n" msg;
           List.iter (Mls_printer.print stdout) p_list;
         end in
-    let p_list = Callgraph_mapfold.program p in
+    let p_list = Callgraph.program p in
     print_programs "Unfolding" p_list;
     if !Misc.vhdl_simpl
     then
@@ -79,8 +79,8 @@ let generate_target p s =
           let o_list = List.map Mls2obc.program p_list in
           if !Misc.verbose then
             begin
-              Printf.fprintf stdout "** Translation to Obc done **\n\n";
-              List.iter (wrap_print Obc_printer.print_prog stdout) o_list;
+              Printf.printf "** Translation to Obc done **\n\n";
+              List.iter (Format.printf "%a" Obc_printer.print_prog) o_list;
             end;
           List.iter convert_fun o_list
 

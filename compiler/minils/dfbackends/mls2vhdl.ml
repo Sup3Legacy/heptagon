@@ -396,8 +396,8 @@ and trad_app e op pl el = match op, el, pl with
       Ve_funcall ("to_logic", [Ve_bop ("=", trad_exp l, trad_exp r)])
   | (Efield_update | Etuple), _, _ -> unimplemented "trad_aop"
   | _ ->
-      Printf.eprintf "Unexpected expression:\n";
-      Mls_printer.print_exp stderr e;
+      Format.eprintf "Unexpected expression: @[%a@]\n"
+        Mls_printer.print_exp e;
       assert false
 
 let rec trad_cexpr e dst = match e.e_desc with

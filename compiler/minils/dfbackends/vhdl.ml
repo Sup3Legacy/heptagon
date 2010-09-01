@@ -257,8 +257,8 @@ let rec pp_const fmt c = match c.se_desc with
       fprintf fmt "(@[%a@])" (pp_list_sep pp_const s) cl
   | Sfloat _ | Stuple _
     ->
-      Printf.eprintf "VHDL: unsupported constant type:\n";
-      wrap_print Types.print_static_exp stderr c;
+      Format.eprintf "VHDL: unsupported constant type: @[%a@]\n"
+        Types.print_static_exp c;
       assert false
 
 let rec pp_lhs fmt lhs = match lhs with
