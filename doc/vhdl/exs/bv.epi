@@ -1,0 +1,8 @@
+val fun l_shift(a : bool^16; offset : int) returns (b : bool^16)
+val fun r_shift(a : bool^16; offset : int) returns (b : bool^16)
+val fun u_plus(a : bool^8; b : bool^8) returns (c : bool^8)
+val fun u_minus(a : bool^8; b : bool^8) returns (c : bool^8)
+val fun u2bin(a : int) returns (o : bool^8)
+val fun bin2u(a : bool^8) returns (o : int)
+val fun bv_eq(a : bool^8; b : bool^8) returns (c : bool)
+val fun bv_lt(a : bool^8; b : bool^8) returns (c : bool)
