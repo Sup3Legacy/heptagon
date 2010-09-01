@@ -141,7 +141,6 @@ type package = { vpack_name : name;
 
 type program = (component, package) either list
 
-
 (** {2 Pretty-printing of VHDL AST} *)
 
 open Format
@@ -239,7 +238,7 @@ let pp_decl fmt decl = match decl with
 let pp_decls fmt decls = pp_list_end pp_decl ";" fmt decls
 
 let rec pp_const fmt c = match c.se_desc with
-  | Svar n -> fprintf fmt "%s" (fullname n)
+  | Svar n -> fprintf fmt "work.%s" (fullname n)
   | Sbool false | Sconstructor { qual = "Pervasives"; name = "false"; }
       -> fprintf fmt "'0'"
   | Sbool true | Sconstructor { qual = "Pervasives"; name = "true"; }
@@ -395,7 +394,7 @@ let pp_architecture fmt a =
   fprintf fmt "@];@\nend architecture %a;@]@\n" pp_name a.va_name
 
 let pp_component fmt c =
-  fprintf fmt "use work.types.all;@\n@\n";
+  fprintf fmt "use work.%s.all;@\n@\n" (Modules.g_env.Modules.current_mod);
   fprintf fmt "library ieee;@\n";
   fprintf fmt "use ieee.std_logic_1164.all;@\n@\n";
   pp_entity fmt c.vc_entity;

@@ -377,10 +377,15 @@ and trad_app e op pl el = match op, el, pl with
             | [l; r] -> mk (Ve_bop (vhdl_op, trad_exp l, trad_exp r))
             | [e] -> mk (Ve_uop (vhdl_op, trad_exp e))
             | l ->
-                Format.eprintf "VHDL: unknown operator %s in %a@."
-                  (fullname ln) Mls_printer.print_exp e;
-                raise Errors.Error)
-       with Not_found -> Ve_funcall (shortname ln, List.map trad_exp el))
+                Printf.eprintf "VHDL: unknown operator %s in\n"
+                  (fullname ln);
+                raise Error)
+       with Not_found ->
+         let funn = match ln with
+           | { qual = qual; name = id; }
+               when Modules.g_env.Modules.current_mod = qual -> id
+           | _ -> "work." ^ fullname ln in
+         Ve_funcall (funn, List.map trad_exp el))
   | Econcat, [l; r], _ -> Ve_concat (trad_exp l, trad_exp r)
   | Earray, _, _ -> Ve_array (List.map trad_exp el)
   | Eselect, [e], sl ->
@@ -744,7 +749,7 @@ let package_of_types p =
 
   let tydl = !tydl @ List.map trans_ty_dec p.p_types in
 
-  { vpack_name = "types";
+  { vpack_name = Modules.g_env.Modules.current_mod;
     vpack_decls =
       List.map trans_const_dec p.p_consts
       @ List.map (fun tyd -> Vd_type tyd) tydl; }
