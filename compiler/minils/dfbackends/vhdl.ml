@@ -255,7 +255,7 @@ let rec pp_const fmt c = match c.se_desc with
       fprintf fmt "(@[%a@])" (pp_list_sep pp_const s) cl
   | Sfloat _ | Stuple _
     ->
-      Format.eprintf "VHDL: unsupported constant type: %a@."
+      Format.eprintf "VHDL: unsupported constant type: @[%a@]\n"
         Global_printer.print_static_exp c;
       assert false
 
