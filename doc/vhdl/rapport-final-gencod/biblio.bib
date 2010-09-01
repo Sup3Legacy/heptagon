@@ -1,0 +1,109 @@
+@inproceedings{lucy:lctes08a,
+  author = {Darek Biernacki and Jean-Louis Colaco and Gr\'egoire Hamon
+                  and Marc Pouzet},
+  title = {{Clock-directed Modular Code Generation of Synchronous Data-flow
+                   Languages}},
+  booktitle = {ACM International Conference on
+                  Languages, Compilers, and Tools for Embedded Systems
+                  (LCTES)},
+  year = 2008,
+  address = {Tucson, Arizona},
+  month = {June},
+  url = {lctes08a.pdf},
+  abstract = {The compilation of synchronous block diagrams into sequential
+imperative code has been addressed in the early eighties and can now
+be considered as folklore. However, modular code
+generation, though largely used in existing compilers and particularly
+in industrial ones, has never been precisely described or entirely
+formalized. Such a formalization is now fundamental in the long-term
+goal to develop a mathematically certified compiler for a synchronous
+language as well as in simplifying existing implementations.
+
+This article presents in full detail the modular compilation of
+synchronous block diagrams into sequential code. We consider a
+first-order functional language reminiscent of Lustre, which it
+extends with a general n-ary merge operator, a reset
+construct, and a richer notion of clocks. The clocks are used to
+express activation of computations in the program and are specifically
+taken into account during the compilation process to produce efficient
+imperative code. We introduce a generic machine-based intermediate
+language to represent transition functions, and we present a concise
+clock-directed translation from the source to this intermediate
+language. We address the target code generation phase by describing a
+translation from the intermediate language to Java and C.
+}
+}
+
+@INPROCEEDINGS{twelveyears,
+    author = {Albert Benveniste and Paul Caspi and Stephen A. Edwards and
+                  Nicolas Halbwachs and Paul Le Guernic and Robert De Simone},
+    title = {The synchronous languages twelve years later},
+    booktitle = {Proceedings of the IEEE},
+    year = {2003},
+    pages = {64--83}
+}
+
+@inproceedings{lustre,
+ author = {Caspi, P. and Pilaud, D. and Halbwachs, N. and Plaice, J. A.},
+ title = {LUSTRE: a declarative language for real-time programming},
+ booktitle = {POPL '87: Proceedings of the 14th ACM SIGACT-SIGPLAN symposium on
+                  Principles of programming languages},
+ year = {1987},
+ isbn = {0-89791-215-2},
+ pages = {178--188},
+ location = {Munich, West Germany},
+ doi = {http://doi.acm.org/10.1145/41625.41641},
+ publisher = {ACM},
+ address = {New York, NY, USA},
+ }
+
+@inproceedings{lucy:emsoft06,
+  author = {Jean-Louis Cola\c{c}o and Gr\'egoire Hamon and Marc Pouzet},
+  title = {{Mixing Signals and Modes in Synchronous Data-flow Systems}},
+  booktitle = {ACM International Conference on Embedded Software (EMSOFT'06)},
+  address = {Seoul, South Korea},
+  month = {October},
+  year = 2006,
+  url = {emsoft06.pdf},
+  abstract = {
+  Synchronous data-flow languages such as SCADE/Lustre manage
+  infinite sequences or {\em streams} as primitive values making them
+  naturally adapted to the description of data-dominated systems.
+  Their conservative extension with means to define control-structures
+  or {\em modes} have been a long-term research topic and several
+  solutions have emerged.
+
+  In this paper, we pursue this effort and generalize existing
+  solutions by providing two constructs: a general form of state
+  machines called {\em parameterized state machines}, and valued
+  signals, as can be found in Esterel. Parameterized state machines
+  greatly reduce the reliance on error-prone mechanisms such as shared
+  memory in automaton-based programming. Signals provide a new way of
+  programming with multi-rate data in synchronous data-flow
+  languages. Together, they allow for a much more direct and natural
+  programming of systems that combine data-flow and state-machines.
+
+  The proposed extension is fully implemented in the new Lucid
+  Synchrone compiler.}
+}
+
+@manual{vhdl,
+    author = {IEEE Computer Society},
+    publisher = {IEEE Press},
+    title = {Std 1076-2002: IEEE Standard VHDL Language Reference Manual},
+    address = {New York, NY},
+    year = {2004}
+}
+
+@inproceedings{hashcons,
+ author = {Filli\^{a}tre, Jean-Christophe and Conchon, Sylvain},
+ title = {Type-safe modular hash-consing},
+ booktitle = {ML '06: Proceedings of the 2006 workshop on ML},
+ year = {2006},
+ isbn = {1-59593-483-9},
+ pages = {12--19},
+ location = {Portland, Oregon, USA},
+ doi = {http://doi.acm.org/10.1145/1159876.1159880},
+ publisher = {ACM},
+ address = {New York, NY, USA},
+ }

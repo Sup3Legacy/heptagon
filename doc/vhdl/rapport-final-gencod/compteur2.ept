@@ -1,0 +1,17 @@
+node int_of_bool(b : bool) returns (o : int)
+let
+  o = if b then 1 else 0;
+tel
+
+node count<<n : int>>(event : bool^n; rst : bool) 
+     returns (count : int)
+var pres : int;
+let
+  pres = fold (+)<<n>>(map int_of_bool<<n>>(event), 0);
+  reset count = (0 fby count) + pres every rst;
+tel
+
+node main() returns (o : int)
+let
+  o = count<<4>>([false, true, false, true], false);
+tel
