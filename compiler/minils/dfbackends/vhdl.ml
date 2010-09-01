@@ -60,6 +60,7 @@ type vty_decl = { vty_name : name;
                   vty_desc : vty_desc; }
 and vty_desc =
   | Vty_opaque
+  | Vty_alias of vhdl_type
   | Vty_enum of qualname list
   | Vty_record of (name * vhdl_type) list
   | Vty_vector of int * vhdl_type (* dimension * type *)
@@ -198,6 +199,7 @@ let pp_signals = pp_list_sep pp_signal ";"
 let pp_ty_desc fmt desc = match desc with
   | Vty_opaque -> ()
   | Vty_enum nl -> fprintf fmt "( @[%a@] )" (pp_list_sep pp_qualname ",") nl
+  | Vty_alias ty -> assert false
   | Vty_record ntyl ->
       let pp fmt (n, ty) = fprintf fmt "%a : %a;" pp_name n pp_type ty in
       fprintf fmt "@\n@[<v 2>record@\n%a@]@\nend record" (pp_list pp) ntyl
@@ -211,8 +213,11 @@ let pp_ty_desc fmt desc = match desc with
       fprintf fmt "@\n@[<v 2>array (%s) of %a@]"
         (Buffer.contents buf) pp_type ty
 
-let pp_ty_decl fmt { vty_name = name; vty_desc = desc; } =
-  fprintf fmt "@[<v 2>type %a is %a@]" pp_name name pp_ty_desc desc
+let pp_ty_decl fmt { vty_name = name; vty_desc = desc; } = match desc with
+  | Vty_alias ty ->
+      fprintf fmt "@[<v 2>subtype %a is %a@]" pp_name name pp_type ty
+  | _ ->
+      fprintf fmt "@[<v 2>type %a is %a@]" pp_name name pp_ty_desc desc
 
 let pp_decl fmt decl = match decl with
   | Vd_signal sd -> pp_signal fmt sd
