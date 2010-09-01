@@ -107,14 +107,3 @@ translation from the intermediate language to Java and C.
  publisher = {ACM},
  address = {New York, NY, USA},
  }
-
-@Manual{lucy:manual06,
-  author =	 {Marc Pouzet},
-  title =	 {{Lucid Synchrone}, version 3.
-                  {Tutorial and reference manual}},
-  organization = {Universit\'e Paris-Sud, LRI},
-  month =	{April},
-  year =	 2006,
-  note =	 {Distribution available at: 
-                  {\tt www.lri.fr/$\sim$pouzet/lucid-synchrone}}}
-

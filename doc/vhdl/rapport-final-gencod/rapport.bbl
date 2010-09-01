@@ -1,0 +1,24 @@
+\begin{thebibliography}{1}
+
+\bibitem{lctes08a}
+Darek Biernacki, Jean-Louis Colaco, Gr\'egoire Hamon, and Marc Pouzet.
+\newblock {Clock-directed Modular Code Generation of Synchronous Data-flow
+  Languages}.
+\newblock In {\em ACM International Conference on Languages, Compilers, and
+  Tools for Embedded Systems (LCTES)}, Tucson, Arizona, June 2008.
+
+\bibitem{lustre}
+P.~Caspi, D.~Pilaud, N.~Halbwachs, and J.~A. Plaice.
+\newblock Lustre: a declarative language for real-time programming.
+\newblock In {\em POPL '87: Proceedings of the 14th ACM SIGACT-SIGPLAN
+  symposium on Principles of programming languages}, pages 178--188, New York,
+  NY, USA, 1987. ACM.
+
+\bibitem{lucy:manual06}
+Marc Pouzet.
+\newblock {\em {Lucid Synchrone}, version 3. {Tutorial and reference manual}}.
+\newblock Universit\'e Paris-Sud, LRI, April 2006.
+\newblock Distribution available at: {\tt
+  www.lri.fr/$\sim$pouzet/lucid-synchrone}.
+
+\end{thebibliography}

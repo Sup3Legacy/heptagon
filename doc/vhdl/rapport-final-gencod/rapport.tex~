@@ -250,10 +250,9 @@ la technique de compilation sous-jacente. Comment d\'ecrire ce p\'erim\`etre ?
 \item
 Enfin, c'est une approche assez peu naturelle puisqu'elle
 consiste \`a compiler un langage parall\`ele (SCADE) vers un autre langage parall\`ele
-(VHDL) en passant par un langage s\'equentiel.
-\end{itemize}
-Puisque le compilateur KCG produit un code interm\'ediaire data-flow, nous
-avons \'etudi\'e sa traduction directe vers VHDL.
+(VHDL) en passant par un langage s\'equentiel. D'o\`u la proposition d'une compilation
+compilation appliqu\'ee directement au code data-flow interm\'ediaire produit par
+KCG.
 
 
 . Bien qu'il n'existe
