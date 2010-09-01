@@ -363,21 +363,17 @@ let rec trad_exp e = match e.e_desc with
 and trad_app e op pl el = match op, el, pl with
   | Enode _, _, _ -> assert false
   | Efun ln, _, _ ->
-      let (vhdl_op, need_conv) =
-        try List.assoc (fullname ln) op_table
-        with Not_found ->
-          Printf.eprintf "Unknown operator %s\n" (fullname ln);
-          assert false in
-
-      let mk e = if need_conv then Ve_funcall ("to_logic", [e]) else e in
-
-      (match el with
-         | [l; r] -> mk (Ve_bop (vhdl_op, trad_exp l, trad_exp r))
-         | [e] -> mk (Ve_uop (vhdl_op, trad_exp e))
-         | l ->
-             Printf.eprintf "VHDL: unknown operator %s in\n"
-               (fullname ln);
-             raise Misc.Error)
+      (try
+         let (vhdl_op, need_conv) = List.assoc (fullname ln) op_table in
+         let mk e = if need_conv then Ve_funcall ("to_logic", [e]) else e in
+         (match el with
+            | [l; r] -> mk (Ve_bop (vhdl_op, trad_exp l, trad_exp r))
+            | [e] -> mk (Ve_uop (vhdl_op, trad_exp e))
+            | l ->
+                Printf.eprintf "VHDL: unknown operator %s in\n"
+                  (fullname ln);
+               raise Misc.Error)
+       with Not_found -> Ve_funcall (shortname ln, List.map trad_exp el))
   | Econcat, [l; r], _ -> Ve_concat (trad_exp l, trad_exp r)
   | Earray, _, _ -> Ve_array (List.map trad_exp el)
   | Eselect, [e], sl ->
@@ -621,7 +617,8 @@ let trans_ty_dec tyd =
     | Type_struct nbtyl ->
         let mk_field { f_name = n; f_type = ty; } = (n, trans_ty ty) in
         Vty_record (List.map mk_field nbtyl)
-    | Type_abs -> Vty_opaque in
+    | Type_abs -> Vty_opaque
+    | Type_alias ty -> Vty_alias (trans_ty ty) in
   { vty_name = tyd.t_name;
     vty_desc = desc; }
 
