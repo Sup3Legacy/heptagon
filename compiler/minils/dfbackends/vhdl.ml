@@ -70,6 +70,7 @@ type decl =
   | Vd_type of vty_decl
   | Vd_component of name * signal_decl list
   | Vd_bind of name * name * qualname
+  | Vd_const of name * vhdl_type * static_exp
 
 type const = Types.static_exp
 
@@ -229,6 +230,11 @@ let pp_decl fmt decl = match decl with
   | Vd_bind (name, compname, entname) ->
       fprintf fmt "@[for %a: %a use entity@ %s.%s@]"
         pp_name name pp_name compname entname.qual entname.name
+  | Vd_const (name, ty, c) ->
+      fprintf fmt "@[constant %a : %a := @[%a@]@]"
+        pp_name name
+        pp_type ty
+        Global_printer.print_static_exp c
 
 let pp_decls fmt decls = pp_list_end pp_decl ";" fmt decls
 

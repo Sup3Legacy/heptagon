@@ -640,6 +640,11 @@ let trans_ty_dec tyd =
   { vty_name = shortname tyd.t_name;
     vty_desc = desc; }
 
+let trans_const_dec { Minils.c_name = name;
+                      Minils.c_type = ty;
+                      Minils.c_value = c; } =
+  Vd_const (shortname name, trans_ty ty, c)
+
 (** [tb_node nd] generates a test-bench for node definition [nd]. [nd] should
     have no input parameters, only outputs. *)
 let tb_node nd =
@@ -740,7 +745,9 @@ let package_of_types p =
   let tydl = !tydl @ List.map trans_ty_dec p.p_types in
 
   { vpack_name = "types";
-    vpack_decls = List.map (fun tyd -> Vd_type tyd) tydl; }
+    vpack_decls =
+      List.map trans_const_dec p.p_consts
+      @ List.map (fun tyd -> Vd_type tyd) tydl; }
 
 let translate modn p =
   (* TODO: clean *)
