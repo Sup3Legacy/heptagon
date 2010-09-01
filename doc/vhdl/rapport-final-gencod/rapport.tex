@@ -10,7 +10,7 @@
 \usepackage{fancyvrb}
 \usepackage{bm}
 \usepackage{pxfonts}
-
+\usepackage{verbatim}
 
 % Alter some LaTeX defaults for better treatment of figures:
 % See p.105 of "TeX Unbound" for suggested values.
@@ -85,36 +85,21 @@
 \title{\LANG{} vers VHDL}
 \author{Adrien Guatto et Marc Pouzet}
 
-\input{pygments}
-
 \begin{document}
 
 \maketitle
 
-\begin{abstract}
-  On détaille ici la traduction de \LANG{}, un langage synchrone combinant des
-  équations à flots de données, dans l'esprit de Lustre, et des automates
-  hiérarchiques, tels qu'introduits par Lucid Synchrone et SCADE 6, vers le
-  langage de description de circuits VHDL. Cette traduction prend le parti de ne
-  pas passer par un langage impératif mais de directement utiliser la
-  représentation interne à flots de données du compilateur.
-\end{abstract}
-
-\tableofcontents
-
 \section{Introduction}
 
-Les langages synchrones \cite{twelveyears} ont prouvé leur efficacité dans la
-modélisation et programmation des logiciels de contrôle des systèmes embarqués
-critiques ; SCADE en est le représentant industriel phare. Le projet GENCOD
-envisage leur utilisation pour la création de circuits au même niveau
-d'exigence.
+On détaille ici la traduction de \LANG{}, un langage synchrone combinant des
+équations à flots de données, dans l'esprit de Lustre, et des automates
+hiérarchiques, tels qu'introduits par Lucid Synchrone et SCADE 6, vers le
+langage de description de circuits VHDL. Cette traduction prend le parti de ne
+pas passer par un langage impératif mais de directement utiliser la
+représentation interne à flots de données du compilateur.
 
-Comme expliqué dans les précédents rappports du projet, nous tentons ici d'y
-répondre de manière directe, c'est à dire en partant de la réprésentation
-interne à flots de données du compilateur. Après avoir rappellé brièvement la
-forme des langages d'entrée et de sortie, on va expliciter la procédure de
-traduction retenue.
+Après avoir rappellé brièvement la forme des langages d'entrée et de sortie, on
+va expliciter la procédure de traduction retenue.
 
 \section{\LANG{}}
 
@@ -129,35 +114,37 @@ compilateur.
 
 \subsection{Quelques exemples}
 
-\begin{figure}[htp]
-  \centering
-  \input{compteur}
-  \caption{Compteur d'évènements réinitialisable}
-  \label{fig:ex_count}
-\end{figure}
+\paragraph{Compteur d'événements simple}
 
-L'exemple présenté en \ref{fig:ex_count}, implante un compteur d'évènements qui
-comptabilise le nombre de booléens valant \texttt{true} sur son entrée
-\textit{event}. On utilise les itérateurs \texttt{map} et \texttt{fold} pour
-calculer le nombre d'évènements observés dans l'instant ; le premier permet de
-traduire les booléens en entiers, et le second d'additioner ceux-ci. Notons
-également l'utilisation de la construction de réinitialisation \texttt{reset},
-actionnée simplement lorsque l'entrée \textit{rst}\footnote{On suppose que le
-  nom \textit{rst} est frais} est vraie.
+\verbatiminput{simpcount.ept}
 
-L'exemple \ref{fig:ex_alloc} présente un automate réalisant l'allocation d'une
-ressource quelconque à deux demandeurs, avec priorité \textit{round-robin} (en
-cas de demande simultannée, le processus qui vera sa requêtre satisfaite sera
-celui ayant obtenu la ressource il y a le plus longtemps).
+Le nœud \textit{count} compte le nombre d'évènements \textit{e} reçus depuis le
+premier instant du programme.
 
-\begin{figure}[htp]
-  \centering
-  \input{alloc}
-  \caption{Allocateur de ressource}
-  \label{fig:ex_alloc}
-\end{figure}
+\paragraph{Compteur multi-événements réinitialisable}
 
-%\paragraph{Architecture du compilateur}
+\begin{center}
+  \verbatiminput{compteur.ept}
+\end{center}
+
+Ce programme implante un compteur d'événements qui comptabilise le nombre de
+booléens valant \texttt{true} sur son entrée \textit{event}. On utilise les
+itérateurs \texttt{map} et \texttt{fold} pour calculer le nombre d'événements
+observés dans l'instant ; le premier permet de traduire les booléens en entiers,
+et le second d'additioner ceux-ci. Notons également l'utilisation de la
+construction de réinitialisation \texttt{reset}, actionnée simplement lorsque
+l'entrée \textit{rst}\footnote{On suppose que le nom \textit{rst} est frais} est
+vraie.
+
+\paragraph{Allocateur de ressource}
+
+\verbatiminput{alloc.ept}
+
+Cet exemple présente un automate réalisant l'allocation d'une ressource
+quelconque à deux demandeurs, avec priorité \textit{round-robin} (en cas de
+demande simultannée, le processus qui vera sa requêtre satisfaite sera celui
+ayant obtenu la ressource il y a le plus longtemps).
+
 \subsection{Architecture du compilateur}
 
 On décrit brièvement l'architecture du compilateur : après des phases initiales
@@ -401,24 +388,15 @@ les tableaux $t_1, \dots, t_m$ sont de taille $n$ sera ainsi remplacée par $n +
 indice et la dernière affecte à $x$ le tableau en résultant. On applique des
 transformations similaires aux opérateurs \texttt{fold} et \texttt{mapfold}.
 
-\begin{figure}[htp]
-  \centering
-  \input{fold_orig}
-  \caption{Calcul d'un ET logique via itérateur \texttt{fold}.}
-  \label{fig:fold_orig}
-\end{figure}
+Le programme suivant présente un exemple effectuant un ET logique sur tous les
+éléments d'un tableau via l'itérateur \texttt{fold}.
 
-\begin{figure}[htp]
-  \centering
-  \input{fold_il}
-  \caption{Calcul d'un ET logique, \texttt{fold} mis à plat.}
-  \label{fig:fold_il}
-\end{figure}
+\verbatiminput{fold_orig.ept}
 
-Le programme \ref{fig:fold_orig} présente un exemple effectuant un ET logique
-sur tous les éléments d'un tableau via l'itérateur \texttt{fold}. Son pendant
-avec itérateur mis à plat se contente de passer l'accumulateur d'élément en
-élément \ref{fig:fold_il}.
+Son pendant avec itérateur mis à plat se contente de passer l'accumulateur
+d'élément en élément.
+
+\verbatiminput{fold_il.ept}
 
 \paragraph{Simplification des appels}
 
@@ -449,7 +427,7 @@ intermédiaire pour chaque argument.
 \begin{array}{ll}
   \simplnd{\Node{x_1,\dots,x_n}{y_1,\dots,y_n}{p}{D}} & = \\
   \ind \mathtt{node} f(x_1,\dots,x_n) = y_1, \dots, y_n \; \\
-  \ind \mathtt{with} \  \mathtt{var} \; p' \; \mathtt{in} \; fold\_right \; Simpl
+  \ind \mathtt{with} \  \mathtt{var} \; p' \; \mathtt{in} \; fold\_right \;Simpl
   \; D \; [] \\
   \ind \mbox{en supposant que que } p' \mbox{ correspond} \\
   \ind \mbox{aux variables définies par les nouvelles équations.}
@@ -738,15 +716,18 @@ sous-composants requise.
   body
 \end{align*}
 
-\section{Conclusion}
+\section{Discussion}
 
-\TODO{À enrichir}
+\section{Conclusion}
 
 On a traduit \LANG{} vers VHDL en profitant des forces du modèle synchrone : sa
 sémantique est bien adaptée à une description sous forme de circuits. Le
 processus de traduction reste simple et compréhensible grâce aux garanties
 offertes par le synchrone : nul besoin d'écrire plusieurs fois dans le même
 élément mémorisant par cycle.
+
+\tableofcontents
+
 
 \appendix
 
@@ -764,7 +745,7 @@ MiniLS normalisé et ordonnancé, et enfin le code VHDL.
 \paragraph{MiniLS initial}
 
 \small
-\input{compteur2_init}
+\verbatiminput{compteur2_init.mls}
 \normalsize
 
 \paragraph{MiniLS normalisé, ordonnancé et simplifié}
@@ -773,13 +754,13 @@ Notons que le noeud \textit{compteur} est ici instancié avec son paramètre
 \textit{n} égal à 4, ceci afin de pouvoir déplier les itérateurs.
 
 \small
-\input{compteur2_sched}
+\verbatiminput{compteur2_sched.mls}
 \normalsize
 
 \paragraph{VHDL}
 
 \small
-\input{compteur2_vhdl}
+\verbatiminput{compteur2_vhdl.vhd}
 \normalsize
 
 \subsection{Allocateur de ressource}
@@ -787,19 +768,19 @@ Notons que le noeud \textit{compteur} est ici instancié avec son paramètre
 \paragraph{MiniLS initial}
 
 \small
-\input{al2_init}
+\verbatiminput{al2_init.mls}
 \normalsize
 
 \paragraph{MiniLS normalisé, ordonnancé et simplifié}
 
 \small
-\input{al2_sched}
+\verbatiminput{al2_sched.mls}
 \normalsize
 
 \paragraph{VHDL}
 
 \small
-\input{al2_vhdl}
+\verbatiminput{al2_vhdl.vhd}
 \normalsize
 
 \section{Utilisation du compilateur}
