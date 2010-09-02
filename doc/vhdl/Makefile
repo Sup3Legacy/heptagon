@@ -21,12 +21,12 @@ clean:
 	rm -f $(EXAMPLES) archi.pdf pygments.tex archi.pdf *.aux *.bbl *.blg *.log
 	rm -f *.out *.toc *.epci
 
-rapport.pdf: rapport.tex archi.pdf pygments.tex $(EXAMPLES)
+rapport-final-gencod/rapport.pdf: rapport-final-gencod/rapport.tex
 	pdflatex $<
 	bibtex $(basename $<)
 	pdflatex $<
 	pdflatex $<
-	cp $@ ~/Dropbox/Public
+	[ -d ~/Dropbox/Public ] && cp $@ ~/Dropbox/Public
 
 %.eps:	%.svg
 	inkscape --export-eps=$@ $^
