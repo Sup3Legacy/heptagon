@@ -30,10 +30,10 @@
 \contentsline {subsection}{\numberline {A.1}Compteur}{17}{subsection.A.1}
 \contentsline {paragraph}{MiniLS initial}{17}{section*.6}
 \contentsline {paragraph}{MiniLS normalis\'e, ordonnanc\'e et simplifi\'e}{17}{section*.7}
-\contentsline {paragraph}{VHDL}{17}{section*.8}
-\contentsline {subsection}{\numberline {A.2}Allocateur de ressource}{19}{subsection.A.2}
-\contentsline {paragraph}{MiniLS initial}{19}{section*.9}
-\contentsline {paragraph}{MiniLS normalis\'e, ordonnanc\'e et simplifi\'e}{19}{section*.10}
-\contentsline {paragraph}{VHDL}{19}{section*.11}
-\contentsline {section}{\numberline {B}Utilisation du compilateur}{23}{appendix.B}
-\contentsline {section}{\numberline {C}Grammaire de Heptagon}{24}{appendix.C}
+\contentsline {paragraph}{VHDL}{18}{section*.8}
+\contentsline {subsection}{\numberline {A.2}Allocateur de ressource}{20}{subsection.A.2}
+\contentsline {paragraph}{MiniLS initial}{20}{section*.9}
+\contentsline {paragraph}{MiniLS normalis\'e, ordonnanc\'e et simplifi\'e}{20}{section*.10}
+\contentsline {paragraph}{VHDL}{20}{section*.11}
+\contentsline {section}{\numberline {B}Utilisation du compilateur}{24}{appendix.B}
+\contentsline {section}{\numberline {C}Grammaire de Heptagon}{25}{appendix.C}

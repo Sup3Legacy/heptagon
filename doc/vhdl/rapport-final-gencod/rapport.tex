@@ -676,6 +676,14 @@ d'\'el\'ement en \'el\'ement.
 
 \verbatiminput{fold_il.ept}
 
+Un traitement spécial est adopté pour l'utilisation de \texttt{map} avec
+certains opérateurs. En effet, VHDL permet d'utiliser certains opérateurs sur
+des tableaux de bits, sans avoir à déconstruire ces derniers ; par exemple, il
+est possible d'effectuer un ET logique bit-à-bit sur deux tableaux $t_1$ et
+$t_2$ via $t_1 \ \texttt{and} \ t_2$. La passe effectue la transformation de
+$\texttt{map}\ \textbf{op}<<n>>(t_1,\dots,t_n)$ à $t_1\ \textbf{op}\ \dots
+\textbf{op}\ t_n$ lorsque cela est possible.
+
 \subsubsection{Simplification des appels}
 
 \newcommand{\simpl}[2]{Simpl(#1,#2)}
