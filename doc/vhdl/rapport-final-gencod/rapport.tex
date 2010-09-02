@@ -1,5 +1,5 @@
 \documentclass[a4paper]{article}
-%\usepackage[frenchb]{babel}
+\usepackage[frenchb]{babel}
 %\usepackage[utf8]{inputenc}
 %\usepackage[T1]{fontenc}
 %\usepackage{lmodern}
@@ -121,9 +121,9 @@ repr\'esentation interne \`a flots de donn\'ees du compilateur.
 Apr\`es avoir rappell\'e bri\`evement la forme des langages d'entr\'ee et de sortie, on
 va expliciter la proc\'edure de traduction retenue.
 
-\section{\LANG{}}
+\section{\LANG}
 
-\LANG{} est un langage synchrone acad\'emique conceptuellement proche de SCADE,
+\LANG est un langage synchrone acad\'emique conceptuellement proche de SCADE,
 mais un peu moins expressif : pas de signaux, peu de constructions riches
 (\'emissions sur transitions, etc.). Par rapport aux it\'erations pr\'ec\'edente, il
 dispose d\'esormais de tableaux de taille statique et des it\'erateurs associ\'es.
@@ -168,14 +168,14 @@ ayant obtenu la ressource il y a le plus longtemps).
 \subsection{Architecture du compilateur}
 
 On d\'ecrit bri\`evement l'architecture du compilateur : apr\`es des phases initiales
-d'analyse lexicale, syntaxique et de typage, le programme \LANG{} est soumis aux
+d'analyse lexicale, syntaxique et de typage, le programme \LANG est soumis aux
 v\'erifications traditionnelles des langages synchrones (causalit\'e,
 etc.). Ensuite, on le d\'epouille progressivement de ses constructions de haut
 niveau par des r\'e\'ecritures successives, jusqu'\`a arriver \`a une forme simple qui
 peut \^etre traduite simplement en MiniLS. Le code r\'esultant, apr\`es avoir \'et\'e
 soumis \`a d'\'eventuelles optimisations, est mis dans une certaine forme dite
 ``normale'' et ordonnanc\'e avant d'\^etre finalement traduit en code
-s\'equentiel. L'architecture du compilateur \LANG{} est pr\'esent\'e \`a la figure
+s\'equentiel. L'architecture du compilateur \LANG est pr\'esent\'e \`a la figure
 \ref{fig:archi}.
 
 % Le compilateur est structur\'e en plusieurs passes effectuant une combinaison
@@ -189,7 +189,7 @@ s\'equentiel. L'architecture du compilateur \LANG{} est pr\'esent\'e \`a la figu
 \begin{figure}[htp]
   \centering
   \includegraphics[scale=0.5]{archi}
-  \caption{Architecture du compilateur \LANG{}}
+  \caption{Architecture du compilateur \LANG}
   \label{fig:archi}
 \end{figure}
 
@@ -208,13 +208,13 @@ on pratiquera en amont trois transformations simplificatrices sur MiniLS.
 
 Le code MiniVHDL obtenu peut ensuite \^etre trait\'e par les outil d\'edi\'es.
 
-\section{De \LANG{} \`a VHDL}
+\section{De \LANG \`a VHDL}
 
-\subsubsection{Syntaxes}
+\subsection{Syntaxes}
 
 \TODO{Donner la forme originale sans reset telle qu'avant normalisation ?}
 
-\paragraph{MiniLS}
+\subsubsection{MiniLS}
 \label{sec:syn:mls}
 
 \begin{figure}[h]
@@ -251,7 +251,7 @@ directement la deuxi\`eme. Ce processus de compilation est d\'ecrit en d\'etails
 l'article \cite{lctes08a}.
 
 \begin{itemize}
-\item Forme originale \ref{fig:mls} telle qu'obtenue \`a partir du code \LANG{}
+\item Forme originale \ref{fig:mls} telle qu'obtenue \`a partir du code \LANG
   original.
 \item Forme normale \ref{fig:mlsn}.
 \item Forme finale \ref{fig:mlsns}, normalis\'ee, sans r\'einitialisations ($every$)
@@ -289,7 +289,7 @@ On va d\'ecrire les constructions du langage :
   \label{fig:mlsns}
 \end{figure}
 
-\paragraph{MiniVHDL}
+\subsubsection{MiniVHDL}
 
 MiniVHDL \ref{fig:mvhdl} est un fragment tr\`es restreint de VHDL, suffisant pour
 d\'ecrire l'essence de notre processus de traduction. Un composant MiniVHDL
@@ -331,11 +331,11 @@ pr\'ec\'edent.
 % \mybox{ then } I \mybox{ else } J \equiv \mybox{case } e \mybox{ of } ('1'
 % \Rightarrow I) ('0' \Rightarrow J)$$
 
-\subsubsection{Simplification de MiniLS normalis\'e}
+\subsection{Simplification de MiniLS normalis\'e}
 
 Nous effectuons donc trois passes pour simplifier le code MiniLS.
 
-\paragraph{\'Elimination de la r\'einitialisation logique}
+\subsubsection{\'Elimination de la r\'einitialisation logique}
 
 Certaines constructions de MiniLS proposent au programmeur une forme de
 r\'einitialisation modulaire : les \'equations de la forme $\Fby{v}{e}$ d'un noeud
@@ -391,7 +391,7 @@ transforme ses \'equations.
 \end{array}
 \]
 
-\paragraph{Suppression des it\'erateurs}
+\subsubsection{Suppression des it\'erateurs}
 
 La version actuelle du compilateur et de son g\'en\'erateur de code VHDL supporte
 les tableaux de dimension arbitraire \footnote{En pratique, les outils de
@@ -418,7 +418,7 @@ d'\'el\'ement en \'el\'ement.
 
 \verbatiminput{fold_il.ept}
 
-\paragraph{Simplification des appels}
+\subsubsection{Simplification des appels}
 
 Comme nous le verrons plus bas, les appels de nœuds seront compil\'es en
 instantiations de composants ; or, les arguments d'une construction VHDL $port
@@ -457,7 +457,7 @@ interm\'ediaire pour chaque argument.
 Ces simplifications effectu\'ees, on va s'atteler \`a la traduction de MiniLS vers
 MiniVHDL.
 
-\subsubsection{MiniLS simplif\'e vers MiniVHDL}
+\subsection{MiniLS simplif\'e vers MiniVHDL}
 
 Les id\'ees g\'en\'erales de la traduction de MiniLS simplifi\'e vers MiniVHDL sont les
 suivantes :
@@ -485,7 +485,7 @@ suivantes :
   signaux auxquels il faudra assigner la valeur correcte.
 \end{itemize}
 
-\paragraph{Traduction des types}
+\subsubsection{Traduction des types}
 
 Les d\'eclarations de types de donn\'ees ont \'et\'e laiss\'ees implicites aussi bien dans
 la syntaxe de MiniLS que de MiniVHDL ; les possibilit\'es \'etant exactement les
@@ -493,7 +493,7 @@ m\^emes (\'enum\'erations et enregistrements), on choisit de ne pas s'attarder s
 leur traduction qui reste une traduction mot-\`a-mot d'une syntaxe concr\`ete \`a
 l'autre.
 
-\paragraph{Traduction des constantes et fonction auxiliaires sur les horloges}
+\subsubsection{Traduction des constantes et fonction auxiliaires sur les horloges}
 
 La fonction $TradConst$ traduit une constante MiniLS en constante MiniVHDL.
 
@@ -536,7 +536,7 @@ correspondant \`a l'horloge utilis\'ee dans l'appel d'un noeud.
 \end{array}
 \]
 
-\paragraph{Traduction des expressions et \'equations}
+\subsubsection{Traduction des expressions et \'equations}
 
 La fonction $TradExp$ traduit les expressions simples MiniLS normalis\'es et
 simplifi\'e en expressions MiniVHDL.
@@ -609,7 +609,7 @@ concernant la fa\c{c}on de compiler les appels d'un noeud MiniLS qui seront donn
 Pr\'ecisons que par construction, l'interface d'un composant est toujours de la
 forme $(clk, in_1, \dots,in_n, out_1,\dots,out_n)$.
 
-\paragraph{Gestion des tableaux}
+\subsubsection{Gestion des tableaux}
 
 Hormis le cas des it\'erateurs trait\'es pr\'ec\'edemment, la gestion des tableaux
 n'appelle pas de commentaire particulier, \`a l'exception de l'anecdotique mais
@@ -629,7 +629,7 @@ nous semble pas d\'erangeante pour des raisons pragmatiques\footnote{Notons que
   notre version de l'outil Xilinx ISE refuse par exemple tout tableau de
   dimension sup\'erieure \`a trois.}.
 
-\paragraph{Compilation modulaire et appels de noeuds}
+\subsubsection{Compilation modulaire et appels de noeuds}
 
 MiniVHDL offre une forme de modularit\'e bas\'ee sur une hi\'erarchie de
 composants. Chacun de ces derniers sp\'ecifie une liste de composants fils dont
@@ -711,7 +711,7 @@ avec mode d'utilisation (entr\'ee ou sortie).
 \end{array}
 \]
 
-\paragraph{Traduction des noeuds}
+\subsubsection{Traduction des noeuds}
 
 Enfin, $TradNode$ se charge de traduire un noeud en composant MiniVHDL, en
 cr\'eant un signal local pour chaque \'equation retard\'ee et argument d'appel de
@@ -740,25 +740,36 @@ sous-composants requise.
 
 \section{Conclusion}
 
-On a traduit \LANG{} vers VHDL en profitant des forces du mod\`ele synchrone : sa
+On a traduit \LANG vers VHDL en profitant des forces du mod\`ele synchrone : sa
 s\'emantique est bien adapt\'ee \`a une description sous forme de circuits. Le
 processus de traduction reste simple et compr\'ehensible gr\^ace aux garanties
 offertes par le synchrone : nul besoin d'\'ecrire plusieurs fois dans le m\^eme
 \'el\'ement m\'emorisant par cycle.
 
+\newpage
+
 \tableofcontents
 
+\bibliography{biblio}
+\bibliographystyle{plain}
 
 \appendix
 
+\newpage
+
 \section{Exemples de code g\'en\'er\'e}
 
-On pr\'esente ici quelques codes g\'en\'er\'es par notre prototype. En l'\'etat actuel de
-ce dernier, beaucoup de variables interm\'ediaires sont g\'en\'er\'ees ; une passe
-d'optimisation puissante est en d\'eveloppement.
+On pr\'esente ici quelques codes g\'en\'er\'es par notre prototype. En l'\'etat
+actuel de ce dernier, beaucoup de variables interm\'ediaires inutiles sont
+g\'en\'er\'ees ; cela s'explique pour deux raisons :
 
-On liste successivement le code MiniLS obtenu \`a partir de \LANG{}, puis le code
-MiniLS normalis\'e et ordonnanc\'e, et enfin le code VHDL.
+\begin{itemize}
+\item Ces codes représentent des sorties brutes n'ayant subies aucune
+  optimisation.
+\item Certaines passes du compilateur ont naturellement tendance à introduire
+  des variables intermédiaire de façon préventive, simplifiant ainsi leur
+  fonctionnement.
+\end{itemize}
 
 \subsection{Compteur}
 
@@ -805,14 +816,14 @@ Notons que le noeud \textit{compteur} est ici instanci\'e avec son param\`etre
 
 \section{Utilisation du compilateur}
 
-Nous supposerons dans ce manuel que l'archive du compilateur a \'et\'e d\'ecompress\'ee
-dans le r\'epertoire \verb/$HEPTDIR/. Cette archive contient le pr\'esent rapport,
-un r\'epertoire \texttt{exs/} avec une batterie d'exemples \LANG{} compil\'es vers
-VHDL, et un binaire en code-octet pour la machine abstraite OCaml. Ce dernier
-peut-\^etre ex\'ecut\'e via \texttt{ocamlrun heptc}, ou bien directement lorsque votre
-\texttt{ocamlrun} est pr\'esent dans \texttt{/usr/bin/}. Nous supposerons par la
-suite que c'est le cas et que votre variable d'environnement \verb/$PATH/
-contient \verb/$HEPTDIR/bin/.
+Nous supposerons dans ce manuel que l'archive du compilateur a \'et\'e
+d\'ecompress\'ee dans le r\'epertoire \verb/$HEPTDIR/. Cette archive contient le
+pr\'esent rapport, un r\'epertoire \texttt{exs/} avec une batterie d'exemples
+\LANG compil\'es vers VHDL, et un binaire en code-octet pour la machine
+abstraite OCaml. Ce dernier peut-\^etre ex\'ecut\'e via \texttt{ocamlrun heptc},
+ou bien directement lorsque votre \texttt{ocamlrun} est pr\'esent dans
+\texttt{/usr/bin}. Nous supposerons par la suite que c'est le cas et que votre
+variable d'environnement \verb/$PATH/ contient \verb/$HEPTDIR//bin.
 
 Pour utiliser le compilateur, il faut tout d'abord renseigner la variable
 d'environnement \verb/$HEPTLIB/ sp\'ecifiant au compilateur o\`u trouver la
@@ -831,7 +842,7 @@ The Heptagon compiler, version 0.4 (wed. aug. 18 11:17:42 CET 2010)
 Standard library in [...]
 \end{verbatim}
 
-Pour compiler un fichier \LANG{}, le compilateur doit \^etre invoqu\'e avec l'option
+Pour compiler un fichier \LANG, le compilateur doit \^etre invoqu\'e avec l'option
 \verb/-target/. Les arguments possibles pour cette option sont :
 
 \begin{itemize}
@@ -856,8 +867,8 @@ $ ls source_vhdl
 main.vhd  types.vhd
 \end{verbatim}
 
-L'option \verb/-s noeud/ permet de g\'en\`erer le code n\'ecessaire \`a un ex\'ecutable
-autonome \`a partir d'un fichier source \LANG{}, c'est \`a dire un
+L'option \verb/-s noeud/ permet de g\'en\`erer le code n\'ecessaire \`a un
+ex\'ecutable autonome \`a partir d'un fichier source \LANG, c'est \`a dire un
 \textit{test-bench} dans le cas de VHDL et une fonction \verb/main()/ en ce qui
 concerne C. Voici un exemple d'utilisation de la sortie C :
 
@@ -876,7 +887,7 @@ $ heptc -target c -s main source.ept
 $ ls source_c
 _main.c  _main.h  source.c  source.h  source_types.c  source_types.h
 $ cc -Isource_c source_c/*.c -o source
-$ ./source 5 # Option indiquant \`a l'ex\'ecutable g\'en\'er\'e de s'arr\^eter apr\`es 5 pas
+$ ./source 5 # Option indiquant a l'executable genere de s'arreter apres 5 pas
 => 1
 => 2
 => 3
@@ -884,7 +895,151 @@ $ ./source 5 # Option indiquant \`a l'ex\'ecutable g\'en\'er\'e de s'arr\^eter a
 => 5
 \end{verbatim}
 
-\bibliography{biblio}
-\bibliographystyle{plain}
+\section{Grammaire de \LANG}
+
+Cette grammaire de référence explicite la syntaxe du langage Heptagon.
+
+\newcommand{\sdash}{\mbox{-}}
+\newcommand{\spow}{\text{\^{ }}}
+\newcommand{\piquots}[1]{<<#1>>}
+
+\newcommand{\lp}{\texttt{(}}
+\newcommand{\rp}{\texttt{)}}
+\newcommand{\lcb}{\texttt{\{}}
+\newcommand{\rcb}{\texttt{\}}}
+
+\[
+\begin{array}{lcl}
+  type & \Coloneqq & \mathtt{int} \p \mathtt{bool} \p \mathtt{float} \p
+    {\bf type\sdash{}name} \\
+  & | & type \spow{} constant \\
+
+  \\
+
+  constant & \Coloneqq & {\bf constant\sdash{}name} \\
+  & | & {\bf integer} \\
+  & | & {\bf string} \\
+  & | & constant + constant \\
+  & | & constant - constant \\
+  & | & \dots \\
+
+  \\
+
+  expression & \Coloneqq & constant \\
+  & | & {\bf variable\sdash{}name} \\
+  & | & expression + expression \p expression - expression \p \dots \\
+  & | &
+    iterator \  \lp{}iterator\sdash{}argument\rp{}
+    \piquots{constant} \lp{}expression^+\rp{}
+    \\
+  & | &
+    {\bf function\sdash{}name} \; static\sdash{}parameters \;
+    \lp{}expression,\dots,expression\rp{} \\
+  & | & \mathtt{last} \  {\bf variable\sdash{}name} \\
+  & | & \mathtt{pre} \  expression \\
+  & | & constant \  \mathtt{fby} \  expression \\
+  & | & expression \  \texttt{->} \  expression \\
+  & | & \lp{}expression,\dots,\ expression\rp{} \\
+  & | & expression = expression \\
+  & | & \mathtt{if} \ expression \ \mathtt{then} \ expression \ 
+    \mathtt{else} \ expression \\
+  & | & \lcb{} field\sdash{}def^+ \rcb{} \\
+  & | & expression.{\bf field\sdash{}name} \\
+  & | & \lcb{} expression
+    \ \mathtt{with} \  field\sdash{}def^+ \rcb{} \\
+  & | & [ expression, \dots, expression ] \\
+  & | & expression \spow{} constant \\
+  & | & expression.[constant^+] \\
+  & | & expression.[constant \  .. \ constant] \\
+  & | & expression.[expression^+] \ \mathtt{default} \  expression \\
+  & | & [ expression \ \mathtt{with} \ expression^+ \ = \ expression ] \\
+  & | & expression \ @ \ expression \\
+
+  \\
+
+  static\sdash{}parameters & \Coloneqq & \epsilon \\
+  & | & \piquots{constant,\dots,constant} \\
+
+  \\
+
+  iterator & \Coloneqq & \mathtt{map} \p \mathtt{fold} \p \mathtt{mapfold} \\
+  iterator\sdash{}argument & \Coloneqq &
+    {\bf function\sdash{}name} \; static\sdash{}parameters
+    \p \mathtt{+} \p \mathtt{-} \p \dots \\
+
+  \\
+
+  field\sdash{}def & \Coloneqq & {\bf field\sdash{}name} = constant
+\end{array}
+\]
+
+\newcommand{\funo}{fun\sdash{}or\sdash{}node\sdash{}decl}
+
+\[
+\begin{array}{lcl}
+  equation & \Coloneqq &
+    \mathtt{automaton} \ state\sdash{}handler^+ \ \mathtt{end} \\
+  & | & \mathtt{switch} \ expression \ \mathtt{of} \ switch\sdash{}handler^+ \\
+  & | & \mathtt{present} \ present\sdash{}handler^+
+    optional\sdash{}present\sdash{}handler \\
+  & | & \mathtt{reset} \ block \ \mathrm{every} expression \\
+  & | & pattern = expression; \\
+  pattern & \Coloneqq & {\bf variable\sdash{}name} \\
+  & | & \lp{}pattern,\dots,pattern\rp{} \\
+
+  \\
+
+  switch\sdash{}handler &
+    \Coloneqq & | \ {\bf constructor\sdash{}name} \ block \\
+
+  \\
+
+  present\sdash{}handler & \Coloneqq &
+    | \ expression \  block \\
+  optional\sdash{}present\sdash{}handler & \Coloneqq & \epsilon \\
+  & | & \mathtt{default} \ present\sdash{}handler \\
+
+  \\
+  state\sdash{}handler & \Coloneqq &
+    \mathtt{state} \  {\bf state\sdash{}name} \ block
+    \ until\sdash{}transitions? \  unless\sdash{}transitions? \\
+  until\sdash{}transition & \Coloneqq & \mathtt{until} \ escapes^+ \\
+  unless\sdash{}transition & \Coloneqq & \mathtt{unless} \ escapes^+ \\
+  escape & \Coloneqq &
+    expression \ \mathtt{then} \ {\bf constructor\sdash{}name} \\
+    & | & expression \ \mathtt{continue} \ {\bf constructor\sdash{}name} \\
+
+  \\
+
+  block & \Coloneqq & variable\sdash{}declarations \ \mathtt{do} \ equation^* \\
+  variable\sdash{}declarations & \Coloneqq & \epsilon \\
+  & | & \mathtt{var} \ variable\sdash{}declaration^+ \\
+  variable\sdash{}declaration & \Coloneqq & {\bf variable\sdash{}name} \ : type;
+    \\
+
+  \\
+
+  \funo{} & \Coloneqq & \funo{}\sdash{}kind \ 
+  {\bf \funo{}\sdash{}name}\lp{}variable\sdash{}declarations\rp{} \ \\
+  & & \hspace{6.1cm}
+    \mathtt{returns} \ \lp{}variable\sdash{}declarations\rp{} \\
+  & & \mathtt{var} \ variable\sdash{}declarations \ \mathtt{let} \ equation^*
+  \ \mathtt{tel} \\
+  \funo{}\sdash{}kind & \Coloneqq & \mathtt{node} \p \mathtt{fun} \\
+
+  \\
+
+  const\sdash{}decl & \Coloneqq & \mathtt{const} \; ident : type = constant \\
+  type\sdash{}decl & \Coloneqq & \mathtt{type} \ {\bf type\sdash{}name} \ = \ 
+    type\sdash{}decl\sdash{}desc \\
+  type\sdash{}decl\sdash{}desc & \Coloneqq & {\bf type\sdash{}name} \\
+  & | & \lcb{} {\bf tag\sdash{}name}, \dots, {\bf tag\sdash{}name} \rcb{} \\
+  & | & \lcb{} {\bf field\sdash{}name} : {\bf type\sdash{}name},\  \dots,\ 
+    {\bf field\sdash{}name} : {\bf type\sdash{}name} \rcb{} \\
+  program & \Coloneqq &
+    const\sdash{}decl^* \  type\sdash{}decl^* \  node\sdash{}decl^*
+\end{array}
+\]
+
 
 \end{document}
