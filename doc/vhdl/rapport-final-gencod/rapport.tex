@@ -14,6 +14,21 @@
 \usepackage{a4wide}
 \usepackage{graphicx}
 
+\hypersetup{
+  backref=true, %permet d'ajouter des liens dans...
+  pagebackref=true,%...les bibliographies
+  hyperindex=true, %ajoute des liens dans les index
+  colorlinks=true, %colorise les liens
+  breaklinks=true, %permet le retour a la ligne dans les liens trop longs
+  urlcolor=blue,  %couleur des hyperliens (blue pour la version web)
+  linkcolor=blue, %couleur des liens internes (blue pour la version web)
+  citecolor=blue, %couleur des citation (green pour la version web)
+  bookmarks=true,  %cree des signets pour Acrobat
+  bookmarksopen=true, %affiche completement les signets Acrobat
+  %%%%%%%%%%%%%%%%% HYPER TITLE %%%%%%%%%%%%%%%%%%%%%%%%%%
+  pdfsubject={Rapport} %document sous Acrobat.
+}
+
 % Alter some LaTeX defaults for better treatment of figures:
 % See p.105 of "TeX Unbound" for suggested values.
 % See pp. 199-200 of Lamport's "LaTeX" book for details.
@@ -43,8 +58,15 @@
 \newcommand{\FIXME}{\textcolor{red}{FIXME}}
 %\newcommand{\TODO}[1]{(\textcolor{red}{TODO} #1)}
 \newcommand{\TODO}[1]{}
-\newcommand{\LANG}{Heptagon}
-\newcommand{\lucy}{Lucid Synchrone}
+\newcommand{\LANG}{{\sc Heptagon}}
+\newcommand{\lucy}{{\sc Lucid Synchrone}}
+\newcommand{\lustre}{{\sc Lustre}}
+\newcommand{\scadesix}{{\sc Scade~6}}
+\newcommand{\minils}{{\sc MiniLS}}
+\newcommand{\heptagon}{{\sc Heptagon}}
+\newcommand{\obc}{{\sc Obc}}
+\newcommand{\minivhdl}{{\sc MiniVHDL}}
+
 
 \newcommand{\bold}[1]{\textbf{#1}}
 \newcommand{\p}[0]{\; \vert \;}
@@ -120,20 +142,19 @@ constructions: \'equations data-flow, automates hi\'erarchiques et
 tableaux. Son compilateur est organis\'e de mani\`ere similaire au
 compilateur KCG de Scade d\'evelopp\'e par
 Esterel-Technologies~\footnote{Pour \^etre complet, \LANG{} est un
-  sous-ensemble du langage \lucy~\cite{lucy:manual06} dont les
-  principaux traits sont int\'egr\'es \`a Scade~6. Nous aurions donc pu tout
-  aussi bien r\'ealiser un prototype d'\'etude \`a partir de \lucy. Le
+  sous-ensemble du langage \lucy~\cite{lucy:manual06} dont plusieurs
+  traits sont int\'egr\'es \`a Scade~6. Nous aurions donc pu
+  r\'ealiser un prototype d'\'etude \`a partir de \lucy. Le
   langage \'etant plus riche (ordre sup\'erieur, inf\'erence de type,
   polymorphisme, etc.), cela n\'ecessitait de r\'esoudre des probl\`emes peu
-  pertinents pour le projet GENCOD. D'o\`u le choix de r\'ealiser un
-  prototype simplifi\'e, plus proche de la structure interne du
-  compilateur KCG pour un langage proche de Scade~6.}.  Le prototype
+  pertinents pour le projet GENCOD. D'o\`u le choix de consid\'erer un
+  langage simplifi\'e.}.  Le prototype
 \LANG{} a \'et\'e mis a la disposition des partenaires du projet GENCOD.
 
 \subsection{Compilation de SCADE/Lustre vers VHDL}
 Rapellons l'organisation g\'en\'erale du compilateur KCG (Figure~\ref{organisation-scade}).
 
-\begin{figure}
+\begin{figure}[t]
 \begin{center}
 \includegraphics[height=4cm]{Fig/compil-scade}
 \end{center}
@@ -153,31 +174,35 @@ propagation de constantes, etc.). Au pr\'ealable \`a cette phase, les modules
 sont expans\'es et le code polymorphe est sp\'ecialis\'e. Ces deux \'etapes ne sont pas
 d\'ecrites ici.
 
-Au regard de cette organisation, il y a deux points d'entr\'ees naturels pour produire du
-code VHDL:
+Au regard de cette organisation, il y a deux points d'entr\'ees naturels
+pour produire du code VHDL:
 \begin{itemize}
-\item
-\`a partir du code interm\'ediaire dataflow avec horloges, apr\`es \'elimination des
-structures de contr\^ole (e.g., automates, conditions d'activation);
+\item \`a partir du code interm\'ediaire dataflow avec horloges, apr\`es
+  \'elimination des structures de contr\^ole (e.g., automates, conditions
+  d'activation);
 \item
 \`a partir du code final g\'en\'er\'e par le compilateur (dans le cas de KCG, le
 code C, par exemple).
 \end{itemize}
-Notons que le code data-flow est d\'ej\`a un point d'entr\'ee pour les outils
-de v\'erification formelle utilis\'es dans le compilateur KCG (le Prover Plug-in). La
-v\'erification d'une propri\'et\'e (\'ecrite en Scade) se fait en traduisant le code
-et la propri\'et\'e vers le format data-flow qui sert alors de passerelle vers l'outil
-Prover.
+Notons que le code data-flow est d\'ej\`a un point d'entr\'ee pour les
+outils de v\'erification formelle utilis\'es dans le compilateur KCG (le
+Prover Plug-in). La v\'erification d'une propri\'et\'e (\'ecrite en Scade) se
+fait en traduisant le code et la propri\'et\'e vers le format data-flow
+qui sert alors de passerelle vers l'outil Prover.
 
 \subsection{G\'en\'eration de VHDL \`a partir d'\'equations data-flow gard\'ees}
 Ce sont principalement les deux approches qui ont \'et\'e retenues dans le
 projet GENCOD. La soci\'et\'e GeenSoft a r\'ealis\'e un compilateur \`a partir
-du code C g\'en\'er\'e par KCG. Dans ce document, nous d\'ecrivons l'autre
-approche dite ``directe'' \`a partir du code interm\'ediaire data-flow
-vers un sous-ensemble ``synth\'etisable'' de VHDL (nous reviendrons plus loin
-sur ce qualificatif). L'objectif est ici de d\'efinir les fonctions de traduction
-le plus formellement possible afin de pouvoir les int\'egrer \`a un environnement certifi\'e
-tel que SCADE.
+du code C g\'en\'er\'e par KCG. Dans ce document. Nous d\'ecrivons ici une autre
+approche appliqu\'ee directement sur une repr\'esentation interm\'ediaire data-flow
+vers un sous-ensemble ``synth\'etisable'' de VHDL. Un des objectifs
+de ce travail \'etait de d\'ecrire formellement chaque \'etape de traduction
+afin de pouvoir les int\'egrer dans une chaine certifi\'ee.
+
+L'utilisation de Lustre pour la g\'en\'eration de harware a \'et\'e envisag\'ee
+tr\`es t\^ot (th\`ese de Fr\'ederic Rocheteau~\cite{lustre:rocheteau91}). Signalons
+\'egalement que \lustre{} est utilis\'e dans plusieurs enseignements de
+harware~\cite{lustre:amblard05}.
 
 \subsubsection{Un mot sur la traduction de C vers VHDL}
 La compilation de SCADE est modulaire: un noeud \texttt{counter}
@@ -211,82 +236,95 @@ locales o\`u de l'\'etat (ici \texttt{self}) ainsi que de structures de contr\^o
 (conditionnelles, construction ``switch'' et boucles ``for'' o\`u
 d'appel \`a d'autres fonctions de transition). La
 g\'en\'eration de code VHDL suit le sch\'ema suivant:
+
 \begin{itemize}
-\item
-Une affectation de variable locale
-est traduite par une \'equation VHDL sur une variable locale. E.g.,
-\texttt{$x$ = $e$} est traduit sch\'ematiquement en une equation VHDL \texttt{$x$ := $e$}.
-Il faut cependant \^etre tr\`es attentif \`a ce que \verb-x- ne g\'en\`ere pas de registre.
-Ce point est assez d\'elicat puisque, en particulier lors de la traduction de
-\texttt{if $cond$ \{ $x$ = $exp$; \}}. Il correspond \`a la d\'efinition d'un flot
-dont l'horloge est $cond$. Parce que sa d\'efinition est partielle (la valeur de
-$x$ est ind\'efinie lorsque $cond$ est faux, sa traduction en VHDL va conduire le
-synth\'etiseur \`a allouer un registre pour $x$, ce qui est \`a la fois inutile et inefficace.
-Dans le cas o\`u le programme en entr\'ee n'a pas d'effets de bord, la s\'emantique de
-SCADE garantit que ce programme est \'equivalent \`a l'affectation simple $x$ = $exp$.
-\item
-Une affectation de variable d'\'etat \texttt{$self$ -> $t$ = $exp$} devra, elle,
-g\'en\'erer un registre. Il faut cependant retrouver la condition bool\'eenne d'activation
-de cette \'equations.
+\item Une affectation de variable locale est traduite par une \'equation
+  VHDL sur une variable locale. E.g., \texttt{$x$ = $e$} est traduit
+  sch\'ematiquement en une equation VHDL \texttt{$x$ := $e$}.  Il faut
+  cependant \^etre tr\`es attentif \`a ce que \verb-x- ne g\'en\`ere pas de
+  registre.  Ce point est assez d\'elicat puisque, en particulier lors
+  de la traduction de \texttt{if $cond$ \{ $x$ = $exp$; \}}. Il
+  correspond \`a la d\'efinition d'un flot dont l'horloge est
+  $cond$. Parce que sa d\'efinition est partielle (la valeur de $x$ est
+  ind\'efinie lorsque $cond$ est faux, sa traduction en VHDL va conduire
+  le synth\'etiseur \`a allouer un registre pour $x$, ce qui est \`a la fois
+  inutile et inefficace.  Dans le cas o\`u le programme en entr\'ee n'a
+  pas d'effets de bord, la s\'emantique de SCADE garantit que ce
+  programme est \'equivalent \`a l'affectation simple $x$ = $exp$.
+\item Une affectation de variable d'\'etat \texttt{self->$t$ =
+    $exp$} doit \^etre traduite vers une equation de la forme
+  \texttt{$t$ <= $exp$}. Cette affectation doit cependant \^etre ex\'ecut\'ee
+  conditionnellement. Il faut donc retrouver, dans le code C,
+  la condition bool\'eenne d'activation de la mise \`a jour de
+  l'\'etat \texttt{self->$t$}.
 \end{itemize}
+
 L'int\'er\^et d'une traduction du code C produit par KCG vers VHDL est
 d'abord de ne pas toucher au compilateur existant (d\'ej\`a qualifi\'e). Nous voyons
 cependant plusieurs difficult\'es dans cette approche:
 \begin{itemize}
-\item
-La n\'ecessit\'e de certification demande d'instrumenter
-le compilateur KCG avec des informations donnant la tra\c{c}abilit\'e (lien
-entre les noms de variables produites et les noms dans le code source,
-en particulier).
-\item
-Certaines optimisations pertinentes lorsque l'on g\'en\`ere du
-code s\'equentiel, peuvent ne pas \^etre utiles, voire p\'enalisantes, pour une compilation
-vers VHDL. C'est le cas de l'optimisation des structures de contr\^ole
-ou de la compilation des boucles (cf. discussion ci-dessus, conduisant \`a g\'en\'erer
-trop de registres).
-\item
-Il est n\'ecessaire de restreindre le p\'erim\`etre du compilateur C vers VHDL: on
-ne r\'ealise pas un compilateur capable de traduire tout code C vers VHDL mais
-plut\^ot un compilateur adapt\'e au code C produit par KCG et prenant en compte
-la technique de compilation sous-jacente. Comment d\'ecrire ce p\'erim\`etre ?
-\item
-Enfin, c'est une approche assez peu naturelle puisqu'elle
-consiste \`a compiler un langage parall\`ele (SCADE) vers un autre langage parall\`ele
-(VHDL) en passant par un langage s\'equentiel.
+\item La n\'ecessit\'e de certification demande d'instrumenter le
+  compilateur KCG avec des informations donnant la tra\c{c}abilit\'e (lien
+  entre les noms de variables produites et les noms dans le code
+  source, en particulier).
+\item Certaines optimisations pertinentes lorsque l'on g\'en\`ere du code
+  s\'equentiel, peuvent ne pas \^etre utiles, voire p\'enalisantes, pour une
+  compilation vers VHDL. C'est le cas de l'optimisation des structures
+  de contr\^ole ou de la compilation des boucles (cf. discussion
+  ci-dessus, conduisant \`a g\'en\'erer trop de registres).
+\item Il est n\'ecessaire de restreindre le p\'erim\`etre du compilateur C
+  vers VHDL: on ne r\'ealise pas un compilateur capable de traduire tout
+  code C vers VHDL mais plut\^ot un compilateur adapt\'e au code C produit
+  par KCG et prenant en compte la technique de compilation
+  sous-jacente. Comment d\'ecrire ce p\'erim\`etre ?
+\item Enfin, c'est une approche assez peu naturelle puisqu'elle
+  consiste \`a compiler un langage parall\`ele (SCADE) vers un autre
+  langage parall\`ele (VHDL) en passant par un langage s\'equentiel.
 \end{itemize}
+
 Puisque le compilateur KCG produit un code interm\'ediaire data-flow, nous
 avons \'etudi\'e sa traduction directe vers VHDL.
 
+\section{Prototypage}
+Nous avons r\'ealis\'e un compilateur de r\'ef\'erence, appel\'e \LANG{}. Le
+langage d'entr\'ee est un sous-ensemble de \scadesix: il permet de
+combiner des \'equations de suite telles qu'\'ecrites en \lustre{} des
+structures de contr\^ole (e.g., automates, conditions d'activation)
+ainsi que des tableaux manipul\'es par des it\'erateurs (dans l'esprit
+de~\cite{lucy:genie00,morel-07-jes}). Le langage dispose des
+principales constructions de \scadesix, certaines n'ayant cependant pas
+\'et\'e consid\'er\'e ici: signaux ainsi que l'\'emissions sur les transitions. L'ajout
+de ces constructions ne pose pas de difficult\'e particuli\`ere.
 
-. Bien qu'il n'existe
-pas de d\'efinition pr\'ecise de ce sous-ensemble, nous avons identifi\'e un sous-ensemble
-appel\'e MiniVHDL (Section~\ref{section-mini-vhdl}).  dans la litt\'erature, nous
-avons identifi\'e unles divers \'echanges
-avec les partenaires du projet nous ont cont du Il est apparu au cours du projet qu'il
-n'existait pas de d\'efinition pr\'ecise d'un sous-ensemble synth\'etisable
-de VHDL. Apr\`es \'echange avec les partenaires, nous avons identifi\'e un
-sous-ensemb. Le contexte du projet GENCOD \'etant la g\'en\'eration de code
-L'objectif \'etait de proposer avec l'objectif de produire du code
-``synth\'etisable''.L'une des difficult\'e a \'et\'e d'identifier un
-sous-ensemble de VHDL ``synth\'etisable''.Plusieurs difficult\'es sont
-apparues, notamment l'ambiguit\'e de l'expression ``VHDL
-synth\'etisable''dL'objectif est de propoduire du code et les r\'esultats
-obtenus sont les suivants:
+% L'organisation du compilateur est d\'ecrite dans la
+% figure~\ref{comp-organisation}. L'organisation de l'\'etape de
+% g\'en\'eration de code s\'equentiel \`a partir de code data-flow
+% est donn\'ee dans la figure~\ref{translation}.
+% Ce compilateur est \'ecrit en Ocaml.
 
-Le code VHDL est obtenu \`a partir du code Le A la diff\'erence de la solution propos\'ee par GeenSoft o\`u la g\'en\'eration de
-code VHDL est obtenue \`a partir du code C g\'en\'er\'e par le compilateur KCG de
-SCADEA6. Ce prototypune technique de traduction de programmes synchronespr\'esente une m\'ethode de traduction pr\'esente une approche 
-On d\'etaille ici la traduction de \LANG{}, un langage synchrone combinant des
-\'equations \`a flots de donn\'ees, dans l'esprit de Lustre, et des automates
-hi\'erarchiques, tels qu'introduits par Lucid Synchrone et SCADE 6, vers le
-langage de description de circuits VHDL. Cette traduction prend le parti de ne
-pas passer par un langage imp\'eratif mais de directement utiliser la
-repr\'esentation interne \`a flots de donn\'ees du compilateur.
+% \begin{figure}
+% \begin{center}
+% %\rotatebox{-90}
+% {\includegraphics[height=3cm]{Fig/comp-organisation}}
+% \end{center}
+% \caption{Organisation du compilateur\label{comp-organisation}}
+% \end{figure}
+
+% \begin{figure}
+% \begin{center}
+% \rotatebox{-90}{\includegraphics[height=11.5cm]{Fig/translation}}
+% \end{center}
+% \caption{Traduction vers du code imp\'eratif\label{translation}}
+% \end{figure}
+
+Il n'existe pas de d\'efinition pr\'ecise identifiant un sous-ensemble
+``synth\'etisable'' du langage VHDL, g\'er\'e par les principaux outils
+industriels. Apr\`es \'echange avec les partenaires du projet GENCOD,
+nous avons identifi\'e un sous-ensemble raisonnable appel\'e \minivhdl dont
+la d\'efinition syntaxique est d\'ecrite dans la section~\ref{section-mini-vhdl}.
 
 Apr\`es avoir rappell\'e bri\`evement la forme des langages d'entr\'ee et de sortie, on
 va expliciter la proc\'edure de traduction retenue.
-
-\section{\LANG}
 
 \LANG{} est un langage synchrone acad\'emique conceptuellement proche de SCADE,
 mais un peu moins expressif : pas de signaux, peu de constructions riches
@@ -297,28 +335,29 @@ On va d\'ecrire rapidement quelques exemples illustrant les fonctionnalit\'es du
 langage, avant de d\'etailler le processus de compilation et l'architecture du
 compilateur.
 
-\subsection{Quelques exemples}
+\subsection{Exemples}
 
 \paragraph{Compteur d'\'ev\'enements simple}
 
 \verbatiminput{simpcount.ept}
 
-Le nœud \textit{count} compte le nombre d'\'ev\`enements \textit{e} re\c{c}us depuis le
+Le noeud \textit{count} compte le nombre d'\'ev\`enements \textit{e} re\c{c}us depuis le
 premier instant du programme.
 
 \paragraph{Compteur multi-\'ev\'enements r\'einitialisable}
 
 \verbatiminput{compteur.ept}
 
-Ce programme implante un compteur d'\'ev\'enements qui comptabilise le nombre de
-bool\'eens valant \texttt{true} sur son entr\'ee \textit{event}, celle-ci étant
-un tableau de booléens de taille \textit{n}, où \textit{n} est un paramètre
-statiquement connu du noeud. On utilise les it\'erateurs \texttt{map} et
-\texttt{fold} pour calculer le nombre d'\'ev\'enements observ\'es dans l'instant
-; le premier permet de traduire les bool\'eens en entiers, et le second
-d'additioner ceux-ci. Notons \'egalement l'utilisation de la construction de
-r\'einitialisation \texttt{reset}, actionn\'ee simplement lorsque l'entr\'ee
-\textit{rst} est vraie.
+Ce programme implante un compteur d'\'ev\'enements qui comptabilise le
+nombre de bool\'eens valant \texttt{true} sur son entr\'ee
+\textit{event}, celle-ci \'etant un tableau de bool\'eens de taille
+\textit{n}, o\`u \textit{n} est un param\`etre statiquement connu du
+noeud. On utilise les it\'erateurs \texttt{map} et \texttt{fold} pour
+calculer le nombre d'\'ev\'enements observ\'es dans l'instant; le
+premier permet de traduire les bool\'eens en entiers, et le second
+d'additioner ceux-ci. Notons \'egalement l'utilisation de la
+construction de r\'einitialisation \texttt{reset}, actionn\'ee
+simplement lorsque l'entr\'ee \textit{rst} est vraie.
 
 \paragraph{Allocateur de ressource}
 
@@ -331,16 +370,19 @@ ayant obtenu la ressource il y a le plus longtemps).
 
 \subsection{Architecture du compilateur}
 
-On d\'ecrit bri\`evement l'architecture du compilateur : apr\`es des phases initiales
-d'analyse lexicale, syntaxique et de typage, le programme \LANG{} est soumis aux
-v\'erifications traditionnelles des langages synchrones (causalit\'e,
-etc.). Ensuite, la compilation progresse par étapes successives en réécrivant le programme jusqu'\`a arriver \`a une forme simple qui
-peut \^etre traduite simplement en MiniLS. Le code r\'esultant, apr\`es avoir \'et\'e
-soumis \`a d'\'eventuelles optimisations, est mis dans une certaine forme dite
+On d\'ecrit bri\`evement l'architecture du compilateur : apr\`es des
+phases initiales d'analyse lexicale, syntaxique et de typage, le
+programme \LANG{} est soumis aux v\'erifications traditionnelles des
+langages synchrones (causalit\'e, etc.). Ensuite, la compilation
+progresse par \'etapes successives en r\'e\'ecrivant le programme jusqu'\`a
+arriver \`a une forme simple qui peut \^etre traduite simplement en
+MiniLS. Le code r\'esultant, apr\`es avoir \'et\'e soumis \`a
+d'\'eventuelles optimisations, est mis dans une certaine forme dite
 ``normale'' et ordonnanc\'e avant d'\^etre finalement traduit en code
-s\'equentiel. L'architecture du compilateur \LANG{} est pr\'esent\'e \`a la figure
-\ref{fig:archi}. Le processus de compilation de MiniLS vers un langage impératif séquentiel est
-d\'ecrit en d\'etails dans l'article \cite{lctes08a}.
+s\'equentiel. L'architecture du compilateur \LANG{} est pr\'esent\'e
+\`a la figure \ref{fig:archi}. Le processus de compilation de MiniLS
+vers un langage imp\'eratif s\'equentiel est d\'ecrit en d\'etails dans
+l'article \cite{lctes08a}.
 
 % Le compilateur est structur\'e en plusieurs passes effectuant une combinaison
 % d'analyses et de transformations, g\'en\'eralement dans le but d'obtenir un code
@@ -370,7 +412,7 @@ on pratiquera en amont trois transformations simplificatrices sur MiniLS.
 \end{enumerate}
 
 Le code obtenu sera finalement traduit vers un sous ensemble de VHDL baptis\'e
-MiniVHDL (étape D), prêt à \^etre trait\'e par les outil d\'edi\'es (étape E).
+MiniVHDL (\'etape D), pr\^et \`a \^etre trait\'e par les outil d\'edi\'es (\'etape E).
 
 \section{De \LANG{} \`a VHDL}
 
@@ -401,7 +443,7 @@ MiniVHDL (étape D), prêt à \^etre trait\'e par les outil d\'edi\'es (étape E
 \end{figure}
 
 MiniLS est \'equivalent au langage synchrone \`a flots de donn\'ees Lustre
-\cite{lustre}, auquel on adjoint une construction de r\'einitialisation
+\cite{lustre:ieee91}, auquel on adjoint une construction de r\'einitialisation
 modulaire d'un noeud\footnote{$\Every{f}{e_1}{e_n}{z}$ appelle le noeud $f$ avec
   les arguments $e_1,\dots,e_n$, et r\'einitialise la m\'emoire de celui-ci
   lorsque $z$ est vraie.}. Un programme MiniLS passera successivement par trois
@@ -409,10 +451,10 @@ formes distinctes lors du processus de compilation :
 
 \begin{itemize}
 \item La forme originale \ref{fig:mls} telle qu'obtenue \`a partir du code
-  \LANG{} original. Cette forme est décrite ici par souci de cohérence et ne
-  nous intéresse pas directement.
-\item La forme normale \ref{fig:mlsn}. Des transformations décrites ci-dessous
-  seront effectuées sur celle-ci pour faciliter la traduction vers VHDL.
+  \LANG{} original. Cette forme est d\'ecrite ici par souci de coh\'erence et ne
+  nous int\'eresse pas directement.
+\item La forme normale \ref{fig:mlsn}. Des transformations d\'ecrites ci-dessous
+  seront effectu\'ees sur celle-ci pour faciliter la traduction vers VHDL.
 \item La forme finale \ref{fig:mlsns}, normalis\'ee, sans r\'einitialisations
   ($every$) ni it\'erateurs, et o\`u tous les param\`etres effectifs sont des
   identifiants.
@@ -446,18 +488,18 @@ formes distinctes lors du processus de compilation :
   \label{fig:mlsns}
 \end{figure}
 
-MiniLS est donc un langage à flots de données proche de Lustre dont les
-programmes sont d'équations mutuellement récursives. Ces équations calculent des
-suites infinies de valeurs progressant selon un temps découpé en instants
-discrets.  Les paquets d'équations sont regroupés dans des unités lexicales
-nommées ``noeuds'' à la granularité dans l'esprit d'une fonction d'un langage
-impératif tel que C.
+MiniLS est donc un langage \`a flots de donn\'ees proche de Lustre dont les
+programmes sont d'\'equations mutuellement r\'ecursives. Ces \'equations calculent des
+suites infinies de valeurs progressant selon un temps d\'ecoup\'e en instants
+discrets.  Les paquets d'\'equations sont regroup\'es dans des unit\'es lexicales
+nomm\'ees ``noeuds'' \`a la granularit\'e dans l'esprit d'une fonction d'un langage
+imp\'eratif tel que C.
 
-On associe à chaque expression du langage un type, qui précise la nature des
-valeurs calculées, ainsi qu'une horloge, garde booléenne qui spécifie les
-instants durant lesquels l'expression calcule une valeur définie.
+On associe \`a chaque expression du langage un type, qui pr\'ecise la nature des
+valeurs calcul\'ees, ainsi qu'une horloge, garde bool\'eenne qui sp\'ecifie les
+instants durant lesquels l'expression calcule une valeur d\'efinie.
 
-Les expressions simples du langage s'exécutent uniquement dans l'instant, et
+Les expressions simples du langage s'ex\'ecutent uniquement dans l'instant, et
 n'ont pas d'effet en dehors de celui-ci.
 
 \[
@@ -470,7 +512,7 @@ n'ont pas d'effet en dehors de celui-ci.
 \end{array}
 \]
 
-À l'inverse, les expressions \textrm{pre} et \textrm{fby} permettent de retarder
+\`A l'inverse, les expressions \textrm{pre} et \textrm{fby} permettent de retarder
 leur argument d'un instant, avec une valeur d'initialisation dans le cas de
 \textrm{fby}.
 
@@ -485,9 +527,9 @@ leur argument d'un instant, avec une valeur d'initialisation dans le cas de
 \]
 
 Les expressions \texttt{when} et \texttt{merge} permettent respectivement de
-sous-échantilloner et sur-échantilloner des expression. L'emploi de ces
+sous-\'echantilloner et sur-\'echantilloner des expression. L'emploi de ces
 constructions a un effet sur les horloges : l'horloge de $\When{e}{C}{x}$ est
-$\On{ck}{C}{x}$, où $ck$ est celle de $e$, et l'horloge de
+$\On{ck}{C}{x}$, o\`u $ck$ est celle de $e$, et l'horloge de
 $\Merge{x}{C_1}{e_1}{C_n}{e_n}$ est $ck$ quand celle des $e_i$ est
 $\On{ck}{C}{x}$.
 
@@ -509,24 +551,24 @@ $\On{ck}{C}{x}$.
 \end{array}
 \]
 
-Les itérateurs \texttt{map}, \texttt{fold}, et \texttt{mapfold} prennent en
+Les it\'erateurs \texttt{map}, \texttt{fold}, et \texttt{mapfold} prennent en
 argument une fonction $f$, une taille de tableau et un ou plusieurs
-tableaux. Ces constructions ont le même sens que dans les langages de
+tableaux. Ces constructions ont le m\^eme sens que dans les langages de
 programmation fonctionnels habituels.
 
 \begin{itemize}
-\item \texttt{map} applique en parallèle $f$ à tous les éléments des tableaux
+\item \texttt{map} applique en parall\`ele $f$ \`a tous les \'el\'ements des tableaux
   pour former un nouveau tableau.
-\item \texttt{fold} applique en série $f$ sur tous les éléments d'un tableau en
-  passant un accumulateur et renvoie ce dernier une fois le parcours terminé.
+\item \texttt{fold} applique en s\'erie $f$ sur tous les \'el\'ements d'un tableau en
+  passant un accumulateur et renvoie ce dernier une fois le parcours termin\'e.
 \item \texttt{mapfold}, qui suppose que $f$ renvoie au moins deux valeurs,
-  combine les deux en construisant un nouveau tableau avec le premier résultat
-  de $f$ (à la manière de \texttt{map}) et en passant un accumulateur durant le
+  combine les deux en construisant un nouveau tableau avec le premier r\'esultat
+  de $f$ (\`a la mani\`ere de \texttt{map}) et en passant un accumulateur durant le
   parcours (tout comme \texttt{fold}).
 \end{itemize}
 
-Enfin, la construction $f(e,\dots,e) \; \mathtt{every} \; x$ réinitialise
-l'appel à $f$ dès que $x$ est vrai.
+Enfin, la construction $f(e,\dots,e) \; \mathtt{every} \; x$ r\'einitialise
+l'appel \`a $f$ d\`es que $x$ est vrai.
 
 \subsubsection{MiniVHDL}
 
@@ -536,18 +578,18 @@ $\Component{f}{P}{sigs}{lvars}{ports}{I}$ correspondra concr\`etement \`a un
 composant VHDL form\'e des instantiations $ports$, signaux internes $sigs$ et d'un
 processus avec les variables locales $lvars$ et de corps $I$.
 
-Le langage est structuré sous forme de composants. Chacun d'eux possède des
-signaux d'entrée/sortie, des signaux locaux, des variables locales, d'éventuels
-sous-composants, et enfin un corps formé d'une suite d'instructions.
+Le langage est structur\'e sous forme de composants. Chacun d'eux poss\`ede des
+signaux d'entr\'ee/sortie, des signaux locaux, des variables locales, d'\'eventuels
+sous-composants, et enfin un corps form\'e d'une suite d'instructions.
 
-La sémantique informelle du langage est la suivante : dès que la valeur d'un
-signal d'entrée ou local change, le corps du composant est exécuté. Celui-ci
+La s\'emantique informelle du langage est la suivante : d\`es que la valeur d'un
+signal d'entr\'ee ou local change, le corps du composant est ex\'ecut\'e. Celui-ci
 peut modifier la valeur d'autres signaux via l'instruction $x \Leftarrow e$ ($x$
-étant par définition un signal), entraînant ainsi l'activation de
-sous-composants, ou même la réactivation du composant courant. Les variables
+\'etant par d\'efinition un signal), entra\^{\i}nant ainsi l'activation de
+sous-composants, ou m\^eme la r\'eactivation du composant courant. Les variables
 locales sont semblables aux variables des langages de programmation
-traditionnels : elles n'ont de valeur que pendant l'exécution du corps d'un
-composant. L'exécution s'arrête une fois tous les signaux stables.
+traditionnels : elles n'ont de valeur que pendant l'ex\'ecution du corps d'un
+composant. L'ex\'ecution s'arr\^ete une fois tous les signaux stables.
 
 \begin{figure}[htp]
   \centering
@@ -585,7 +627,7 @@ Nous effectuons donc trois passes pour simplifier le code MiniLS.
 
 \subsubsection{\'Elimination de la r\'einitialisation logique}
 
-Comme expliqué plus haut, certaines constructions de MiniLS proposent au
+Comme expliqu\'e plus haut, certaines constructions de MiniLS proposent au
 programmeur une forme de r\'einitialisation modulaire : les \'equations de la
 forme $\Fby{v}{e}$ d'un noeud $f$ instanci\'e par la construction
 $\Every{f}{e_1}{e_n}{z}$ doivent-\^etre r\'einitialis\'ees d\`es lors que $z$
@@ -593,29 +635,29 @@ est vrai.
 
 La premi\`ere passe de simplification, qui s'ex\'ecute sur le code MiniLS obtenu
 \`a la troisi\`eme \'etape du processus d\'ecrit plus haut, va exprimer la
-réinitialisation en fonction du reste du langage, réduisant ainsi la complexité
-du langage à traduire vers VHDL.
+r\'einitialisation en fonction du reste du langage, r\'eduisant ainsi la complexit\'e
+du langage \`a traduire vers VHDL.
 
 On va supposer dans ce qui suit que l'identifiant \textbf{rst} est un
-identifiant utilisé nulle part dans le programme. En pratique, le compilateur
+identifiant utilis\'e nulle part dans le programme. En pratique, le compilateur
 s'assure de l'absence de conflit avec les variables de l'utilisateur.
 
 L'id\'ee est d'ajouter \`a chaque noeud un argument suppl\'ementaire nomm\'e
 \textbf{rst} qui vaudra $true$ lorsqu'une r\'einitialisation de la m\'emoire est
-nécessaire, et de modifier les expressions contenant des constructions
+n\'ecessaire, et de modifier les expressions contenant des constructions
 \texttt{fby} ou \texttt{every} pour prendre en compte \textbf{rst}. L'exemple
-suivant reprend le compteur simple présenté plus haut pour illustrer cette
+suivant reprend le compteur simple pr\'esent\'e plus haut pour illustrer cette
 simplification.
 
 \verbatiminput{rst_ex.ept}
 
-Une fois le reset éliminé, le code est le suivant :
+Une fois le reset \'elimin\'e, le code est le suivant :
 
 \verbatiminput{rst_ex2.ept}
 
-On va détailler les fonctions effectuant ces deux t\^aches : $RstE(e)$ prend une
-expression MiniLS $e$ et renvoie une nouvelle expression où la réinitialisation
-a été éliminée, et $RstNode(nd)$ prend un nœud $nd$ et renvoie un nouveau nœud
+On va d\'etailler les fonctions effectuant ces deux t\^aches : $RstE(e)$ prend une
+expression MiniLS $e$ et renvoie une nouvelle expression o\`u la r\'einitialisation
+a \'et\'e \'elimin\'ee, et $RstNode(nd)$ prend un nœud $nd$ et renvoie un nouveau nœud
 prenant un \texttt{rst} \`a un noeud et transforme ses \'equations.
 
 \newcommand{\re}[1]{RstE(#1)}
@@ -676,12 +718,12 @@ d'\'el\'ement en \'el\'ement.
 
 \verbatiminput{fold_il.ept}
 
-Un traitement spécial est adopté pour l'utilisation de \texttt{map} avec
-certains opérateurs. En effet, VHDL permet d'utiliser certains opérateurs sur
-des tableaux de bits, sans avoir à déconstruire ces derniers ; par exemple, il
-est possible d'effectuer un ET logique bit-à-bit sur deux tableaux $t_1$ et
+Un traitement sp\'ecial est adopt\'e pour l'utilisation de \texttt{map} avec
+certains op\'erateurs. En effet, VHDL permet d'utiliser certains op\'erateurs sur
+des tableaux de bits, sans avoir \`a d\'econstruire ces derniers ; par exemple, il
+est possible d'effectuer un ET logique bit-\`a-bit sur deux tableaux $t_1$ et
 $t_2$ via $t_1 \ \texttt{and} \ t_2$. La passe effectue la transformation de
-$\texttt{map}\ \textbf{op}<<n>>(t_1,\dots,t_n)$ à $t_1\ \textbf{op}\ \dots
+$\texttt{map}\ \textbf{op}<<n>>(t_1,\dots,t_n)$ \`a $t_1\ \textbf{op}\ \dots
 \textbf{op}\ t_n$ lorsque cela est possible.
 
 \subsubsection{Simplification des appels}
@@ -691,12 +733,12 @@ $\texttt{map}\ \textbf{op}<<n>>(t_1,\dots,t_n)$ à $t_1\ \textbf{op}\ \dots
 
 Comme nous le verrons plus bas, les appels de nœuds seront compil\'es en
 instantiations de composants ; or, les arguments d'une construction VHDL $port
-\; map$ sont forc\'ement des identifiants. Pour simplifier la génération de
+\; map$ sont forc\'ement des identifiants. Pour simplifier la g\'en\'eration de
 VHDL, on va donc modifier en amont chaque appel de noeud en introduisant une
 variable interm\'ediaire pour chaque argument. La fonction $\simpl{eq}{eqs}$
-simplifie l'équation $eq$ en ajoutant la ou les équations produits à la liste
-des équations déjà traitées $eqs$ ; $\simplnd{nd}$ prend un noeud $nd$ et
-simplifie les appels présents dans ses équations.
+simplifie l'\'equation $eq$ en ajoutant la ou les \'equations produits \`a la liste
+des \'equations d\'ej\`a trait\'ees $eqs$ ; $\simplnd{nd}$ prend un noeud $nd$ et
+simplifie les appels pr\'esents dans ses \'equations.
 
 \[
 \begin{array}{ll}
@@ -735,10 +777,10 @@ suivantes :
 \item Chaque noeud MiniLS correspondra \`a un composant (Mini)VHDL.
 \item Chaque \'equation \`a m\'emoire (i.e. contenant $fby$ ou $pre$) va correspondre
   \`a un signal VHDL local, chaque \'equation combinatoire \`a une variable locale.
-\item Les horloges importent uniquement pour les équations de la forme $x =
+\item Les horloges importent uniquement pour les \'equations de la forme $x =
   \Fby{v}{e}$ et $(x_1,\dots,x_n) = \App{f}{e_1,\dots,e_n}$ : il faudra alors
-  générer la garde booléenne correspondant à $ck$. Les autres sont combinatoires
-  et ne nécessitent pas de traitement particulier.
+  g\'en\'erer la garde bool\'eenne correspondant \`a $ck$. Les autres sont combinatoires
+  et ne n\'ecessitent pas de traitement particulier.
 \item La r\'einitialisation logique est g\'er\'ee en amont comme expliqu\'ee ci-dessus,
   elle est donc implicitement asynchrone (ind\'ependante des fronts montants de
   l'horloge).
@@ -746,7 +788,7 @@ suivantes :
   physiquement toute la m\'emoire lors du bascument d'un signal pr\'ecis nomm\'e
   \textbf{hwrst} : on ajoute donc ce signal suppl\'ementaire invisible dans le
   code MiniLS et on g\'en\`ere le code de r\'einitialisation correspondant lors
-  du traitement du $fby$. Tout comme pour l'identifiant \textit{rst} plus haut, on suppose que l'identifiant \textbf{hwrst} n'est pas utilisé dans le programme.
+  du traitement du $fby$. Tout comme pour l'identifiant \textit{rst} plus haut, on suppose que l'identifiant \textbf{hwrst} n'est pas utilis\'e dans le programme.
 \item Pour respecter la s\'emantique \`a $\Delta$-cycles de VHDL, il importe de
   faire \'evoluer la m\'emoire par un pas du calcul uniquement sur front montant de
   l'horloge.
@@ -826,8 +868,8 @@ simplifi\'e $e$ en expression MiniVHDL.
 \end{array}
 \]
 
-La construction \texttt{when} n'a pas de sens calculatoire, et peut n'être vue
-que comme une annotation d'horloge. Elle sera ignorée lors du processus de
+La construction \texttt{when} n'a pas de sens calculatoire, et peut n'\^etre vue
+que comme une annotation d'horloge. Elle sera ignor\'ee lors du processus de
 traduction.
 
 La fonction $TradCExp(ce)$ traduit les expressions $ce$ de contr\^ole form\'ees
@@ -1025,15 +1067,15 @@ offertes par le synchrone : nul besoin d'\'ecrire plusieurs fois dans le m\^eme
 \'el\'ement m\'emorisant par cycle.
 
 \newpage
-
 \tableofcontents
 
-\bibliography{biblio}
+\newpage
 \bibliographystyle{plain}
-
-\appendix
+\bibliography{lucy,synchrone,biblio}
 
 \newpage
+\appendix
+
 
 \section{Exemples de code g\'en\'er\'e}
 
@@ -1042,10 +1084,10 @@ actuel de ce dernier, beaucoup de variables interm\'ediaires inutiles sont
 g\'en\'er\'ees ; cela s'explique pour deux raisons :
 
 \begin{itemize}
-\item Ces codes représentent des sorties brutes n'ayant subies aucune
+\item Ces codes repr\'esentent des sorties brutes n'ayant subies aucune
   optimisation.
-\item Certaines passes du compilateur ont naturellement tendance à introduire
-  des variables intermédiaire de façon préventive, simplifiant ainsi leur
+\item Certaines passes du compilateur ont naturellement tendance \`a introduire
+  des variables interm\'ediaire de fa\c{c}on pr\'eventive, simplifiant ainsi leur
   fonctionnement.
 \end{itemize}
 
@@ -1175,7 +1217,7 @@ $ ./source 5 # Option indiquant a l'executable genere de s'arreter apres 5 pas
 
 \section{Grammaire de \LANG}
 
-Cette grammaire de référence explicite la syntaxe du langage Heptagon.
+Cette grammaire de r\'ef\'erence explicite la syntaxe du langage Heptagon.
 
 \newcommand{\sdash}{\mbox{-}}
 \newcommand{\spow}{\text{\^{ }}}
@@ -1318,6 +1360,5 @@ Cette grammaire de référence explicite la syntaxe du langage Heptagon.
     const\sdash{}decl^* \  type\sdash{}decl^* \  \funo{}^*
 \end{array}
 \]
-
 
 \end{document}

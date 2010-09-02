@@ -1,18 +1,53 @@
-\begin{thebibliography}{1}
+\begin{thebibliography}{10}
 
-\bibitem{lctes08a}
+\bibitem{lustre:amblard05}
+Paul Amblard.
+\newblock {Using Lustre in Practical Educational Activities : Digital Circuits
+  Design, Formal Languages}.
+\newblock In {\em ETAPS Workshop : Synchronous Language Applications
+  Programming, SLAP 05}, Edinburgh, April 2005.
+
+\bibitem{lucy:lctes08a}
 Darek Biernacki, Jean-Louis Colaco, Gr\'egoire Hamon, and Marc Pouzet.
 \newblock {Clock-directed Modular Code Generation of Synchronous Data-flow
   Languages}.
 \newblock In {\em ACM International Conference on Languages, Compilers, and
   Tools for Embedded Systems (LCTES)}, Tucson, Arizona, June 2008.
 
-\bibitem{lustre}
-P.~Caspi, D.~Pilaud, N.~Halbwachs, and J.~A. Plaice.
-\newblock Lustre: a declarative language for real-time programming.
-\newblock In {\em POPL '87: Proceedings of the 14th ACM SIGACT-SIGPLAN
-  symposium on Principles of programming languages}, pages 178--188, New York,
-  NY, USA, 1987. ACM.
+\bibitem{lucy:emsoft04}
+Jean-Louis Cola\c{c}o, Alain Girault, Gr\'egoire Hamon, and Marc Pouzet.
+\newblock {Towards a Higher-order Synchronous Data-flow Language}.
+\newblock In {\em ACM Fourth International Conference on Embedded Software
+  (EMSOFT'04)}, Pisa, Italy, september 2004.
+
+\bibitem{lucy:emsoft03}
+Jean-Louis Cola\c{c}o and Marc Pouzet.
+\newblock {Clocks as First Class Abstract Types}.
+\newblock In {\em Third International Conference on Embedded Software
+  (EMSOFT'03)}, Philadelphia, Pennsylvania, USA, october 2003.
+
+\bibitem{lucy:sttt04}
+Jean-Louis Cola\c{c}o and Marc Pouzet.
+\newblock {Type-based Initialization Analysis of a Synchronous Data-flow
+  Language}.
+\newblock {\em International Journal on Software Tools for Technology Transfer
+  (STTT)}, 6(3):245--255, August 2004.
+
+\bibitem{lucy:genie00}
+Jean-Louis~Cola\c{c}o et~Marc~Pouzet.
+\newblock {Prototypages}.
+\newblock Rapport final du projet GENIE II, Verilog SA, Janvier 2000.
+
+\bibitem{lustre:ieee91}
+N.~Halbwachs, P.~Caspi, P.~Raymond, and D.~Pilaud.
+\newblock The synchronous dataflow programming language {\sc lustre}.
+\newblock {\em Proceedings of the IEEE}, 79(9):1305--1320, September 1991.
+
+\bibitem{morel-07-jes}
+L.~Morel.
+\newblock Array iterators in lustre: From a language extension to its
+  exploitation in validation.
+\newblock {\em EURASIP Journal on Embedded Systems}, 2007.
 
 \bibitem{lucy:manual06}
 Marc Pouzet.
@@ -20,5 +55,11 @@ Marc Pouzet.
 \newblock Universit\'e Paris-Sud, LRI, April 2006.
 \newblock Distribution available at: {\tt
   www.lri.fr/$\sim$pouzet/lucid-synchrone}.
+
+\bibitem{lustre:rocheteau91}
+Fr\'ed\'eric Rocheteau and Nicolas Halbwachs.
+\newblock {POLLUS: A LUSTRE based hardware design environment}.
+\newblock In {\em Algorithms and Parallel VLSI Architectures}, pages 335--346,
+  1991.
 
 \end{thebibliography}
