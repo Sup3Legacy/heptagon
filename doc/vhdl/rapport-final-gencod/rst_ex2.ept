@@ -1,0 +1,14 @@
+node simple_count(rst : bool; e : bool) returns (o : int)
+let
+  o = (if e then 1 else 0) + (if rst then 0 else (0 fby o));
+tel
+
+node main(rst : bool) returns (o : int)
+let
+  o = simple_count(rst,
+                   if rst
+                   then true
+                   else (true fby (if rst
+                                   then false
+                                   else (false fby true))));
+tel

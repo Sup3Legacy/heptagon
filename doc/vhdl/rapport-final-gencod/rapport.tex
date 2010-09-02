@@ -1,6 +1,6 @@
 \documentclass[a4paper]{article}
 \usepackage[frenchb]{babel}
-%\usepackage[utf8]{inputenc}
+\usepackage[utf8]{inputenc}
 %\usepackage[T1]{fontenc}
 %\usepackage{lmodern}
 \usepackage{amsmath}
@@ -68,8 +68,10 @@
 \newcommand{\When}[3]{#1 \; \mybox{when} \; #2(#3)}
 \newcommand{\Merge}[5]{\mybox{merge} \; #1 \; (#2 \Rightarrow #3) \; \dots \; \
   (#4 \Rightarrow #5)}
+\newcommand{\Merges}[5]{\mybox{merge} \; #1 \; (#2 \Rightarrow #3) \; \
+  (#4 \Rightarrow #5)}
 \newcommand{\Base}[0]{\mybox{base}}
-\newcommand{\On}[3]{#1 \mybox{ on } #2 (#3)}
+\newcommand{\On}[3]{#1 \; \mybox{on} \; #2 (#3)}
 \newcommand{\Map}[3]{\mathtt{map} \; #1 n (#2,\dots,#3)}
 \newcommand{\Fold}[3]{\mathtt{fold} \; #1 n (#2,\dots,#3)}
 \newcommand{\Mapfold}[3]{\mathtt{mapfold} \; #1 n (#2,\dots,#3)}
@@ -123,7 +125,7 @@ va expliciter la proc\'edure de traduction retenue.
 
 \section{\LANG}
 
-\LANG est un langage synchrone acad\'emique conceptuellement proche de SCADE,
+\LANG{} est un langage synchrone acad\'emique conceptuellement proche de SCADE,
 mais un peu moins expressif : pas de signaux, peu de constructions riches
 (\'emissions sur transitions, etc.). Par rapport aux it\'erations pr\'ec\'edente, il
 dispose d\'esormais de tableaux de taille statique et des it\'erateurs associ\'es.
@@ -143,18 +145,17 @@ premier instant du programme.
 
 \paragraph{Compteur multi-\'ev\'enements r\'einitialisable}
 
-\begin{center}
-  \verbatiminput{compteur.ept}
-\end{center}
+\verbatiminput{compteur.ept}
 
 Ce programme implante un compteur d'\'ev\'enements qui comptabilise le nombre de
-bool\'eens valant \texttt{true} sur son entr\'ee \textit{event}. On utilise les
-it\'erateurs \texttt{map} et \texttt{fold} pour calculer le nombre d'\'ev\'enements
-observ\'es dans l'instant ; le premier permet de traduire les bool\'eens en entiers,
-et le second d'additioner ceux-ci. Notons \'egalement l'utilisation de la
-construction de r\'einitialisation \texttt{reset}, actionn\'ee simplement lorsque
-l'entr\'ee \textit{rst}\footnote{On suppose que le nom \textit{rst} est frais} est
-vraie.
+bool\'eens valant \texttt{true} sur son entr\'ee \textit{event}, celle-ci étant
+un tableau de booléens de taille \textit{n}, où \textit{n} est un paramètre
+statiquement connu du noeud. On utilise les it\'erateurs \texttt{map} et
+\texttt{fold} pour calculer le nombre d'\'ev\'enements observ\'es dans l'instant
+; le premier permet de traduire les bool\'eens en entiers, et le second
+d'additioner ceux-ci. Notons \'egalement l'utilisation de la construction de
+r\'einitialisation \texttt{reset}, actionn\'ee simplement lorsque l'entr\'ee
+\textit{rst} est vraie.
 
 \paragraph{Allocateur de ressource}
 
@@ -168,15 +169,15 @@ ayant obtenu la ressource il y a le plus longtemps).
 \subsection{Architecture du compilateur}
 
 On d\'ecrit bri\`evement l'architecture du compilateur : apr\`es des phases initiales
-d'analyse lexicale, syntaxique et de typage, le programme \LANG est soumis aux
+d'analyse lexicale, syntaxique et de typage, le programme \LANG{} est soumis aux
 v\'erifications traditionnelles des langages synchrones (causalit\'e,
-etc.). Ensuite, on le d\'epouille progressivement de ses constructions de haut
-niveau par des r\'e\'ecritures successives, jusqu'\`a arriver \`a une forme simple qui
+etc.). Ensuite, la compilation progresse par étapes successives en réécrivant le programme jusqu'\`a arriver \`a une forme simple qui
 peut \^etre traduite simplement en MiniLS. Le code r\'esultant, apr\`es avoir \'et\'e
 soumis \`a d'\'eventuelles optimisations, est mis dans une certaine forme dite
 ``normale'' et ordonnanc\'e avant d'\^etre finalement traduit en code
-s\'equentiel. L'architecture du compilateur \LANG est pr\'esent\'e \`a la figure
-\ref{fig:archi}.
+s\'equentiel. L'architecture du compilateur \LANG{} est pr\'esent\'e \`a la figure
+\ref{fig:archi}. Le processus de compilation de MiniLS vers un langage impératif séquentiel est
+d\'ecrit en d\'etails dans l'article \cite{lctes08a}.
 
 % Le compilateur est structur\'e en plusieurs passes effectuant une combinaison
 % d'analyses et de transformations, g\'en\'eralement dans le but d'obtenir un code
@@ -203,16 +204,14 @@ on pratiquera en amont trois transformations simplificatrices sur MiniLS.
 \item Suppression des it\'erateurs sur tableaux via mise \`a plat.
 \item Introduction d'une variable interm\'ediaire pour chaque argument d'un appel
   de noeud.
-\item Traduction vers un sous ensemble de VHDL baptis\'e MiniVHDL.
 \end{enumerate}
 
-Le code MiniVHDL obtenu peut ensuite \^etre trait\'e par les outil d\'edi\'es.
+Le code obtenu sera finalement traduit vers un sous ensemble de VHDL baptis\'e
+MiniVHDL (étape D), prêt à \^etre trait\'e par les outil d\'edi\'es (étape E).
 
-\section{De \LANG \`a VHDL}
+\section{De \LANG{} \`a VHDL}
 
-\subsection{Syntaxes}
-
-\TODO{Donner la forme originale sans reset telle qu'avant normalisation ?}
+\subsection{Langages internes}
 
 \subsubsection{MiniLS}
 \label{sec:syn:mls}
@@ -238,28 +237,23 @@ Le code MiniVHDL obtenu peut ensuite \^etre trait\'e par les outil d\'edi\'es.
   \label{fig:mls}
 \end{figure}
 
-MiniLS est \'equivalent au langage synchrone \`a flots de donn\'ees bien connu qu'est
-Lustre \cite{lustre}, auquel on adjoint une construction de r\'einitialisation
+MiniLS est \'equivalent au langage synchrone \`a flots de donn\'ees Lustre
+\cite{lustre}, auquel on adjoint une construction de r\'einitialisation
 modulaire d'un noeud\footnote{$\Every{f}{e_1}{e_n}{z}$ appelle le noeud $f$ avec
-  les arguments $e_1,\dots,e_n$, et r\'einitialise la m\'emoire de celui-ci lorsque
-  $z$ est vraie.}.
-
-Les programmes MiniLS sont pr\'esents dans le compilateur sous trois formes
-distinctes ; la premi\`ere est donn\'ee par souci de coh\'erence et ne nous int\'eresse
-pas directement, les pr\'ec\'edentes passes du compilateur nous fournissant
-directement la deuxi\`eme. Ce processus de compilation est d\'ecrit en d\'etails dans
-l'article \cite{lctes08a}.
+  les arguments $e_1,\dots,e_n$, et r\'einitialise la m\'emoire de celui-ci
+  lorsque $z$ est vraie.}. Un programme MiniLS passera successivement par trois
+formes distinctes lors du processus de compilation :
 
 \begin{itemize}
-\item Forme originale \ref{fig:mls} telle qu'obtenue \`a partir du code \LANG
-  original.
-\item Forme normale \ref{fig:mlsn}.
-\item Forme finale \ref{fig:mlsns}, normalis\'ee, sans r\'einitialisations ($every$)
-  ni it\'erateurs, et o\`u tous les param\`etres effectifs sont des noms
-  d'identifiants.
+\item La forme originale \ref{fig:mls} telle qu'obtenue \`a partir du code
+  \LANG{} original. Cette forme est décrite ici par souci de cohérence et ne
+  nous intéresse pas directement.
+\item La forme normale \ref{fig:mlsn}. Des transformations décrites ci-dessous
+  seront effectuées sur celle-ci pour faciliter la traduction vers VHDL.
+\item La forme finale \ref{fig:mlsns}, normalis\'ee, sans r\'einitialisations
+  ($every$) ni it\'erateurs, et o\`u tous les param\`etres effectifs sont des
+  identifiants.
 \end{itemize}
-
-On va d\'ecrire les constructions du langage :
 
 \begin{figure}[htp]
   \centering
@@ -289,6 +283,88 @@ On va d\'ecrire les constructions du langage :
   \label{fig:mlsns}
 \end{figure}
 
+MiniLS est donc un langage à flots de données proche de Lustre dont les
+programmes sont d'équations mutuellement récursives. Ces équations calculent des
+suites infinies de valeurs progressant selon un temps découpé en instants
+discrets.  Les paquets d'équations sont regroupés dans des unités lexicales
+nommées ``noeuds'' à la granularité dans l'esprit d'une fonction d'un langage
+impératif tel que C.
+
+On associe à chaque expression du langage un type, qui précise la nature des
+valeurs calculées, ainsi qu'une horloge, garde booléenne qui spécifie les
+instants durant lesquels l'expression calcule une valeur définie.
+
+Les expressions simples du langage s'exécutent uniquement dans l'instant, et
+n'ont pas d'effet en dehors de celui-ci.
+
+\[
+\begin{array}{|r|llllllllllllllllllllllllllll}
+  \hline
+  1     & 1 & 1 & 1 & 1 & \dots \\
+  \hline
+  1 + 2 & 3 & 3 & 3 & 3 & \dots \\
+  \hline
+\end{array}
+\]
+
+À l'inverse, les expressions \textrm{pre} et \textrm{fby} permettent de retarder
+leur argument d'un instant, avec une valeur d'initialisation dans le cas de
+\textrm{fby}.
+
+\[
+\begin{array}{|r|llllllllllllllllllllllllllll}
+  \hline
+  1 \ \mathrm{fby} \ 2 & 1 & 2 & 2 & 2 & \dots \\
+  \hline
+  \mathrm{pre} \ 3 &  & 3 & 3 & 3 & \dots \\
+  \hline
+\end{array}
+\]
+
+Les expressions \texttt{when} et \texttt{merge} permettent respectivement de
+sous-échantilloner et sur-échantilloner des expression. L'emploi de ces
+constructions a un effet sur les horloges : l'horloge de $\When{e}{C}{x}$ est
+$\On{ck}{C}{x}$, où $ck$ est celle de $e$, et l'horloge de
+$\Merge{x}{C_1}{e_1}{C_n}{e_n}$ est $ck$ quand celle des $e_i$ est
+$\On{ck}{C}{x}$.
+
+\[
+\begin{array}{|r|llllllllllllllllllllllllllll}
+  \hline
+  x & 1 & 2 & 3 & 4 & \dots \\
+  \hline
+  h & false & true & false & true & \dots \\
+  \hline
+  \When{x}{true}{h} & & 2 & & 4 & \dots \\
+  \hline
+  u &  & 1 & & 4 & \dots \\
+  \hline
+  v & 0 & & 3 & & \dots \\
+  \hline
+  \Merges{h}{true}{u}{false}{v} & 0 & 1 & 3 & 4 \\
+  \hline
+\end{array}
+\]
+
+Les itérateurs \texttt{map}, \texttt{fold}, et \texttt{mapfold} prennent en
+argument une fonction $f$, une taille de tableau et un ou plusieurs
+tableaux. Ces constructions ont le même sens que dans les langages de
+programmation fonctionnels habituels.
+
+\begin{itemize}
+\item \texttt{map} applique en parallèle $f$ à tous les éléments des tableaux
+  pour former un nouveau tableau.
+\item \texttt{fold} applique en série $f$ sur tous les éléments d'un tableau en
+  passant un accumulateur et renvoie ce dernier une fois le parcours terminé.
+\item \texttt{mapfold}, qui suppose que $f$ renvoie au moins deux valeurs,
+  combine les deux en construisant un nouveau tableau avec le premier résultat
+  de $f$ (à la manière de \texttt{map}) et en passant un accumulateur durant le
+  parcours (tout comme \texttt{fold}).
+\end{itemize}
+
+Enfin, la construction $f(e,\dots,e) \; \mathtt{every} \; x$ réinitialise
+l'appel à $f$ dès que $x$ est vrai.
+
 \subsubsection{MiniVHDL}
 
 MiniVHDL \ref{fig:mvhdl} est un fragment tr\`es restreint de VHDL, suffisant pour
@@ -297,9 +373,18 @@ $\Component{f}{P}{sigs}{lvars}{ports}{I}$ correspondra concr\`etement \`a un
 composant VHDL form\'e des instantiations $ports$, signaux internes $sigs$ et d'un
 processus avec les variables locales $lvars$ et de corps $I$.
 
-Notons que les param\`etres effectifs des instantiations de composants sont des
-noms de signaux ; cela justifie la forme simplifi\'ee MiniLS d\'ecrite au paragraphe
-pr\'ec\'edent.
+Le langage est structuré sous forme de composants. Chacun d'eux possède des
+signaux d'entrée/sortie, des signaux locaux, des variables locales, d'éventuels
+sous-composants, et enfin un corps formé d'une suite d'instructions.
+
+La sémantique informelle du langage est la suivante : dès que la valeur d'un
+signal d'entrée ou local change, le corps du composant est exécuté. Celui-ci
+peut modifier la valeur d'autres signaux via l'instruction $x \Leftarrow e$ ($x$
+étant par définition un signal), entraînant ainsi l'activation de
+sous-composants, ou même la réactivation du composant courant. Les variables
+locales sont semblables aux variables des langages de programmation
+traditionnels : elles n'ont de valeur que pendant l'exécution du corps d'un
+composant. L'exécution s'arrête une fois tous les signaux stables.
 
 \begin{figure}[htp]
   \centering
@@ -309,7 +394,7 @@ pr\'ec\'edent.
     & & \mybox{and} \, \mybox{var} \; d; \dots; d \; \mybox{and} \
     \mybox{subcomponents} \; p; \dots; p \; \mybox{in} \; I \\
     sm & \Coloneqq & x : mode \ ty \\
-    sd & \Coloneqq & x : mode \ ty \coloneqq e \\
+    sd & \Coloneqq & x : mode \ ty := e \\
     mode & \Coloneqq & \mybox{in} \p \mybox{out} \\
     d & \Coloneqq & x : ty \\
     p & \Coloneqq & \mybox{port map } x (bd;\dots;bd) \\
@@ -327,9 +412,9 @@ pr\'ec\'edent.
   \label{fig:mvhdl}
 \end{figure}
 
-% On y ajoute comme raccourci syntaxique l'instruction suivante : $$\mybox{if } e
-% \mybox{ then } I \mybox{ else } J \equiv \mybox{case } e \mybox{ of } ('1'
-% \Rightarrow I) ('0' \Rightarrow J)$$
+Notons que les param\`etres effectifs des sous-composants sont des noms de
+signaux ; cela justifie la forme simplifi\'ee MiniLS d\'ecrite au paragraphe
+pr\'ec\'edent.
 
 \subsection{Simplification de MiniLS normalis\'e}
 
@@ -337,28 +422,38 @@ Nous effectuons donc trois passes pour simplifier le code MiniLS.
 
 \subsubsection{\'Elimination de la r\'einitialisation logique}
 
-Certaines constructions de MiniLS proposent au programmeur une forme de
-r\'einitialisation modulaire : les \'equations de la forme $\Fby{v}{e}$ d'un noeud
-$f$ instanci\'e par la construction $\Every{f}{e_1}{e_n}{z}$ doivent-\^etre
-r\'einitialis\'ees d\`es lors que $z$ est vrai.
+Comme expliqué plus haut, certaines constructions de MiniLS proposent au
+programmeur une forme de r\'einitialisation modulaire : les \'equations de la
+forme $\Fby{v}{e}$ d'un noeud $f$ instanci\'e par la construction
+$\Every{f}{e_1}{e_n}{z}$ doivent-\^etre r\'einitialis\'ees d\`es lors que $z$
+est vrai.
 
-La premi\`ere passe de simplification, qui s'ex\'ecute sur le code MiniLS obtenu \`a
-la troisi\`eme \'etape du processus d\'ecrit plus haut, permet d'\'eliminer ces
-constructions $every$ dans le but de compiler plus uniform\'ement vers VHDL,
-autrement dit sans n\'ecessiter un traitement ad-hoc de la r\'einitialisation.
+La premi\`ere passe de simplification, qui s'ex\'ecute sur le code MiniLS obtenu
+\`a la troisi\`eme \'etape du processus d\'ecrit plus haut, va exprimer la
+réinitialisation en fonction du reste du langage, réduisant ainsi la complexité
+du langage à traduire vers VHDL.
+
+On va supposer dans ce qui suit que l'identifiant \textbf{rst} est un
+identifiant utilisé nulle part dans le programme. En pratique, le compilateur
+s'assure de l'absence de conflit avec les variables de l'utilisateur.
 
 L'id\'ee est d'ajouter \`a chaque noeud un argument suppl\'ementaire nomm\'e
-\textit{rst} correspondant \`a un appel n\'ecessitant une r\'einitialisation de la
-m\'emoire. La passe se charge de modifier les appels de noeuds pour synth\'etiser
-l'expression correcte, en particulier dans le cas d'une \'equation de type $(x_1,
-\dots, x_n) = \Every{f}{e}{e}{x}$ o\`u $x$ doit \^etre capable de r\'einitialiser
-$f$. Les m\'emoires r\'einitialisables $\Fby{v}{e}$ doivent bien-entendu \^etre
-r\'einitialis\'ees lorsque l'argument \texttt{rst} est vrai ; pour cela, il suffit
-de remplacer ces derni\`eres par $\If{rst}{v}{\newline \Pre{e}}$.
+\textbf{rst} qui vaudra $true$ lorsqu'une r\'einitialisation de la m\'emoire est
+nécessaire, et de modifier les expressions contenant des constructions
+\texttt{fby} ou \texttt{every} pour prendre en compte \textbf{rst}. L'exemple
+suivant reprend le compteur simple présenté plus haut pour illustrer cette
+simplification.
 
-Les fonctions suivantes effectuent ces deux t\^aches : $RstE$ traite une
-expression MiniLS, et $RstNode$ ajoute l'argument \texttt{rst} \`a un noeud et
-transforme ses \'equations.
+\verbatiminput{rst_ex.ept}
+
+Une fois le reset éliminé, le code est le suivant :
+
+\verbatiminput{rst_ex2.ept}
+
+On va détailler les fonctions effectuant ces deux t\^aches : $RstE(e)$ prend une
+expression MiniLS $e$ et renvoie une nouvelle expression où la réinitialisation
+a été éliminée, et $RstNode(nd)$ prend un nœud $nd$ et renvoie un nouveau nœud
+prenant un \texttt{rst} \`a un noeud et transforme ses \'equations.
 
 \newcommand{\re}[1]{RstE(#1)}
 \newcommand{\rstn}[1]{RstNode(#1)}
@@ -366,19 +461,19 @@ transforme ses \'equations.
 \[
 \begin{array}{lcl}
   \re{\Op{e_1}{e_n}} & = & \Op{\re{e_1}}{\re{e_n}} \\
-  \re{\Fby{v}{e}} & = & \If{rst}{v}{\Fby{v}{\re{e}}} \\
+  \re{\Fby{v}{e}} & = & \If{rst}{v}{(\Fby{v}{\re{e}})} \\
   \re{\Pre{e}} & = & \Pre{\re{e}} \\
-  \re{\Every{f}{e_1}{e_n}{x}} & = & \App{f}{\mathtt{rst} \; \mathbf{or} \;
+  \re{\Every{f}{e_1}{e_n}{x}} & = & \App{f}{\mathbf{rst} \; \mathtt{or} \;
     x, \re{e_1} \dots, \re{e_n}} \\
   \re{\App{f}{e_1,\dots,e_n}} & = &
-  \App{f}{\mathtt{rst},\re{e_1},\dots,\re{e_n}} \\
-  \re{\If{e_1}{e_2}{e_3}} & = & \If{\re{e_1}}{\re{e_2}\\ & & \hspace{1.7cm}}
+  \App{f}{\mathbf{rst},\re{e_1},\dots,\re{e_n}} \\
+  \re{\If{e_1}{e_2}{e_3}} & = & \If{\re{e_1}}{\re{e_2}\\ & & \hspace{1.9cm}}
   {\re{e_3}} \\
   \re{\When{e}{C}{x}} & = & \When{\re{e}}{C}{x} \\
   \re{\Merge{e}{C_1}{e_1}{C_n}{e_n}} & = &
   \mybox{merge} \; \re{e} \; (C_1 \Rightarrow \re{e_1}) \\
-  & & \hspace{2.2cm} \dots \\
-  & & \hspace{2.2cm} (C_n \Rightarrow \re{e_n})
+  & & \hspace{2.4cm} \dots \\
+  & & \hspace{2.4cm} (C_n \Rightarrow \re{e_n})
 \end{array}
 \]
 
@@ -420,14 +515,17 @@ d'\'el\'ement en \'el\'ement.
 
 \subsubsection{Simplification des appels}
 
-Comme nous le verrons plus bas, les appels de nœuds seront compil\'es en
-instantiations de composants ; or, les arguments d'une construction VHDL $port
-\; map$ sont forc\'ement des identifiants. Autant se simplifier la t\^ache en amont
-: on va donc transformer tout appel de noeud en introduisant une variable
-interm\'ediaire pour chaque argument.
-
 \newcommand{\simpl}[2]{Simpl(#1,#2)}
 \newcommand{\simplnd}[1]{SimplNode(#1)}
+
+Comme nous le verrons plus bas, les appels de nœuds seront compil\'es en
+instantiations de composants ; or, les arguments d'une construction VHDL $port
+\; map$ sont forc\'ement des identifiants. Pour simplifier la génération de
+VHDL, on va donc modifier en amont chaque appel de noeud en introduisant une
+variable interm\'ediaire pour chaque argument. La fonction $\simpl{eq}{eqs}$
+simplifie l'équation $eq$ en ajoutant la ou les équations produits à la liste
+des équations déjà traitées $eqs$ ; $\simplnd{nd}$ prend un noeud $nd$ et
+simplifie les appels présents dans ses équations.
 
 \[
 \begin{array}{ll}
@@ -449,8 +547,8 @@ interm\'ediaire pour chaque argument.
   \ind \mathtt{node} f(x_1,\dots,x_n) = y_1, \dots, y_n \; \\
   \ind \mathtt{with} \  \mathtt{var} \; p' \; \mathtt{in} \; fold\_right \;Simpl
   \; D \; [] \\
-  \ind \mbox{en supposant que que } p' \mbox{ correspond} \\
-  \ind \mbox{aux variables d\'efinies par les nouvelles \'equations.}
+  \ind \mbox{en supposant que que } p' \mbox{ correspond}
+  \mbox{aux variables d\'efinies par} \\ \ind \mbox{les nouvelles \'equations.}
 \end{array}
 \]
 
@@ -465,15 +563,19 @@ suivantes :
 \begin{itemize}
 \item Chaque noeud MiniLS correspondra \`a un composant (Mini)VHDL.
 \item Chaque \'equation \`a m\'emoire (i.e. contenant $fby$ ou $pre$) va correspondre
-  \`a un signal, chaque \'equation combinatoire \`a une variable locale.
+  \`a un signal VHDL local, chaque \'equation combinatoire \`a une variable locale.
+\item Les horloges importent uniquement pour les équations de la forme $x =
+  \Fby{v}{e}$ et $(x_1,\dots,x_n) = \App{f}{e_1,\dots,e_n}$ : il faudra alors
+  générer la garde booléenne correspondant à $ck$. Les autres sont combinatoires
+  et ne nécessitent pas de traitement particulier.
 \item La r\'einitialisation logique est g\'er\'ee en amont comme expliqu\'ee ci-dessus,
   elle est donc implicitement asynchrone (ind\'ependante des fronts montants de
   l'horloge).
-\item Les partenaires ont exprim\'e le d\'esir de pouvoir r\'einitialiser physiquement
-  toute la m\'emoire lors du bascument d'un signal pr\'ecis nomm\'e
-  \textit{hwrst}\footnote{Tout comme \textit{rst}, \textit{hwrst} est frais.} :
-  on ajoute donc ce signal suppl\'ementaire invisible dans le code MiniLS et on
-  g\'en\`ere le code de r\'einitialisation correspondant lors du traitement du $fby$.
+\item Les partenaires ont exprim\'e le d\'esir de pouvoir r\'einitialiser
+  physiquement toute la m\'emoire lors du bascument d'un signal pr\'ecis nomm\'e
+  \textbf{hwrst} : on ajoute donc ce signal suppl\'ementaire invisible dans le
+  code MiniLS et on g\'en\`ere le code de r\'einitialisation correspondant lors
+  du traitement du $fby$. Tout comme pour l'identifiant \textit{rst} plus haut, on suppose que l'identifiant \textbf{hwrst} n'est pas utilisé dans le programme.
 \item Pour respecter la s\'emantique \`a $\Delta$-cycles de VHDL, il importe de
   faire \'evoluer la m\'emoire par un pas du calcul uniquement sur front montant de
   l'horloge.
@@ -495,7 +597,8 @@ l'autre.
 
 \subsubsection{Traduction des constantes et fonction auxiliaires sur les horloges}
 
-La fonction $TradConst$ traduit une constante MiniLS en constante MiniVHDL.
+La fonction $TradConst(c)$ traduit une constante MiniLS $c$ en constante
+MiniVHDL.
 
 \newcommand{\TradC}[1]{TradConst(#1)}
 
@@ -509,9 +612,9 @@ La fonction $TradConst$ traduit une constante MiniLS en constante MiniVHDL.
 \]
 
 La fonction auxiliaire $GuardClock$ permet de traduire une horloge MiniLS en
-expression MiniVHDL de type bool\'een. Elle sera utilis\'ee pour contr\^oler la mise \`a
-jour des registres, s'assurant que cette derni\`ere n'est effectu\'ee qu'aux
-instants o\`u l'horloge est effective.
+expression MiniVHDL de type bool\'een. Elle sera utilis\'ee pour contr\^oler la
+mise \`a jour des registres, s'assurant que cette derni\`ere n'est effectu\'ee
+qu'aux instants o\`u l'horloge est effective.
 
 \newcommand{\GEC}[1]{GuardClock(#1)}
 
@@ -522,9 +625,9 @@ instants o\`u l'horloge est effective.
 \end{array}
 \]
 
-Tout comme les mises \`a jour des m\'emoires, les appels \`a d'autres noeuds sont
-dirig\'es par les horloges qui en donnent la cadence. Il nous faudra donc une
-fonction voisine de $GuardClock$ pour calculer l'expression MiniVHDL
+Tout comme les mises \`a jour des m\'emoires, les appels \`a d'autres noeuds
+sont dirig\'es par les horloges qui en donnent la cadence. Il nous faudra donc
+une fonction voisine de $GuardClock$ pour calculer l'expression MiniVHDL
 correspondant \`a l'horloge utilis\'ee dans l'appel d'un noeud.
 
 \newcommand{\EC}[1]{ExpClock(#1)}
@@ -538,8 +641,8 @@ correspondant \`a l'horloge utilis\'ee dans l'appel d'un noeud.
 
 \subsubsection{Traduction des expressions et \'equations}
 
-La fonction $TradExp$ traduit les expressions simples MiniLS normalis\'es et
-simplifi\'e en expressions MiniVHDL.
+La fonction $TradExp(e)$ traduit l'expression MiniLS normalis\'ee et
+simplifi\'e $e$ en expression MiniVHDL.
 
 \newcommand{\TradE}[1]{TradExp(#1)}
 
@@ -552,8 +655,12 @@ simplifi\'e en expressions MiniVHDL.
 \end{array}
 \]
 
-La fonction $TradCExp$ traduit les expressions de contr\^ole form\'ees d'expressions
-simples ou de \texttt{merge} imbriqu\'es en instructions MiniVHDL.
+La construction \texttt{when} n'a pas de sens calculatoire, et peut n'être vue
+que comme une annotation d'horloge. Elle sera ignorée lors du processus de
+traduction.
+
+La fonction $TradCExp(ce)$ traduit les expressions $ce$ de contr\^ole form\'ees
+d'expressions simples ou de \texttt{merge} imbriqu\'es en instructions MiniVHDL.
 
 \newcommand{\TradCE}[2]{TradCExp(#1, #2)}
 
@@ -611,9 +718,9 @@ forme $(clk, in_1, \dots,in_n, out_1,\dots,out_n)$.
 
 \subsubsection{Gestion des tableaux}
 
-Hormis le cas des it\'erateurs trait\'es pr\'ec\'edemment, la gestion des tableaux
-n'appelle pas de commentaire particulier, \`a l'exception de l'anecdotique mais
-g\^enante n\'ecessit\'e de d\'eclarer \`a l'avance les types tableaux (bornes exclues) en
+Hormis le cas des it\'erateurs trait\'es pr\'ec\'edemment, la gestion des
+tableaux n'appelle pas de commentaire particulier, \`a l'exception de la
+n\'ecessit\'e de d\'eclarer \`a l'avance les types tableaux (bornes exclues) en
 VHDL. Deux solutions sont envisageables :
 
 \begin{itemize}
@@ -713,7 +820,7 @@ avec mode d'utilisation (entr\'ee ou sortie).
 
 \subsubsection{Traduction des noeuds}
 
-Enfin, $TradNode$ se charge de traduire un noeud en composant MiniVHDL, en
+Enfin, $TradNode(nd)$ se charge de traduire un noeud $nd$ en composant MiniVHDL, en
 cr\'eant un signal local pour chaque \'equation retard\'ee et argument d'appel de
 noeud, une variable pour chaque \'equation combinatoire, et la liste de
 sous-composants requise.
@@ -740,7 +847,7 @@ sous-composants requise.
 
 \section{Conclusion}
 
-On a traduit \LANG vers VHDL en profitant des forces du mod\`ele synchrone : sa
+On a traduit \LANG{} vers VHDL en profitant des forces du mod\`ele synchrone : sa
 s\'emantique est bien adapt\'ee \`a une description sous forme de circuits. Le
 processus de traduction reste simple et compr\'ehensible gr\^ace aux garanties
 offertes par le synchrone : nul besoin d'\'ecrire plusieurs fois dans le m\^eme
@@ -819,7 +926,7 @@ Notons que le noeud \textit{compteur} est ici instanci\'e avec son param\`etre
 Nous supposerons dans ce manuel que l'archive du compilateur a \'et\'e
 d\'ecompress\'ee dans le r\'epertoire \verb/$HEPTDIR/. Cette archive contient le
 pr\'esent rapport, un r\'epertoire \texttt{exs/} avec une batterie d'exemples
-\LANG compil\'es vers VHDL, et un binaire en code-octet pour la machine
+\LANG{} compil\'es vers VHDL, et un binaire en code-octet pour la machine
 abstraite OCaml. Ce dernier peut-\^etre ex\'ecut\'e via \texttt{ocamlrun heptc},
 ou bien directement lorsque votre \texttt{ocamlrun} est pr\'esent dans
 \texttt{/usr/bin}. Nous supposerons par la suite que c'est le cas et que votre
@@ -973,7 +1080,7 @@ Cette grammaire de référence explicite la syntaxe du langage Heptagon.
 \end{array}
 \]
 
-\newcommand{\funo}{fun\sdash{}or\sdash{}node\sdash{}decl}
+\newcommand{\funo}{fun\sdash{}or\sdash{}node}
 
 \[
 \begin{array}{lcl}
@@ -1037,7 +1144,7 @@ Cette grammaire de référence explicite la syntaxe du langage Heptagon.
   & | & \lcb{} {\bf field\sdash{}name} : {\bf type\sdash{}name},\  \dots,\ 
     {\bf field\sdash{}name} : {\bf type\sdash{}name} \rcb{} \\
   program & \Coloneqq &
-    const\sdash{}decl^* \  type\sdash{}decl^* \  node\sdash{}decl^*
+    const\sdash{}decl^* \  type\sdash{}decl^* \  \funo{}^*
 \end{array}
 \]
 
