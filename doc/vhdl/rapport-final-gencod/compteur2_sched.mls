@@ -1,0 +1,41 @@
+node count_23(rst_2 : bool; event : bool^4; rst : bool) returns (count : int)
+var _v_43 : int; _v_42 : int; _v_41 : int; _v_40 : int; _v_39 : int;
+    _v_38 : int; _v_37 : int; _v_36 : int; _v_35 : int; _v_34 : int;
+    _v_33 : int; _v_32 : int; z_31 : int; z_30 : int; z_29 : int; z_28 : int;
+    z_27 : int; z_26 : int; z_25 : int; z_24 : int; _v_19 : int^4;
+    _v_18 : bool^4; _v_17 : bool; _v_16 : int; _v_15 : int; pres : int;
+let
+  _v_17 = ( or )(rst_2, rst);
+  _v_37 = event[3];
+  _v_39 = event[2];
+  _v_43 = event[0];
+  _v_41 = event[1];
+  _v_18 = _v_17^4;
+  _v_42 = _v_18[0];
+  _v_36 = _v_18[3];
+  z_24 = int_of_bool(_v_42, _v_43);
+  _v_38 = _v_18[2];
+  z_27 = int_of_bool(_v_36, _v_37);
+  _v_40 = _v_18[1];
+  z_26 = Compteur2.int_of_bool(_v_38, _v_39);
+  z_25 = Compteur2.int_of_bool(_v_40, _v_41);
+  _v_19 = [z_27; z_26; z_25; z_24];
+  _v_35 = _v_19[0];
+  _v_32 = _v_19[3];
+  _v_33 = _v_19[2];
+  _v_34 = _v_19[1];
+  z_28 = ( + )(_v_35, 0);
+  z_29 = ( + )(_v_34, z_28);
+  z_30 = ( + )(_v_33, z_29);
+  z_31 = ( + )(_v_32, z_30);
+  _v_16 =
+    merge rst
+      (true -> (0 when true(rst)))
+      (false -> 
+        (merge rst_2 (true -> (0 when true(rst_2)))
+                     (false -> (_v_15 when false(rst_2)))
+          when false(rst)));
+  pres = z_31;
+  count = ( + )(_v_16, pres);
+  _v_15 = 0 fby count;
+tel
