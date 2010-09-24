@@ -3,5 +3,7 @@ node count<<n : int>>(event : bool^n; rst : bool)
 var pres : int;
 let
   pres = fold (+)<<n>>(map int_of_bool<<n>>(event), 0);
-  reset count = (0 fby count) + pres every rst;
+  reset 
+    count = (0 fby count) + pres 
+  every rst;
 tel
