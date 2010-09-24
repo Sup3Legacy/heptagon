@@ -25,8 +25,8 @@
 \BOOKMARK [3][]{subsubsection.3.4.5}{Compilation modulaire et appels de noeuds}{subsection.3.4}
 \BOOKMARK [3][]{subsubsection.3.4.6}{Traduction des noeuds}{subsection.3.4}
 \BOOKMARK [1][]{section.4}{Conclusion}{}
-\BOOKMARK [1][]{appendix.A}{Exemples de code g\351n\351r\351}{}
-\BOOKMARK [2][]{subsection.A.1}{Compteur}{appendix.A}
-\BOOKMARK [2][]{subsection.A.2}{Allocateur de ressource}{appendix.A}
-\BOOKMARK [1][]{appendix.B}{Utilisation du compilateur}{}
-\BOOKMARK [1][]{appendix.C}{Grammaire de Heptagon}{}
+\BOOKMARK [1][]{section.A}{Exemples de code g\351n\351r\351}{}
+\BOOKMARK [2][]{subsection.A.1}{Compteur}{section.A}
+\BOOKMARK [2][]{subsection.A.2}{Allocateur de ressource}{section.A}
+\BOOKMARK [1][]{section.B}{Utilisation du compilateur}{}
+\BOOKMARK [1][]{section.C}{Grammaire de Heptagon}{}

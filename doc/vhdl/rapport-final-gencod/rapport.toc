@@ -1,0 +1,39 @@
+\select@language {french}
+\contentsline {section}{\numberline {1}Introduction}{3}{section.1}
+\contentsline {subsection}{\numberline {1.1}Compilation de SCADE/Lustre vers VHDL}{3}{subsection.1.1}
+\contentsline {subsection}{\numberline {1.2}G\'en\'eration de VHDL \`a partir d'\'equations data-flow gard\'ees}{4}{subsection.1.2}
+\contentsline {subsubsection}{\numberline {1.2.1}Un mot sur la traduction de C vers VHDL}{4}{subsubsection.1.2.1}
+\contentsline {section}{\numberline {2}Prototypage}{5}{section.2}
+\contentsline {subsection}{\numberline {2.1}Exemples}{6}{subsection.2.1}
+\contentsline {subsubsection}{\numberline {2.1.1}Compteur d'\'ev\'enements simple}{6}{subsubsection.2.1.1}
+\contentsline {subsubsection}{\numberline {2.1.2}Compteur multi-\'ev\'enements r\'einitialisable}{6}{subsubsection.2.1.2}
+\contentsline {subsubsection}{\numberline {2.1.3}Allocateur de ressource}{6}{subsubsection.2.1.3}
+\contentsline {subsection}{\numberline {2.2}Architecture du compilateur}{7}{subsection.2.2}
+\contentsline {section}{\numberline {3}De {\sc Heptagon}{} \`a VHDL}{7}{section.3}
+\contentsline {subsection}{\numberline {3.1}Langages internes}{7}{subsection.3.1}
+\contentsline {subsubsection}{\numberline {3.1.1}MiniLS}{7}{subsubsection.3.1.1}
+\contentsline {subsection}{\numberline {3.2}S\'emantique intuitive}{8}{subsection.3.2}
+\contentsline {subsubsection}{\numberline {3.2.1}MiniVHDL}{10}{subsubsection.3.2.1}
+\contentsline {subsection}{\numberline {3.3}Simplification de MiniLS normalis\'e}{10}{subsection.3.3}
+\contentsline {subsubsection}{\numberline {3.3.1}\'Elimination de la r\'einitialisation logique}{10}{subsubsection.3.3.1}
+\contentsline {subsubsection}{\numberline {3.3.2}Suppression des it\'erateurs}{12}{subsubsection.3.3.2}
+\contentsline {subsubsection}{\numberline {3.3.3}Simplification des appels}{13}{subsubsection.3.3.3}
+\contentsline {subsection}{\numberline {3.4}MiniLS simplifi\'e vers MiniVHDL}{13}{subsection.3.4}
+\contentsline {subsubsection}{\numberline {3.4.1}Traduction des types}{14}{subsubsection.3.4.1}
+\contentsline {subsubsection}{\numberline {3.4.2}Traduction des constantes et fonction auxiliaires sur les horloges}{14}{subsubsection.3.4.2}
+\contentsline {subsubsection}{\numberline {3.4.3}Traduction des expressions et \'equations}{14}{subsubsection.3.4.3}
+\contentsline {subsubsection}{\numberline {3.4.4}Gestion des tableaux}{15}{subsubsection.3.4.4}
+\contentsline {subsubsection}{\numberline {3.4.5}Compilation modulaire et appels de noeuds}{15}{subsubsection.3.4.5}
+\contentsline {subsubsection}{\numberline {3.4.6}Traduction des noeuds}{16}{subsubsection.3.4.6}
+\contentsline {section}{\numberline {4}Conclusion}{17}{section.4}
+\contentsline {section}{\numberline {A}Exemples de code g\'en\'er\'e}{19}{section.A}
+\contentsline {subsection}{\numberline {A.1}Compteur}{19}{subsection.A.1}
+\contentsline {paragraph}{MiniLS initial}{19}{section*.3}
+\contentsline {paragraph}{MiniLS normalis\'e, ordonnanc\'e et simplifi\'e}{19}{section*.4}
+\contentsline {paragraph}{VHDL}{20}{section*.5}
+\contentsline {subsection}{\numberline {A.2}Allocateur de ressource}{22}{subsection.A.2}
+\contentsline {paragraph}{MiniLS initial}{22}{section*.6}
+\contentsline {paragraph}{MiniLS normalis\'e, ordonnanc\'e et simplifi\'e}{23}{section*.7}
+\contentsline {paragraph}{VHDL}{26}{section*.8}
+\contentsline {section}{\numberline {B}Utilisation du compilateur}{30}{section.B}
+\contentsline {section}{\numberline {C}Grammaire de Heptagon}{31}{section.C}

@@ -144,6 +144,14 @@ SP2}
 
 \newpage
 
+\title{Traduction SCADE/Lustre vers VHDL~\thanks{Rapport d'\'etude dans
+    le cadre du projet GENCOD.}}  \author{Adrien Guatto et Marc Pouzet
+  \\ LRI~\thanks{Marc Pouzet est maintenant professeur \`a l'Universit\'e
+    Pierre et Marie Curie et rattach\'e \`a l'\'Ecole normale
+    sup\'erieure. Adrien Guatto, \'etudiant de l'Universit\'e Pierre et
+    Marie Curie, a effectu\'e son stage dans le cadre du projet.}}
+\date{31 ao\^ut 2010}
+
 \section{Introduction}
 Ce document pr\'esente le probl\`eme de la compilation d'un langage
 synchrone tel que \scade{} vers un langage pour le mat\'eriel et les
