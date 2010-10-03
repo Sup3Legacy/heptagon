@@ -28,14 +28,14 @@ type iterator_type =
   | Imapfold
 
 type type_dec = {
-  t_name: name;
+  t_name: qualname;
   t_desc: tdesc;
   t_loc: location }
 
 and tdesc =
   | Type_abs
   | Type_alias of ty
-  | Type_enum of name list
+  | Type_enum of constructor_name list
   | Type_struct of structure
 
 and exp = {
@@ -58,7 +58,7 @@ and edesc =
   | Estruct of (field_name * exp) list
                        (** { field=exp; ... } *)
   | Eiterator of iterator_type * app * static_exp * exp list * var_ident option
-                       (** map f <<n>> (exp,exp...) reset ident *)
+                       (** map f <<n>> (exp, exp...) reset ident *)
 
 and app = { a_op: op; a_params: static_exp list; a_unsafe: bool }
     (** Unsafe applications could have side effects
@@ -79,19 +79,18 @@ and op =
   | Eselect_dyn        (** arg1.[arg3...] default arg2 *)
   | Eupdate            (** [ arg1 with arg3..arg_n = arg2 ] *)
   | Econcat            (** arg1@@arg2 *)
-  | Elambda of var_dec list * var_dec list * var_dec list * eq list
-      (* inputs, outputs, locals, body *)
 
-and pat =
+
+type pat =
   | Etuplepat of pat list
   | Evarpat of var_ident
 
-and eq = {
+type eq = {
   eq_lhs : pat;
   eq_rhs : exp;
   eq_loc : location }
 
-and var_dec = {
+type var_dec = {
   v_ident : var_ident;
   v_type : ty;
   v_clock : ck;
@@ -104,7 +103,7 @@ type contract = {
   c_eq : eq list }
 
 type node_dec = {
-  n_name   : name;
+  n_name   : qualname;
   n_input  : var_dec list;
   n_output : var_dec list;
   n_contract : contract option;
@@ -115,7 +114,7 @@ type node_dec = {
   n_params_constraints : size_constraint list }
 
 type const_dec = {
-  c_name : name;
+  c_name : qualname;
   c_type : ty;
   c_value : static_exp;
   c_loc : location }
@@ -130,8 +129,8 @@ type program = {
 
 (*Helper functions to build the AST*)
 
-let mk_exp ?(exp_ty = invalid_type) ?(clock = Cbase) ?(loc = no_location) desc =
-  { e_desc = desc; e_ty = exp_ty; e_ck = clock; e_loc = loc }
+let mk_exp ?(ty = invalid_type) ?(clock = Cbase) ?(loc = no_location) desc =
+  { e_desc = desc; e_ty = ty; e_ck = clock; e_loc = loc }
 
 let mk_var_dec ?(loc = no_location) ?(clock = Cbase) ident ty =
   { v_ident = ident; v_type = ty; v_clock = clock; v_loc = loc }
@@ -152,11 +151,19 @@ let mk_node
     n_params = param;
     n_params_constraints = constraints }
 
-let mk_type_dec ?(type_desc = Type_abs) ?(loc = no_location) name =
+let mk_type_dec type_desc name loc =
   { t_name = name; t_desc = type_desc; t_loc = loc }
+
+let mk_const_dec id ty e loc =
+  { c_name = id; c_type = ty; c_value = e; c_loc = loc }
 
 let mk_app ?(params=[]) ?(unsafe=false) op =
   { a_op = op; a_params = params; a_unsafe = unsafe }
+
+(** The modname field has to be set when known, TODO LG : format_version *)
+let mk_program o n t c =
+  { p_modname = ""; p_format_version = "";
+    p_opened = o; p_nodes = n; p_types = t; p_consts = c }
 
 let void = mk_exp (Eapp (mk_app Etuple, [], None))
 

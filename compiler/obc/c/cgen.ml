@@ -29,25 +29,31 @@ struct
     | Eno_unnamed_output
     | Ederef_not_pointer
     | Estatic_exp_compute_failed
+    | Eunknown_method of string
 
   let message loc kind = (match kind with
     | Evar name ->
-        eprintf "%aCode generation : The variable name '%s' is unbound.\n"
+        eprintf "%aCode generation : The variable name '%s' is unbound.@."
           print_location loc name
     | Enode name ->
-        eprintf "%aCode generation : The node name '%s' is unbound.\n"
+        eprintf "%aCode generation : The node name '%s' is unbound.@."
           print_location loc name
     | Eno_unnamed_output ->
-        eprintf "%aCode generation : Unnamed outputs are not supported.\n"
+        eprintf "%aCode generation : Unnamed outputs are not supported.@."
           print_location loc
     | Ederef_not_pointer ->
-        eprintf "%aCode generation : Trying to deference a non pointer type.\n"
+        eprintf "%aCode generation : Trying to deference a non pointer type.@."
           print_location loc
     | Estatic_exp_compute_failed ->
         eprintf "%aCode generation : Computation of the value of the static \
-                 expression failed.\n"
-          print_location loc);
-    raise Misc.Error
+                 expression failed.@."
+          print_location loc
+    | Eunknown_method s ->
+        eprintf "%aCode generation : Methods other than step and \
+                    reset are not supported (found '%s').@."
+          print_location loc
+          s);
+    raise Errors.Error
 end
 
 let rec struct_name ty =
@@ -56,63 +62,20 @@ let rec struct_name ty =
   | _ -> assert false
 
 let int_of_static_exp se =
-  Static.int_of_static_exp NamesEnv.empty se
+  Static.int_of_static_exp QualEnv.empty se
 
-(* Functions to deal with opened modules set. *)
-type world = { mutable opened_modules : S.t }
-let world = { opened_modules = S.empty }
-
-let add_opened_module (m:string) =
-  world.opened_modules <-
-    S.add (String.uncapitalize (cname_of_name m)) world.opened_modules
-let get_opened_modules () =
-  S.elements  world.opened_modules
-let remove_opened_module (m:string) =
-  world.opened_modules <- S.remove m world.opened_modules
-let reset_opened_modules () =
-  world.opened_modules <- S.empty
-
-let shortname = function
-  | Name(n) -> n
-  | Modname(q) ->
-      if q.qual <> "Pervasives" then
-        add_opened_module q.qual;
-      q.id
-
-(** Returns the information concerning a node given by name. *)
-let node_info classln =
-  match classln with
-    | Modname {qual = modname; id = modname_name } ->
-        begin try
-          modname, find_value (Modname({qual = modname;
-                                        id = modname_name }))
-        with Not_found ->
-          (* name might be of the form Module.name, remove the module name*)
-          (*let ind_name = (String.length modname) + 1 in
-          let name = String.sub modname_name ind_name
-            ((String.length modname_name)-ind_name) in
-          begin try
-            modname, find_value (Modname({qual = modname;
-                                          id = name }))
-          with Not_found ->*)
-            Error.message no_location (Error.Enode modname)
-          (*end *)
-        end
-    | Name n ->
-        assert false;
-        Error.message no_location (Error.Enode n)
 
 let output_names_list sig_info =
   let remove_option ad = match ad.a_name with
     | Some n -> n
     | None -> Error.message no_location Error.Eno_unnamed_output
   in
-  List.map remove_option sig_info.info.node_outputs
+  List.map remove_option sig_info.node_outputs
 
 let is_statefull n =
   try
-    let _, sig_info = node_info n in
-      sig_info.info.node_statefull
+    let sig_info = find_value n in
+      sig_info.node_statefull
   with
       Not_found -> Error.message no_location (Error.Enode (fullname n))
 
@@ -135,7 +98,7 @@ let rec ctype_of_otype oty =
     | Types.Tid id when id = Initial.pint -> Cty_int
     | Types.Tid id when id = Initial.pfloat -> Cty_float
     | Types.Tid id when id = Initial.pbool -> Cty_int
-    | Tid id -> Cty_id (shortname id)
+    | Tid id -> Cty_id id
     | Tarray(ty, n) -> Cty_arr(int_of_static_exp n,
                                ctype_of_otype ty)
     | Tprod _ -> assert false
@@ -152,7 +115,7 @@ let copname = function
   | "-" -> "-" | "*" -> "*" | "/" -> "/" | "*." -> "*" | "/." -> "/"
   | "+." -> "+" | "-." -> "-" | "<"  -> "<" | ">"  -> ">" | "<=" -> "<="
   | ">=" -> ">="
-  | "~-" -> "-" | "not" -> "!"
+  | "~-" -> "-" | "not" -> "!" | "%" -> "%"
   | op   -> op
 
 (** Translates an Obc var_dec to a tuple (name, cty). *)
@@ -186,7 +149,7 @@ let rec copy_array src dest bounds =
     mapping strings to cty). *)
 let rec assoc_type n var_env =
   match var_env with
-    | [] -> (*Error.message no_location (Error.Evar n)*)assert false
+    | [] -> Error.message no_location (Error.Evar n)
     | (vn,ty)::var_env ->
         if vn = n then
           ty
@@ -197,10 +160,9 @@ let rec assoc_type n var_env =
 let rec unalias_ctype = function
   | Cty_id ty_name ->
       (try
-        let { qualid = q; info = ty_desc } = find_type (longname ty_name) in
-          match ty_desc with
-            | Talias ty -> unalias_ctype (ctype_of_otype ty)
-            | _ -> Cty_id ty_name
+         match find_type ty_name with
+           | Talias ty -> unalias_ctype (ctype_of_otype ty)
+           | _ -> Cty_id ty_name
       with Not_found -> Cty_id ty_name)
   | Cty_arr (n, cty) -> Cty_arr (n, unalias_ctype cty)
   | Cty_ptr cty -> Cty_ptr (unalias_ctype cty)
@@ -219,12 +181,12 @@ let rec assoc_type_lhs lhs var_env =
         (match assoc_type_lhs lhs var_env with
          | Cty_ptr ty -> ty
          | _ -> Error.message no_location Error.Ederef_not_pointer)
-    | Cfield(Cderef (Cvar "self"), x) -> assoc_type x var_env
+    | Cfield(Cderef (Cvar "self"), { name = x }) -> assoc_type x var_env
     | Cfield(x, f) ->
         let ty = assoc_type_lhs x var_env in
         let n = struct_name ty in
-        let { info = fields } = find_struct (longname n) in
-        ctype_of_otype (field_assoc (Name f) fields)
+        let fields = find_struct n in
+        ctype_of_otype (field_assoc f fields)
 
 (** Creates the statement a = [e_1, e_2, ..], which gives a list
     a[i] = e_i.*)
@@ -239,7 +201,7 @@ let rec create_affect_lit dest l ty =
 
 (** Creates the expression dest <- src (copying arrays if necessary). *)
 and create_affect_stm dest src ty =
-  match ty  with
+  match ty with
     | Cty_arr (n, bty) ->
         (match src with
            | Carraylit l -> create_affect_lit dest l bty
@@ -248,42 +210,55 @@ and create_affect_stm dest src ty =
                [Cfor(x, 0, n,
                      create_affect_stm (Carray (dest, Clhs (Cvar x)))
                        (Clhs (Carray (src, Clhs (Cvar x)))) bty)]
+           | _ -> assert false (** TODO: add missing cases eg for records *)
         )
+    | Cty_id ln ->
+        (match src with
+          | Cstructlit (_, ce_list) ->
+              let create_affect { f_name = f_name;
+                                  Signature.f_type = f_type; } e stm_list =
+                let cty = ctype_of_otype f_type in
+                create_affect_stm (Cfield (dest, f_name)) e cty @ stm_list in
+              List.fold_right2 create_affect (find_struct ln) ce_list []
+          | _ -> [Caffect (dest, src)])
     | _ -> [Caffect (dest, src)]
 
 (** Returns the expression to use e as an argument of
     a function expecting a pointer as argument. *)
 let address_of e =
-  try
+(*  try *)
     let lhs = lhs_of_exp e in
     match lhs with
       | Carray _ -> Clhs lhs
       | Cderef lhs -> Clhs lhs
       | _ -> Caddrof lhs
-  with _ ->
-    e
+(*  with _ ->
+    e  *)
 
 let rec cexpr_of_static_exp se =
   match se.se_desc with
     | Sint i -> Cconst (Ccint i)
     | Sfloat f -> Cconst (Ccfloat f)
     | Sbool b -> Cconst (Ctag (if b then "TRUE" else "FALSE"))
-    | Sconstructor c -> Cconst (Ctag (shortname c))
+    | Sfield _ -> assert false
+    | Sconstructor c -> Cconst (Ctag (cname_of_qn c))
     | Sarray sl -> Carraylit (List.map cexpr_of_static_exp sl)
     | Sarray_power(n,c) ->
         let cc = cexpr_of_static_exp c in
           Carraylit (repeat_list cc (int_of_static_exp n))
     | Svar ln ->
         (try
-          let { info = cd } = find_const ln in
-            cexpr_of_static_exp (Static.simplify NamesEnv.empty cd.c_value)
+          let cd = find_const ln in
+          cexpr_of_static_exp (Static.simplify QualEnv.empty cd.c_value)
         with Not_found -> assert false)
     | Sop _ ->
-        let se' = Static.simplify NamesEnv.empty se in
+        let se' = Static.simplify QualEnv.empty se in
           if se = se' then
             Error.message se.se_loc Error.Estatic_exp_compute_failed
           else
             cexpr_of_static_exp se'
+    | Stuple _ -> assert false (** TODO *)
+    | Srecord _ -> assert false (** TODO *)
 
 (** [cexpr_of_exp exp] translates the Obj action [exp] to a C expression. *)
 let rec cexpr_of_exp var_env exp =
@@ -300,7 +275,7 @@ let rec cexpr_of_exp var_env exp =
           (** Structure literals. *)
     | Estruct (tyn, fl) ->
         let cexps = List.map (fun (_,e) -> cexpr_of_exp var_env e) fl in
-        let ctyn = shortname tyn in
+        let ctyn = cname_of_qn tyn in
         Cstructlit (ctyn, cexps)
     | Earray e_list ->
         Carraylit (cexprs_of_exps var_env e_list)
@@ -308,9 +283,8 @@ let rec cexpr_of_exp var_env exp =
 and cexprs_of_exps var_env exps =
   List.map (cexpr_of_exp var_env) exps
 
-and cop_of_op_aux var_env op_name cexps =
-  match op_name with
-    | Modname { qual = "Pervasives"; id = op } ->
+and cop_of_op_aux op_name cexps = match op_name with
+    | { qual = "Pervasives"; name = op } ->
         begin match op,cexps with
           | "~-", [e] -> Cuop ("-", e)
           | "not", [e] -> Cuop ("!", e)
@@ -318,20 +292,16 @@ and cop_of_op_aux var_env op_name cexps =
               "=" | "<>"
             | "&" | "or"
             | "+" | "-" | "*" | "/"
-            | "*." | "/." | "+." | "-."
+            | "*." | "/." | "+." | "-." | "%"
             | "<" | ">" | "<=" | ">="), [el;er] ->
               Cbop (copname op, el, er)
           | _ -> Cfun_call(op, cexps)
         end
-    | Modname {qual = m; id = op} ->
-        add_opened_module m;
-        Cfun_call(op,cexps)
-    | Name(op) ->
-        Cfun_call(op,cexps)
+    | {qual = m; name = op} -> Cfun_call(op,cexps) (*TODO m should be used?*)
 
 and cop_of_op var_env op_name exps =
   let cexps = cexprs_of_exps var_env exps in
-  cop_of_op_aux var_env op_name cexps
+  cop_of_op_aux op_name cexps
 
 and clhs_of_lhs var_env l = match l.l_desc with
   (** Each Obc variable corresponds to a real local C variable. *)
@@ -346,9 +316,9 @@ and clhs_of_lhs var_env l = match l.l_desc with
       else
         Cvar n
   (** Dereference our [self] struct holding the node's memory. *)
-  | Lmem v -> Cfield (Cderef (Cvar "self"), name v)
+  | Lmem v -> Cfield (Cderef (Cvar "self"), local_qn (name v))
   (** Field access. /!\ Indexed Obj expression should be a valid lhs!  *)
-  | Lfield (l, fn) -> Cfield(clhs_of_lhs var_env l, shortname fn)
+  | Lfield (l, fn) -> Cfield(clhs_of_lhs var_env l, fn)
   | Larray (l, idx) ->
       Carray(clhs_of_lhs var_env l, cexpr_of_exp var_env idx)
 
@@ -372,7 +342,7 @@ let assoc_cn instance obj_env =
   (assoc_obj (obj_call_name instance) obj_env).o_class
 
 let is_op = function
-  | Modname { qual = "Pervasives"; id = _ } -> true
+  | { qual = "Pervasives"; name = _ } -> true
   | _ -> false
 
 let out_var_name_of_objn o =
@@ -385,10 +355,10 @@ let step_fun_call var_env sig_info objn out args =
   if sig_info.node_statefull then (
     let mem =
       (match objn with
-         | Oobj o -> Cfield (Cderef (Cvar "self"), o)
+         | Oobj o -> Cfield (Cderef (Cvar "self"), local_qn o)
          | Oarray (o, l) ->
              let l = clhs_of_lhs var_env l in
-               Carray (Cfield (Cderef (Cvar "self"), o), Clhs l)
+               Carray (Cfield (Cderef (Cvar "self"), local_qn o), Clhs l)
       ) in
       args@[Caddrof out; Caddrof mem]
   ) else
@@ -401,17 +371,17 @@ let step_fun_call var_env sig_info objn out args =
 let generate_function_call var_env obj_env outvl objn args =
   (** Class name for the object to step. *)
   let classln = assoc_cn objn obj_env in
-  let classn = shortname classln in
-  let mod_classn, sig_info = node_info classln in
+  let classn = cname_of_qn classln in
+  let sig_info = find_value classln in
   let out = Cvar (out_var_name_of_objn classn) in
 
   let fun_call =
     if is_op classln then
-      cop_of_op_aux var_env classln args
+      cop_of_op_aux classln args
     else
       (** The step function takes scalar arguments and its own internal memory
           holding structure. *)
-      let args = step_fun_call var_env sig_info.info objn out args in
+      let args = step_fun_call var_env sig_info objn out args in
       (** Our C expression for the function call. *)
       Cfun_call (classn ^ "_step", args)
   in
@@ -429,13 +399,16 @@ let generate_function_call var_env obj_env outvl objn args =
         let out_sig = output_names_list sig_info in
         let create_affect outv out_name =
           let ty = assoc_type_lhs outv var_env in
-            create_affect_stm outv (Clhs (Cfield (out, out_name))) ty
+            create_affect_stm outv (Clhs (Cfield (out, local_qn out_name))) ty
         in
           (Csexpr fun_call)::(List.flatten (map2 create_affect outvl out_sig))
 
 (** Create the statement dest = c where c = v^n^m... *)
 let rec create_affect_const var_env dest c =
   match c.se_desc with
+    | Svar ln ->
+        let se = Static.simplify QualEnv.empty (find_const ln).c_value in
+        create_affect_const var_env dest se
     | Sarray_power(c, n) ->
         let x = gen_symbol () in
         [Cfor(x, 0, int_of_static_exp n,
@@ -453,8 +426,8 @@ let rec create_affect_const var_env dest c =
 let rec cstm_of_act var_env obj_env act =
   match act with
       (** Case on boolean values are converted to if instead of switch! *)
-    | Acase (c, [(Name "true", te); (Name "false", fe)])
-    | Acase (c, [(Name "false", fe); (Name "true", te)]) ->
+    | Acase (c, [({name = "true"}, te); ({ name = "false" }, fe)])
+    | Acase (c, [({name = "false"}, fe); ({ name = "true"}, te)]) ->
         let cc = cexpr_of_exp var_env c in
         let cte = cstm_of_act_list var_env obj_env te in
         let cfe = cstm_of_act_list var_env obj_env fe in
@@ -468,7 +441,7 @@ let rec cstm_of_act var_env obj_env act =
         (** [ccl_of_obccl] translates an Obc clause to a C clause. *)
         let ccl =
           List.map
-            (fun (c,act) -> shortname c,
+            (fun (c,act) -> cname_of_qn c,
                cstm_of_act_list var_env obj_env act) cl in
         [Cswitch (cexpr_of_exp var_env e, ccl)]
 
@@ -480,16 +453,19 @@ let rec cstm_of_act var_env obj_env act =
 
     (** Reinitialization of an object variable, extracting the reset
         function's name from our environment [obj_env]. *)
-    | Acall ([], o, Mreset, []) ->
+    | Acall (name_list, o, Mreset, args) ->
+        assert_empty name_list;
+        assert_empty args;
         let on = obj_call_name o in
         let obj = assoc_obj on obj_env in
-        let classn = shortname obj.o_class in
+        let classn = cname_of_qn obj.o_class in
         (match obj.o_size with
-           | None -> [Csexpr (Cfun_call (classn ^ "_reset",
-                        [Caddrof (Cfield (Cderef (Cvar "self"), on))]))]
+           | None ->
+             [Csexpr (Cfun_call (classn ^ "_reset",
+                [Caddrof (Cfield (Cderef (Cvar "self"), local_qn on))]))]
            | Some size ->
                let x = gen_symbol () in
-               let field = Cfield (Cderef (Cvar "self"), on) in
+               let field = Cfield (Cderef (Cvar "self"), local_qn on) in
                let elt = [Caddrof( Carray(field, Clhs (Cvar x)) )] in
                  [Cfor(x, 0, int_of_static_exp size,
                        [Csexpr (Cfun_call (classn ^ "_reset", elt ))] )]
@@ -516,6 +492,11 @@ let rec cstm_of_act var_env obj_env act =
         let outvl = clhss_of_lhss var_env outvl in
         generate_function_call var_env obj_env outvl objn args
 
+    | Acall(_, o, Mmethod s, _) ->
+        let on = obj_call_name o in
+        let obj = assoc_obj on obj_env in
+          Error.message obj.o_loc (Error.Eunknown_method s)
+
 and cstm_of_act_list var_env obj_env b =
   let l = List.map cvar_of_vd b.b_locals in
   let var_env = l @ var_env in
@@ -532,16 +513,16 @@ let global_name = ref "";;
 
 (** {2 step() and reset() functions generation *)
 
-let mk_current_longname n =
-  Modname { qual = !global_name; id = n }
+let qn_append q suffix =
+  { qual = q.qual; name = q.name ^ suffix }
 
 (** Builds the argument list of step function*)
 let step_fun_args n md =
   let args = cvarlist_of_ovarlist md.m_inputs in
-  let out_arg = [("out", Cty_ptr (Cty_id (n ^ "_out")))] in
+  let out_arg = [("out", Cty_ptr (Cty_id (qn_append n "_out")))] in
   let context_arg =
-    if is_statefull (mk_current_longname n) then
-      [("self", Cty_ptr (Cty_id (n ^ "_mem")))]
+    if is_statefull n then
+      [("self", Cty_ptr (Cty_id (qn_append n "_mem")))]
     else
       []
   in
@@ -554,17 +535,17 @@ let step_fun_args n md =
     reset calls. A step function can have multiple return values, whereas C does
     not allow such functions. When it is the case, we declare a structure with a
     field by return value. *)
-let fun_def_of_step_fun name obj_env mem objs md =
-  let fun_name = name ^ "_step" in
+let fun_def_of_step_fun n obj_env mem objs md =
+  let fun_name = (cname_of_qn n) ^ "_step" in
   (** Its arguments, translating Obc types to C types and adding our internal
       memory structure. *)
-  let args = step_fun_args name md in
+  let args = step_fun_args n md in
 
   (** Out vars for function calls *)
   let out_vars =
     unique
-      (List.map (fun obj -> out_var_name_of_objn (shortname obj.o_class),
-                   Cty_id ((shortname obj.o_class) ^ "_out"))
+      (List.map (fun obj -> out_var_name_of_objn (cname_of_qn obj.o_class),
+                   Cty_id (qn_append obj.o_class "_out"))
          (List.filter (fun obj -> not (is_op obj.o_class)) objs)) in
 
   (** The body *)
@@ -594,8 +575,7 @@ let mem_decl_of_class_def cd =
       convention we described above. *)
   let struct_field_of_obj_dec l od =
     if is_statefull od.o_class then
-      let clsname = shortname od.o_class in
-      let ty = Cty_id (clsname ^ "_mem") in
+      let ty = Cty_id (qn_append od.o_class "_mem") in
       let ty = match od.o_size with
         | Some se -> Cty_arr (int_of_static_exp se, ty)
         | None -> ty in
@@ -603,12 +583,13 @@ let mem_decl_of_class_def cd =
     else
       l
   in
-    if is_statefull (mk_current_longname cd.cd_name) then (
+    if is_statefull cd.cd_name then (
       (** Fields corresponding to normal memory variables. *)
       let mem_fields = List.map cvar_of_vd cd.cd_mems in
       (** Fields corresponding to object variables. *)
       let obj_fields = List.fold_left struct_field_of_obj_dec [] cd.cd_objs in
-        [Cdecl_struct (cd.cd_name ^ "_mem", mem_fields @ obj_fields)]
+        [Cdecl_struct ((cname_of_qn cd.cd_name) ^ "_mem",
+                       mem_fields @ obj_fields)]
     ) else
       []
 
@@ -616,7 +597,7 @@ let out_decl_of_class_def cd =
   (** Fields corresponding to output variables. *)
   let step_m = find_step_method cd in
   let out_fields = List.map cvar_of_vd step_m.m_outputs in
-    [Cdecl_struct (cd.cd_name ^ "_out", out_fields)]
+    [Cdecl_struct ((cname_of_qn cd.cd_name) ^ "_out", out_fields)]
 
 (** [reset_fun_def_of_class_def cd] returns the defintion of the C function
     tasked to reset the class [cd]. *)
@@ -625,9 +606,9 @@ let reset_fun_def_of_class_def cd =
   let reset = find_reset_method cd in
   let body = cstm_of_act_list var_env cd.cd_objs reset.m_body in
   Cfundef {
-    f_name = (cd.cd_name ^ "_reset");
+    f_name = (cname_of_qn cd.cd_name) ^ "_reset";
     f_retty = Cty_void;
-    f_args = [("self", Cty_ptr (Cty_id (cd.cd_name ^ "_mem")))];
+    f_args = [("self", Cty_ptr (Cty_id (qn_append cd.cd_name "_mem")))];
     f_body = {
       var_decls = [];
       block_body = body;
@@ -643,14 +624,14 @@ let cdefs_and_cdecls_of_class_def cd =
   let step_m = find_step_method cd in
   let memory_struct_decl = mem_decl_of_class_def cd in
   let out_struct_decl = out_decl_of_class_def cd in
-  let step_fun_def
-    = fun_def_of_step_fun cd.cd_name cd.cd_objs cd.cd_mems cd.cd_objs step_m in
+  let step_fun_def = fun_def_of_step_fun cd.cd_name
+    cd.cd_objs cd.cd_mems cd.cd_objs step_m in
   (** C function for resetting our memory structure. *)
   let reset_fun_def = reset_fun_def_of_class_def cd in
   let res_fun_decl = cdecl_of_cfundef reset_fun_def in
   let step_fun_decl = cdecl_of_cfundef step_fun_def in
   let (decls, defs) =
-    if is_statefull (mk_current_longname cd.cd_name) then
+    if is_statefull cd.cd_name then
       ([res_fun_decl; step_fun_decl], [reset_fun_def; step_fun_def])
     else
       ([step_fun_decl], [step_fun_def]) in
@@ -662,39 +643,41 @@ let cdefs_and_cdecls_of_class_def cd =
 
 
 let decls_of_type_decl otd =
-  let name = otd.t_name in
+  let name = cname_of_qn otd.t_name in
   match otd.t_desc with
     | Type_abs -> [] (*assert false*)
     | Type_alias ty -> [Cdecl_typedef (ctype_of_otype ty, name)]
     | Type_enum nl ->
         let name = !global_name ^ "_" ^ name in
-        [Cdecl_enum (otd.t_name, nl);
+        [Cdecl_enum (name, List.map cname_of_qn nl);
          Cdecl_function (name ^ "_of_string",
-                         Cty_id name,
+                         Cty_id otd.t_name,
                          [("s", Cty_ptr Cty_char)]);
          Cdecl_function ("string_of_" ^ name,
                          Cty_ptr Cty_char,
-                         [("x", Cty_id name); ("buf", Cty_ptr Cty_char)])]
+                         [("x", Cty_id otd.t_name); ("buf", Cty_ptr Cty_char)])]
     | Type_struct fl ->
-        let decls = List.map (fun f -> f.Signature.f_name,
+        let decls = List.map (fun f -> cname_of_qn f.Signature.f_name,
                                 ctype_of_otype f.Signature.f_type) fl in
-        [Cdecl_struct (otd.t_name, decls)];;
+        [Cdecl_struct (name, decls)];;
 
 (** Translates an Obc type declaration to its C counterpart. *)
 let cdefs_and_cdecls_of_type_decl otd =
-  let name = otd.t_name in
+  let name = cname_of_qn otd.t_name in
   match otd.t_desc with
     | Type_abs -> [], [] (*assert false*)
-    | Type_alias ty -> [], [Cdecl_typedef (ctype_of_otype ty, name)]
+    | Type_alias ty ->
+      [], [Cdecl_typedef (ctype_of_otype ty, name)]
     | Type_enum nl ->
         let of_string_fun = Cfundef
           { f_name = name ^ "_of_string";
-            f_retty = Cty_id name;
+            f_retty = Cty_id otd.t_name;
             f_args = [("s", Cty_ptr Cty_char)];
             f_body =
               { var_decls = [];
                 block_body =
                   let gen_if t =
+                    let t = cname_of_qn t in
                     let funcall = Cfun_call ("strcmp", [Clhs (Cvar "s");
                                                         Cconst (Cstrlit t)]) in
                     let cond = Cbop ("==", funcall, Cconst (Ccint 0)) in
@@ -704,11 +687,12 @@ let cdefs_and_cdecls_of_type_decl otd =
         and to_string_fun = Cfundef
           { f_name = "string_of_" ^ name;
             f_retty = Cty_ptr Cty_char;
-            f_args = [("x", Cty_id name); ("buf", Cty_ptr Cty_char)];
+            f_args = [("x", Cty_id otd.t_name); ("buf", Cty_ptr Cty_char)];
             f_body =
               { var_decls = [];
                 block_body =
                   let gen_clause t =
+                    let t = cname_of_qn t in
                     let fun_call =
                       Cfun_call ("strcpy", [Clhs (Cvar "buf");
                                             Cconst (Cstrlit t)]) in
@@ -717,12 +701,13 @@ let cdefs_and_cdecls_of_type_decl otd =
                    Creturn (Clhs (Cvar "buf"))]; }
           } in
         ([of_string_fun; to_string_fun],
-         [Cdecl_enum (otd.t_name, nl); cdecl_of_cfundef of_string_fun;
+         [Cdecl_enum (name, List.map cname_of_qn nl);
+          cdecl_of_cfundef of_string_fun;
           cdecl_of_cfundef to_string_fun])
     | Type_struct fl ->
-        let decls = List.map (fun f -> f.Signature.f_name,
+        let decls = List.map (fun f -> cname_of_qn f.Signature.f_name,
                                 ctype_of_otype f.Signature.f_type) fl in
-        let decl = Cdecl_struct (otd.t_name, decls) in
+        let decl = Cdecl_struct (name, decls) in
         ([], [decl])
 
 (** [cfile_list_of_oprog oprog] translates the Obc program [oprog] to a list of
@@ -730,10 +715,10 @@ let cdefs_and_cdecls_of_type_decl otd =
 let cfile_list_of_oprog_ty_decls name oprog =
   let cdefs_and_cdecls = List.map cdefs_and_cdecls_of_type_decl oprog.p_types in
 
-  let (cty_defs, cty_decls) = List.split (List.rev cdefs_and_cdecls) in
+  let (cty_defs, cty_decls) = List.split cdefs_and_cdecls in
   let filename_types = name ^ "_types" in
   let types_h = (filename_types ^ ".h",
-                 Cheader (["stdbool"], concat cty_decls)) in
+                 Cheader (["stdbool"], List.concat cty_decls)) in
   let types_c = (filename_types ^ ".c", Csource (concat cty_defs)) in
 
   filename_types, [types_h; types_c]

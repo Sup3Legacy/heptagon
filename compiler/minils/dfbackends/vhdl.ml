@@ -10,6 +10,8 @@ open Names
 open Misc
 open Obc
 open Types
+open Global_printer
+open Compiler_options (* for verbose *)
 
 exception Unimplemented of string
 
@@ -30,7 +32,7 @@ module M = Map.Make(struct type t = string let compare = Pervasives.compare end)
 
 let unionl = List.fold_left S.union S.empty
 
-(** [modname] is used in translation of longnames. *)
+(** [modname] is used in translation of qualnames. *)
 let modname = ref ""
 
 (** {2 VHDL abstract-syntax tree}
@@ -45,7 +47,7 @@ type vhdl_type =
   | Vt_boolean
   | Vt_int
   | Vt_array of int list * vhdl_type
-  | Vt_id of longname
+  | Vt_id of qualname
 
 type polarity =
   | Vp_in
@@ -61,15 +63,15 @@ type vty_decl = { vty_name : name;
 and vty_desc =
   | Vty_opaque
   | Vty_alias of vhdl_type
-  | Vty_enum of name list
-  | Vty_record of (name * vhdl_type) list
+  | Vty_enum of qualname list
+  | Vty_record of (qualname * vhdl_type) list
   | Vty_vector of int * vhdl_type (* dimension * type *)
 
 type decl =
   | Vd_signal of signal_decl
   | Vd_type of vty_decl
   | Vd_component of name * signal_decl list
-  | Vd_bind of name * name * qualident
+  | Vd_bind of name * name * qualname
   | Vd_const of name * vhdl_type * static_exp
 
 type const = Types.static_exp
@@ -82,8 +84,8 @@ type expr =
   | Ve_event of name
   | Ve_when of expr * expr * expr
   | Ve_funcall of name * expr list
-  | Ve_record of (longname * expr) list
-  | Ve_field of expr * longname
+  | Ve_record of (qualname * expr) list
+  | Ve_field of expr * qualname
   | Ve_array of expr list
   | Ve_concat of expr * expr
   | Ve_slice of int * int * expr
@@ -150,11 +152,10 @@ let pp_name fmt name =
     if String.length name > 0 && name.[0] = '_' then "h" ^ name else name in
   fprintf fmt "%s" real_name
 
-let pp_longname fmt longname = match longname with
-  | Modname { qual = modn; id = id; } when modn = !modname ->
-      (* fprintf fmt "work.types.%a" pp_name id *)
-      fprintf fmt "%a" pp_name id
-  | _ -> pp_name fmt (fullname longname)
+let pp_qualname fmt ({ qual = qual; name = name; } as qn) =
+  if qual = "Pervasives"
+  then fprintf fmt "%a" pp_name name
+  else print_qualname fmt qn
 
 let rec pp_list f fmt l = match l with
   | [] -> ()
@@ -174,8 +175,8 @@ let rec pp_type fmt ty = match ty with
   | Vt_boolean -> fprintf fmt "boolean"
   | Vt_logic -> fprintf fmt "std_logic"
   | Vt_int -> fprintf fmt "integer"
-      (* TODO: real longname *)
-  | Vt_id ln -> pp_longname fmt ln
+      (* TODO: real qualname *)
+  | Vt_id ln -> pp_qualname fmt ln
   | Vt_array ([], _) -> assert false
   | Vt_array ([size], ty) -> fprintf fmt "%a_vector (0 to %d)" pp_type ty size
   | Vt_array ([s1; s2], ty) ->
@@ -202,9 +203,9 @@ let pp_signals = pp_list_sep pp_signal ";"
 let pp_ty_desc fmt desc = match desc with
   | Vty_opaque -> ()
   | Vty_alias ty -> assert false
-  | Vty_enum nl -> fprintf fmt "( @[%a@] )" (pp_list_sep pp_name ",") nl
+  | Vty_enum nl -> fprintf fmt "( @[%a@] )" (pp_list_sep pp_qualname ",") nl
   | Vty_record ntyl ->
-      let pp fmt (n, ty) = fprintf fmt "%a : %a;" pp_name n pp_type ty in
+      let pp fmt (qn, ty) = fprintf fmt "%a : %a;" pp_qualname qn pp_type ty in
       fprintf fmt "@\n@[<v 2>record@\n%a@]@\nend record" (pp_list pp) ntyl
   | Vty_vector (dims, ty) ->
       assert (dims > 0);
@@ -231,7 +232,7 @@ let pp_decl fmt decl = match decl with
       fprintf fmt "@]);@]@\nend component@]"
   | Vd_bind (name, compname, entname) ->
       fprintf fmt "@[for %a: %a use entity@ %s.%s@]"
-        pp_name name pp_name compname entname.qual entname.id
+        pp_name name pp_name compname entname.qual entname.name
   | Vd_const (name, ty, c) ->
       fprintf fmt "@[constant %a : %a := @[%a@]@]"
         pp_name name
@@ -242,12 +243,13 @@ let pp_decls fmt decls = pp_list_end pp_decl ";" fmt decls
 
 let rec pp_const fmt c = match c.se_desc with
   | Svar n -> fprintf fmt "work.%s" (fullname n)
-  | Sbool false | Sconstructor (Modname { qual = "Pervasives"; id = "false"; })
-  | Sconstructor (Name "false") -> fprintf fmt "'0'"
-  | Sbool true | Sconstructor (Modname { qual = "Pervasives"; id = "true"; })
-  | Sconstructor (Name "true") -> fprintf fmt "'1'"
+  | Sbool false | Sconstructor { qual = "Pervasives"; name = "false"; } ->
+      fprintf fmt "'0'"
+  | Sbool true | Sconstructor { qual = "Pervasives"; name = "true"; } ->
+      fprintf fmt "'1'"
   | Sint i -> fprintf fmt "%d" i
-  | Sconstructor ln -> pp_longname fmt ln
+  | Sfield ln -> assert false
+  | Sconstructor ln -> pp_qualname fmt ln
   | Sarray_power (c, _) -> fprintf fmt "(others => %a)" pp_const c
   | Sarray cl ->
       fprintf fmt "@[(";
@@ -258,17 +260,17 @@ let rec pp_const fmt c = match c.se_desc with
       pp 0 fmt cl;
       fprintf fmt ")@]"
   | Srecord fcl ->
-      let pp fmt (n, c) = fprintf fmt "%a => %a" pp_longname n pp_const c in
+      let pp fmt (n, c) = fprintf fmt "%a => %a" pp_qualname n pp_const c in
       fprintf fmt "(@[%a@])" (pp_list_sep pp ",") fcl
   | Sop (fn, cl) ->
       let s = match fn with
-        | Modname { qual = "Pervasives"; id = id; } -> id
+        | { qual = "Pervasives"; name = id; } -> id
         | _ -> fullname fn in
       fprintf fmt "(@[%a@])" (pp_list_sep pp_const s) cl
   | Sfloat _ | Stuple _
     ->
       Format.eprintf "VHDL: unsupported constant type: @[%a@]\n"
-        Types.print_static_exp c;
+        print_static_exp c;
       assert false
 
 let rec pp_lhs fmt lhs = match lhs with
@@ -286,9 +288,9 @@ and pp_expr fmt e = match e with
   | Ve_funcall (n, el) ->
       fprintf fmt "%a(@[%a@])" pp_name n (pp_list_sep pp_expr ",") el
   | Ve_field (e, n) ->
-      fprintf fmt "%a.%a" pp_expr e pp_longname n
+      fprintf fmt "%a.%a" pp_expr e pp_qualname n
   | Ve_record fel ->
-      let pp fmt (n, e) = fprintf fmt "%a => %a" pp_longname n pp_expr e in
+      let pp fmt (n, e) = fprintf fmt "%a => %a" pp_qualname n pp_expr e in
       fprintf fmt "(@[%a@])" (pp_list_sep pp ",") fel
   | Ve_array el ->
       let rec pp i fmt el = match el with
@@ -395,8 +397,10 @@ let pp_architecture fmt a =
   pp_list_sep pp_def ";" fmt a.va_body;
   fprintf fmt "@];@\nend architecture %a;@]@\n" pp_name a.va_name
 
+open Modules (* for g_env & friends *)
+
 let pp_component fmt c =
-  fprintf fmt "use work.%s.all;@\n@\n" (Modules.current.Modules.name);
+  fprintf fmt "use work.%s.all;@\n@\n" g_env.current_mod;
   fprintf fmt "library ieee;@\n";
   fprintf fmt "use ieee.std_logic_1164.all;@\n@\n";
   pp_entity fmt c.vc_entity;
@@ -492,6 +496,6 @@ let op_table =
 let mk_vare vn = Ve_lhs (Vl_var vn)
 
 let is_native_vhdl op = match op with
-  | Minils.Efun (Modname { qual = "Pervasives"; id = id; }) ->
+  | Minils.Efun { qual = "Pervasives"; name = id; } ->
       List.mem id ["xor"; "&"; "or"; "not"]
   | _ -> false

@@ -37,7 +37,7 @@ struct
           eprintf "%aThis construct is not supported by MiniLS.@."
             print_location loc
     end;
-    raise Misc.Error
+    raise Errors.Error
 end
 
 module Env =
@@ -48,7 +48,7 @@ struct
   type env =
     | Eempty
     | Ecomp of env * IdentSet.t
-    | Eon of env * longname * ident
+    | Eon of env * constructor_name * ident
 
   let empty = Eempty
 
@@ -84,7 +84,7 @@ struct
             let ck_tag_name = Con(ck, tag, name) in
             { e with e_desc = Ewhen(e, tag, name); e_ck = ck_tag_name },
             ck_tag_name
-        | Ecomp(env, l) -> constrec env in
+        | Ecomp(env, _) -> constrec env in
     let e, _ = constrec env in e
 end
 
@@ -149,12 +149,12 @@ let switch x ci_eqs_list =
         | _ ->
             let firsts,nexts = extract eqs_lists in
             (* check all firsts defining same name *)
-            if (List.for_all (fun (x,e) -> x = (fst (List.hd firsts))) firsts)
+            if (List.for_all (fun (x,_) -> x = (fst (List.hd firsts))) firsts)
             then ()
             else
               begin
                 List.iter
-                  (fun (x,e) -> Format.eprintf "|%s|, " (name x))
+                  (fun (x,_) -> Format.eprintf "|%s|, " (name x))
                   firsts;
                 assert false
               end;
@@ -168,16 +168,16 @@ let switch x ci_eqs_list =
   let rec split ci_eqs_list =
     match ci_eqs_list with
       | [] | (_, []) :: _ -> [], []
-      | (ci, (y, e) :: shared_eq_list) :: ci_eqs_list ->
+      | (ci, (_, e) :: shared_eq_list) :: ci_eqs_list ->
           let ci_e_list, ci_eqs_list = split ci_eqs_list in
           (ci, e) :: ci_e_list, (ci, shared_eq_list) :: ci_eqs_list in
 
   let rec distribute ci_eqs_list =
     match ci_eqs_list with
       | [] | (_, []) :: _ -> []
-      | (ci, (y, { e_ty = ty; e_loc = loc }) :: _) :: _ ->
+      | (_, (y, { e_ty = ty; e_loc = loc }) :: _) :: _ ->
           let ci_e_list, ci_eqs_list = split ci_eqs_list in
-          (y, mk_exp ~exp_ty:ty ~loc:loc (Emerge(x, ci_e_list))) ::
+          (y, mk_exp ~ty:ty ~loc:loc (Emerge(x, ci_e_list))) ::
             distribute ci_eqs_list in
 
   check ci_eqs_list;
@@ -194,7 +194,7 @@ let translate_iterator_type = function
   | Heptagon.Ifoldi -> Ifoldi
   | Heptagon.Imapfold -> Imapfold
 
-let rec translate_op env = function
+let rec translate_op = function
   | Heptagon.Eequal -> Eequal
   | Heptagon.Eifthenelse -> Eifthenelse
   | Heptagon.Efun f -> Efun f
@@ -212,38 +212,39 @@ let rec translate_op env = function
   | Heptagon.Earrow ->
       Error.message no_location Error.Eunsupported_language_construct
 
-let translate_app env app =
+let translate_app app =
   mk_app ~params:app.Heptagon.a_params
-    ~unsafe:app.Heptagon.a_unsafe (translate_op env app.Heptagon.a_op)
+    ~unsafe:app.Heptagon.a_unsafe (translate_op app.Heptagon.a_op)
 
 let rec translate env
     { Heptagon.e_desc = desc; Heptagon.e_ty = ty;
       Heptagon.e_loc = loc } =
   match desc with
     | Heptagon.Econst c ->
-        Env.const env (mk_exp ~loc:loc ~exp_ty:ty (Econst c))
+        Env.const env (mk_exp ~loc:loc ~ty:ty (Econst c))
     | Heptagon.Evar x ->
-        Env.con env x (mk_exp ~loc:loc ~exp_ty:ty (Evar x))
+        Env.con env x (mk_exp ~loc:loc ~ty:ty (Evar x))
     | Heptagon.Epre(None, e) ->
-        mk_exp ~loc:loc ~exp_ty:ty (Efby(None, translate env e))
+        mk_exp ~loc:loc ~ty:ty (Efby(None, translate env e))
     | Heptagon.Epre(Some c, e) ->
-        mk_exp ~loc:loc ~exp_ty:ty (Efby(Some c, translate env e))
+        mk_exp ~loc:loc ~ty:ty (Efby(Some c, translate env e))
     | Heptagon.Efby ({ Heptagon.e_desc = Heptagon.Econst c }, e) ->
-        mk_exp ~loc:loc ~exp_ty:ty (Efby(Some c, translate env e))
+        mk_exp ~loc:loc ~ty:ty (Efby(Some c, translate env e))
     | Heptagon.Estruct f_e_list ->
         let f_e_list = List.map
           (fun (f, e) -> (f, translate env e)) f_e_list in
-        mk_exp ~loc:loc ~exp_ty:ty (Estruct f_e_list)
+        mk_exp ~loc:loc ~ty:ty (Estruct f_e_list)
     | Heptagon.Eapp(app, e_list, reset) ->
-        mk_exp ~loc:loc ~exp_ty:ty (Eapp (translate_app env app,
+        mk_exp ~loc:loc ~ty:ty (Eapp (translate_app app,
                                           List.map (translate env) e_list,
                                           translate_reset reset))
     | Heptagon.Eiterator(it, app, n, e_list, reset) ->
-        mk_exp ~loc:loc ~exp_ty:ty
+        mk_exp ~loc:loc ~ty:ty
           (Eiterator (translate_iterator_type it,
-                    translate_app env app, n,
+                    translate_app app, n,
                     List.map (translate env) e_list,
                     translate_reset reset))
+    | Heptagon.Efby _
     | Heptagon.Elast _ ->
         Error.message loc Error.Eunsupported_language_construct
 
@@ -257,7 +258,7 @@ let rec rename_pat ni locals s_eqs = function
         let n_copy = Idents.fresh (sourcename n) in
         Evarpat n_copy,
         (mk_var_dec n_copy ty) :: locals,
-        add n (mk_exp ~exp_ty:ty (Evar n_copy)) s_eqs
+        add n (mk_exp ~ty:ty (Evar n_copy)) s_eqs
       ) else
         Evarpat n, locals, s_eqs
   | Heptagon.Etuplepat(l), Tprod l_ty ->
@@ -389,8 +390,7 @@ let typedec
     | Heptagon.Type_abs -> Type_abs
     | Heptagon.Type_alias ln -> Type_alias ln
     | Heptagon.Type_enum tag_list -> Type_enum tag_list
-    | Heptagon.Type_struct field_ty_list ->
-        Type_struct field_ty_list
+    | Heptagon.Type_struct field_ty_list -> Type_struct field_ty_list
   in
   { t_name = n; t_desc = onetype tdesc; t_loc = loc }
 

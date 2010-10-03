@@ -12,23 +12,8 @@ open Location
 open Compiler_utils
 open Mls2seq
 
-let parse parsing_fun lexing_fun lexbuf =
-  try
-    parsing_fun lexing_fun lexbuf
-  with
-    | Mls_lexer.Lexical_error(err, loc) ->
-        lexical_error err loc
-    | Mls_parser.Error ->
-        let pos1 = Lexing.lexeme_start_p lexbuf
-        and pos2 = Lexing.lexeme_end_p lexbuf in
-        let l = Loc(pos1,pos2) in
-        syntax_error l
-
-let parse_implementation lexbuf =
-  parse Mls_parser.program Mls_lexer.token lexbuf
 
 let compile_impl modname filename =
-  (* input and output files *)
   (* input and output files *)
   let source_name = filename ^ ".mls"
   and mls_norm_name = filename ^ "_norm.mls"
@@ -45,16 +30,17 @@ let compile_impl modname filename =
   in
 
   try
-    init_compiler modname;
+    Initial.initialize modname;
 
     (* Set pretty printer to the Minils one *)
     let pp = Mls_compiler.pp in
 
     (* Parsing of the file *)
-    let p = Mls_compiler.parse_implementation lexbuf in
-    let p = { p with Minils.p_modname = modname } in
-    comment "Parsing";
-    pp p;
+    let p = do_silent_pass "Parsing" (Mls_compiler.parse_implementation modname)
+                           lexbuf in
+
+    (* Convert Parse tree to Minils AST *)
+    let p = do_pass "Scoping" Mls_scoping.translate_program p pp in
 
     (* Process the MiniLS AST *)
     let p = Mls_compiler.compile pp p in
@@ -93,10 +79,11 @@ let main () =
         "-targetpath", Arg.String set_target_path, doc_target_path;
         "-noinit", Arg.Clear init, doc_noinit;
         "-fti", Arg.Set full_type_info, doc_full_type_info;
+        "-itfusion", Arg.Set do_iterator_fusion, doc_itfusion;
       ]
       compile
       errmsg;
   with
-    | Misc.Error -> exit 2;;
+    | Errors.Error -> exit 2;;
 
 main ()

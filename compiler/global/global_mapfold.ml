@@ -1,4 +1,5 @@
 open Misc
+open Errors
 open Types
 (*open Clocks*)
 open Signature
@@ -29,7 +30,7 @@ and static_exp_desc_it funs acc sd =
   with Fallback -> static_exp_desc funs acc sd
 
 and static_exp_desc funs acc sd = match sd with
-  | Svar _ | Sint _ | Sfloat _ | Sbool _ | Sconstructor _ -> sd, acc
+  | Svar _ | Sint _ | Sfloat _ | Sbool _ | Sconstructor _ | Sfield _ -> sd, acc
   | Stuple se_l ->
       let se_l, acc = mapfold (static_exp_it funs) acc se_l in
       Stuple se_l, acc
@@ -127,7 +128,7 @@ let defaults = {
 
 
 (** Is used to stop the pass at this level *)
-let stop funs acc x = x, acc
+let stop _ acc x = x, acc
 
 let defaults_stop = {
   static_exp = stop;

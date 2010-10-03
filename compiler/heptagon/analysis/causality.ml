@@ -62,7 +62,7 @@ let rec pre = function
   | Cand(c1, c2) -> Cand(pre c1, pre c2)
   | Ctuple l -> Ctuple (List.map pre l)
   | Cseq(c1, c2) -> Cseq(pre c1, pre c2)
-  | Cread(x) -> Cempty
+  | Cread _ -> Cempty
   | (Cwrite _ | Clastread _ | Cempty) as c -> c
 
 (* projection and restriction *)
@@ -94,7 +94,7 @@ let build dec =
 (** Main typing function *)
 let rec typing e =
   match e.e_desc with
-    | Econst(c) -> cempty
+    | Econst _ -> cempty
     | Evar(x) -> read x
     | Elast(x) -> lastread x
     | Epre (_, e) -> pre (typing e)
@@ -111,27 +111,33 @@ let rec typing e =
 
 (** Typing an application *)
 and apply op e_list =
-  match op, e_list with
-    | Earrow, [e1;e2] ->
+  match op with
+    | Earrow ->
+        let e1, e2 = assert_2 e_list in
         let t1 = typing e1 in
         let t2 = typing e2 in
         candlist [t1; t2]
-    | Efield, [e1] -> typing e1
-    | Eifthenelse, [e1; e2; e3] ->
+    | Efield ->
+      let e1 = assert_1 e_list in
+        typing e1
+    | Eifthenelse ->
+        let e1, e2, e3 = assert_3 e_list in
         let t1 = typing e1 in
         let i2 = typing e2 in
         let i3 = typing e3 in
         cseq t1 (cor i2 i3)
     | (Eequal | Efun _| Enode _ | Econcat | Eselect_slice
-      | Eselect_dyn| Eselect _ | Earray_fill), e_list ->
+      | Eselect_dyn| Eselect _ | Earray_fill) ->
         ctuplelist (List.map typing e_list)
-    | (Earray | Etuple), e_list ->
+    | (Earray | Etuple) ->
         candlist (List.map typing e_list)
-    | Efield_update, [e1;e2] ->
+    | Efield_update ->
+        let e1, e2 = assert_2 e_list in
         let t1 = typing e1 in
         let t2 = typing e2 in
         cseq t2 t1
-    | Eupdate , e1::e_list ->
+    | Eupdate ->
+        let e1, e_list = assert_1min e_list in
         let t1 = typing e1 in
         let t2 = ctuplelist (List.map typing e_list) in
           cseq t2 t1
@@ -195,8 +201,7 @@ let typing_contract loc contract =
         let t_contract = clear (build b.b_local) t_contract in
         t_contract
 
-let typing_node { n_name = f; n_input = i_list; n_output = o_list;
-                  n_contract = contract;
+let typing_node { n_contract = contract;
                   n_block = b; n_loc = loc } =
   let _ = typing_contract loc contract in
     ignore (typing_block b)

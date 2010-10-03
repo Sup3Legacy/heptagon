@@ -24,6 +24,8 @@ open Signature
 open Mls_utils
 open Location
 open Clocks
+open Modules
+open Global_printer
 
 (* TODO: find a better way to access type information *)
 let tys = ref []
@@ -61,10 +63,10 @@ let ren_o s = { s with vs_name = mk_o_s s.vs_name; }
 
 let bool_t = Tid pbool
 
-let rst_e = mk_exp ~exp_ty:bool_t (Evar rs_n)
+let rst_e = mk_exp ~ty:bool_t (Evar rs_n)
 
 let eval_static_size se =
-  try Static.int_of_static_exp NamesEnv.empty se
+  try Static.int_of_static_exp QualEnv.empty se
   with Instanciation_failed ->
     Format.eprintf "Instantiation failed: %a@." print_static_exp se;
     assert false
@@ -76,10 +78,10 @@ struct
   let mk_or_rst ro = match ro with
     | None -> rst_e
     | Some x ->
-        let e_x = mk_exp ~exp_ty:bool_t (Evar x) in
+        let e_x = mk_exp ~ty:bool_t (Evar x) in
         { rst_e with
-            e_desc = Eapp (mk_app (Efun (Modname { qual = "Pervasives";
-                                                   id = "or"; })),
+            e_desc = Eapp (mk_app (Efun { qual = "Pervasives";
+                                          name = "or"; }),
                            [rst_e; e_x],
                            None); }
 
@@ -102,9 +104,9 @@ struct
           let rst_arr =
             let rst_e = mk_or_rst ro in
             let app = mk_app ~params:[se] Earray_fill in
-            mk_exp ~exp_ty:(Tarray (bool_t, se)) (Eapp (app, [rst_e], None)) in
+            mk_exp ~ty:(Tarray (bool_t, se)) (Eapp (app, [rst_e], None)) in
           (Eiterator (it, app, se, rst_arr :: e_list, None), ())
-      | _ -> raise Fallback
+      | _ -> raise Errors.Fallback
 
   let add_rst_node_dec funs () nd =
     let (nd, ()) = Mls_mapfold.node_dec funs () nd in
@@ -127,7 +129,7 @@ struct
     | Eapp ({ a_op = Enode nn; } as app, e_list, None) ->
         let add_eq (vars, equs) e =
           let arg = Idents.fresh "arg" in
-          let e_arg = mk_exp ~exp_ty:e.e_ty (Evar arg) in
+          let e_arg = mk_exp ~ty:e.e_ty (Evar arg) in
           let vd_arg = mk_var_dec arg e.e_ty
           and eq_arg = mk_equation (Evarpat arg) e in
           (e_arg, (vd_arg :: vars, eq_arg :: equs)) in
@@ -136,7 +138,7 @@ struct
         let e_list, acc = mapfold add_eq acc e_list in
 
         (Eapp (app, e_list, None), acc)
-    | _ -> raise Fallback
+    | _ -> raise Errors.Fallback
 
   let simp_calls_node_dec funs acc nd =
     let (nd, (vars, equs)) = Mls_mapfold.node_dec funs acc nd in
@@ -174,7 +176,7 @@ struct
 
           let select i e =
             let app = mk_app ~params:[mk_static_exp (Sint i)] Eselect in
-            mk_exp ~exp_ty:ty_r ~clock:e.e_ck (Eapp (app, [e], None)) in
+            mk_exp ~ty:ty_r ~clock:e.e_ck (Eapp (app, [e], None)) in
 
           (* creates y_1(i), ..., y_m(i) *)
           let mk_args y_l i = List.map (select i) y_l in
@@ -183,10 +185,11 @@ struct
             let z = Idents.fresh s in
             (z,
              mk_var_dec ~clock:ck z ty_r,
-             mk_exp ~exp_ty:ty_r ~clock:ck (Evar z)) in
+             mk_exp ~ty:ty_r ~clock:ck (Evar z)) in
           let mk_new_z () = mk_new_var "z" in
 
           (match it with
+             | Ifoldi -> unimplemented "Iterator foldi"
              | Imap when is_native_vhdl app.a_op ->
                  let eq =
                    { eq with eq_rhs =
@@ -207,7 +210,7 @@ struct
                  let mk_eq i (z_l, (varl, equs)) =
                    let (z, z_var, z_e) = mk_new_z () in
                    let exp_f =
-                     mk_exp ~exp_ty:ty_r ~clock:ck
+                     mk_exp ~ty:ty_r ~clock:ck
                        (Eapp (app, mk_args y_l i, rst)) in
                    (z_e :: z_l,
                     (z_var :: varl, mk_equation (Evarpat z) exp_f :: equs)) in
@@ -235,7 +238,7 @@ struct
                  let add_eq i (z_prev, varl, equs) =
                    let (z, z_var, z_e) = mk_new_z () in
                    let exp_f =
-                     mk_exp ~exp_ty:ty_r ~clock:ck
+                     mk_exp ~ty:ty_r ~clock:ck
                        (Eapp (app, (mk_args y_l i) @ [z_prev], rst)) in
                    let new_eq = mk_equation (Evarpat z) exp_f in
                    (z_e, z_var :: varl, new_eq :: equs) in
@@ -263,7 +266,7 @@ struct
                    let (acc, acc_var, acc_e) = mk_new_var "acc" in
                    let exp_f =
                      mk_exp
-                       ~exp_ty:(match eq.eq_rhs.e_ty with
+                       ~ty:(match eq.eq_rhs.e_ty with
                                   | Tprod [_; ty] -> Tprod [ty_r; ty]
                                   | _ -> assert false)
                        ~clock:ck
@@ -280,7 +283,7 @@ struct
                         (mk_equation
                            (Evarpat x)
                            (mk_exp
-                              ~exp_ty:(Tarray (ty_r, ssize))
+                              ~ty:(Tarray (ty_r, ssize))
                               (Eapp (mk_app Earray, resl, None))),
                          (varl, mk_equation (Evarpat acc) acc_last :: equs))
                     | _ -> assert false))
@@ -301,16 +304,16 @@ end
 (** {2 Translation from MiniLS programs to VHDL programs} *)
 
 let rec trans_ty_acc acc ty = match ty with
+  | Tprod _ -> unimplemented "product types"
   | Tarray (ty, s) -> trans_ty_acc (eval_static_size s - 1 :: acc) ty
-  | Tid (Name s | Modname { id = s; }) ->
-      let scal_ty = Vt_id (Name (try
-                                   let table =
-                                     [
-                                       ("int", "integer");
-                                       ("bool", "std_logic");
-                                     ] in
-                                   List.assoc s table
-                                 with Not_found -> s)) in
+  | Tid ({ qual = qual; name = name; } as qn) ->
+      let scal_ty =
+        if qual = "Pervasives"
+        then Vt_id { qual = "Pervasives";
+                     name = let table = [ ("int", "integer");
+                                          ("bool", "std_logic"); ] in
+                            List.assoc name table; }
+        else Vt_id qn in
       (match acc with
          | [] -> scal_ty
          | _ -> check_dim (List.length acc); Vt_array (acc, scal_ty))
@@ -362,22 +365,22 @@ let rec trad_exp e = match e.e_desc with
 
 and trad_app e op pl el = match op, el, pl with
   | Enode _, _, _ -> assert false
-  | Efun ln, _, _ ->
+  | Efun qn, _, _ ->
       (try
-         let (vhdl_op, need_conv) = List.assoc (fullname ln) op_table in
+         let (vhdl_op, need_conv) = List.assoc (fullname qn) op_table in
          let mk e = if need_conv then Ve_funcall ("to_logic", [e]) else e in
          (match el with
             | [l; r] -> mk (Ve_bop (vhdl_op, trad_exp l, trad_exp r))
             | [e] -> mk (Ve_uop (vhdl_op, trad_exp e))
             | l ->
                 Printf.eprintf "VHDL: unknown operator %s in\n"
-                  (fullname ln);
-               raise Misc.Error)
+                  (fullname qn);
+                raise Errors.Error)
        with Not_found ->
-         let funn = match ln with
-           | Modname { qual = qual; id = id; }
-               when Modules.current.Modules.name = qual -> id
-           | _ -> "work." ^ fullname ln in
+         let funn =
+           if qn.qual = g_env.current_mod
+           then qn.name
+           else "work." ^ fullname qn in
          Ve_funcall (funn, List.map trad_exp el))
   | Econcat, [l; r], _ -> Ve_concat (trad_exp l, trad_exp r)
   | Earray, _, _ -> Ve_array (List.map trad_exp el)
@@ -508,7 +511,7 @@ let gather_port_map env eq (n, pdecls, pbinds, pmaps) =
           then [Vd_component (shortname f, sigs)] else [] in
 
         let new_bind = Vd_bind (inst_n, shortname f, { qual = "work";
-                                                       id = shortname f; }) in
+                                                       name = shortname f; }) in
 
         (n + 1, new_pdecl @ pdecls, new_bind :: pbinds, new_pmap :: pmaps)
 
@@ -581,6 +584,8 @@ let trad_node env nd =
     name ck_n :: name hr_n
     :: List.fold_left add_results inputs nd.n_equs in
 
+  let f = f.name in
+
   { vc_name = f;
     vc_entity = { ve_name = f;
                   ve_port = port;
@@ -599,7 +604,7 @@ let trad_node env nd =
                                  vp_body = Vi_seq body; } :: ports; }; }
 
 let mk_env prog n =
-  try List.find (fun nd -> nd.n_name = shortname n) prog.p_nodes
+  try List.find (fun nd -> nd.n_name = n) prog.p_nodes
   with Not_found ->
     Printf.eprintf "Could not find node %s\n" (shortname n);
     exit 1
@@ -612,9 +617,10 @@ let eqname eq = match eq.eq_lhs with
       Printf.eprintf "VHDL: non-normalized equation found\n";
       assert false
 
-let trans_opname opn = match opn with
-  | Name id | Modname { qual = "Pervasives"; id = id; } -> id
-  | Modname _ -> unimplemented ("operator " ^ fullname opn)
+let trans_opname qn =
+  if qn.qual = "Pervasives"
+  then qn.name
+  else unimplemented ("operator " ^ fullname qn)
 
 let trans_ty_dec tyd =
   let desc = match tyd.t_desc with
@@ -624,10 +630,10 @@ let trans_ty_dec tyd =
         Vty_record (List.map mk_field nbtyl)
     | Type_abs -> Vty_opaque
     | Type_alias ty -> Vty_alias (trans_ty ty) in
-  { vty_name = tyd.t_name;
+  { vty_name = tyd.t_name.name;
     vty_desc = desc; }
 
-let trans_const_dec { Minils.c_name = name;
+let trans_const_dec { Minils.c_name = { name = name; };
                       Minils.c_type = ty;
                       Minils.c_value = c; } = Vd_const (name, trans_ty ty, c)
 
@@ -637,20 +643,22 @@ let tb_node nd =
   (** Enforce the absence of input parameters. *)
   if (List.length nd.n_input > 1)
   then begin
-    Printf.eprintf "VHDL: Cannot create a test-bench for node %s with inputs.\n"
-      nd.n_name;
+    Format.eprintf "VHDL: Cannot create a test-bench for node %a with inputs.\n"
+      print_qualname nd.n_name;
     exit 1;
   end;
 
+  let name = nd.n_name.name in
+
   (** [tb_name] will be the name of our test-bench. *)
-  let tb_name = bench_name nd.n_name in
+  let tb_name = bench_name name in
 
   (** [ci_name] will be the name of our instantiated component. *)
-  let ci_name = nd.n_name ^ "_0"
+  let ci_name = name ^ "_0"
 
   (** [ent_name] is the name of our component/class to be tested. VHDL considers
       components in the current directory to be in a "work" module. *)
-  and ent_name = { qual = "work"; id = nd.n_name; } in
+  and ent_name = { qual = "work"; name = name; } in
 
   let (in_signals, out_signals) = interface_signals_of_node nd in
 
@@ -660,40 +668,41 @@ let tb_node nd =
   (** We declare our component (correctly bound), and required signals. *)
   let decls =
     let sig_d s = Vd_signal { s with vs_polarity = None; } in
-    Vd_component (nd.n_name, in_signals @ out_signals)
-    :: Vd_bind (ci_name, nd.n_name, ent_name)
+    Vd_component (name, in_signals @ out_signals)
+    :: Vd_bind (ci_name, name, ent_name)
     :: List.map sig_d out_signals
     @ List.map sig_d base_signals in
 
   (** The test-bench initializes (reset) our component/class, and then
       indefinitely repeats clock cycles. *)
   let process_body =
-    Vi_seq [Vi_assgn (Vl_var (name ck_n), zero);
-            Vi_assgn (Vl_var (name hr_n), one);
-            Vi_assgn (Vl_var (name rs_n), one);
+    Vi_seq [Vi_assgn (Vl_var (Idents.name ck_n), zero);
+            Vi_assgn (Vl_var (Idents.name hr_n), one);
+            Vi_assgn (Vl_var (Idents.name rs_n), one);
             wait_i;
-            Vi_assgn (Vl_var (name hr_n), zero);
-            Vi_assgn (Vl_var (name rs_n), zero);
+            Vi_assgn (Vl_var (Idents.name hr_n), zero);
+            Vi_assgn (Vl_var (Idents.name rs_n), zero);
             wait_i;
-            Vi_assgn (Vl_var (name ck_n), one);
-            Vi_assgn (Vl_var (name hr_n), zero);
+            Vi_assgn (Vl_var (Idents.name ck_n), one);
+            Vi_assgn (Vl_var (Idents.name hr_n), zero);
             wait_i;
-            Vi_assgn (Vl_var (name ck_n), zero);
+            Vi_assgn (Vl_var (Idents.name ck_n), zero);
             wait_i;
-            Vi_loop (Vi_seq [Vi_assgn (Vl_var (name ck_n), one);
+            Vi_loop (Vi_seq [Vi_assgn (Vl_var (Idents.name ck_n), one);
                              wait_i;
-                             Vi_assgn (Vl_var (name ck_n), zero);
+                             Vi_assgn (Vl_var (Idents.name ck_n), zero);
                              wait_i])] in
 
   (** Correct instantiation for our component. *)
   let comp_inst =
-    let mk_bind vd = (mk_o_s (name vd.v_ident), mk_o_s (name vd.v_ident)) in
+    let mk_bind vd =
+      (mk_o_s (Idents.name vd.v_ident), mk_o_s (Idents.name vd.v_ident)) in
     let bindl =
-      (name ck_n, name ck_n)
-      :: (name hr_n, name hr_n)
-      :: (name rs_n, name rs_n)
+      (Idents.name ck_n, Idents.name ck_n)
+      :: (Idents.name hr_n, Idents.name hr_n)
+      :: (Idents.name rs_n, Idents.name rs_n)
       :: List.map mk_bind nd.n_output in
-    Vdef_comp_inst (ci_name, nd.n_name, bindl) in
+    Vdef_comp_inst (ci_name, name, bindl) in
 
   { vc_name = tb_name;
     vc_entity = { ve_name = tb_name;
@@ -730,7 +739,7 @@ let package_of_types p =
 
   let tydl = !tydl @ List.map trans_ty_dec p.p_types in
 
-  { vpack_name = Modules.current.Modules.name;
+  { vpack_name = g_env.current_mod;
     vpack_decls =
       List.map trans_const_dec p.p_consts
       @ List.map (fun tyd -> Vd_type tyd) tydl; }
@@ -747,13 +756,13 @@ let translate modn p =
                                                     processing of nodes, depends
                                                     on a side effect computing
                                                     maximum array dimension.  *)
-  (match !Misc.simulation_node with
+  (match !Compiler_options.simulation_node with
      | None -> []
      | Some sn ->
          let nd_to_simulate =
            try List.find (fun nd -> nd.n_name = sn) p.p_nodes
            with Not_found ->
-             Printf.eprintf "Unknown node to simulate: %s\n" sn;
+             Format.eprintf "Unknown node to simulate: %a\n" print_qualname sn;
              assert false in
          [Left (tb_node nd_to_simulate)]) @ res
 

@@ -8,6 +8,7 @@
 (**************************************************************************)
 
 open Compiler_utils
+open Compiler_options
 open Obc
 open Minils
 open Misc
@@ -46,14 +47,14 @@ let targets = [ "c", Obc_no_params Cmain.program;
 let generate_target p s =
   let unfold_params p =
     let print_programs msg p_list =
-      if !Misc.verbose then
+      if !Compiler_options.verbose then
         begin
-          Printf.fprintf stdout "** %s done **\n\n" msg;
+          Format.printf "** %s done **@\n@\n" msg;
           List.iter (Mls_printer.print stdout) p_list;
         end in
     let p_list = Callgraph.program p in
     print_programs "Unfolding" p_list;
-    if !Misc.vhdl_simpl
+    if !Compiler_options.vhdl_simpl
     then
       let p_list = List.map Mls2vhdl.InlineIterators.program p_list in
       let p_list = List.map Normalize.program p_list in
@@ -64,7 +65,7 @@ let generate_target p s =
 
   let target =
     (try List.assoc s targets
-    with Not_found -> language_error s; raise Error) in
+    with Not_found -> language_error s; raise Errors.Error) in
     match target with
       | Minils convert_fun ->
           convert_fun p
@@ -77,7 +78,7 @@ let generate_target p s =
       | Obc_no_params convert_fun ->
           let p_list = unfold_params p in
           let o_list = List.map Mls2obc.program p_list in
-          if !Misc.verbose then
+          if !Compiler_options.verbose then
             begin
               Printf.printf "** Translation to Obc done **\n\n";
               List.iter (Format.printf "%a" Obc_printer.print_prog) o_list;

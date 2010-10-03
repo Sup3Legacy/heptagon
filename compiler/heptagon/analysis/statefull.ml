@@ -9,7 +9,6 @@
 (* Checks that a node declared stateless is stateless *)
 open Names
 open Location
-open Misc
 open Signature
 open Modules
 open Heptagon
@@ -29,7 +28,7 @@ let message loc kind =
         Format.eprintf "%aThis expression should be stateless.@."
           print_location loc
   end;
-  raise Error
+  raise Errors.Error
 
 (** @returns whether the exp is statefull. Replaces node calls with
     the correct Efun or Enode depending on the node signature. *)
@@ -40,7 +39,7 @@ let edesc funs statefull ed =
       | Efby _ | Epre _ -> ed, true
       | Eapp({ a_op = Earrow }, _, _) -> ed, true
       | Eapp({ a_op = (Enode f | Efun f) } as app, e_list, r) ->
-          let { qualid = q; info = ty_desc } = find_value f in
+          let ty_desc = find_value f in
           let op = if ty_desc.node_statefull then Enode f else Efun f in
             Eapp({ app with a_op = op }, e_list, r),
           ty_desc.node_statefull or statefull

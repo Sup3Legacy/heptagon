@@ -6,43 +6,56 @@
 (*  Organization : Demons, LRI, University of Paris-Sud, Orsay            *)
 (*                                                                        *)
 (**************************************************************************)
-open Misc
 open Location
-open Minils
+open Format
+open Unix
+open Compiler_options
+
+type lexical_error =
+  | Illegal_character
+  | Unterminated_comment
+  | Bad_char_constant
+  | Unterminated_string
 
 let lexical_error err loc =
-  Format.eprintf "%aIllegal character.\n@." print_location loc;
-  raise Error
+  Format.eprintf (match err with
+    | Illegal_character -> Pervasives.format_of_string "%aIllegal character.@."
+    | Unterminated_comment -> "%aUnterminated comment.@."
+    | Bad_char_constant -> "%aBad char constant.@."
+    | Unterminated_string -> "%aUnterminated string.@."
+     ) print_location loc;
+  raise Errors.Error
 
 let syntax_error loc =
-  Format.eprintf "%aSyntax error.\n@." print_location loc;
-  raise Error
+  Format.eprintf "%aSyntax error.@." print_location loc;
+  raise Errors.Error
 
 let language_error lang =
-  Format.eprintf "Unknown language: '%s'.\n@." lang
+  Format.eprintf "Unknown language: '%s'.@." lang
 
-let comment s =
-  if !verbose then Format.printf "** %s done **\n@." s
+let separateur = "\n*********************************************\
+    *********************************\n*** "
 
+let comment ?(sep=separateur) s =
+  if !verbose then Format.printf "%s%s@." sep s
 
-let do_pass f d p pp enabled =
+let do_pass d f p pp =
+  comment (d^" ...\n");
+  let r = f p in
+  pp r;
+  comment ~sep:"*** " (d^" done.");
+  r
+
+let do_silent_pass d f p = do_pass d f p (fun _ -> ())
+
+let pass d enabled f p pp =
   if enabled
-  then
-    let r = f p in
-    if !verbose
-    then begin
-      comment d;
-      pp r;
-    end;
-    r
+  then do_pass d f p pp
   else p
 
-let do_silent_pass f d p enabled =
+let silent_pass d enabled f p =
   if enabled
-  then begin
-    let r = f p in
-    if !verbose then comment d; r
-  end
+  then do_silent_pass d f p
   else p
 
 let build_path suf =
@@ -61,9 +74,20 @@ let clean_dir dir =
   end else Unix.mkdir dir 0o740;
   dir
 
-let init_compiler modname =
-  Modules.initialize modname;
-  Initial.initialize ()
+exception Cannot_find_file of string
+
+let findfile filename =
+  if Sys.file_exists filename then
+    filename
+  else if not(Filename.is_implicit filename) then
+    raise(Cannot_find_file filename)
+  else
+    let rec find = function
+      | [] -> raise(Cannot_find_file filename)
+      | a::rest ->
+          let b = Filename.concat a filename in
+          if Sys.file_exists b then b else find rest in
+    find !load_path
 
 let lexbuf_from_file file_name =
   let ic = open_in file_name in
@@ -72,29 +96,18 @@ let lexbuf_from_file file_name =
       { lexbuf.Lexing.lex_curr_p with Lexing.pos_fname = file_name };
   ic, lexbuf
 
-
-
-let doc_verbose = "\t\t\tSet verbose mode"
-and doc_version = "\t\tThe version of the compiler"
-and doc_print_types = "\t\t\tPrint types"
-and doc_include = "<dir>\t\tAdd <dir> to the list of include directories"
-and doc_stdlib = "<dir>\t\tDirectory for the standard library"
-and doc_object_file = "\t\tOnly generate a .epo object file"
-and doc_sim = "<node>\t\tCreate simulation for node <node>"
-and doc_locate_stdlib = "\t\tLocate standard libray"
-and doc_no_pervasives = "\tDo not load the pervasives module"
-and doc_flatten = "\t\tInline everything."
-and doc_target =
-  "<lang>\tGenerate code in language <lang>\n\t\t\t(with <lang>=c,"
-  ^ " java or z3z)"
-and doc_full_type_info = "\t\t\tPrint full type information"
-and doc_target_path =
-  "<path>\tGenerated files will be placed in <path>\n\t\t\t(the directory is"
-  ^ " cleaned)"
-and doc_noinit = "\t\tDisable initialization analysis"
-and doc_assert = "<node>\t\tInsert run-time assertions for boolean node <node>"
-and doc_inline = "<node>\t\tInline node <node>"
-and doc_vhdlsimpl = "\t\tEnable transformations needed by VHDL (debug)"
+let print_header_info ff cbeg cend =
+  let tm = Unix.localtime (Unix.time ()) in
+  fprintf ff "%s --- Generated the %d/%d/%d at %d:%d --- %s@\n"
+    cbeg tm.tm_mday (tm.tm_mon+1) (tm.tm_year + 1900) tm.tm_hour tm.tm_min cend;
+  fprintf ff "%s --- heptagon compiler, version %s (compiled %s) --- %s@\n"
+    cbeg version date cend;
+  fprintf ff "%s --- Command line: %a--- %s@\n@\n"
+    cbeg
+    (fun ff a ->
+       Array.iter (fun arg -> fprintf ff "%s " arg) a)
+    Sys.argv
+    cend
 
 let errmsg = "Options are:"
 

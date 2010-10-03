@@ -23,12 +23,12 @@ type error_kind = | Etypeclash of ct * ct
 
 let error_message loc = function
   | Etypeclash (actual_ct, expected_ct) ->
-      Format.eprintf "%aClock Clash: this expression has clock %a, \n\
+      Format.eprintf "%aClock Clash: this expression has clock %a,@\n\
                         but is expected to have clock %a.@."
         print_location loc
         print_clock actual_ct
         print_clock expected_ct;
-      raise Error
+      raise Errors.Error
 
 
 let typ_of_name h x = Env.find x h
@@ -37,7 +37,7 @@ let rec typing h e =
   let ct = match e.e_desc with
     | Econst se -> skeleton (new_var ()) se.se_ty
     | Evar x -> Ck (typ_of_name h x)
-    | Efby (c, e) -> typing h e
+    | Efby (_, e) -> typing h e
     | Eapp({a_op = op}, args, r) ->
         let ck = match r with
           | None -> new_var ()
@@ -57,39 +57,44 @@ let rec typing h e =
     | Estruct l ->
         let ck = new_var () in
         (List.iter
-           (fun (n, e) -> let ct = skeleton ck e.e_ty in expect h ct e) l;
+           (fun (_, e) -> let ct = skeleton ck e.e_ty in expect h ct e) l;
          Ck ck)
   in (e.e_ck <- ckofct ct; ct)
 
-and typing_op op args h e ck = match op, args with
-  | (Eequal | Efun _ | Enode _), e_list ->
-      (List.iter (expect h (Ck ck)) e_list; skeleton ck e.e_ty)
-  | Etuple, e_list ->
+and typing_op op e_list h e ck = match op with
+  | (Eequal | Efun _ | Enode _) ->
+      List.iter (fun e -> expect h (skeleton ck e.e_ty) e) e_list;
+      skeleton ck e.e_ty
+  | Etuple ->
       Cprod (List.map (typing h) e_list)
-  | Eifthenelse, [e1; e2; e3] ->
+  | Eifthenelse ->
+      let e1, e2, e3 = assert_3 e_list in
       let ct = skeleton ck e.e_ty
       in (expect h (Ck ck) e1; expect h ct e2; expect h ct e3; ct)
-  | Efield, [e1] ->
+  | Efield ->
+      let e1 = assert_1 e_list in
       let ct = skeleton ck e1.e_ty in (expect h (Ck ck) e1; ct)
-  | Efield_update, [e1; e2] ->
+  | Efield_update ->
+      let e1, e2 = assert_2 e_list in
       let ct = skeleton ck e.e_ty
       in (expect h (Ck ck) e1; expect h ct e2; ct)
-  | Earray, e_list ->
+  | Earray ->
       (List.iter (expect h (Ck ck)) e_list; skeleton ck e.e_ty)
-  | Earray_fill, [e] -> typing h e
-  | Eselect, [e] -> typing h e
-  | Eselect_dyn, e1::defe::idx -> (* TODO defe not treated ? *)
+  | Earray_fill -> let e = assert_1 e_list in typing h e
+  | Eselect -> let e = assert_1 e_list in typing h e
+  | Eselect_dyn -> (* TODO defe not treated ? *)
+      let e1, defe, idx = assert_2min e_list in
       let ct = skeleton ck e1.e_ty
-      in (expect h ct e1; List.iter (expect h ct) idx; ct)
-  | Eupdate, e1::e2::idx ->
+      in (List.iter (expect h ct) (e1::defe::idx); ct)
+  | Eupdate ->
+      let e1, e2, idx = assert_2min e_list in
       let ct = skeleton ck e.e_ty
       in (expect h (Ck ck) e1; expect h ct e2; List.iter (expect h ct) idx; ct)
-  | Eselect_slice, [e] -> typing h e
-  | Econcat, [e1; e2] ->
+  | Eselect_slice -> let e = assert_1 e_list in typing h e
+  | Econcat ->
+      let e1, e2 = assert_2 e_list in
       let ct = skeleton ck e.e_ty
       in (expect h (Ck ck) e1; expect h ct e2; ct)
-  | Elambda  _, _ -> Format.eprintf "Elambda dans le cloking"; assert false;
-
 
 and expect h expected_ty e =
   let actual_ty = typing h e in
@@ -115,11 +120,11 @@ let typing_eqs h eq_list = (*TODO FIXME*)
   let typing_eq { eq_lhs = pat; eq_rhs = e } =
     let ty_pat = typing_pat h pat in
     (try expect h ty_pat e with
-      | Error -> (* DEBUG *)
-          Format.eprintf "Complete expression: %a\nClock pattern: %a@."
+      | Errors.Error -> (* DEBUG *)
+          Format.eprintf "Complete expression: %a@\nClock pattern: %a@."
             Mls_printer.print_exp e
             Mls_printer.print_clock ty_pat;
-          raise Error)
+          raise Errors.Error)
   in List.iter typing_eq eq_list
 
 let build h dec =
@@ -143,8 +148,7 @@ let typing_contract h contract base =
          expect h' (Ck base) e_g;
          h)
 
-let typing_node ({ n_name = f;
-                   n_input = i_list;
+let typing_node ({ n_input = i_list;
                    n_output = o_list;
                    n_contract = contract;
                    n_local = l_list;

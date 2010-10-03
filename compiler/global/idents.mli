@@ -10,6 +10,9 @@ type ident
 (** Type to be used for local variables *)
 type var_ident = ident
 
+(** Comparision on idents with the same properties as [Pervasives.compare] *)
+val ident_compare : ident -> ident -> int
+
 (** Get the source name from an identifier*)
 val sourcename : ident -> string
 (** Get the full name of an identifier (it is guaranteed to be unique) *)
@@ -22,6 +25,9 @@ val fresh : string -> ident
 (** [ident_of_name n] returns an identifier corresponding
   to a _source_ variable (do not use it for generated variables). *)
 val ident_of_name : string -> ident
+(** Resets the sets that makes sure that idents are mapped to unique
+    identifiers. Should be called when scoping a new function. *)
+val new_function : unit -> unit
 
 (** Maps taking an identifier as a key. *)
 module Env :

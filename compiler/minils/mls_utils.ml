@@ -15,10 +15,12 @@ type err_kind = | Enot_static_exp
 
 let err_message ?(exp=void) ?(loc=exp.e_loc) = function
   | Enot_static_exp ->
-      Format.eprintf "The expression %a should be a static_exp.@."
+      Format.eprintf "%aThe expression %a should be a static_exp.@."
+        print_location loc
         print_exp exp;
-      raise Error
+      raise Errors.Error
 
+(*TODO faux pour l'instant, besoin d'une passe de best effort exp->static_exp*)
 let rec static_exp_of_exp e =
   match e.e_desc with
     | Econst se -> se
@@ -33,7 +35,7 @@ let rec bounds_list ty =
 (** @return the [var_dec] object corresponding to the name [n]
     in a list of [var_dec]. *)
 let rec vd_find n = function
-  | [] -> Format.printf "Not found var %s\n" (name n); raise Not_found
+  | [] -> Format.eprintf "Not found var %s@." (name n); raise Not_found
   | vd::l ->
       if vd.v_ident = n then vd else vd_find n l
 
@@ -46,19 +48,17 @@ let rec vd_mem n = function
 (** @return whether [ty] corresponds to a record type. *)
 let is_record_type ty = match ty with
   | Tid n ->
-      (try
-         ignore (Modules.find_struct n); true
-       with
-           Not_found -> false)
+      (match Modules.find_type n with
+        | Tstruct _ -> true
+        | _ -> false)
   | _ -> false
 
 let is_op = function
-  | Modname { qual = "Pervasives"; id = _ } -> true | _ -> false
-
+  | { qual = "Pervasives"; name = _ } -> true | _ -> false
 
 let exp_list_of_static_exp_list se_list =
   let mk_one_const se =
-    Minils.mk_exp ~exp_ty:se.se_ty (Minils.Econst se)
+    Minils.mk_exp ~ty:se.se_ty (Minils.Econst se)
   in
     List.map mk_one_const se_list
 
@@ -71,7 +71,7 @@ struct
     | Etuplepat pat_list -> List.fold_left vars_pat acc pat_list
 
   let rec vars_ck acc = function
-    | Con(ck, c, n) -> add n acc
+    | Con(_, _, n) -> add n acc
     | Cbase | Cvar { contents = Cindex _ } -> acc
     | Cvar { contents = Clink ck } -> vars_ck acc ck
 
@@ -124,7 +124,7 @@ struct
     let rec headrec ck l =
       match ck with
         | Cbase | Cvar { contents = Cindex _ } -> l
-        | Con(ck, c, n) -> headrec ck (n :: l)
+        | Con(ck, _, n) -> headrec ck (n :: l)
         | Cvar { contents = Clink ck } -> headrec ck l
     in
     headrec ck []
@@ -137,7 +137,7 @@ struct
 end
 
 let node_memory_vars n =
-  let eq funs acc ({ eq_lhs = pat; eq_rhs = e } as eq) =
+  let eq _ acc ({ eq_lhs = pat; eq_rhs = e } as eq) =
     match e.e_desc with
     | Efby(_, _) -> eq, Vars.vars_pat acc pat
     | _ -> eq, acc
@@ -161,5 +161,7 @@ module AllDep = Dep.Make
      type equation = eq
      let read eq = Vars.read false eq
      let def = Vars.def
-     let antidep eq = false
+     let antidep _ = false
    end)
+
+let eq_find id = List.find (fun eq -> List.mem id (Vars.def [] eq))

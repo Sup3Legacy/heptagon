@@ -169,13 +169,13 @@ module Error = struct
     begin match kind with
       | Eclash(left_ty, right_ty) ->
           Format.eprintf "%aInitialization error: this expression has type \
-              %a, \n\
+              %a, @\n\
               but is expected to have type %a@."
             print_location loc
             Printer.print_type left_ty
             Printer.print_type right_ty
     end;
-    raise Misc.Error
+    raise Errors.Error
 end
 
 let less_exp e actual_ty expected_ty =
@@ -231,7 +231,7 @@ and apply h op e_list =
     | Etuple, _ -> assert false
     (** TODO: init of safe/unsafe nodes
         This is a tmp fix so that pre x + 1 works.*)
-    | (Eequal | Efun (Modname { qual = "Pervasives" })), e_list ->
+    | (Eequal | Efun { qual = "Pervasives" }), e_list ->
         List.fold_left (fun acc e -> itype (typing h e)) izero e_list
     | _ , e_list ->
         List.iter (fun e -> initialized_exp h e) e_list; izero

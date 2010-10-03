@@ -10,7 +10,7 @@
 open Format
 open List
 open Modules
-
+open Names
 
 let rec print_list ff print sep l =
   match l with
@@ -51,7 +51,8 @@ type cty =
   | Cty_int (** C machine-dependent integer type. *)
   | Cty_float (** C machine-dependent single-precision floating-point type. *)
   | Cty_char (** C character type. *)
-  | Cty_id of string (** Previously defined C type, such as an enum or struct.*)
+  | Cty_id of qualname
+  (** Previously defined C type, such as an enum or struct.*)
   | Cty_ptr of cty (** C points-to-other-type type. *)
   | Cty_arr of int * cty (** A static array of the specified size. *)
   | Cty_void (** Well, [void] is not really a C type. *)
@@ -90,7 +91,7 @@ and cconst =
 and clhs =
   | Cvar of string (** A local variable. *)
   | Cderef of clhs (** Pointer dereference, *ptr. *)
-  | Cfield of clhs * string (** Field access to left-hand-side. *)
+  | Cfield of clhs * qualname (** Field access to left-hand-side. *)
   | Carray of clhs * cexpr (** Array access clhs[cexpr] *)
       (** C statements. *)
 and cstm =
@@ -161,11 +162,20 @@ let rec pp_list f sep fmt l = match l with
 let pp_string fmt s =
   fprintf fmt "%s" (cname_of_name s)
 
+let cname_of_qn q =
+  if q.qual = "Pervasives" or q.qual = Names.local_qualname then
+    q.name
+  else
+    (q.qual ^ "__" ^ q.name)
+
+let pp_qualname fmt q =
+  pp_string fmt (cname_of_qn q)
+
 let rec pp_cty fmt cty = match cty with
   | Cty_int -> fprintf fmt "int"
   | Cty_float -> fprintf fmt "float"
   | Cty_char -> fprintf fmt "char"
-  | Cty_id s -> pp_string fmt s
+  | Cty_id s -> pp_qualname fmt s
   | Cty_ptr cty' -> fprintf fmt "%a*" pp_cty cty'
   | Cty_arr (n, cty') -> fprintf fmt "%a[%d]" pp_cty cty' n
   | Cty_void -> fprintf fmt "void"
@@ -180,21 +190,18 @@ let rec pp_array_decl cty =
     | _ -> cty, ""
 
 let rec pp_param_cty fmt = function
-    | Cty_arr(n, cty') ->
+    | Cty_arr(_, cty') ->
           fprintf fmt "%a*" pp_param_cty cty'
     | cty -> pp_cty fmt cty
 
 (* pp_vardecl, featuring an ugly hack coping with C's inconsistent concrete
    syntax! *)
 let rec pp_vardecl fmt (s, cty) = match cty with
-  | Cty_arr (n, cty') ->
+  | Cty_arr _ ->
       let ty, indices = pp_array_decl cty in
       fprintf fmt "%a %a%s" pp_cty ty  pp_string s indices
   | _ -> fprintf fmt "%a %a" pp_cty cty  pp_string s
-and pp_paramdecl fmt (s, cty) = match cty with
-  | Cty_arr (n, cty') -> fprintf fmt "%a* %a" pp_param_cty cty'  pp_string s
-  | _ -> pp_vardecl fmt (s, cty)
-and pp_param_list fmt l = pp_list1 pp_paramdecl "," fmt l
+and pp_param_list fmt l = pp_list1 pp_vardecl "," fmt l
 and pp_var_list fmt l = pp_list pp_vardecl ";" fmt l
 
 let rec pp_cblock fmt cb =
@@ -246,8 +253,8 @@ and pp_cexpr fmt ce = match ce with
 and pp_clhs fmt lhs = match lhs with
   | Cvar s -> pp_string fmt s
   | Cderef lhs' -> fprintf fmt "*%a" pp_clhs lhs'
-  | Cfield (Cderef lhs, f) -> fprintf fmt "%a->%a" pp_clhs lhs  pp_string f
-  | Cfield (lhs, f) -> fprintf fmt "%a.%s" pp_clhs lhs f
+  | Cfield (Cderef lhs, f) -> fprintf fmt "%a->%a" pp_clhs lhs  pp_qualname f
+  | Cfield (lhs, f) -> fprintf fmt "%a.%a" pp_clhs lhs  pp_qualname f
   | Carray (lhs, e) ->
       fprintf fmt "%a[%a]"
         pp_clhs lhs
@@ -284,17 +291,16 @@ let pp_cfile_desc fmt filen cfile =
   match cfile with
     | Cheader (deps, cdecls) ->
         let headern_macro = String.uppercase filen_wo_ext in
-        Misc.print_header_info fmt "/*" "*/";
+        Compiler_utils.print_header_info fmt "/*" "*/";
         fprintf fmt "#ifndef %s_H@\n" headern_macro;
         fprintf fmt "#define %s_H@\n@\n" headern_macro;
-        (* fprintf fmt "#include \"types.h\"\n"; *)
         iter (fun d -> fprintf fmt "#include \"%s.h\"@\n" d)
           deps;
         iter (pp_cdecl fmt) cdecls;
-        fprintf fmt "#endif // %s_H@\n" headern_macro
+        fprintf fmt "#endif // %s_H@\n@?" headern_macro
     | Csource cdefs ->
         let headern = filen_wo_ext ^ ".h" in
-        Misc.print_header_info fmt "/*" "*/";
+        Compiler_utils.print_header_info fmt "/*" "*/";
         fprintf fmt "#include <stdio.h>@\n";
         fprintf fmt "#include <string.h>@\n";
         fprintf fmt "#include <stdlib.h>@\n";
@@ -307,7 +313,8 @@ let pp_cfile_desc fmt filen cfile =
 (** [output_cfile dir cfile] pretty-prints the content of [cfile] to the
     corresponding file in the [dir] directory. *)
 let output_cfile dir (filen, cfile_desc) =
-  if !Misc.verbose then Format.printf "C-NG generating %s/%s\n" dir filen;
+  if !Compiler_options.verbose then
+    Format.printf "C-NG generating %s/%s@." dir filen;
   let buf = Buffer.create 20000 in
   let oc = open_out (Filename.concat dir filen) in
   let fmt = Format.formatter_of_buffer buf in
@@ -343,6 +350,6 @@ let is_pointer_type = function
     then it returns a[i1]..[ip]. *)
 let rec array_base_ctype ty idx_list =
   match ty, idx_list with
-    | Cty_arr (n, ty), [i] -> ty
-    | Cty_arr (n, ty), i::idx_list -> array_base_ctype ty idx_list
+    | Cty_arr (_, ty), [_] -> ty
+    | Cty_arr (_, ty), _::idx_list -> array_base_ctype ty idx_list
     | _ -> assert false

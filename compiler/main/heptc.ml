@@ -9,9 +9,11 @@
 
 
 open Misc
+open Modules
 open Location
 open Compiler_utils
-
+open Compiler_options
+open Hept_compiler
 
 
 
@@ -32,34 +34,25 @@ let compile_impl modname filename =
     close_out mlsc in
 
   try
-    init_compiler modname;
+    Initial.initialize modname;
     add_include (Filename.dirname filename);
 
-    (* Set pretty printer to the Heptagon one *)
-    let pp = Hept_compiler.pp in
-
     (* Parsing of the file *)
-    let p = Hept_compiler.parse_implementation lexbuf in
-    let p = { p with Hept_parsetree.p_modname = modname } in
-    comment "Parsing";
+    let p = do_silent_pass "Parsing" (parse_implementation modname) lexbuf in
 
     (* Convert the parse tree to Heptagon AST *)
-    let p = Hept_scoping.translate_program p in
-    comment "Scoping";
-    pp p;
+    let p = do_pass "Scoping" Hept_scoping.translate_program p pp in
 
     (* Process the Heptagon AST *)
-    let p = Hept_compiler.compile_impl pp p in
-    Modules.write itc;
+    let p = compile_impl pp p in
+    output_value itc (Modules.current_module ());
 
     (* Set pretty printer to the Minils one *)
     let pp = Mls_compiler.pp in
 
     (* Compile Heptagon to MiniLS *)
-    let p = Hept2mls.program p in
+    let p = do_pass "Translation into MiniLs" Hept2mls.program p pp in
     Mls_printer.print mlsc p;
-    comment "Translation into MiniLs";
-    pp p;
 
     (* Process the MiniLS AST *)
     let p = Mls_compiler.compile pp p in
@@ -69,10 +62,9 @@ let compile_impl modname filename =
 
     close_all_files ()
 
-  with
-    | x -> close_all_files (); raise x
+  with x -> close_all_files (); raise x
 
-
+let read_qualname f = Arg.String (fun s -> f (Names.qualname_of_string s))
 
 let main () =
   try
@@ -86,20 +78,24 @@ let main () =
         "-where", Arg.Unit locate_stdlib, doc_locate_stdlib;
         "-stdlib", Arg.String set_stdlib, doc_stdlib;
         "-c", Arg.Set create_object_file, doc_object_file;
-        "-s", Arg.String set_simulation_node, doc_sim;
-        "-inline", Arg.String add_inlined_node, doc_inline;
+        "-s", read_qualname set_simulation_node, doc_sim;
+        "-tomato", Arg.Set tomato, doc_tomato;
+        "-tomanode", read_qualname add_tomato_node, doc_tomato;
+        "-tomacheck", read_qualname add_tomato_check, "";
+        "-inline", read_qualname add_inlined_node, doc_inline;
         "-flatten", Arg.Set flatten, doc_flatten;
-        "-assert", Arg.String add_assert, doc_assert;
+        "-assert", read_qualname add_assert, doc_assert;
         "-nopervasives", Arg.Unit set_no_pervasives, doc_no_pervasives;
         "-target", Arg.String add_target_language, doc_target;
         "-targetpath", Arg.String set_target_path, doc_target_path;
         "-noinit", Arg.Clear init, doc_noinit;
         "-fti", Arg.Set full_type_info, doc_full_type_info;
         "-vhdlsimpl", Arg.Set vhdl_simpl, doc_vhdlsimpl;
+        "-itfusion", Arg.Set do_iterator_fusion, doc_itfusion;
       ]
-      (Hept_compiler.compile compile_impl)
+      (compile compile_impl)
       errmsg;
   with
-    | Misc.Error -> exit 2;;
+    | Errors.Error -> exit 2;;
 
 main ()

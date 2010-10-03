@@ -6,101 +6,68 @@
 (*  Organization : Demons, LRI, University of Paris-Sud, Orsay            *)
 (*                                                                        *)
 (**************************************************************************)
-(* Generic mapred over Heptagon AST *)
-
-(* The basic idea is to provide a top-down pass over an Heptagon AST. If you
-   call [program_it hept_funs_default acc p], with [p] an heptagon program and
-   [acc] the accumulator of your choice, it will go through the whole AST,
-   passing the accumulator without touching it, and applying the identity
-   function on the AST. It'll return [p, acc].
-
-   To customize your pass, you need to redefine some functions of the
-   [hept_funs_default] record. Each field in the record handles one node type,
-   and the function held in the field will be called when the iterator
-   encounters the corresponding node type.
-
-   You can imitate the default functions defined here, and named corresponding
-   to the [hep_it_funs] field (corresponding to the Heptagon AST type).  There
-   are two types of functions, the ones handling record types, and the more
-   special ones handling sum types. If you don't want to deal with every
-   constructor, you can simply finish your matching with [| _ -> raise
-   Misc.Fallback]: it will then fall back to the generic handling for these
-   construtors, defined in this file.
-
-   Note that the iterator is a top-down one. If you want to use it in a
-   bottom-up manner (e.g. visiting expressions before visiting an equation), you
-   need to manually call the proper recursive function (defined here) in the
-   beginning of your handler. For example:
-
-   [
-   let eq funs acc eq =
-     let (eq, acc) = Hept_mapfold.eq funs acc eq in
-     ...
-     (eq, acc)
-   ]
-
-   The record provided here and the functions to iterate over any type
-   ([type_it]) enable lots of different ways to deal with the AST.
-
-   Discover it by yourself !*)
-
-(* /!\ Do not EVER put in your funs record one of the generic iterator function
-   [type_it]. You should always put a custom version or the default version
-   provided in this file. Trespassers will loop infinitely! /!\ *)
+(* Generic mapred over Heptagon Parsetree AST *)
 
 open Misc
-open Errors
 open Global_mapfold
-open Heptagon
+open Hept_parsetree
 
 type 'a hept_it_funs = {
+  ty : 'a hept_it_funs -> 'a -> Hept_parsetree.ty -> Hept_parsetree.ty * 'a;
   app:
-    'a hept_it_funs -> 'a -> Heptagon.app -> Heptagon.app * 'a;
+    'a hept_it_funs -> 'a -> Hept_parsetree.app -> Hept_parsetree.app * 'a;
   block:
-    'a hept_it_funs -> 'a -> Heptagon.block -> Heptagon.block * 'a;
+    'a hept_it_funs -> 'a -> Hept_parsetree.block -> Hept_parsetree.block * 'a;
   edesc:
-    'a hept_it_funs -> 'a -> Heptagon.desc -> Heptagon.desc * 'a;
+    'a hept_it_funs -> 'a -> Hept_parsetree.desc -> Hept_parsetree.desc * 'a;
   eq:
-    'a hept_it_funs -> 'a -> Heptagon.eq -> Heptagon.eq * 'a;
+    'a hept_it_funs -> 'a -> Hept_parsetree.eq -> Hept_parsetree.eq * 'a;
   eqdesc:
-    'a hept_it_funs -> 'a -> Heptagon.eqdesc -> Heptagon.eqdesc * 'a;
+    'a hept_it_funs -> 'a -> Hept_parsetree.eqdesc ->
+        Hept_parsetree.eqdesc * 'a;
   escape_unless :
-    'a hept_it_funs -> 'a -> Heptagon.escape -> Heptagon.escape * 'a;
+    'a hept_it_funs -> 'a -> Hept_parsetree.escape ->
+        Hept_parsetree.escape * 'a;
   escape_until:
-    'a hept_it_funs -> 'a -> Heptagon.escape -> Heptagon.escape * 'a;
+    'a hept_it_funs -> 'a -> Hept_parsetree.escape ->
+        Hept_parsetree.escape * 'a;
   exp:
-    'a hept_it_funs -> 'a -> Heptagon.exp -> Heptagon.exp * 'a;
+    'a hept_it_funs -> 'a -> Hept_parsetree.exp -> Hept_parsetree.exp * 'a;
   pat:
-    'a hept_it_funs -> 'a -> pat -> Heptagon.pat * 'a;
+    'a hept_it_funs -> 'a -> pat -> Hept_parsetree.pat * 'a;
   present_handler:
-    'a hept_it_funs -> 'a -> Heptagon.present_handler
-                          -> Heptagon.present_handler * 'a;
+    'a hept_it_funs -> 'a -> Hept_parsetree.present_handler
+                          -> Hept_parsetree.present_handler * 'a;
   state_handler:
-    'a hept_it_funs -> 'a -> Heptagon.state_handler
-                          -> Heptagon.state_handler * 'a;
+    'a hept_it_funs -> 'a -> Hept_parsetree.state_handler
+                          -> Hept_parsetree.state_handler * 'a;
   switch_handler:
-    'a hept_it_funs -> 'a -> Heptagon.switch_handler
-                          -> Heptagon.switch_handler * 'a;
+    'a hept_it_funs -> 'a -> Hept_parsetree.switch_handler
+                          -> Hept_parsetree.switch_handler * 'a;
   var_dec:
-    'a hept_it_funs -> 'a -> Heptagon.var_dec -> Heptagon.var_dec * 'a;
+    'a hept_it_funs -> 'a -> Hept_parsetree.var_dec ->
+        Hept_parsetree.var_dec * 'a;
   last:
-    'a hept_it_funs -> 'a -> Heptagon.last -> Heptagon.last * 'a;
+    'a hept_it_funs -> 'a -> Hept_parsetree.last -> Hept_parsetree.last * 'a;
   contract:
-    'a hept_it_funs -> 'a -> Heptagon.contract -> Heptagon.contract * 'a;
+    'a hept_it_funs -> 'a -> Hept_parsetree.contract ->
+        Hept_parsetree.contract * 'a;
   node_dec:
-    'a hept_it_funs -> 'a -> Heptagon.node_dec -> Heptagon.node_dec * 'a;
+    'a hept_it_funs -> 'a -> Hept_parsetree.node_dec ->
+        Hept_parsetree.node_dec * 'a;
   const_dec:
-    'a hept_it_funs -> 'a -> Heptagon.const_dec -> Heptagon.const_dec * 'a;
+    'a hept_it_funs -> 'a -> Hept_parsetree.const_dec ->
+        Hept_parsetree.const_dec * 'a;
   program:
-    'a hept_it_funs -> 'a -> Heptagon.program -> Heptagon.program * 'a;
+    'a hept_it_funs -> 'a -> Hept_parsetree.program ->
+        Hept_parsetree.program * 'a;
   global_funs: 'a Global_mapfold.global_it_funs }
 
 
 let rec exp_it funs acc e = funs.exp funs acc e
 and exp funs acc e =
   let e_desc, acc = edesc_it funs acc e.e_desc in
-  let e_ty, acc = ty_it funs.global_funs acc e.e_ty in
-  { e with e_desc = e_desc; e_ty = e_ty }, acc
+  { e with e_desc = e_desc }, acc
 
 and edesc_it funs acc ed =
   try funs.edesc funs acc ed
@@ -111,7 +78,7 @@ and edesc funs acc ed = match ed with
       Econst se, acc
   | Evar _ | Elast _ -> ed, acc
   | Epre (se, e) ->
-      let se, acc = optional_wacc (static_exp_it funs.global_funs) acc se in
+      let se, acc = optional_wacc (exp_it funs) acc se in
       let e, acc = exp_it funs acc e in
       Epre (se, e), acc
   | Efby (e1, e2) ->
@@ -124,22 +91,20 @@ and edesc funs acc ed = match ed with
         (n,e), acc in
       let n_e_list, acc = mapfold aux acc n_e_list in
       Estruct n_e_list, acc
-  | Eapp (app, args, reset) ->
+  | Eapp (app, args) ->
       let app, acc = app_it funs acc app in
       let args, acc = mapfold (exp_it funs) acc args in
-      let reset, acc = optional_wacc (exp_it funs) acc reset in
-      Eapp (app, args, reset), acc
-  | Eiterator (i, app, param, args, reset) ->
+      Eapp (app, args), acc
+  | Eiterator (i, app, param, args) ->
       let app, acc = app_it funs acc app in
-      let param, acc = static_exp_it funs.global_funs acc param in
+      let param, acc = exp_it funs acc param in
       let args, acc = mapfold (exp_it funs) acc args in
-      let reset, acc = optional_wacc (exp_it funs) acc reset in
-      Eiterator (i, app, param, args, reset), acc
+      Eiterator (i, app, param, args), acc
 
 
 and app_it funs acc a = funs.app funs acc a
 and app funs acc a =
-  let p, acc = mapfold (static_exp_it funs.global_funs) acc a.a_params in
+  let p, acc = mapfold (exp_it funs) acc a.a_params in
   { a with a_params = p }, acc
 
 
@@ -235,7 +200,7 @@ and last_it funs acc l =
 and last funs acc l = match l with
   | Var -> l, acc
   | Last sto ->
-      let sto, acc = optional_wacc (static_exp_it funs.global_funs) acc sto in
+      let sto, acc = optional_wacc (exp_it funs) acc sto in
       Last sto, acc
 
 
@@ -257,7 +222,7 @@ and node_dec_it funs acc nd = funs.node_dec funs acc nd
 and node_dec funs acc nd =
   let n_input, acc = mapfold (var_dec_it funs) acc nd.n_input in
   let n_output, acc = mapfold (var_dec_it funs) acc nd.n_output in
-  let n_params, acc = mapfold (param_it funs.global_funs) acc nd.n_params in
+  let n_params, acc = mapfold (var_dec_it funs) acc nd.n_params in
   let n_contract, acc =  optional_wacc (contract_it funs) acc nd.n_contract in
   let n_block, acc = block_it funs acc nd.n_block in
   { nd with
@@ -269,10 +234,20 @@ and node_dec funs acc nd =
   , acc
 
 
+and ty_it funs acc t = try funs.ty funs acc t with Fallback -> ty funs acc t
+and ty funs acc t = match t with
+  | Tid _ -> t, acc
+  | Tprod t_l -> let t_l, acc = mapfold (ty_it funs) acc t_l in Tprod t_l, acc
+  | Tarray (t, e) ->
+      let t, acc = ty_it funs acc t in
+      let e, acc = exp_it funs acc e in
+      Tarray (t, e), acc
+
+
 and const_dec_it funs acc c = funs.const_dec funs acc c
 and const_dec funs acc c =
-  let c_type, acc = ty_it funs.global_funs acc c.c_type in
-  let c_value, acc = static_exp_it funs.global_funs acc c.c_value in
+  let c_type, acc = ty_it funs acc c.c_type in
+  let c_value, acc = exp_it funs acc c.c_value in
   { c with c_value = c_value; c_type = c_type }, acc
 
 and program_it funs acc p = funs.program funs acc p
@@ -283,6 +258,7 @@ and program funs acc p =
 
 
 let defaults = {
+  ty = ty;
   app = app;
   block = block;
   edesc = edesc;
@@ -306,6 +282,7 @@ let defaults = {
 
 
 let defaults_stop = {
+  ty = stop;
   app = stop;
   block = stop;
   edesc = stop;
@@ -325,8 +302,4 @@ let defaults_stop = {
   const_dec = stop;
   program = stop;
   global_funs = Global_mapfold.defaults_stop }
-
-
-
-
 

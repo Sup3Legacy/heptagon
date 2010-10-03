@@ -15,24 +15,24 @@ open Types
 open Signature
 open Location
 
-type class_name = name
-type instance_name = longname
+type class_name = qualname
+type instance_name = qualname
 type obj_name = name
-type op_name = longname
+type op_name = qualname
 
 type type_dec =
-    { t_name : name;
+    { t_name : qualname;
       t_desc : tdesc;
       t_loc : location }
 
 and tdesc =
   | Type_abs
   | Type_alias of ty
-  | Type_enum of name list
+  | Type_enum of constructor_name list
   | Type_struct of structure
 
 type const_dec = {
-  c_name : name;
+  c_name : qualname;
   c_value : static_exp;
   c_type : ty;
   c_loc : location }
@@ -142,7 +142,7 @@ let rec vd_mem n = function
 (** Returns the var_dec object corresponding to the name n
     in a list of var_dec. *)
 let rec vd_find n = function
-  | [] -> Format.printf "Not found var %s\n" (name n); raise Not_found
+  | [] -> Format.eprintf "Not found var %s@." (name n); raise Not_found
   | vd::l ->
       if vd.v_ident = n then vd else vd_find n l
 

@@ -7,6 +7,7 @@
 (*                                                                        *)
 (**************************************************************************)
 open Misc
+open Initial
 open Names
 open Idents
 open Signature
@@ -15,8 +16,12 @@ open Mls_utils
 open Types
 open Clocks
 
-let ctrue = Name "true"
-and cfalse = Name "false"
+let flatten_e_list l =
+  let flatten = function
+    | { e_desc = Eapp({ a_op =  Etuple }, l, _) } -> l
+    | e -> [e]
+  in
+    List.flatten (List.map flatten l)
 
 let equation (d_list, eq_list) e =
   let add_one_var ty d_list =
@@ -31,7 +36,7 @@ let equation (d_list, eq_list) e =
           let pat_list = List.map (fun n -> Evarpat n) var_list in
           let eq_list = (mk_equation (Etuplepat pat_list) e) :: eq_list in
           let e_list = List.map2
-            (fun n ty -> mk_exp ~exp_ty:ty (Evar n)) var_list ty_list in
+            (fun n ty -> mk_exp ~ty:ty (Evar n)) var_list ty_list in
           let e = Eapp(mk_app Etuple, e_list, None) in
             (d_list, eq_list), e
       | _ ->
@@ -84,7 +89,7 @@ let rec merge e x ci_a_list =
   let rec distribute ci_tas_list =
     match ci_tas_list with
       | [] | (_, _, []) :: _ -> []
-      | (ci, b, (eo :: _)) :: _ ->
+      | (_, b, (eo :: _)) :: _ ->
           let ci_ta_list, ci_tas_list = split ci_tas_list in
           let ci_tas_list = distribute ci_tas_list in
           (if b then
@@ -112,9 +117,9 @@ let rec merge e x ci_a_list =
 let ifthenelse context e1 e2 e3 =
   let context, n = intro context e1 in
   let n = (match n with Evar n -> n | _ -> assert false) in
-  let context, e2 = whenc context e2 ctrue n in
-  let context, e3 = whenc context e3 cfalse n in
-    context, merge e1 n [ctrue, e2; cfalse, e3]
+  let context, e2 = whenc context e2 ptrue n in
+  let context, e3 = whenc context e3 pfalse n in
+    context, merge e1 n [ptrue, e2; pfalse, e3]
 
 let const e c =
   let rec const = function
@@ -187,16 +192,22 @@ let rec translate kind context e =
         let context, e2 = translate Act context e2 in
         let context, e3 = translate Act context e3 in
           ifthenelse context e1 e2 e3
+    | Eapp({ a_op = Efun _ | Enode _ } as app, e_list, r) ->
+        let context, e_list =
+          translate_list function_args_kind context e_list in
+          context, { e with e_desc = Eapp(app, flatten_e_list e_list, r) }
     | Eapp(app, e_list, r) ->
         let context, e_list = translate_app kind context app.a_op e_list in
           context, { e with e_desc = Eapp(app, e_list, r) }
     | Eiterator (it, app, n, e_list, reset) ->
-        let app =
-          (match app.a_op with
-             | Elambda(inp, outp, [], eq_list) ->
-                let d_list, eq_list = translate_eq_list [] eq_list in
-                  { app with a_op = Elambda(inp, outp, d_list, eq_list) }
-             | _ -> app) in
+      (* normalize anonymous nodes *)
+      (match app.a_op with
+        | Enode f when Itfusion.is_anon_node f ->
+    let nd = Itfusion.find_anon_node f in
+          let d_list, eq_list = translate_eq_list nd.n_local nd.n_equs in
+    let nd = { nd with n_equs = eq_list; n_local = d_list } in
+      Itfusion.replace_anon_node f nd
+        | _ -> () );
 
         (* Add an intermediate equation for each array lit argument. *)
         let translate_iterator_arg_list context e_list =
@@ -209,51 +220,62 @@ let rec translate kind context e =
 
         let context, e_list =
           translate_iterator_arg_list context e_list in
-        context, { e with e_desc = Eiterator(it, app, n, e_list, reset) }
+        context, { e with e_desc = Eiterator(it, app, n,
+                                             flatten_e_list e_list, reset) }
   in add context kind e
 
 and translate_app kind context op e_list =
-  match op, e_list with
-    | (Eequal | Efun _ | Enode _), e_list ->
+  match op with
+    | Eequal ->
         let context, e_list =
           translate_list function_args_kind context e_list in
         context, e_list
-    | Etuple, e_list ->
+    | Etuple ->
         let context, e_list = translate_list kind context e_list in
           context, e_list
-    | Efield, [e'] ->
+    | Efield ->
+        let e' = assert_1 e_list in
         let context, e' = translate Exp context e' in
           context, [e']
-    | Efield_update, [e1; e2] ->
+    | Efield_update ->
+        let e1, e2 = assert_2 e_list in
         let context, e1 = translate VRef context e1 in
         let context, e2 = translate Exp context e2 in
           context, [e1; e2]
-    | Earray, e_list ->
+    | Earray ->
         let context, e_list = translate_list kind context e_list in
           context, e_list
-    | Earray_fill, [e] ->
-        let context, e = translate VRef context e in
+    | Earray_fill ->
+        let e = assert_1 e_list in
+        let context, e = translate Exp context e in
           context, [e]
-    | Eselect, [e'] ->
+    | Eselect ->
+        let e' = assert_1 e_list in
         let context, e' = translate VRef context e' in
           context, [e']
-    | Eselect_dyn, e1::e2::idx ->
+    | Eselect_dyn ->
+        let e1, e2, idx = assert_2min e_list in
         let context, e1 = translate VRef context e1 in
         let context, idx = translate_list Exp context idx in
         let context, e2 = translate Exp context e2 in
         context, e1::e2::idx
-    | Eupdate, e1::e2::idx  ->
+    | Eupdate ->
+        let e1, e2, idx = assert_2min e_list in
         let context, e1 = translate VRef context e1 in
         let context, idx = translate_list Exp context idx in
         let context, e2 = translate Exp context e2 in
           context, e1::e2::idx
-    | Eselect_slice, [e'] ->
+    | Eselect_slice ->
+        let e' = assert_1 e_list in
         let context, e' = translate VRef context e' in
         context, [e']
-    | Econcat, [e1; e2] ->
+    | Econcat ->
+        let e1, e2 = assert_2 e_list in
         let context, e1 = translate VRef context e1 in
         let context, e2 = translate VRef context e2 in
         context, [e1; e2]
+    | Enode _ | Efun _ | Eifthenelse _ ->
+      assert false (*already done in translate*)
 
 and translate_list kind context e_list =
   match e_list with
@@ -265,9 +287,9 @@ and translate_list kind context e_list =
 
 and fby kind context e v e1 =
   let mk_fby c e =
-    mk_exp ~exp_ty:e.e_ty ~loc:e.e_loc (Efby(Some c, e)) in
+    mk_exp ~ty:e.e_ty ~loc:e.e_loc (Efby(Some c, e)) in
   let mk_pre e =
-    mk_exp ~exp_ty:e.e_ty ~loc:e.e_loc (Efby(None, e)) in
+    mk_exp ~ty:e.e_ty ~loc:e.e_loc (Efby(None, e)) in
   match e1.e_desc, v with
     | Eapp({ a_op = Etuple } as app, e_list, r),
       Some { se_desc = Stuple se_list } ->

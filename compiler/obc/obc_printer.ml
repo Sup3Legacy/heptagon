@@ -4,6 +4,7 @@ open Pp_tools
 open Types
 open Idents
 open Names
+open Global_printer
 
 let print_vd ff vd =
   fprintf ff "@[<v>";
@@ -14,7 +15,7 @@ let print_vd ff vd =
 
 let print_obj ff o =
   fprintf ff "@[<v>"; print_name ff o.o_name;
-  fprintf ff " : "; print_longname ff o.o_class;
+  fprintf ff " : "; print_qualname ff o.o_class;
   fprintf ff "@[<2>%a@]" (print_list_r print_static_exp "<<"","">>") o.o_params;
   (match o.o_size with
      | Some se -> fprintf ff "[%a]" print_static_exp se
@@ -42,7 +43,7 @@ and print_exp ff e =
     | Estruct(_,f_e_list) ->
         fprintf ff "@[<v 1>";
         print_list_r
-          (fun ff (field, e) -> print_longname ff field;fprintf ff " = ";
+          (fun ff (field, e) -> print_qualname ff field;fprintf ff " = ";
              print_exp ff e)
           "{" ";" "}" ff f_e_list;
         fprintf ff "@]"
@@ -53,9 +54,9 @@ and print_exp ff e =
 
 and print_op ff op e_list = match e_list with
   | [l; r] ->
-      fprintf ff "(@[%a@ %a %a@])" print_longname op print_exp l print_exp r
+      fprintf ff "(@[%a@ %a %a@])" print_qualname op print_exp l print_exp r
   | _ ->
-      print_longname ff op;
+      print_qualname ff op;
       print_list_l print_exp "(" "," ")" ff e_list
 
 let print_asgn ff pref x e =
@@ -117,7 +118,7 @@ and print_tag_act_list ff tag_act_list =
   print_list
     (fun ff (tag, a) ->
        fprintf ff "@[<v 2>case %a:@ %a@]"
-         print_longname tag
+         print_qualname tag
          print_block a)
     "" "" "" ff tag_act_list
 
@@ -138,7 +139,7 @@ let print_method ff md =
 
 let print_class_def ff
     { cd_name = id; cd_mems = mem; cd_objs = objs; cd_methods = m_list } =
-  fprintf ff "@[<v 2>machine "; print_name ff id; fprintf ff " =@,";
+  fprintf ff "@[<v 2>machine "; print_qualname ff id; fprintf ff " =@,";
   if mem <> [] then begin
     fprintf ff "@[<hov 4>var ";
     print_list_r print_vd "" ";" "" ff mem;
@@ -155,19 +156,19 @@ let print_class_def ff
 
 let print_type_def ff { t_name = name; t_desc = tdesc } =
   match tdesc with
-    | Type_abs -> fprintf ff "@[type %s@\n@]" name
+    | Type_abs -> fprintf ff "@[type %a@\n@]" print_qualname name
     | Type_alias ty ->
-        fprintf ff  "@[type %s@ = %a\n@]" name  print_type ty
+        fprintf ff  "@[type %a@ = %a@\n@]" print_qualname name  print_type ty
     | Type_enum(tag_name_list) ->
-        fprintf ff "@[type %s = " name;
-        print_list_r print_name "" "|" "" ff tag_name_list;
+        fprintf ff "@[type %a = " print_qualname name;
+        print_list_r print_qualname "" "|" "" ff tag_name_list;
         fprintf ff "@\n@]"
     | Type_struct(f_ty_list) ->
-        fprintf ff "@[type %s = " name;
+        fprintf ff "@[type %a = " print_qualname name;
         fprintf ff "@[<v 1>";
         print_list
           (fun ff { Signature.f_name = field; Signature.f_type = ty } ->
-             print_name ff field;
+             print_qualname ff field;
              fprintf ff ": ";
              print_type ff ty) "{" ";" "}" ff f_ty_list;
         fprintf ff "@]@.@]"
@@ -178,7 +179,7 @@ let print_open_module ff name =
   fprintf ff "@.@]"
 
 let print_const_dec ff c =
-  fprintf ff "const %a = %a@." print_name c.c_name
+  fprintf ff "const %a = %a@." print_qualname c.c_name
     print_static_exp c.c_value
 
 let print_prog ff { p_opened = modules; p_types = types;
