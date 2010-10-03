@@ -1,0 +1,162 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   xmlns:dc="http://purl.org/dc/elements/1.1/"
+   xmlns:cc="http://creativecommons.org/ns#"
+   xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+   xmlns:svg="http://www.w3.org/2000/svg"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   width="210mm"
+   height="297mm"
+   id="svg2"
+   version="1.1"
+   inkscape:version="0.47 r22583"
+   sodipodi:docname="comparo.svg"
+   inkscape:export-filename="/home/agmk/heptagon/doc/vhdl/slides-finaux-gencod/comparo.png"
+   inkscape:export-xdpi="90"
+   inkscape:export-ydpi="90">
+  <defs
+     id="defs4">
+    <inkscape:perspective
+       sodipodi:type="inkscape:persp3d"
+       inkscape:vp_x="0 : 526.18109 : 1"
+       inkscape:vp_y="0 : 1000 : 0"
+       inkscape:vp_z="744.09448 : 526.18109 : 1"
+       inkscape:persp3d-origin="372.04724 : 350.78739 : 1"
+       id="perspective10" />
+  </defs>
+  <sodipodi:namedview
+     id="base"
+     pagecolor="#ffffff"
+     bordercolor="#666666"
+     borderopacity="1.0"
+     inkscape:pageopacity="0.0"
+     inkscape:pageshadow="2"
+     inkscape:zoom="1.4"
+     inkscape:cx="227.51677"
+     inkscape:cy="624.91349"
+     inkscape:document-units="px"
+     inkscape:current-layer="layer1"
+     showgrid="false"
+     inkscape:window-width="1280"
+     inkscape:window-height="784"
+     inkscape:window-x="0"
+     inkscape:window-y="16"
+     inkscape:window-maximized="0" />
+  <metadata
+     id="metadata7">
+    <rdf:RDF>
+      <cc:Work
+         rdf:about="">
+        <dc:format>image/svg+xml</dc:format>
+        <dc:type
+           rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
+        <dc:title></dc:title>
+      </cc:Work>
+    </rdf:RDF>
+  </metadata>
+  <g
+     inkscape:label="Calque 1"
+     inkscape:groupmode="layer"
+     id="layer1">
+    <path
+       sodipodi:open="true"
+       sodipodi:end="6.2096929"
+       sodipodi:start="0"
+       d="m 336.38079,331.61835 a 85.357887,83.337585 0 1 1 -0.23041,-6.11917"
+       sodipodi:ry="83.337585"
+       sodipodi:rx="85.357887"
+       sodipodi:cy="331.61835"
+       sodipodi:cx="251.0229"
+       id="path3641"
+       style="fill:#7777b3;fill-opacity:1;stroke:none"
+       sodipodi:type="arc"
+       transform="matrix(1.7900788,0,0,0.98789394,-231.90493,78.260793)" />
+    <text
+       xml:space="preserve"
+       style="font-size:15.2121048px;font-style:normal;font-weight:normal;fill:#000000;fill-opacity:1;stroke:none;font-family:Bitstream Vera Sans"
+       x="84.581276"
+       y="515.79016"
+       id="text3629"
+       transform="scale(1.472187,0.67926153)"><tspan
+         sodipodi:role="line"
+         id="tspan3631"
+         x="84.581276"
+         y="515.79016">Lucid Synchrone</tspan></text>
+    <path
+       transform="matrix(1.5503107,0,0,0.75153029,-180.56698,168.26007)"
+       sodipodi:type="arc"
+       style="fill:#5b5bcf;fill-opacity:1;stroke:none"
+       id="path3596"
+       sodipodi:cx="251.0229"
+       sodipodi:cy="331.61835"
+       sodipodi:rx="85.357887"
+       sodipodi:ry="83.337585"
+       d="m 336.38079,331.61835 a 85.357887,83.337585 0 1 1 -0.23041,-6.11917"
+       sodipodi:start="0"
+       sodipodi:end="6.2096929"
+       sodipodi:open="true" />
+    <text
+       xml:space="preserve"
+       style="font-size:17.81742668px;font-style:normal;font-weight:normal;fill:#000000;fill-opacity:1;stroke:none;font-family:Bitstream Vera Sans"
+       x="124.31336"
+       y="501.6666"
+       id="text3633"
+       transform="scale(1.347617,0.7420506)"><tspan
+         sodipodi:role="line"
+         id="tspan3635"
+         x="124.31336"
+         y="501.6666">SCADE</tspan></text>
+    <path
+       sodipodi:open="true"
+       sodipodi:end="6.2096929"
+       sodipodi:start="0"
+       d="m 336.38079,331.61835 a 85.357887,83.337585 0 1 1 -0.23041,-6.11917"
+       sodipodi:ry="83.337585"
+       sodipodi:rx="85.357887"
+       sodipodi:cy="331.61835"
+       sodipodi:cx="251.0229"
+       id="path2822"
+       style="fill:#1b33e4;fill-opacity:1;stroke:none"
+       sodipodi:type="arc"
+       transform="matrix(1.4511485,0,0,0.57244684,-160.32657,233.70836)" />
+    <text
+       xml:space="preserve"
+       style="font-size:15.78514004px;font-style:normal;font-weight:normal;fill:#000000;fill-opacity:1;stroke:none;font-family:Bitstream Vera Sans"
+       x="99.205254"
+       y="581.06647"
+       id="text3621"
+       transform="scale(1.4790861,0.67609317)"><tspan
+         sodipodi:role="line"
+         x="99.205254"
+         y="581.06647"
+         id="tspan3625">Heptagon</tspan></text>
+    <path
+       transform="matrix(1.1456075,0,0,0.41428487,-95.026199,294.6326)"
+       sodipodi:type="arc"
+       style="fill:#0298fd;fill-opacity:1;stroke:none"
+       id="path3643"
+       sodipodi:cx="251.0229"
+       sodipodi:cy="331.61835"
+       sodipodi:rx="85.357887"
+       sodipodi:ry="83.337585"
+       d="m 336.38079,331.61835 a 85.357887,83.337585 0 1 1 -0.23041,-6.11917"
+       sodipodi:start="0"
+       sodipodi:end="6.2096929"
+       sodipodi:open="true" />
+    <text
+       xml:space="preserve"
+       style="font-size:17.14583969px;font-style:normal;font-weight:normal;fill:#000000;fill-opacity:1;stroke:none;font-family:Bitstream Vera Sans"
+       x="124.20284"
+       y="556.61194"
+       id="text3637"
+       transform="scale(1.2742173,0.78479549)"><tspan
+         sodipodi:role="line"
+         id="tspan3639"
+         x="124.20284"
+         y="556.61194">Lustre</tspan></text>
+  </g>
+</svg>

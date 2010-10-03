@@ -1,0 +1,8 @@
+\begin{Verbatim}[commandchars=\\\{\}]
+\PY{k+kd}{node}\PY{+w}{ }\PY{n}{compteur}\PY{p}{(}\PY{n}{tick}\PY{+w}{ }\PY{p}{:}\PY{+w}{ }\PY{k+kt}{bool}\PY{p}{;}\PY{+w}{ }\PY{n}{top}\PY{+w}{ }\PY{p}{:}\PY{+w}{ }\PY{k+kt}{bool}\PY{p}{)}\PY{+w}{ }\PY{k}{returns}\PY{+w}{ }\PY{p}{(}\PY{n}{o}\PY{+w}{ }\PY{p}{:}\PY{+w}{ }\PY{k+kt}{int}\PY{p}{)}
+\PY{k+kd}{var}\PY{+w}{ }\PY{o}{pre}\PY{n}{s}\PY{+w}{ }\PY{p}{:}\PY{+w}{ }\PY{k+kt}{int}\PY{p}{;}
+\PY{k}{let}
+\PY{+w}{ }\PY{+w}{ }\PY{n}{o}\PY{+w}{ }\PY{o}{=}\PY{+w}{ }\PY{p}{(}\PY{k}{if}\PY{+w}{ }\PY{n}{top}\PY{+w}{ }\PY{k}{then}\PY{+w}{ }\PY{l+m+mi}{0}\PY{+w}{ }\PY{k}{else}\PY{+w}{ }\PY{l+m+mi}{0}\PY{+w}{ }\PY{k}{fby}\PY{+w}{ }\PY{n}{o}\PY{p}{)}\PY{+w}{ }\PY{o}{+}\PY{+w}{ }\PY{o}{pre}\PY{n}{s}\PY{p}{;}
+\PY{+w}{ }\PY{+w}{ }\PY{o}{pre}\PY{n}{s}\PY{+w}{ }\PY{o}{=}\PY{+w}{ }\PY{k}{if}\PY{+w}{ }\PY{n}{tick}\PY{+w}{ }\PY{k}{then}\PY{+w}{ }\PY{l+m+mi}{1}\PY{+w}{ }\PY{k}{else}\PY{+w}{ }\PY{l+m+mi}{0}
+\PY{k}{tel}
+\end{Verbatim}

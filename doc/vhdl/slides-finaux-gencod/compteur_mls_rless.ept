@@ -1,0 +1,6 @@
+node compteur(rst_2 : bool; tick : bool; top : bool)
+     returns (o : int)
+let
+  o = (if top then 0 else (if rst_2 then 0 else (0 fby o)))
+    + (if tick then 1 else 0)
+tel

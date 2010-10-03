@@ -1,0 +1,18 @@
+\begin{Verbatim}[commandchars=\\\{\}]
+\PY{k+kd}{node}\PY{+w}{ }\PY{n}{compteur}\PY{p}{(}\PY{n}{rst\PYZus{}2}\PY{+w}{ }\PY{p}{:}\PY{+w}{ }\PY{k+kt}{bool}\PY{p}{;}\PY{+w}{ }\PY{n}{tick}\PY{+w}{ }\PY{p}{:}\PY{+w}{ }\PY{k+kt}{bool}\PY{p}{;}\PY{+w}{ }\PY{n}{top}\PY{+w}{ }\PY{p}{:}\PY{+w}{ }\PY{k+kt}{bool}\PY{p}{)}\PY{+w}{ }\PY{k}{returns}\PY{+w}{ }\PY{p}{(}\PY{n}{o}\PY{+w}{ }\PY{p}{:}\PY{+w}{ }\PY{k+kt}{int}\PY{p}{)}
+\PY{k+kd}{var}\PY{+w}{ }\PY{n}{\PYZus{}v\PYZus{}28}\PY{+w}{ }\PY{p}{:}\PY{+w}{ }\PY{k+kt}{int}\PY{p}{;}\PY{+w}{ }\PY{n}{\PYZus{}v\PYZus{}27}\PY{+w}{ }\PY{p}{:}\PY{+w}{ }\PY{k+kt}{int}\PY{p}{;}\PY{+w}{ }\PY{n}{\PYZus{}v\PYZus{}26}\PY{+w}{ }\PY{p}{:}\PY{+w}{ }\PY{k+kt}{int}\PY{p}{;}
+\PY{k}{let}
+\PY{+w}{ }\PY{+w}{ }\PY{n}{\PYZus{}v\PYZus{}27}\PY{+w}{ }\PY{o}{=}
+\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{k}{merge}\PY{+w}{ }\PY{n}{top}
+\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{p}{(}\PY{l}{true}\PY{+w}{ }\PY{o}{->}\PY{+w}{ }\PY{p}{(}\PY{l+m+mi}{0}\PY{+w}{ }\PY{k}{when}\PY{+w}{ }\PY{l}{true}\PY{p}{(}\PY{n}{top}\PY{p}{)}\PY{p}{)}\PY{p}{)}
+\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{p}{(}\PY{l}{false}\PY{+w}{ }\PY{o}{->}
+\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{p}{(}\PY{k}{merge}\PY{+w}{ }\PY{n}{rst\PYZus{}2}
+\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{p}{(}\PY{l}{true}\PY{+w}{ }\PY{o}{->}\PY{+w}{ }\PY{p}{(}\PY{l+m+mi}{0}\PY{+w}{ }\PY{k}{when}\PY{+w}{ }\PY{l}{true}\PY{p}{(}\PY{n}{rst\PYZus{}2}\PY{p}{)}\PY{p}{)}\PY{p}{)}
+\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{p}{(}\PY{l}{false}\PY{+w}{ }\PY{o}{->}\PY{+w}{ }\PY{p}{(}\PY{n}{\PYZus{}v\PYZus{}26}\PY{+w}{ }\PY{k}{when}\PY{+w}{ }\PY{l}{false}\PY{p}{(}\PY{n}{rst\PYZus{}2}\PY{p}{)}\PY{p}{)}\PY{p}{)}
+\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{k}{when}\PY{+w}{ }\PY{l}{false}\PY{p}{(}\PY{n}{top}\PY{p}{)}\PY{p}{)}\PY{p}{)}\PY{p}{;}
+\PY{+w}{ }\PY{+w}{ }\PY{n}{\PYZus{}v\PYZus{}28}\PY{+w}{ }\PY{o}{=}
+\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{k}{merge}\PY{+w}{ }\PY{n}{tick}\PY{+w}{ }\PY{p}{(}\PY{l}{true}\PY{+w}{ }\PY{o}{->}\PY{+w}{ }\PY{p}{(}\PY{l+m+mi}{1}\PY{+w}{ }\PY{k}{when}\PY{+w}{ }\PY{l}{true}\PY{p}{(}\PY{n}{tick}\PY{p}{)}\PY{p}{)}\PY{p}{)}\PY{+w}{ }\PY{p}{(}\PY{l}{false}\PY{+w}{ }\PY{o}{->}\PY{+w}{ }\PY{p}{(}\PY{l+m+mi}{0}\PY{+w}{ }\PY{k}{when}\PY{+w}{ }\PY{l}{false}\PY{p}{(}\PY{n}{tick}\PY{p}{)}\PY{p}{)}\PY{p}{)}\PY{p}{;}
+\PY{+w}{ }\PY{+w}{ }\PY{n}{o}\PY{+w}{ }\PY{o}{=}\PY{+w}{ }\PY{n}{\PYZus{}v\PYZus{}27}\PY{+w}{ }\PY{o}{+}\PY{+w}{ }\PY{n}{\PYZus{}v\PYZus{}28}\PY{p}{;}
+\PY{+w}{ }\PY{+w}{ }\PY{n}{\PYZus{}v\PYZus{}26}\PY{+w}{ }\PY{o}{=}\PY{+w}{ }\PY{l+m+mi}{0}\PY{+w}{ }\PY{k}{fby}\PY{+w}{ }\PY{n}{o}
+\PY{k}{tel}
+\end{Verbatim}

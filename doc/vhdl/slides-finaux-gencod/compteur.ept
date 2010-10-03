@@ -1,0 +1,12 @@
+node compteur(tick, top : bool) returns (o : int)
+var pres : int;
+let
+  pres = if tick then 1 else 0;
+  reset o = (0 fby o) + pres every top;
+tel
+
+node main() returns (o : int)
+let
+  o = compteur(true  fby  true fby false fby true,
+               false fby false fby true fby false);
+tel

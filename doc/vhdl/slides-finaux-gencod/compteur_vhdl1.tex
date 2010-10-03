@@ -1,0 +1,32 @@
+\begin{Verbatim}[commandchars=\\\{\}]
+\PY{k+kn}{use}\PY{+w}{ }\PY{n}{work}\PY{o}{.}\PY{n}{compteur}\PY{o}{.}\PY{n}{all}\PY{p}{;}
+
+\PY{k+kn}{library}\PY{+w}{ }\PY{n}{ieee}\PY{p}{;}
+\PY{k+kn}{use}\PY{+w}{ }\PY{n}{ieee}\PY{o}{.}\PY{k+kt}{std\PYZus{}logic}\PY{n}{\PYZus{}1164}\PY{o}{.}\PY{n}{all}\PY{p}{;}
+
+\PY{k+kd}{entity}\PY{+w}{ }\PY{n}{compteur}\PY{+w}{ }\PY{k}{is}
+\PY{+w}{ }\PY{+w}{ }\PY{k}{port}\PY{+w}{ }\PY{p}{(}\PY{k+kd}{signal}\PY{+w}{ }\PY{n}{clk\PYZus{}1}\PY{+w}{ }\PY{p}{:}\PY{+w}{ }\PY{n}{in}\PY{+w}{ }\PY{k+kt}{std\PYZus{}logic}\PY{p}{;}\PY{+w}{ }
+\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{k+kd}{signal}\PY{+w}{ }\PY{n}{hw\PYZus{}rst\PYZus{}3}\PY{+w}{ }\PY{p}{:}\PY{+w}{ }\PY{n}{in}\PY{+w}{ }\PY{k+kt}{std\PYZus{}logic}\PY{p}{;}
+\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{k+kd}{signal}\PY{+w}{ }\PY{n}{rst\PYZus{}2}\PY{+w}{ }\PY{p}{:}\PY{+w}{ }\PY{n}{in}\PY{+w}{ }\PY{k+kt}{std\PYZus{}logic}\PY{p}{;}\PY{+w}{ }
+\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{k+kd}{signal}\PY{+w}{ }\PY{n}{tick}\PY{+w}{ }\PY{p}{:}\PY{+w}{ }\PY{n}{in}\PY{+w}{ }\PY{k+kt}{std\PYZus{}logic}\PY{p}{;}
+\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{k+kd}{signal}\PY{+w}{ }\PY{n}{top}\PY{+w}{ }\PY{p}{:}\PY{+w}{ }\PY{n}{in}\PY{+w}{ }\PY{k+kt}{std\PYZus{}logic}\PY{p}{;}
+\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{k+kd}{signal}\PY{+w}{ }\PY{n}{o\PYZus{}o}\PY{+w}{ }\PY{p}{:}\PY{+w}{ }\PY{n}{out}\PY{+w}{ }\PY{k+kt}{integer}\PY{p}{)}\PY{p}{;}
+\PY{k}{end}\PY{+w}{ }\PY{k+kd}{entity}\PY{+w}{ }\PY{n}{compteur}\PY{p}{;}
+
+\PY{k+kd}{architecture}\PY{+w}{ }\PY{n}{rtl}\PY{+w}{ }\PY{k}{of}\PY{+w}{ }\PY{n}{compteur}\PY{+w}{ }\PY{k}{is}
+\PY{+w}{ }\PY{+w}{ }\PY{k+kd}{signal}\PY{+w}{ }\PY{n}{h\PYZus{}v\PYZus{}26}\PY{+w}{ }\PY{p}{:}\PY{+w}{ }\PY{k+kt}{integer}\PY{p}{;}
+\PY{k}{begin}
+\PY{+w}{ }\PY{+w}{ }\PY{n}{update}\PY{+w}{ }\PY{p}{:}\PY{+w}{ }\PY{k+kd}{process}\PY{+w}{ }\PY{p}{(}\PY{n}{clk\PYZus{}1}\PY{p}{,}\PY{+w}{ }\PY{n}{hw\PYZus{}rst\PYZus{}3}\PY{p}{,}\PY{+w}{ }\PY{n}{rst\PYZus{}2}\PY{p}{,}
+\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{n}{tick}\PY{p}{,}\PY{+w}{ }\PY{n}{top}\PY{p}{)}
+\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{k+kd}{variable}\PY{+w}{ }\PY{n}{h\PYZus{}v\PYZus{}27}\PY{+w}{ }\PY{p}{:}\PY{+w}{ }\PY{k+kt}{integer}\PY{p}{;}
+\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{k+kd}{variable}\PY{+w}{ }\PY{n}{h\PYZus{}v\PYZus{}28}\PY{+w}{ }\PY{p}{:}\PY{+w}{ }\PY{k+kt}{integer}\PY{p}{;}
+\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{k+kd}{variable}\PY{+w}{ }\PY{n}{o}\PY{+w}{ }\PY{p}{:}\PY{+w}{ }\PY{k+kt}{integer}\PY{p}{;}
+\PY{+w}{ }\PY{+w}{ }\PY{k}{begin}
+\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{k}{case}\PY{+w}{ }\PY{n}{top}\PY{+w}{ }\PY{k}{is}
+\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{k}{when}\PY{+w}{ }\PY{p}{'}\PY{l+m+mi}{1}\PY{p}{'}\PY{+w}{ }\PY{p}{=>}\PY{+w}{ }\PY{n}{h\PYZus{}v\PYZus{}27}\PY{+w}{ }\PY{p}{:}\PY{o}{=}\PY{+w}{ }\PY{l+m+mi}{0}\PY{p}{;}
+\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{k}{when}\PY{+w}{ }\PY{p}{'}\PY{l+m+mi}{0}\PY{p}{'}\PY{+w}{ }\PY{p}{=>}\PY{+w}{ }\PY{k}{case}\PY{+w}{ }\PY{n}{rst\PYZus{}2}\PY{+w}{ }\PY{k}{is}
+\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{k}{when}\PY{+w}{ }\PY{p}{'}\PY{l+m+mi}{1}\PY{p}{'}\PY{+w}{ }\PY{p}{=>}\PY{+w}{ }\PY{n}{h\PYZus{}v\PYZus{}27}\PY{+w}{ }\PY{p}{:}\PY{o}{=}\PY{+w}{ }\PY{l+m+mi}{0}\PY{p}{;}
+\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{k}{when}\PY{+w}{ }\PY{p}{'}\PY{l+m+mi}{0}\PY{p}{'}\PY{+w}{ }\PY{p}{=>}\PY{+w}{ }\PY{n}{h\PYZus{}v\PYZus{}27}\PY{+w}{ }\PY{p}{:}\PY{o}{=}\PY{+w}{ }\PY{n}{h\PYZus{}v\PYZus{}26}\PY{p}{;}
+\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{k}{end}\PY{+w}{ }\PY{k}{case}\PY{p}{;}
+\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{k}{end}\PY{+w}{ }\PY{k}{case}\PY{p}{;}
+\end{Verbatim}

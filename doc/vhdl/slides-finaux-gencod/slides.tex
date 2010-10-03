@@ -1,0 +1,202 @@
+\documentclass{beamer}
+\usepackage[T1]{fontenc}
+\usepackage[french]{babel}
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath}
+\usepackage{hyperref}
+\usepackage{verbatim}
+\usepackage{graphicx}
+\usepackage{fancyvrb}
+
+\hypersetup{
+  backref=true, %permet d'ajouter des liens dans...
+  pagebackref=true,%...les bibliographies
+  hyperindex=true, %ajoute des liens dans les index
+  colorlinks=true, %colorise les liens
+  breaklinks=true, %permet le retour a la ligne dans les liens trop longs
+  urlcolor=blue,  %couleur des hyperliens (blue pour la version web)
+  linkcolor=blue, %couleur des liens internes (blue pour la version web)
+  citecolor=blue, %couleur des citation (green pour la version web)
+  bookmarks=true,  %cree des signets pour Acrobat
+  bookmarksopen=true, %affiche completement les signets Acrobat
+  %%%%%%%%%%%%%%%%% HYPER TITLE %%%%%%%%%%%%%%%%%%%%%%%%%%
+  pdfsubject={Transparents} %document sous Acrobat.
+}
+
+\usetheme{boxes}
+% \definecolor{MonJaune}{HTML}{FFCC00}
+% \setbeamercolor{block title}{fg=MonJaune}
+
+\include{pygments}
+
+\logo{\includegraphics[height=1cm]{gencod}}
+% \logo{\insertframenumber/\inserttotalframenumber}
+
+\newcommand{\FIXME}{\textcolor{red}{FIXME}}
+\newcommand{\TODO}[1]{(\textcolor{red}{TODO} #1)}
+%\newcommand{\TODO}[1]{}
+\newcommand{\LANG}{{\sc Heptagon}}
+\newcommand{\lucy}{{\sc Lucid Synchrone}}
+\newcommand{\lustre}{{\sc Lustre}}
+\newcommand{\scade}{{\sc Scade}}
+\newcommand{\scadesix}{{\sc Scade~6}}
+\newcommand{\minils}{{\sc MiniLS}}
+\newcommand{\heptagon}{{\sc Heptagon}}
+\newcommand{\obc}{{\sc Obc}}
+\newcommand{\minivhdl}{{\sc MiniVHDL}}
+\newcommand{\vhdl}{{\sc Vhdl}}
+
+\title{Revue du projet GenCod}
+\author{Adrien Guatto et Marc Pouzet}
+\date{Mardi 5 Octobre 2010}
+
+\begin{document}
+
+% \maketitle
+
+\begin{frame}[t,plain]
+  \titlepage
+\end{frame}
+
+\begin{frame}
+  \frametitle{Contexte scientifique}
+
+  \begin{block}{Question soulevée dans le cadre du projet GenCod}
+    Comment générer une description de matériel à partir de programmes écrits en
+    \scade{} ?
+  \end{block}
+
+  \pause
+
+  \begin{block}{Approche retenue}
+    Étudier la question et proposer une solution dans le cadre d'un langage
+    laboratoire simplifié mais suffisamment proche de \scadesix{} pour un
+    transfert ultérieur vers celui-ci.
+  \end{block}
+
+  \pause
+
+  \begin{block}{Véhicule de l'expérience}
+    \heptagon{} est un sous-ensemble de \lucy{}, langage synchrone
+    académique (Pouzet et al.) dont les principes de constructions furent repris
+    dans \scadesix{}
+  \end{block}
+\end{frame}
+
+\begin{frame}
+  \frametitle{Réalisation}
+
+  \begin{center}
+    \includegraphics[scale=0.65]{comparo.pdf}
+  \end{center}
+
+  Les traits marquants d'\heptagon{} sont :
+
+  \begin{itemize}
+  \item Les programmes sont structurés en noeuds contenants des équations de
+    suites ou des automates.
+  \item Le processus de compilation vérifie des propriétés de sûreté et raffine
+    le programme jusqu'à générer du code impératif (e.g. langage C).
+  \item<alert@2-> Il est possible de générer du code VHDL.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}
+  \frametitle{Génération de code VHDL}
+
+  \begin{center}
+    \includegraphics[scale=0.4]{sens_traduction.pdf}
+  \end{center}
+
+  Pour produire du code VHDL, deux points de départ sont possibles :
+
+  \begin{enumerate}
+  \item Le code C produit par le compilateur original (\scade{} ou
+    \heptagon{}). Cette approche est celle de la société GeenSoft.
+  \item La représentation intermédiaire à flots de données interne au
+    compilateur du langage synchrone.
+  \end{enumerate}
+
+  \pause
+
+  Nous avons retenu le second cheminement, et allons l'illustrer sur des
+  exemples dans les transparents suivant.
+\end{frame}
+
+\begin{frame}
+  \frametitle{Exemple 1 : compteur - code original}
+
+  \input{compteur}
+\end{frame}
+
+
+\begin{frame}
+  \frametitle{Exemple 1 : compteur - exemple de sortie attendue}
+
+  \[
+  \begin{array}{r|llllllllllllllllllllllllllll}
+    \hline
+    tick & t & t & t & f & \dots \\
+    \hline
+    top & f & f & t & f & \dots \\
+    \hline
+    compteur(tick,top) & 1 & 2 & 1 & 1 & \dots \\
+    \hline
+  \end{array}
+  \]
+\end{frame}
+
+
+\begin{frame}
+  \frametitle{Exemple 1 : compteur - code MiniLS}
+
+  \footnotesize
+
+  \input{compteur_mls}
+
+  Le code n'est plus formé que d'équations.
+\end{frame}
+
+\begin{frame}
+  \frametitle{Exemple 1 : compteur - code MiniLS sans reset}
+
+  \footnotesize
+
+  \input{compteur_mls_rless}
+
+  La réinitialisation logique est explicitée via un paramètre du nœud.
+\end{frame}
+
+\begin{frame}
+  \frametitle{Exemple 1 : compteur - code MiniLS final}
+
+  \footnotesize
+
+  \input{compteur_mls_norm}
+
+  Le code est normalisé et ordonnancé.
+\end{frame}
+
+\begin{frame}
+  \frametitle{Exemple 1 : compteur - code VHDL}
+
+  \tiny
+
+  \begin{columns}[t]
+    \hspace{1cm}
+    \begin{column}{6cm}
+      \include{compteur_vhdl1}
+    \end{column}
+    \begin{column}{6cm}
+      \include{compteur_vhdl2}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}
+  \frametitle{Exemple 1 : compteur - comportement du code VHDL}
+
+  \includegraphics[width=10cm]{capture-chrono-compteur}
+\end{frame}
+
+\end{document}

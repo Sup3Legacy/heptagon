@@ -1,0 +1,16 @@
+node compteur(rst_2 : bool; tick : bool; top : bool) returns (o : int)
+var _v_28 : int; _v_27 : int; _v_26 : int;
+let
+  _v_27 =
+    merge top
+      (true -> (0 when true(top)))
+      (false ->
+        (merge rst_2
+           (true -> (0 when true(rst_2)))
+           (false -> (_v_26 when false(rst_2)))
+         when false(top)));
+  _v_28 =
+    merge tick (true -> (1 when true(tick))) (false -> (0 when false(tick)));
+  o = _v_27 + _v_28;
+  _v_26 = 0 fby o
+tel
