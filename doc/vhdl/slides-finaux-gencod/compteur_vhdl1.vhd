@@ -16,7 +16,7 @@ architecture rtl of compteur is
   signal h_v_26 : integer;
 begin
   update : process (clk_1, hw_rst_3, rst_2,
-                    tick, top)
+                    tick, top, h_v_26)
     variable h_v_27 : integer;
     variable h_v_28 : integer;
     variable o : integer;

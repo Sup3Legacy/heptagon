@@ -9,8 +9,8 @@ let
            (true -> (0 when true(rst_2)))
            (false -> (_v_26 when false(rst_2)))
          when false(top)));
-  _v_28 =
-    merge tick (true -> (1 when true(tick))) (false -> (0 when false(tick)));
+  _v_28 = merge tick (true -> (1 when true(tick)))
+                     (false -> (0 when false(tick)));
   o = _v_27 + _v_28;
   _v_26 = 0 fby o
 tel

@@ -119,8 +119,8 @@
 
   \pause
 
-  Nous avons retenu le second cheminement, et allons l'illustrer sur des
-  exemples dans les transparents suivant.
+  Nous avons retenu le second cheminement, et l'avons clairement spécifié afin
+  de pouvoir envisager une certification DO-178B ultérieure.
 \end{frame}
 
 \begin{frame}
@@ -194,9 +194,22 @@
 \end{frame}
 
 \begin{frame}
-  \frametitle{Exemple 1 : compteur - comportement du code VHDL}
+  \frametitle{Exemple 1 : compteur - caractéristiques du code VHDL}
 
-  \includegraphics[width=10cm]{capture-chrono-compteur}
+  \begin{block}{Simulation comportementale}
+    \vspace{0.3cm}
+    \includegraphics[width=10cm]{capture-chrono-compteur}
+  \end{block}
+
+  \begin{block}{Synthèse}
+    L'outil industriel \textit{Xilinx XST} synthétise une netlist avec des
+    caractéristiques satisfaisantes :
+
+    \begin{itemize}
+    \item Un additionneur 32 bits pour \textbf{o}.
+    \item Un registre 32 bits pour \textbf{h\_v\_26}.
+    \end{itemize}
+  \end{block}
 \end{frame}
 
 \end{document}
