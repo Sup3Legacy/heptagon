@@ -198,12 +198,14 @@
 
   \begin{block}{Simulation comportementale}
     \vspace{0.3cm}
-    \includegraphics[width=10cm]{capture-chrono-compteur}
+    \begin{center}
+      \includegraphics[width=10cm]{capture-chrono-compteur}
+    \end{center}
   \end{block}
 
   \begin{block}{Synthèse}
     L'outil industriel \textit{Xilinx XST} synthétise une netlist avec des
-    caractéristiques satisfaisantes :
+    propriétés satisfaisantes :
 
     \begin{itemize}
     \item Un additionneur 32 bits pour \textbf{o}.
@@ -266,7 +268,50 @@
 \begin{frame}
   \frametitle{Exemple 2 : compteur de bits - code MiniLS final}
   \tiny
-  \input{autom_mls_norm}
+  \begin{columns}[t]
+    \hspace{1cm}
+    \begin{column}{6cm}
+      \include{autom_mls_norm}
+    \end{column}
+    \begin{column}{6cm}
+      \include{autom_mls_norm2}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}
+  \frametitle{Exemple 2 : compteur de bits - code VHDL final}
+  \tiny
+  \begin{columns}[t]
+    \hspace{1cm}
+    \begin{column}{6cm}
+      \include{autom_vhdl_1}
+    \end{column}
+    \begin{column}{6cm}
+      \include{autom_vhdl_2}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}
+  \frametitle{Exemple 2 : compteur de bits - caractéristiques du code VHDL}
+
+  \begin{block}{Simulation comportementale}
+    \vspace{0.3cm}
+    \begin{center}
+      \includegraphics[width=10cm]{capture-chrono-bitcompteur.png}
+    \end{center}
+  \end{block}
+
+  \begin{block}{Synthèse}
+    \textit{Xilinx XST} synthétise une netlist avec des propriétés
+    satisfaisantes :
+
+    \begin{itemize}
+    \item Deux additionneurs 32 bits.
+    \item Un registre 1 bit.
+    \end{itemize}
+  \end{block}
 \end{frame}
 
 \end{document}

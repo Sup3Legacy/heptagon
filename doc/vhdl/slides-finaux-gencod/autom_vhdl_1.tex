@@ -1,0 +1,28 @@
+\begin{Verbatim}[commandchars=\\\{\}]
+\PY{o}{.}\PY{o}{.}\PY{o}{.}\PY{p}{;}
+
+\PY{k+kd}{entity}\PY{+w}{ }\PY{n}{countbits}\PY{+w}{ }\PY{k}{is}
+\PY{+w}{ }\PY{+w}{ }\PY{k}{port}\PY{+w}{ }\PY{p}{(}\PY{k+kd}{signal}\PY{+w}{ }\PY{n}{clk\PYZus{}1}\PY{+w}{ }\PY{p}{:}\PY{+w}{ }\PY{n}{in}\PY{+w}{ }\PY{k+kt}{std\PYZus{}logic}\PY{p}{;}
+\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{k+kd}{signal}\PY{+w}{ }\PY{n}{hw\PYZus{}rst\PYZus{}3}\PY{+w}{ }\PY{p}{:}\PY{+w}{ }\PY{n}{in}\PY{+w}{ }\PY{k+kt}{std\PYZus{}logic}\PY{p}{;}
+\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{k+kd}{signal}\PY{+w}{ }\PY{n}{rst\PYZus{}2}\PY{+w}{ }\PY{p}{:}\PY{+w}{ }\PY{n}{in}\PY{+w}{ }\PY{k+kt}{std\PYZus{}logic}\PY{p}{;}
+\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{o}{.}\PY{o}{.}\PY{o}{.}\PY{p}{)}\PY{p}{;}
+\PY{k}{end}\PY{+w}{ }\PY{k+kd}{entity}\PY{+w}{ }\PY{n}{countbits}\PY{p}{;}
+
+\PY{k+kd}{architecture}\PY{+w}{ }\PY{n}{rtl}\PY{+w}{ }\PY{k}{of}\PY{+w}{ }\PY{n}{countbits}\PY{+w}{ }\PY{k}{is}
+\PY{+w}{ }\PY{+w}{ }\PY{o}{.}\PY{o}{.}\PY{o}{.}\PY{p}{;}
+\PY{+w}{ }\PY{+w}{ }\PY{n}{component}\PY{+w}{ }\PY{n}{int\PYZus{}of\PYZus{}bool}
+\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{k}{port}\PY{+w}{ }\PY{p}{(}\PY{k+kd}{signal}\PY{+w}{ }\PY{n}{clk\PYZus{}1}\PY{+w}{ }\PY{p}{:}\PY{+w}{ }\PY{n}{in}\PY{+w}{ }\PY{k+kt}{std\PYZus{}logic}\PY{p}{;}
+\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{k+kd}{signal}\PY{+w}{ }\PY{n}{hw\PYZus{}rst\PYZus{}3}\PY{+w}{ }\PY{p}{:}\PY{+w}{ }\PY{n}{in}\PY{+w}{ }\PY{k+kt}{std\PYZus{}logic}\PY{p}{;}
+\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{k+kd}{signal}\PY{+w}{ }\PY{n}{rst\PYZus{}2}\PY{+w}{ }\PY{p}{:}\PY{+w}{ }\PY{n}{in}\PY{+w}{ }\PY{k+kt}{std\PYZus{}logic}\PY{p}{;}
+\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{k+kd}{signal}\PY{+w}{ }\PY{n}{b}\PY{+w}{ }\PY{p}{:}\PY{+w}{ }\PY{n}{in}\PY{+w}{ }\PY{k+kt}{std\PYZus{}logic}\PY{p}{;}
+\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{k+kd}{signal}\PY{+w}{ }\PY{n}{o\PYZus{}o}\PY{+w}{ }\PY{p}{:}\PY{+w}{ }\PY{n}{out}\PY{+w}{ }\PY{k+kt}{integer}\PY{p}{)}\PY{p}{;}
+\PY{+w}{ }\PY{+w}{ }\PY{k}{end}\PY{+w}{ }\PY{n}{component}\PY{p}{;}
+\PY{+w}{ }\PY{+w}{ }\PY{n}{for}\PY{+w}{ }\PY{n}{int\PYZus{}of\PYZus{}bool3}\PY{p}{:}\PY{+w}{ }\PY{n}{int\PYZus{}of\PYZus{}bool}
+\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{k+kn}{use}\PY{+w}{ }\PY{k+kd}{entity}\PY{+w}{ }\PY{n}{work}\PY{o}{.}\PY{n}{int\PYZus{}of\PYZus{}bool}\PY{p}{;}
+\PY{+w}{ }\PY{+w}{ }\PY{o}{.}\PY{o}{.}\PY{o}{.}\PY{p}{;}
+\PY{k}{begin}
+\PY{+w}{ }\PY{+w}{ }\PY{n}{update}\PY{+w}{ }\PY{p}{:}\PY{+w}{ }\PY{k+kd}{process}\PY{+w}{ }\PY{p}{(}\PY{n}{clk\PYZus{}1}\PY{p}{,}\PY{+w}{ }\PY{n}{hw\PYZus{}rst\PYZus{}3}\PY{p}{,}\PY{+w}{ }\PY{n}{z\PYZus{}135}\PY{p}{,}\PY{+w}{ }\PY{o}{.}\PY{o}{.}\PY{o}{.}\PY{p}{)}
+\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{k+kd}{variable}\PY{+w}{ }\PY{n}{h\PYZus{}v\PYZus{}116}\PY{+w}{ }\PY{p}{:}\PY{+w}{ }\PY{k+kt}{std\PYZus{}logic}\PY{n}{\PYZus{}vector}\PY{+w}{ }\PY{p}{(}\PY{l+m+mi}{0}\PY{+w}{ }\PY{n}{to}\PY{+w}{ }\PY{l+m+mi}{2}\PY{p}{)}\PY{p}{;}
+\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{o}{.}\PY{o}{.}\PY{o}{.}\PY{p}{;}
+\PY{+w}{ }\PY{+w}{ }\PY{k}{begin}
+\end{Verbatim}

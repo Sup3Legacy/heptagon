@@ -1,0 +1,30 @@
+\begin{Verbatim}[commandchars=\\\{\}]
+\PY{k+kd}{node}\PY{+w}{ }\PY{n}{countbits}\PY{p}{(}\PY{n}{x}\PY{+w}{ }\PY{p}{:}\PY{+w}{ }\PY{k+kt}{bool}\PY{o}{\PYZca{}}\PY{n}{n}\PY{p}{;}\PY{+w}{ }\PY{n}{mask}\PY{+w}{ }\PY{p}{:}\PY{+w}{ }\PY{k+kt}{bool}\PY{o}{\PYZca{}}\PY{n}{n}\PY{p}{;}
+\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{n}{sw\PYZus{}mode}\PY{+w}{ }\PY{p}{:}\PY{+w}{ }\PY{k+kt}{bool}\PY{p}{)}\PY{+w}{ }\PY{k}{returns}\PY{+w}{ }\PY{p}{(}\PY{n}{o}\PY{+w}{ }\PY{p}{:}\PY{+w}{ }\PY{k+kt}{int}\PY{p}{)}
+\PY{k+kd}{var}\PY{+w}{ }\PY{n}{t\PYZus{}71\PYZus{}t\PYZus{}66\PYZus{}87}\PY{+w}{ }\PY{p}{:}\PY{+w}{ }\PY{k+kt}{bool}\PY{p}{;}\PY{+w}{ }\PY{n}{t\PYZus{}62\PYZus{}t\PYZus{}57\PYZus{}86}\PY{+w}{ }\PY{p}{:}\PY{+w}{ }\PY{k+kt}{bool}\PY{p}{;}
+\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{n}{t\PYZus{}53\PYZus{}nr\PYZus{}31\PYZus{}81}\PY{+w}{ }\PY{p}{:}\PY{+w}{ }\PY{k+kt}{bool}\PY{p}{;}\PY{+w}{ }\PY{n}{t\PYZus{}49\PYZus{}nr\PYZus{}29\PYZus{}80}\PY{+w}{ }\PY{p}{:}\PY{+w}{ }\PY{k+kt}{bool}\PY{p}{;}
+\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{n}{ck\PYZus{}33}\PY{+w}{ }\PY{p}{:}\PY{+w}{ }\PY{n}{\PYZus{}\PYZus{}states\PYZus{}\PYZus{}1}\PY{p}{;}\PY{+w}{ }\PY{n}{ck\PYZus{}28}\PY{+w}{ }\PY{p}{:}\PY{+w}{ }\PY{n}{\PYZus{}\PYZus{}states\PYZus{}\PYZus{}1}\PY{p}{;}
+\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{n}{pnr\PYZus{}19}\PY{+w}{ }\PY{p}{:}\PY{+w}{ }\PY{k+kt}{bool}\PY{p}{;}
+\PY{k}{let}
+\PY{+w}{ }\PY{+w}{ }\PY{n}{t\PYZus{}71\PYZus{}t\PYZus{}66\PYZus{}87}\PY{+w}{ }\PY{o}{=}\PY{+w}{ }\PY{p}{(}\PY{n}{sw\PYZus{}mode}\PY{+w}{ }\PY{k}{when}\PY{+w}{ }\PY{n}{\PYZus{}\PYZus{}Masked\PYZus{}\PYZus{}3}\PY{p}{(}\PY{n}{ck\PYZus{}33}\PY{p}{)}\PY{p}{)}\PY{p}{;}
+\PY{+w}{ }\PY{+w}{ }\PY{n}{t\PYZus{}62\PYZus{}t\PYZus{}57\PYZus{}86}\PY{+w}{ }\PY{o}{=}\PY{+w}{ }\PY{p}{(}\PY{n}{sw\PYZus{}mode}\PY{+w}{ }\PY{k}{when}\PY{+w}{ }\PY{n}{\PYZus{}\PYZus{}Simple\PYZus{}\PYZus{}2}\PY{p}{(}\PY{n}{ck\PYZus{}33}\PY{p}{)}\PY{p}{)}\PY{p}{;}
+\PY{+w}{ }\PY{+w}{ }\PY{n}{t\PYZus{}53\PYZus{}nr\PYZus{}31\PYZus{}81}\PY{+w}{ }\PY{o}{=}\PY{+w}{ }\PY{p}{(}\PY{l}{false}\PY{+w}{ }\PY{k}{when}\PY{+w}{ }\PY{n}{\PYZus{}\PYZus{}Masked\PYZus{}\PYZus{}3}\PY{p}{(}\PY{n}{ck\PYZus{}28}\PY{p}{)}\PY{p}{)}\PY{p}{;}
+\PY{+w}{ }\PY{+w}{ }\PY{n}{t\PYZus{}49\PYZus{}nr\PYZus{}29\PYZus{}80}\PY{+w}{ }\PY{o}{=}\PY{+w}{ }\PY{p}{(}\PY{l}{false}\PY{+w}{ }\PY{k}{when}\PY{+w}{ }\PY{n}{\PYZus{}\PYZus{}Simple\PYZus{}\PYZus{}2}\PY{p}{(}\PY{n}{ck\PYZus{}28}\PY{p}{)}\PY{p}{)}\PY{p}{;}
+\PY{+w}{ }\PY{+w}{ }\PY{n}{ck\PYZus{}33}\PY{+w}{ }\PY{o}{=}
+\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{n}{\PYZus{}\PYZus{}Simple\PYZus{}\PYZus{}2}\PY{+w}{ }\PY{k}{fby}
+\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{k}{merge}\PY{+w}{ }\PY{n}{ck\PYZus{}28}
+\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{p}{(}\PY{n}{\PYZus{}\PYZus{}Masked\PYZus{}\PYZus{}3}\PY{+w}{ }\PY{o}{->}
+\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{p}{(}\PY{n}{\PYZus{}\PYZus{}Masked\PYZus{}\PYZus{}3}\PY{+w}{ }\PY{k}{when}\PY{+w}{ }\PY{n}{\PYZus{}\PYZus{}Masked\PYZus{}\PYZus{}3}\PY{p}{(}\PY{n}{ck\PYZus{}28}\PY{p}{)}\PY{p}{)}\PY{p}{)}
+\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{p}{(}\PY{n}{\PYZus{}\PYZus{}Simple\PYZus{}\PYZus{}2}\PY{+w}{ }\PY{o}{->}
+\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{p}{(}\PY{n}{\PYZus{}\PYZus{}Simple\PYZus{}\PYZus{}2}\PY{+w}{ }\PY{k}{when}\PY{+w}{ }\PY{n}{\PYZus{}\PYZus{}Simple\PYZus{}\PYZus{}2}\PY{p}{(}\PY{n}{ck\PYZus{}28}\PY{p}{)}\PY{p}{)}\PY{p}{)}\PY{p}{;}
+\PY{+w}{ }\PY{+w}{ }\PY{n}{ck\PYZus{}28}\PY{+w}{ }\PY{o}{=}
+\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{k}{merge}\PY{+w}{ }\PY{n}{ck\PYZus{}33}
+\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{p}{(}\PY{n}{\PYZus{}\PYZus{}Masked\PYZus{}\PYZus{}3}\PY{+w}{ }\PY{o}{->}
+\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{k}{if}\PY{+w}{ }\PY{n}{t\PYZus{}71\PYZus{}t\PYZus{}66\PYZus{}87}
+\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{k}{then}\PY{+w}{ }\PY{p}{(}\PY{n}{\PYZus{}\PYZus{}Simple\PYZus{}\PYZus{}2}\PY{+w}{ }\PY{k}{when}\PY{+w}{ }\PY{n}{\PYZus{}\PYZus{}Masked\PYZus{}\PYZus{}3}\PY{p}{(}\PY{n}{ck\PYZus{}33}\PY{p}{)}\PY{p}{)}
+\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{k}{else}\PY{+w}{ }\PY{p}{(}\PY{n}{\PYZus{}\PYZus{}Masked\PYZus{}\PYZus{}3}\PY{+w}{ }\PY{k}{when}\PY{+w}{ }\PY{n}{\PYZus{}\PYZus{}Masked\PYZus{}\PYZus{}3}\PY{p}{(}\PY{n}{ck\PYZus{}33}\PY{p}{)}\PY{p}{)}\PY{p}{)}
+\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{p}{(}\PY{n}{\PYZus{}\PYZus{}Simple\PYZus{}\PYZus{}2}\PY{+w}{ }\PY{o}{->}
+\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{k}{if}\PY{+w}{ }\PY{n}{t\PYZus{}62\PYZus{}t\PYZus{}57\PYZus{}86}
+\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{k}{then}\PY{+w}{ }\PY{p}{(}\PY{n}{\PYZus{}\PYZus{}Masked\PYZus{}\PYZus{}3}\PY{+w}{ }\PY{k}{when}\PY{+w}{ }\PY{n}{\PYZus{}\PYZus{}Simple\PYZus{}\PYZus{}2}\PY{p}{(}\PY{n}{ck\PYZus{}33}\PY{p}{)}\PY{p}{)}
+\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{+w}{ }\PY{k}{else}\PY{+w}{ }\PY{p}{(}\PY{n}{\PYZus{}\PYZus{}Simple\PYZus{}\PYZus{}2}\PY{+w}{ }\PY{k}{when}\PY{+w}{ }\PY{n}{\PYZus{}\PYZus{}Simple\PYZus{}\PYZus{}2}\PY{p}{(}\PY{n}{ck\PYZus{}33}\PY{p}{)}\PY{p}{)}\PY{p}{)}\PY{p}{;}
+\end{Verbatim}
