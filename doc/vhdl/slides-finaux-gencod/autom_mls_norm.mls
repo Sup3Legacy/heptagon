@@ -1,0 +1,67 @@
+node countbits(rst_2 : bool; x : bool^n; mask : bool^n; sw_mode : bool)
+returns (o : int)
+var _v_148 : bool; _v_147 : bool; _v_146 : bool; _v_145 : bool;
+    _v_144 : bool; _v_143 : bool; _v_142 : int; _v_141 : int; _v_140 : int;
+    z_139 : int; z_138 : int; z_137 : int; z_136 : int; z_135 : int;
+    z_134 : int; _v_117 : int^n; _v_116 : bool^n; _v_115 : bool^n;
+    _v_114 : bool^n; _v_113 : bool; _v_112 : bool; _v_111 : __states__1;
+    _v_110 : __states__1; t_71_t_66_87 : bool; t_62_t_57_86 : bool;
+    t_53_nr_31_81 : bool; t_49_nr_29_80 : bool; ck_33 : __states__1;
+    ck_28 : ; pnr_19 : bool;
+let
+  _v_116 = rst_2^n;
+  ck_33 =
+    merge rst_2
+      (true -> (__Simple__2 when true(rst_2)))
+      (false -> (_v_111 when false(rst_2)));
+  pnr_19 =
+    merge rst_2
+      (true -> (false when true(rst_2)))(false -> (_v_113 when false(rst_2)));
+  t_71_t_66_87 = (sw_mode when __Masked__3(ck_33));
+  t_62_t_57_86 = (sw_mode when __Simple__2(ck_33));
+  ck_28 =
+    merge ck_33
+      (__Masked__3 ->
+        merge t_71_t_66_87
+          (true ->
+            ((__Simple__2 when __Masked__3(ck_33)) when true(t_71_t_66_87)))
+          (false ->
+            ((__Masked__3 when __Masked__3(ck_33)) when false(t_71_t_66_87))))
+      (__Simple__2 ->
+        merge t_62_t_57_86
+          (true ->
+            ((__Masked__3 when __Simple__2(ck_33)) when true(t_62_t_57_86)))
+          (false ->
+            ((__Simple__2 when __Simple__2(ck_33)) when false(t_62_t_57_86))));
+  _v_114 = ( & )((x when __Masked__3(ck_28)), (mask when __Masked__3(ck_28)));
+  _v_110 =
+    merge ck_28
+      (__Masked__3 -> (__Masked__3 when __Masked__3(ck_28)))
+      (__Simple__2 -> (__Simple__2 when __Simple__2(ck_28)));
+  t_49_nr_29_80 = (false when __Simple__2(ck_28));
+  t_53_nr_31_81 = (false when __Masked__3(ck_28));
+  _v_115 =
+    merge ck_28
+      (__Masked__3 -> _v_114)(__Simple__2 -> (x when __Simple__2(ck_28)));
+  _v_112 =
+    merge ck_28 (__Masked__3 -> t_53_nr_31_81)(__Simple__2 -> t_49_nr_29_80);
+  _v_147 = _v_116[0];
+  _v_111 = __Simple__2 fby _v_110;
+  _v_113 = false fby _v_112;
+  _v_143 = _v_116[2];
+  _v_144 = _v_115[2];
+  _v_148 = _v_115[0];
+  z_136 = int_of_bool(_v_143, _v_144);
+  z_134 = int_of_bool(_v_147, _v_148);
+  _v_145 = _v_116[1];
+  _v_146 = _v_115[1];
+  z_135 = int_of_bool(_v_145, _v_146);
+  _v_117 = [z_136; z_135; z_134];
+  _v_142 = _v_117[0];
+  _v_140 = _v_117[2];
+  _v_141 = _v_117[1];
+  z_137 = ( + )(_v_142, 0);
+  z_138 = ( + )(_v_141, z_137);
+  z_139 = ( + )(_v_140, z_138);
+  o = z_139
+tel

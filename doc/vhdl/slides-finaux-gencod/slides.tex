@@ -140,7 +140,7 @@
     \hline
     top & f & f & t & f & \dots \\
     \hline
-    compteur(tick,top) & 1 & 2 & 1 & 1 & \dots \\
+    o & 1 & 2 & 1 & 1 & \dots \\
     \hline
   \end{array}
   \]
@@ -210,6 +210,63 @@
     \item Un registre 32 bits pour \textbf{h\_v\_26}.
     \end{itemize}
   \end{block}
+\end{frame}
+
+
+\begin{frame}
+  \frametitle{Exemple 2 : compteur de bits - code original}
+
+  \footnotesize
+
+  \input{autom}
+\end{frame}
+
+\begin{frame}
+  \frametitle{Exemple 2 : compteur de bits - exemple de sortie attendue}
+
+  Ici, $n = 3$.
+
+  \[
+  \begin{array}{r|llllllllllllllllllllllllllll}
+    \hline
+    x & [t,f,f] & [t,t,t] & [t,t,t] & [t,t,t] & \dots \\
+    \hline
+    mask & [t,f,t] & [t,f,t] & [t,f,t] & [t,f,t] & \dots \\
+    \hline
+    sw\_mode & f & t & t & f & \dots \\
+    \hline
+    o & 1 & 2 & 3 & 3 & \dots \\
+    \hline
+  \end{array}
+  \]
+\end{frame}
+
+\begin{frame}
+  \frametitle{Exemple 2 : compteur de bits - code MiniLS}
+
+  \tiny
+
+  \begin{columns}[t]
+    \hspace{1cm}
+    \begin{column}{6cm}
+      \include{autom_mls}
+    \end{column}
+    \begin{column}{6cm}
+      \include{autom_mls2}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}
+  \frametitle{Exemple 2 : compteur de bits - code MiniLS sans reset}
+  \tiny
+  \input{autom_mls_rless}
+\end{frame}
+
+\begin{frame}
+  \frametitle{Exemple 2 : compteur de bits - code MiniLS final}
+  \tiny
+  \input{autom_mls_norm}
 \end{frame}
 
 \end{document}

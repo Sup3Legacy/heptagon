@@ -1,0 +1,28 @@
+node countbits(x : bool^n; mask : bool^n;
+               sw_mode : bool) returns (o : int)
+var t_71_t_66_87 : bool; t_62_t_57_86 : bool;
+    t_53_nr_31_81 : bool; t_49_nr_29_80 : bool;
+    ck_33 : __states__1; ck_28 : __states__1;
+    pnr_19 : bool;
+let
+  t_71_t_66_87 = (sw_mode when __Masked__3(ck_33));
+  t_62_t_57_86 = (sw_mode when __Simple__2(ck_33));
+  t_53_nr_31_81 = (false when __Masked__3(ck_28));
+  t_49_nr_29_80 = (false when __Simple__2(ck_28));
+  ck_33 =
+    __Simple__2 fby
+      merge ck_28
+        (__Masked__3 ->
+           (__Masked__3 when __Masked__3(ck_28)))
+        (__Simple__2 ->
+           (__Simple__2 when __Simple__2(ck_28)));
+  ck_28 =
+    merge ck_33
+      (__Masked__3 ->
+        if t_71_t_66_87
+        then (__Simple__2 when __Masked__3(ck_33))
+        else (__Masked__3 when __Masked__3(ck_33)))
+      (__Simple__2 ->
+        if t_62_t_57_86
+        then (__Masked__3 when __Simple__2(ck_33))
+        else (__Simple__2 when __Simple__2(ck_33)));

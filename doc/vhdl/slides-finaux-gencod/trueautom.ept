@@ -1,0 +1,27 @@
+const n : int = 3
+
+node int_of_bool(b : bool) returns (o : int)
+let o = if b then 1 else 0 tel
+
+node countbits(x : bool^n; mask : bool^n; sw_mode : bool)
+      returns (o : int)
+var bits : bool^n;
+let
+  automaton
+    state Simple
+      do bits = x;
+      unless sw_mode then Masked
+    state Masked
+      do bits = map (&) <<n>>(x, mask);
+      unless sw_mode then Simple
+  end;
+
+  o = fold (+) <<n>> (map int_of_bool <<n>>(bits), 0);
+tel
+
+node main() returns (o : int)
+let
+  o = countbits([true, false, false] fby [true, true, true],
+                [true, false, true],
+                false fby true fby true fby false);
+tel

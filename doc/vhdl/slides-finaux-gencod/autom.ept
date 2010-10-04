@@ -1,0 +1,15 @@
+node countbits(x : bool^n; mask : bool^n; sw_mode : bool)
+      returns (o : int)
+var bits : bool^n;
+let
+  automaton
+    state Simple
+      do bits = x;
+      unless sw_mode then Masked
+    state Masked
+      do bits = map (&) <<n>>(x, mask);
+      unless sw_mode then Simple
+  end;
+
+  o = fold (+) <<n>> (map int_of_bool <<n>>(bits), 0);
+tel

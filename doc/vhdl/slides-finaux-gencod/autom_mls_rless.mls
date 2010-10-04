@@ -1,0 +1,28 @@
+node countbits(rst_2 : bool; x : bool^n; mask : bool^n; sw_mode : bool)
+      returns (o : int)
+var t_71_t_66_87 : bool; t_62_t_57_86 : bool; t_53_nr_31_81 : bool;
+    t_49_nr_29_80 : bool; ck_33 : __states__1; ck_28 : ; pnr_19 : bool;
+let
+  ...
+  ck_33 =
+    if rst_2
+    then __Simple__2
+    else (__Simple__2 fby
+            merge ck_28
+              (__Masked__3 -> (__Masked__3 when __Masked__3(ck_28)))
+              (__Simple__2 -> (__Simple__2 when __Simple__2(ck_28))));
+  pnr_19 =
+    if rst_2
+    then false
+    else (false fby
+            merge ck_28 (__Masked__3 -> t_53_nr_31_81)
+                        (__Simple__2 -> t_49_nr_29_80);
+  o = fold (+) <<n>>(map int_of_bool <<n>>
+                       (rst_2^n,
+                        merge ck_28
+                          (__Masked__3 ->
+                             map (&) <<n>> (x when __Masked__3(ck_28),
+                                            mask when __Masked__3(ck_28)))
+                          (__Simple__2 -> (x when __Simple__2(ck_28)))),
+                     0)
+tel

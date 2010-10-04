@@ -1,0 +1,16 @@
+  pnr_19 =
+    false fby merge ck_28
+      (__Masked__3 -> t_53_nr_31_81)
+      (__Simple__2 -> t_49_nr_29_80);
+  o =
+    fold (+)<<n>>
+      (map (int_of_bool())<<n>>
+         (merge ck_28
+            (__Masked__3 ->
+               map (&)<<n>>
+                 (x when __Masked__3(ck_28),
+                  mask when __Masked__3(ck_28)))
+            (__Simple__2 ->
+               (x when __Simple__2(ck_28)))),
+        0)
+tel

@@ -1,0 +1,6 @@
+node compteur(tick : bool; top : bool) returns (o : int)
+var pres : int;
+let
+  o = (if top then 0 else 0 fby o) + pres;
+  pres = if tick then 1 else 0
+tel

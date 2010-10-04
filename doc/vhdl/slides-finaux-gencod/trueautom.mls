@@ -1,0 +1,77 @@
+const n = 3
+type __states__1 = __Simple__2|__Masked__3
+node int_of_bool(b : bool) returns (o : int)
+let
+  o = if b then 1 else 0
+tel
+
+node countbits(x : bool^n; mask : bool^n; sw_mode : bool) returns (o : int)
+var s_37 : __states__1; r_36 : bool; s_35 : __states__1; r_34 : bool;
+    ck_33 : __states__1; ns_32 : __states__1; nr_31 : bool;
+    ns_30 : __states__1; nr_29 : bool; ck_28 : __states__1; bits : bool^n;
+    pnr_19 : bool; nr_18 : bool; r_17 : bool; ns_16 : __states__1;
+    s_15 : __states__1; r_23 : bool; r_22 : bool; r_21 : bool; r_20 : bool;
+    r_27 : bool; r_26 : bool; r_25 : bool; r_24 : bool;
+let
+  r_27 = true fby r_25;
+  r_26 = true fby r_24;
+  r_23 = true fby r_21;
+  r_22 = true fby r_20;
+  o = (fold (( + )())<<n>>)((map (int_of_bool())<<n>>)(bits), 0);
+  r_21 =
+    merge ck_33
+      (__Masked__3 -> (false when __Masked__3(ck_33)))
+      (__Simple__2 -> (r_23 when __Simple__2(ck_33)));
+  r_20 =
+    merge ck_33
+      (__Masked__3 -> (r_22 when __Masked__3(ck_33)))
+      (__Simple__2 -> (false when __Simple__2(ck_33)));
+  r_17 = merge ck_33 (__Masked__3 -> r_36)(__Simple__2 -> r_34);
+  s_15 = merge ck_33 (__Masked__3 -> s_37)(__Simple__2 -> s_35);
+  (s_37, r_36) =
+    if (sw_mode when __Masked__3(ck_33))
+    then ((__Simple__2 when __Masked__3(ck_33)),
+           (true when __Masked__3(ck_33)))
+    else ((__Masked__3 when __Masked__3(ck_33)),
+           (pnr_19 when __Masked__3(ck_33)))
+      ;
+  (s_35, r_34) =
+    if (sw_mode when __Simple__2(ck_33))
+    then ((__Masked__3 when __Simple__2(ck_33)),
+           (true when __Simple__2(ck_33)))
+    else ((__Simple__2 when __Simple__2(ck_33)),
+           (pnr_19 when __Simple__2(ck_33)))
+      ;
+  ck_33 = __Simple__2 fby ns_16;
+  r_25 =
+    merge ck_28
+      (__Masked__3 -> (false when __Masked__3(ck_28)))
+      (__Simple__2 -> (r_27 when __Simple__2(ck_28)));
+  r_24 =
+    merge ck_28
+      (__Masked__3 -> (r_26 when __Masked__3(ck_28)))
+      (__Simple__2 -> (false when __Simple__2(ck_28)));
+  nr_18 = merge ck_28 (__Masked__3 -> nr_31)(__Simple__2 -> nr_29);
+  ns_16 = merge ck_28 (__Masked__3 -> ns_32)(__Simple__2 -> ns_30);
+  bits =
+    merge ck_28
+      (__Masked__3 -> 
+        (map (( & )())<<n>>)
+          ((x when __Masked__3(ck_28)), (mask when __Masked__3(ck_28))))
+      (__Simple__2 -> (x when __Simple__2(ck_28)));
+  (ns_32, nr_31) =
+    ((__Masked__3 when __Masked__3(ck_28)), (false when __Masked__3(ck_28)));
+  (ns_30, nr_29) =
+    ((__Simple__2 when __Simple__2(ck_28)), (false when __Simple__2(ck_28)));
+  ck_28 = s_15;
+  pnr_19 = false fby nr_18
+tel
+
+node main returns (o : int)
+let
+  o =
+    countbits
+    (if true fby false then [true; false; false] else pre [true; true; true],
+      [true; false; true], false fby true fby true fby false)
+tel
+
