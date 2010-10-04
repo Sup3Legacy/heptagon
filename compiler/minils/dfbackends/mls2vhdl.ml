@@ -760,9 +760,9 @@ let translate modn p =
      | None -> []
      | Some sn ->
          let nd_to_simulate =
-           try List.find (fun nd -> nd.n_name = sn) p.p_nodes
+           try List.find (fun nd -> nd.n_name.name = sn) p.p_nodes
            with Not_found ->
-             Format.eprintf "Unknown node to simulate: %a\n" print_qualname sn;
+             Format.eprintf "Unknown node to simulate: %a\n" print_name sn;
              assert false in
          [Left (tb_node nd_to_simulate)]) @ res
 
