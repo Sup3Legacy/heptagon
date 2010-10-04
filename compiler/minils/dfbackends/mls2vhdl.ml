@@ -175,8 +175,11 @@ struct
           let n = eval_static_size ssize in
 
           let select i e =
+            let ty_r_e = match e.e_ty with
+              | Tarray (ty, _) -> ty
+              | _ -> assert false in
             let app = mk_app ~params:[mk_static_exp (Sint i)] Eselect in
-            mk_exp ~ty:ty_r ~clock:e.e_ck (Eapp (app, [e], None)) in
+            mk_exp ~ty:ty_r_e ~clock:e.e_ck (Eapp (app, [e], None)) in
 
           (* creates y_1(i), ..., y_m(i) *)
           let mk_args y_l i = List.map (select i) y_l in
