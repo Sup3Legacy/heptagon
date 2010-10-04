@@ -12,6 +12,7 @@ open Obc
 open Types
 open Global_printer
 open Compiler_options (* for verbose *)
+open Modules (* for g_env & friends *)
 
 exception Unimplemented of string
 
@@ -147,15 +148,31 @@ type program = (component, package) either list
 
 open Format
 
-let pp_name fmt name =
-  let real_name =
-    if String.length name > 0 && name.[0] = '_' then "h" ^ name else name in
-  fprintf fmt "%s" real_name
+let lex_name name =
+  let buf = Buffer.create (String.length name) in
+  let rec convert c = match c with
+    | 'A' .. 'Z' | 'a' .. 'z' | '0' .. '9' -> Buffer.add_char buf c
+    | '\'' -> Buffer.add_string buf "_prime"
+    | _ ->
+        Buffer.add_string buf "lex";
+        Buffer.add_string buf (string_of_int (Char.code c));
+        Buffer.add_string buf "_" in
+  String.iter convert name;
+  Buffer.contents buf
+
+let lex_name name =
+  let re = Str.regexp "__" in
+  let name = Str.global_replace re "_u_" name in
+  let re = Str.regexp "^_" in
+  let name = Str.global_replace re "h_" name in
+  name
+
+let pp_name fmt name = fprintf fmt "%s" (lex_name name)
 
 let pp_qualname fmt ({ qual = qual; name = name; } as qn) =
-  if qual = "Pervasives"
-  then fprintf fmt "%a" pp_name name
-  else print_qualname fmt qn
+  if qual = "Pervasives" || qual = g_env.current_mod
+  then pp_name fmt name
+  else fprintf fmt "%a.%a" print_name qual print_name name
 
 let rec pp_list f fmt l = match l with
   | [] -> ()
@@ -231,8 +248,8 @@ let pp_decl fmt decl = match decl with
       pp_signals fmt sigs;
       fprintf fmt "@]);@]@\nend component@]"
   | Vd_bind (name, compname, entname) ->
-      fprintf fmt "@[for %a: %a use entity@ %s.%s@]"
-        pp_name name pp_name compname entname.qual entname.name
+      fprintf fmt "@[for %a: %a use entity@ %a.%a@]"
+        pp_name name pp_name compname pp_name entname.qual pp_name entname.name
   | Vd_const (name, ty, c) ->
       fprintf fmt "@[constant %a : %a := @[%a@]@]"
         pp_name name
@@ -242,7 +259,7 @@ let pp_decl fmt decl = match decl with
 let pp_decls fmt decls = pp_list_end pp_decl ";" fmt decls
 
 let rec pp_const fmt c = match c.se_desc with
-  | Svar n -> fprintf fmt "work.%s" (fullname n)
+  | Svar n -> fprintf fmt "work.%a" pp_name (fullname n)
   | Sbool false | Sconstructor { qual = "Pervasives"; name = "false"; } ->
       fprintf fmt "'0'"
   | Sbool true | Sconstructor { qual = "Pervasives"; name = "true"; } ->
@@ -280,8 +297,8 @@ let rec pp_lhs fmt lhs = match lhs with
 and pp_expr fmt e = match e with
   | Ve_lhs lhs -> pp_lhs fmt lhs
   | Ve_const c -> pp_const fmt c
-  | Ve_uop (op, e) -> fprintf fmt "(%s %a)" op pp_expr e
-  | Ve_bop (op, l, r) -> fprintf fmt "(%a %s %a)" pp_expr l op pp_expr r
+  | Ve_uop (op, e) -> fprintf fmt "(%a %a)" pp_name op pp_expr e
+  | Ve_bop (op, l, r) -> fprintf fmt "(%a %a %a)" pp_expr l pp_name op pp_expr r
   | Ve_event n -> fprintf fmt "%a'event" pp_name n
   | Ve_when (t, c, e) ->
       fprintf fmt "%a @[when %a@ else %a@]" pp_expr t pp_expr c pp_expr e
@@ -330,8 +347,8 @@ let rec pp_instr fmt instr = match instr with
   | Vi_seq il -> pp_list_sep pp_instr ";" fmt il;
   | Vi_loop i -> fprintf fmt "@[@[<v 2>loop@\n%a;@]@\nend loop@]" pp_instr i
   | Vi_for (vn, i, instr) ->
-      fprintf fmt "@[@[<v 2>for %s in 0 to %d loop@ %a;@]@\nend loop@]"
-        vn (i - 1) pp_instr instr;
+      fprintf fmt "@[@[<v 2>for %a in 0 to %d loop@ %a;@]@\nend loop@]"
+        pp_name vn (i - 1) pp_instr instr;
   | Vi_wait_ns ns -> fprintf fmt "wait for %d ns" ns
 
 let pp_def fmt stm =
@@ -397,10 +414,10 @@ let pp_architecture fmt a =
   pp_list_sep pp_def ";" fmt a.va_body;
   fprintf fmt "@];@\nend architecture %a;@]@\n" pp_name a.va_name
 
-open Modules (* for g_env & friends *)
+
 
 let pp_component fmt c =
-  fprintf fmt "use work.%s.all;@\n@\n" g_env.current_mod;
+  fprintf fmt "use work.%a.all;@\n@\n" pp_name g_env.current_mod;
   fprintf fmt "library ieee;@\n";
   fprintf fmt "use ieee.std_logic_1164.all;@\n@\n";
   pp_entity fmt c.vc_entity;
