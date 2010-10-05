@@ -1,0 +1,28 @@
+const key_size : int = 4
+
+const key : int^key_size = [ 83, 101, 99, 114 ] (* S e c r e t *)
+
+const data_size : int = 5
+
+const plain_data : int^data_size = [ 0, 1, 2, 3, 4 ]
+
+node vigerene(data : int; crypt : bool) returns (o : int)
+var current : int; k : int; v : int;
+let
+  reset
+    current = (0 fby (current + 1)) % key_size;
+  every false -> (crypt <> pre crypt);
+  k = key.[current] default 0;
+  v = (if crypt then data + k else data - k) % 256;
+  o = if v < 0 then 256 + v else (v % 256);
+tel
+
+node main() returns (o : int)
+var last data : int^data_size = plain_data;
+    i : int; crypt : bool;
+let
+  i = (0 fby (i + 1)) % data_size;
+  data = [ last data with [i] = o ];
+  crypt = true fby (if i = data_size - 1 then not crypt else crypt);
+  o = vigerene((last data).[i] default 0, crypt);
+tel
