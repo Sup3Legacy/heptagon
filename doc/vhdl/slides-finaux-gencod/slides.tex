@@ -47,7 +47,8 @@
 \newcommand{\vhdl}{{\sc Vhdl}}
 
 \title{Revue du projet GenCod}
-\author{Adrien Guatto et Marc Pouzet}
+\author{Adrien Guatto et Marc Pouzet\\
+        LRI}
 \date{Mardi 5 Octobre 2010}
 
 \begin{document}
@@ -62,20 +63,23 @@
   \frametitle{Contexte scientifique}
 
   \begin{block}{Question soulevée dans le cadre du projet GenCod}
-    Comment générer une description de matériel à partir de programmes écrits en
-    \scade{} ?
+    Générer une description de matériel à partir de programmes écrits en
+    \scadesix{}.
   \end{block}
 
   \begin{block}{Approche retenue}
-    Étudier la question et proposer une solution dans le cadre d'un langage
-    laboratoire simplifié mais suffisamment proche de \scadesix{} pour un
-    transfert ultérieur vers celui-ci.
+    \begin{itemize}
+    \item Génération modulaire de code VHDL à partir de code data-flow.
+    \item Mise en oeuvre dans un prototype (\heptagon{}).
+    \end{itemize}
   \end{block}
 
-  \begin{block}{Véhicule de l'expérience}
-    \heptagon{} est un sous-ensemble de \lucy{}, langage synchrone
-    académique (Pouzet et al.) dont les principes de constructions furent repris
-    dans \scadesix{}
+  \begin{block}{Prototype}
+    \begin{itemize}
+    \item Un sous-ensemble du langage (académique) \lucy{} (Pouzet et al.).
+    \item Traits principaux (data-flow, automates, tableaux) pr\'esents dans
+      SCADE 6.
+    \end{itemize}
   \end{block}
 \end{frame}
 
@@ -104,19 +108,16 @@
     \includegraphics[scale=0.4]{sens_traduction.pdf}
   \end{center}
 
-  Pour produire du code VHDL, deux points de départ sont possibles :
+  Pour produire du code VHDL, on considère la génération de code depuis un
+  langage intermédiaire data-flow ``gardé'' (utilisée dans les langages \lucy{}
+  et \scadesix{}).
 
-  \begin{enumerate}
-  \item Le code C produit par le compilateur original (\scade{} ou
-    \heptagon{}). Cette approche est celle de la société GeenSoft.
-  \item La représentation intermédiaire à flots de données interne au
-    compilateur du langage synchrone.
-  \end{enumerate}
+  La compilation est une suite de réécritures du programme data-flow.
 
-  \pause
-
-  Nous avons retenu le second cheminement, et l'avons clairement spécifié afin
-  de pouvoir envisager une certification DO-178B ultérieure.
+  \begin{itemize}
+  \item Chacune est formellement spécifiée et concise.
+  \item Chaque étape intermédiaire peut-être vérifiée à posteriori.
+  \end{itemize}
 \end{frame}
 
 \begin{frame}
@@ -132,11 +133,11 @@
   \[
   \begin{array}{r|llllllllllllllllllllllllllll}
     \hline
-    tick & t & t & t & f & \dots \\
+    tick & t & t & f & t & \dots \\
     \hline
     top & f & f & t & f & \dots \\
     \hline
-    o & 1 & 2 & 1 & 1 & \dots \\
+    o & 1 & 2 & 0 & 1 & \dots \\
     \hline
   \end{array}
   \]
@@ -308,6 +309,17 @@
     \item Un registre 1 bit.
     \end{itemize}
   \end{block}
+\end{frame}
+
+\begin{frame}
+  \frametitle{Conclusion}
+
+  \begin{itemize}
+  \item Le langage traité est un sous-ensemble de \scadesix{}.
+  \item Le prototype est raisonnablement petit.
+  \item Les langages intermédiaires data-flow des compilateurs synchrones sont
+    un bon point d'entrée pour la génération de code VHDL.
+  \end{itemize}
 \end{frame}
 
 \end{document}
