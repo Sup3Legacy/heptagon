@@ -262,7 +262,7 @@ and pp_const fmt c = match c.se_desc with
   | Svar qn ->
       if qn.qual <> g_env.current_mod
       then fprintf fmt "work.%a" pp_qualname qn
-      else pp_name fmt qn
+      else pp_name fmt qn.name
   | Sbool false | Sconstructor { qual = "Pervasives"; name = "false"; } ->
       fprintf fmt "'0'"
   | Sbool true | Sconstructor { qual = "Pervasives"; name = "true"; } ->

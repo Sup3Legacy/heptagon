@@ -397,14 +397,13 @@ and trad_app e op pl el = match op, el, pl with
   | Earray_fill, [e], [ssize] ->
       let n = eval_static_size ssize in
       Ve_array_repeat (n, trad_exp e)
-  | Efield, [e], [{ se_desc = Sconstructor fn; }] ->
+  | Efield, [e], [{ se_desc = Sfield fn; }] ->
       Ve_field (trad_exp e, fn)
   | Eequal, [l; r], _ ->
       Ve_funcall ("to_logic", [Ve_bop ("=", trad_exp l, trad_exp r)])
   | (Efield_update | Etuple), _, _ -> unimplemented "trad_aop"
   | _ ->
-      Format.eprintf "Unexpected expression: @[%a@]\n"
-        Mls_printer.print_exp e;
+      Format.eprintf "Unexpected expression: @[%a@]@." Mls_printer.print_exp e;
       assert false
 
 let rec trad_cexpr e dst = match e.e_desc with
