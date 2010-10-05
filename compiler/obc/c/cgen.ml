@@ -115,7 +115,7 @@ let copname = function
   | "-" -> "-" | "*" -> "*" | "/" -> "/" | "*." -> "*" | "/." -> "/"
   | "+." -> "+" | "-." -> "-" | "<"  -> "<" | ">"  -> ">" | "<=" -> "<="
   | ">=" -> ">="
-  | "~-" -> "-" | "not" -> "!" | "%" -> "%"
+  | "~-" -> "-" | "not" -> "!" | "%" -> "%" | "xori" -> "^"
   | op   -> op
 
 (** Translates an Obc var_dec to a tuple (name, cty). *)
@@ -292,7 +292,7 @@ and cop_of_op_aux op_name cexps = match op_name with
               "=" | "<>"
             | "&" | "or"
             | "+" | "-" | "*" | "/"
-            | "*." | "/." | "+." | "-." | "%"
+            | "*." | "/." | "+." | "-." | "%" | "xori"
             | "<" | ">" | "<=" | ">="), [el;er] ->
               Cbop (copname op, el, er)
           | _ -> Cfun_call(op, cexps)

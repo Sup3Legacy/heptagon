@@ -25,6 +25,7 @@ val fun (>.)(float;float) returns (bool)
 val fun (not)(bool) returns (bool)
 val fun (or)(bool;bool) returns (bool)
 val fun (xor)(bool;bool) returns (bool)
+val fun xori(int;int) returns (int)
 val fun (~-)(int) returns (int)
 val fun (~-.)(float) returns (float)
 
