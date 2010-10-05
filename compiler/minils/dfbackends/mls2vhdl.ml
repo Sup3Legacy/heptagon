@@ -728,23 +728,26 @@ let package_of_types p =
       | 1 -> "matrix"
       | _ -> "mat" ^ (string_of_int n) in
     [
-      { vty_name = "std_logic_" ^ s; vty_desc = Vty_vector (n, Vt_logic); };
-      { vty_name = "integer_" ^ s; vty_desc = Vty_vector (n, Vt_int); };
+      Vd_type { vty_name = "std_logic_" ^ s;
+                vty_desc = Vty_vector (n, Vt_logic); };
+      Vd_type { vty_name = "integer_" ^ s;
+                vty_desc = Vty_vector (n, Vt_int); };
     ] in
 
-  let tydl = ref [
-    { vty_name = "integer_vector"; vty_desc = Vty_vector (1, Vt_int); };
+  let arrtydl = ref [
+    Vd_type { vty_name = "integer_vector"; vty_desc = Vty_vector (1, Vt_int); };
   ] in
 
   for i = 2 to !max_dim do
-    tydl := mk_arr_decls i @ !tydl;
+    arrtydl := mk_arr_decls i @ !arrtydl;
   done;
 
-  let tydl = !tydl @ List.map trans_ty_dec p.p_types in
+  let tydl = List.map trans_ty_dec p.p_types in
 
   { vpack_name = g_env.current_mod;
     vpack_decls =
-      List.map trans_const_dec p.p_consts
+      !arrtydl
+      @ List.map trans_const_dec p.p_consts
       @ List.map (fun tyd -> Vd_type tyd) tydl; }
 
 let translate modn p =

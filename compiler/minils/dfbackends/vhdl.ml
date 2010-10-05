@@ -240,7 +240,7 @@ let pp_ty_decl fmt { vty_name = name; vty_desc = desc; } = match desc with
   | _ ->
       fprintf fmt "@[<v 2>type %a is %a@]" pp_name name pp_ty_desc desc
 
-let pp_decl fmt decl = match decl with
+let rec pp_decl fmt decl = match decl with
   | Vd_signal sd -> pp_signal fmt sd
   | Vd_type td -> pp_ty_decl fmt td
   | Vd_component (compname, sigs) ->
@@ -254,12 +254,15 @@ let pp_decl fmt decl = match decl with
       fprintf fmt "@[constant %a : %a := @[%a@]@]"
         pp_name name
         pp_type ty
-        print_static_exp c
+        pp_const c
 
-let pp_decls fmt decls = pp_list_end pp_decl ";" fmt decls
+and pp_decls fmt decls = pp_list_end pp_decl ";" fmt decls
 
-let rec pp_const fmt c = match c.se_desc with
-  | Svar n -> fprintf fmt "work.%a" pp_name (fullname n)
+and pp_const fmt c = match c.se_desc with
+  | Svar qn ->
+      if qn.qual <> g_env.current_mod
+      then fprintf fmt "work.%a" pp_qualname qn
+      else pp_name fmt qn
   | Sbool false | Sconstructor { qual = "Pervasives"; name = "false"; } ->
       fprintf fmt "'0'"
   | Sbool true | Sconstructor { qual = "Pervasives"; name = "true"; } ->
@@ -269,13 +272,13 @@ let rec pp_const fmt c = match c.se_desc with
   | Sconstructor ln -> pp_qualname fmt ln
   | Sarray_power (c, _) -> fprintf fmt "(others => %a)" pp_const c
   | Sarray cl ->
-      fprintf fmt "@[(";
+      fprintf fmt "(@[";
       let rec pp i fmt l = match l with
         | [] -> assert false
         | [c] -> fprintf fmt "%d => %a" i pp_const c
         | c :: l -> fprintf fmt "%d => %a, %a" i pp_const c (pp (i + 1)) l in
       pp 0 fmt cl;
-      fprintf fmt ")@]"
+      fprintf fmt "@])"
   | Srecord fcl ->
       let pp fmt (n, c) = fprintf fmt "%a => %a" pp_qualname n pp_const c in
       fprintf fmt "(@[%a@])" (pp_list_sep pp ",") fcl
