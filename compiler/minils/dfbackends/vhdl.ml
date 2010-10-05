@@ -510,6 +510,8 @@ let op_table =
           ("Pervasives.>",   (">",    true));
           ("Pervasives.=",   ("=",    true));
           ("Pervasives.<>",  ("<>",   true));
+          ("Pervasives.%",   ("mod", false));
+          ("Pervasives.xori",("xor", false));
         ]
 
 (* handy function for creating an exp from a variable name *)
@@ -517,5 +519,5 @@ let mk_vare vn = Ve_lhs (Vl_var vn)
 
 let is_native_vhdl op = match op with
   | Minils.Efun { qual = "Pervasives"; name = id; } ->
-      List.mem id ["xor"; "&"; "or"; "not"]
+      List.mem id ["xor"; "&"; "or"; "not"; "%"]
   | _ -> false
