@@ -54,7 +54,7 @@
         <dc:format>image/svg+xml</dc:format>
         <dc:type
            rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
-        <dc:title></dc:title>
+        <dc:title />
       </cc:Work>
     </rdf:RDF>
   </metadata>
@@ -72,7 +72,7 @@
        sodipodi:cy="331.61835"
        sodipodi:cx="251.0229"
        id="path3641"
-       style="fill:#7777b3;fill-opacity:1;stroke:none"
+       style="fill:#ff0000;fill-opacity:1;stroke:none"
        sodipodi:type="arc"
        transform="matrix(1.7900788,0,0,0.98789394,-231.90493,78.260793)" />
     <text
@@ -89,7 +89,7 @@
     <path
        transform="matrix(1.5503107,0,0,0.75153029,-180.56698,168.26007)"
        sodipodi:type="arc"
-       style="fill:#5b5bcf;fill-opacity:1;stroke:none"
+       style="fill:#00ffff;fill-opacity:1;stroke:none"
        id="path3596"
        sodipodi:cx="251.0229"
        sodipodi:cy="331.61835"
@@ -102,14 +102,14 @@
     <text
        xml:space="preserve"
        style="font-size:17.81742668px;font-style:normal;font-weight:normal;fill:#000000;fill-opacity:1;stroke:none;font-family:Bitstream Vera Sans"
-       x="124.31336"
+       x="115.79179"
        y="501.6666"
        id="text3633"
        transform="scale(1.347617,0.7420506)"><tspan
          sodipodi:role="line"
          id="tspan3635"
-         x="124.31336"
-         y="501.6666">SCADE</tspan></text>
+         x="115.79179"
+         y="501.6666">SCADE 6</tspan></text>
     <path
        sodipodi:open="true"
        sodipodi:end="6.2096929"
@@ -120,7 +120,7 @@
        sodipodi:cy="331.61835"
        sodipodi:cx="251.0229"
        id="path2822"
-       style="fill:#1b33e4;fill-opacity:1;stroke:none"
+       style="fill:#00ff00;fill-opacity:1;stroke:none"
        sodipodi:type="arc"
        transform="matrix(1.4511485,0,0,0.57244684,-160.32657,233.70836)" />
     <text
