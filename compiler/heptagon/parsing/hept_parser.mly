@@ -39,6 +39,7 @@ open Hept_parsetree
 %token ASSUME
 %token ENFORCE
 %token WITH
+%token INLINED
 %token WHEN MERGE
 %token POWER
 %token LBRACKET
@@ -431,7 +432,8 @@ _simple_exp:
 ;
 
 node_name:
-  | qualname call_params { mk_app (Enode $1) $2 }
+  | q=qualname c=call_params { mk_app (Enode q) c false }
+  | INLINED q=qualname c=call_params { mk_app (Enode q) c true }
 
 merge_handlers:
   | hs=nonempty_list(merge_handler) { hs }
