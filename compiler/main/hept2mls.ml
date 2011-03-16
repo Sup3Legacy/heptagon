@@ -88,6 +88,10 @@ struct
     let e, _ = constrec env in e
 end
 
+let fresh = Idents.gen_fresh "hept2mls" 
+              (function Heptagon.Enode f -> (shortname f) 
+		 | _ -> "n")
+
 (* add an equation *)
 let equation locals l_eqs e =
   let n = Idents.gen_var "hept2mls" "ck" in
@@ -214,7 +218,9 @@ let rec translate_op = function
 
 let translate_app app =
   mk_app ~params:app.Heptagon.a_params
-    ~unsafe:app.Heptagon.a_unsafe (translate_op app.Heptagon.a_op)
+    ~unsafe:app.Heptagon.a_unsafe
+    ~id:(Some (fresh app.Heptagon.a_op))
+    (translate_op app.Heptagon.a_op)
 
 let rec translate env
     { Heptagon.e_desc = desc; Heptagon.e_ty = ty;

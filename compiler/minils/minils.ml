@@ -61,7 +61,11 @@ and edesc =
   | Eiterator of iterator_type * app * static_exp * exp list * var_ident option
                        (** map f <<n>> (exp, exp...) reset ident *)
 
-and app = { a_op: op; a_params: static_exp list; a_unsafe: bool }
+and app = { a_op: op; 
+	    a_params: static_exp list;
+	    a_unsafe: bool;
+	    a_id: ident option;
+	    a_inlined: bool }
     (** Unsafe applications could have side effects
         and be delicate about optimizations, !be careful! *)
 
@@ -110,7 +114,7 @@ type node_dec = {
   n_output : var_dec list;
   n_contract : contract option;
   (* GD: inglorious hack for controller call *)
-  mutable n_controller_call : var_ident list * var_ident list;
+  mutable n_controller_call : string list * string list;
   n_local  : var_dec list;
   n_equs   : eq list;
   n_loc    : location;
@@ -165,8 +169,9 @@ let mk_type_dec type_desc name loc =
 let mk_const_dec id ty e loc =
   { c_name = id; c_type = ty; c_value = e; c_loc = loc }
 
-let mk_app ?(params=[]) ?(unsafe=false) op =
-  { a_op = op; a_params = params; a_unsafe = unsafe }
+let mk_app ?(params=[]) ?(unsafe=false) ?(id=None) ?(inlined=false) op =
+  { a_op = op; a_params = params; a_unsafe = unsafe;
+    a_id = id; a_inlined = inlined }
 
 (** The modname field has to be set when known, TODO LG : format_version *)
 let mk_program o n t c =
