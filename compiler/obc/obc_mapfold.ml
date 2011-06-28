@@ -132,6 +132,10 @@ and act funs acc a = match a with
   | Ablock b ->
       let b, acc = block_it funs acc b in
       Ablock b, acc
+  | Apfor(x, idx, b) ->
+      let idx, acc = exp_it funs acc idx in
+      let b, acc = block_it funs acc b in
+        Apfor(x, idx, b), acc
 
 and block_it funs acc b = funs.block funs acc b
 and block funs acc b =

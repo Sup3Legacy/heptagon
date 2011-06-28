@@ -150,9 +150,9 @@ let typing_eq h { eq_lhs = pat; eq_rhs = e; eq_loc = loc } =
       | Eiterator (it, {a_op = op}, nl, pargs, args, _) -> (* hyperchronous reset *)
           let base_ck = fresh_clock() in
           let ct = match it with
-            | Imap -> (* exactly as if clocking the node *)
+            | Imap | Ipmap -> (* exactly as if clocking the node *)
                 typing_app h base_ck pat op (pargs@args)
-            | Imapi -> (* clocking the node with the extra i input on [ck_r] *)
+            | Imapi | Ipmapi -> (* clocking the node with the extra i input on [ck_r] *)
                 let il (* stubs i as 0 *) =
                   List.map (fun x -> mk_extvalue ~ty:Initial.tint 
                     ~clock:base_ck (Wconst (Initial.mk_static_int 0))) nl

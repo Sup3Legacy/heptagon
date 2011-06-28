@@ -17,6 +17,7 @@ open Idents
 open Types
 open Signature
 open Location
+open Gpu
 
 type class_name = qualname
 type op_name = qualname
@@ -80,6 +81,8 @@ type act =
   | Acase of exp * (constructor_name * block) list
   | Afor of var_dec * exp * exp * block
   | Ablock of block
+  (* parallel for *)
+  | Apfor of var_dec * exp * block
 
 and block =
     { b_locals : var_dec list;
@@ -89,7 +92,8 @@ and var_dec =
     { v_ident : var_ident;
       v_type : ty;
       v_mutable : bool;
-      v_loc : location }
+      v_loc : location;
+      v_mem : mem_loc }
 
 type obj_dec =
     { o_ident : obj_ident;
@@ -110,6 +114,7 @@ type class_def =
       (** when false, the class is a function with static parameters
           calling other functions with parameters *)
       cd_stateful : bool;
+      cd_gpu : gpu;
       cd_mems : var_dec list;
       cd_objs  : obj_dec list;
       cd_params : param list;

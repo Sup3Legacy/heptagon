@@ -178,6 +178,12 @@ let rec fold_left_1 f l = match l with
   | [x] -> x
   | x :: l -> f (fold_left_1 f l) x
 
+let mapfold2 f acc l1 l2 =
+  let l,acc = List.fold_left2
+                (fun (l,acc) e1 e2 -> let e,acc = f acc e1 e2 in e::l, acc)
+                ([],acc) l1 l2 in
+  List.rev l, acc
+
 let rec fold_left4 f acc l1 l2 l3 l4 = match l1, l2, l3, l4 with
   | [], [], [], [] -> acc
   | x1 :: l1, x2 :: l2, x3 :: l3, x4 :: l4 -> fold_left4 f (f acc x1 x2 x3 x4) l1 l2 l3 l4

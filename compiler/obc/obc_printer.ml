@@ -10,6 +10,7 @@ let print_vd ff vd =
   fprintf ff "@[<v>";
   print_ident ff vd.v_ident;
   fprintf ff ": ";
+  print_mem_loc ff vd.v_mem;
   print_type ff vd.v_type;
   fprintf ff "@]"
 
@@ -114,6 +115,11 @@ let rec print_act ff a =
           print_exps es
     | Ablock b ->
         fprintf ff "do@\n  %a@\ndone" print_block b
+    | Apfor(x, i2, act_list) ->
+        fprintf ff "@[<v>@[<v 2>parallel for %a = 0 to %a {@  %a @]@,}@]"
+          print_vd x
+          print_exp i2
+          print_block act_list
 
 and print_var_dec_list ff var_dec_list = match var_dec_list with
   | [] -> ()

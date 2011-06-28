@@ -176,13 +176,22 @@ and act ff = function
         block bt
         block bf
   | Ablock b -> if (List.length b.b_body > 0) then fprintf ff "@[<v>@[<v4>{@ %a@]@ }@]" block b
-  | Afor (x, i1, i2, b) ->
+  | Afor (x, i1, i2, i3, b) when i3 = Sint 1->
       fprintf ff "@[<hv>@[<hv 4>for (%a = %a; %a<%a; %a++) {@ %a@]@ }@]"
         (var_dec false) x
         exp i1
         var_ident x.vd_ident
         exp i2
         var_ident x.vd_ident
+        block b
+  | Afor (x, i1, i2, i3, b)->
+      fprintf ff "@[<hv>@[<hv 4>for (%a = %a; %a<%a; %a += %a) {@ %a@]@ }@]"
+        (var_dec false) x
+        exp i1
+        var_ident x.vd_ident
+        exp i2
+        var_ident x.vd_ident
+        exp i3
         block b
   | Areturn e -> fprintf ff "return %a;" exp e
 

@@ -799,14 +799,14 @@ and typing_iterator cenv h
   let mk_array_type_butlast ty_list =
     map_butlast (array_of_idx_list n_list) ty_list in
   match it with
-  | Imap ->
+  | Imap | Ipmap ->
       let args_ty_list = mk_array_type args_ty_list in
       let result_ty_list = mk_array_type result_ty_list in
       let typed_e_list = typing_args cenv h
         args_ty_list e_list in
       prod result_ty_list, typed_e_list
 
-  | Imapi ->
+  | Imapi | Ipmapi->
       let args_ty_list, idx_ty_list = split_nlast n_size args_ty_list in
       let args_ty_list = mk_array_type args_ty_list in
       let result_ty_list = mk_array_type result_ty_list in

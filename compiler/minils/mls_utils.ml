@@ -46,7 +46,6 @@ let rec vd_mem n = function
   | [] -> false
   | vd::l -> vd.v_ident = n or (vd_mem n l)
 
-
 (** @return whether [ty] corresponds to a record type. *)
 let is_record_type ty = match ty with
   | Tid n ->
@@ -201,7 +200,7 @@ let ident_list_of_pat pat =
 
 let args_of_var_decs =
  List.map (fun vd -> Signature.mk_arg (Some (Idents.source_name vd.v_ident))
-                                      vd.v_type (Signature.ck_to_sck vd.v_clock))
+                                      vd.v_type (Signature.ck_to_sck vd.v_clock) vd.v_mem)
 
 let signature_of_node n =
     { node_inputs = args_of_var_decs n.n_input;
@@ -209,4 +208,5 @@ let signature_of_node n =
       node_stateful = n.n_stateful;
       node_params = n.n_params;
       node_param_constraints = n.n_param_constraints;
-      node_loc = n.n_loc }
+      node_loc = n.n_loc;
+      node_gpu = n.n_gpu }

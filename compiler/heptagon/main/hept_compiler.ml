@@ -21,6 +21,9 @@ let compile_program p =
 
   (* Causality check *)
   let p = silent_pass "Causality check" !causality Causality.program p in
+  
+  (* Paralellism check *)
+  let p = pass "Parallelism check" true Parallelism.program p pp in
 
   (* Initialization check *)
   let p = silent_pass "Initialization check" !init Initialization.program p in

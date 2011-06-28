@@ -46,8 +46,9 @@ end
 
 
 let translate_var { Heptagon.v_ident = n; Heptagon.v_type = ty;
-                    Heptagon.v_loc = loc; Heptagon.v_clock = ck } =
-  mk_var_dec ~loc:loc n ty ck
+                    Heptagon.v_loc = loc; Heptagon.v_clock = ck;
+                    Heptagon.v_mem = mem } =
+  mk_var_dec ~loc:loc ~mem:mem n ty ck
 
 let translate_reset = function
   | Some { Heptagon.e_desc = Heptagon.Evar n } -> Some n
@@ -60,6 +61,8 @@ let translate_iterator_type = function
   | Heptagon.Ifold -> Ifold
   | Heptagon.Ifoldi -> Ifoldi
   | Heptagon.Imapfold -> Imapfold
+  | Heptagon.Ipmap -> Ipmap
+  | Heptagon.Ipmapi -> Ipmapi
 
 let rec translate_op = function
   | Heptagon.Eifthenelse -> Eifthenelse
@@ -175,7 +178,8 @@ let node n =
     n_equs = List.map translate_eq n.Heptagon.n_block.Heptagon.b_equs;
     n_loc = n.Heptagon.n_loc ;
     n_params = n.Heptagon.n_params;
-    n_param_constraints = n.Heptagon.n_param_constraints }
+    n_param_constraints = n.Heptagon.n_param_constraints;
+    n_gpu = n.Heptagon.n_gpu }
 
 let typedec
     {Heptagon.t_name = n; Heptagon.t_desc = tdesc; Heptagon.t_loc = loc} =

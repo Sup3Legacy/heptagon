@@ -16,6 +16,7 @@ let keyword_table = ((Hashtbl.create 149) : (string, token) Hashtbl.t);;
 List.iter (fun (str,tok) -> Hashtbl.add keyword_table str tok) [
  "node", NODE;
  "fun", FUN;
+ "kernel", KERNEL;
  "returns", RETURNS;
  "var", VAR;
  "val", VAL;
@@ -70,7 +71,11 @@ List.iter (fun (str,tok) -> Hashtbl.add keyword_table str tok) [
  "xor", INFIX2("xor");
  "lsl", INFIX4("lsl");
  "lsr", INFIX4("lsr");
- "asr", INFIX4("asr")
+ "asr", INFIX4("asr");
+ "pmap", PMAP;
+ "pmapi", PMAPI;
+ "local", LOCAL;
+ "global", GLOBAL;
 ]
 
 

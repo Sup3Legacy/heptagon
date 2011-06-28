@@ -40,7 +40,7 @@ let add_classe, get_classes =
 let fresh_for size body =
   let i = Idents.gen_var "obc2java" "i" in
   let id = mk_var_dec i Tint in
-  Afor (id, Sint 0, size, mk_block (body i))
+  Afor (id, Sint 0, size, Sint 1, mk_block (body i))
 
 (** fresh nested Afor from 0 to [size]
     with [body] a function from [var_ident] list (the iterator list) to [act] list :
@@ -55,11 +55,11 @@ let fresh_nfor s_l body =
     | [s] ->
         let i = Idents.gen_var "obc2java" "i" in
         let id = (mk_var_dec i Tint) in
-        Afor (id, Sint 0, s, mk_block (body (List.rev (i::i_l))))
+        Afor (id, Sint 0, s, Sint 1, mk_block (body (List.rev (i::i_l))))
     | s::s_l ->
         let i = Idents.gen_var "obc2java" "i" in
         let id = mk_var_dec i Tint in
-        Afor (id, Sint 0, s, mk_block ([aux s_l (i::i_l)]))
+        Afor (id, Sint 0, s, Sint 1, mk_block ([aux s_l (i::i_l)]))
     | [] -> Misc.internal_error "Fresh nfor called with empty size list"
   in
   aux s_l []
@@ -324,11 +324,19 @@ let rec act_list param_env act_l acts =
         acase::acts
     | Obc.Afor (v, se, se', b) ->
         let afor = Afor (var_dec param_env v,
-                        exp param_env se, exp param_env se', block param_env b) in
+                        exp param_env se, exp param_env se', Sint 1, block param_env b) in
         afor::acts
     | Obc.Ablock b ->
         let ablock = Ablock (block param_env b) in
         ablock::acts
+    | Obc.Apfor (v, se, b) ->
+        let y = Idents.gen_var "par_id" "obc2java" in
+        let afor = Afor (var_dec param_env v,
+                        Evar y, exp param_env se, Sint 32, block param_env b) in
+        let afor = Afor ({ vd_type = Tint; vd_ident = y },
+                        Sint 0, Sint 32, Sint 1, 
+                        { b_locals = []; b_body = [afor]; }) in
+        afor::acts
   in
   List.fold_right _act act_l acts
 

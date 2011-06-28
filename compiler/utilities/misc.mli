@@ -91,6 +91,9 @@ val fold_right_1 :
 val fold_left_1 :
   ('a -> 'a -> 'a) -> 'a list -> 'a
 
+(** Mapfold *)
+val mapfold2 : ('acc -> 'b -> 'c -> 'd * 'acc) -> 'acc -> 'b list -> 'c list -> 'd list * 'acc
+
 (** [fold_left4] is fold_left with four lists *)
 val fold_left4 :
   ('a -> 'b -> 'c -> 'd -> 'e -> 'a) -> 'a -> 'b list -> 'c list -> 'd list -> 'e list -> 'a

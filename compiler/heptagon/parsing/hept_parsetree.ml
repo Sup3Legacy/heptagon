@@ -10,6 +10,7 @@
 
 open Location
 open Signature
+open Gpu
 
 (** var_names will be converted to idents *)
 type var_name = Names.name
@@ -55,6 +56,8 @@ type iterator_type =
   | Ifold
   | Ifoldi
   | Imapfold
+  | Ipmap
+  | Ipmapi
 
 type ty =
   | Tprod of ty list
@@ -150,7 +153,8 @@ and var_dec =
     v_type  : ty;
     v_clock : ck option;
     v_last  : last;
-    v_loc   : location; }
+    v_loc   : location;
+    v_mem   : mem_loc; }
 
 and last = Var | Last of exp option
 
@@ -180,7 +184,8 @@ type node_dec =
     n_block       : block;
     n_loc         : location;
     n_params      : var_dec list;
-    n_constraints : exp list; }
+    n_constraints : exp list;
+    n_gpu         : gpu; }
 
 type const_dec =
   { c_name  : dec_name;
@@ -203,7 +208,8 @@ and program_desc =
 type arg =
   { a_type  : ty;
     a_clock : ck option;
-    a_name  : var_name option }
+    a_name  : var_name option;
+    a_mem   : mem_loc; }
 
 type signature =
   { sig_name        : dec_name;
@@ -212,7 +218,8 @@ type signature =
     sig_outputs     : arg list;
     sig_params      : var_dec list;
     sig_param_constraints : exp list;
-    sig_loc         : location }
+    sig_loc         : location;
+    sig_gpu         : gpu; }
 
 type interface = interface_decl list
 
@@ -261,9 +268,9 @@ let mk_equation desc loc =
 let mk_interface_decl desc loc =
   { interf_desc = desc; interf_loc = loc }
 
-let mk_var_dec name ty ck last loc =
+let mk_var_dec name ty ck last loc mem =
   { v_name = name; v_type = ty; v_clock = ck;
-    v_last = last; v_loc = loc }
+    v_last = last; v_loc = loc; v_mem = mem; }
 
 let mk_block locals eqs loc =
   { b_local = locals; b_equs = eqs;
@@ -272,8 +279,19 @@ let mk_block locals eqs loc =
 let mk_const_dec id ty e loc =
   { c_name = id; c_type = ty; c_value = e; c_loc = loc }
 
-let mk_arg name ty ck =
-  { a_type = ty; a_name = name; a_clock = ck}
+let mk_arg name ty ck mem =
+  { a_type = ty; a_name = name; a_clock = ck; a_mem = mem; }
+  
+let is_stateful x =
+  (x != 1)
+  
+let is_gpu = function
+  | 2 -> Kernel_caller
+  | _ -> Undefined
+
+let is_gpu_interface = function
+  | 2 -> Kernel_caller
+  | _ -> No_constraint
 
 let ptrue = Q Initial.ptrue
 let pfalse = Q Initial.pfalse

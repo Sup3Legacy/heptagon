@@ -57,7 +57,7 @@ let tuple_of_vd_list l =
     mk_exp (Eapp (mk_app Etuple, el, None)) ty
 
 let vd_of_arg ad =
-    mk_var_dec (fresh_vd_of_arg ad) ad.a_type
+    mk_var_dec ~mem:ad.a_mem (fresh_vd_of_arg ad) ad.a_type
 
 (** @return the lists of inputs and outputs (as var_dec) of
     an app object. *)
@@ -95,7 +95,8 @@ let mk_call app acc_eq_list =
 let edesc funs acc ed =
   let ed, acc = Hept_mapfold.edesc funs acc ed in
   match ed with
-    | Eiterator(Imap, f, n, [], e_list, r) ->
+    | Eiterator(Ipmap as imap, f, n, [], e_list, r)
+    | Eiterator(Imap as imap, f, n, [], e_list, r) ->
         (** @return the list of inputs of the anonymous function,
             a list of created equations (the body of the function),
             the args for the call of f in the lambda,
@@ -108,7 +109,7 @@ let edesc funs acc ed =
                         o1, o2 = f (_v1, _v2, z')
         *)
         let mk_arg e (inp, acc_eq_list, largs, args, b) = match e.e_desc with
-          | Eiterator(Imap, g, m, [], local_args, _) when List.for_all2 are_equal n m ->
+          | Eiterator(imap, g, m, [], local_args, _) when List.for_all2 are_equal n m ->
               let new_inp, e, acc_eq_list = mk_call g acc_eq_list in
               new_inp @ inp, acc_eq_list, e::largs, local_args @ args, true
           | _ ->
@@ -129,7 +130,7 @@ let edesc funs acc ed =
           (* create the lambda *)
           let anon = mk_app
             (Enode (add_anon_node inp outp [] (eq::acc_eq_list))) in
-          Eiterator(Imap, anon, n, [], args, r), acc)
+          Eiterator(imap, anon, n, [], args, r), acc)
         else
           ed, acc
 

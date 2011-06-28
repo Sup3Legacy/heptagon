@@ -58,28 +58,44 @@ let flatten_e_list l =
   in
     List.flatten (List.map flatten l)
 
+let rec add_env env l = match l with
+  | [] -> env
+  | { v_ident = vi; v_mem = m } :: l -> add_env (Env.add vi m env) l
+
+let mem_loc_of_pat env pat =
+  let rec mem_loc_of_pat pat = match pat with
+    | Etuplepat pl -> List.flatten (List.map mem_loc_of_pat pl)
+    | Evarpat v -> [Env.find v env]
+  in Some (mem_loc_of_pat pat)
+
 (** Creates a new equation x = e, adds x to d_list
     and the equation to eq_list. *)
-let equation (d_list, eq_list) e =
-  let add_one_var ty d_list =
+let equation (env, d_list, eq_list, mem) e =
+  let add_one_var ty mem d_list =
     let n = Idents.gen_var "normalize" "v" in
-    let d_list = (mk_var_dec n ty) :: d_list in
+    let d_list = (mk_var_dec ~mem:mem n ty) :: d_list in
       n, d_list
   in
     match e.e_ty with
       | Tprod ty_list ->
-          let var_list, d_list =
-            mapfold (fun d_list ty -> add_one_var ty d_list) d_list ty_list in
+          let var_list, d_list = match mem with
+            | None -> mapfold (fun d_list ty -> add_one_var ty Gpu.Private d_list) d_list ty_list
+            | Some meml -> 
+                mapfold2 (fun d_list ty mem -> add_one_var ty mem d_list) d_list ty_list meml
+          in
           let pat_list = List.map (fun n -> Evarpat n) var_list in
           let eq_list = (mk_equation (Eeq (Etuplepat pat_list, e))) :: eq_list in
           let e_list = List.map2
             (fun n ty -> mk_exp (Evar n) ty) var_list ty_list in
           let e = Eapp(mk_app Etuple, e_list, None) in
-            (d_list, eq_list), e
+            (env, d_list, eq_list, mem), e
       | _ ->
-          let n, d_list = add_one_var e.e_ty d_list in
+          let n, d_list = match mem with
+            | Some [mem] -> add_one_var e.e_ty mem d_list
+            | _ -> add_one_var e.e_ty Gpu.Private d_list
+          in
           let eq_list = (mk_equation (Eeq (Evarpat n, e))) :: eq_list in
-            (d_list, eq_list), Evar n
+            (env, d_list, eq_list, mem), Evar n
 
 (* [(e1,...,ek) when C(n) = (e1 when C(n),...,ek when C(n))] *)
 let rec whenc context e c n =
@@ -137,8 +153,9 @@ let rec translate kind context e =
     | Eapp({ a_op = Eifthenelse }, [e1; e2; e3], _) ->
         ifthenelse context e e1 e2 e3
     | Eapp(app, e_list, r) ->
-        let context, e_list = translate_list ExtValue context e_list in
-          context, { e with e_desc = Eapp(app, flatten_e_list e_list, r) }
+        (match context with (env, d_list, eq_list, mem) ->
+        let (_, d_list, eq_list, _), e_list = translate_list ExtValue (env, d_list, eq_list, None) e_list in
+          (env, d_list, eq_list, mem), { e with e_desc = Eapp(app, flatten_e_list e_list, r) })
     | Eiterator (it, app, n, pe_list, e_list, reset) ->
         let context, pe_list = translate_list ExtValue context pe_list in
         let context, e_list = translate_list ExtValue context e_list in
@@ -186,9 +203,9 @@ and fby kind context e v e1 =
 
 (** transforms [if x then e1, ..., en else e'1,..., e'n]
     into [if x then e1 else e'1, ..., if x then en else e'n]  *)
-and ifthenelse context e e1 e2 e3 =
-  let context, e1 = translate ExtValue context e1 in
-  let context, e2 = translate ExtValue context e2 in
+and ifthenelse (env, d_list, eq_list, mem) e e1 e2 e3 =
+  let (_, d_list, eq_list, _), e1 = translate ExtValue (env, d_list, eq_list, None) e1 in
+  let context, e2 = translate ExtValue (env, d_list, eq_list, mem) e2 in
   let context, e3 = translate ExtValue context e3 in
   let mk_ite_list e2_list e3_list =
     let mk_ite e'2 e'3 =
@@ -233,7 +250,7 @@ and merge context e x c_e_list =
 
 (* applies distribution rules *)
 (* [(p1,...,pn) = (e1,...,en)] into [p1 = e1;...;pn = en] *)
-and distribute ((d_list, eq_list) as context) eq pat e =
+and distribute ((env, d_list, eq_list, mem) as context) eq pat e =
   let dist_e_list pat_list e_list =
     let mk_eq pat e =
       mk_equation (Eeq (pat, e))
@@ -252,34 +269,42 @@ and distribute ((d_list, eq_list) as context) eq pat e =
           dist_e_list pat_list (exp_list_of_static_exp_list se_list)
       | _ ->
           let eq = mk_equation ~loc:eq.eq_loc (Eeq(pat, e)) in
-            d_list,  eq :: eq_list
+            env, d_list, eq :: eq_list, mem
 
-and translate_eq ((d_list, eq_list) as context) eq = match eq.eq_desc with
+and translate_eq (env, d_list, eq_list, mem) eq = match eq.eq_desc with
   | Eeq (pat, e) ->
+      let context = (env, d_list, eq_list, mem_loc_of_pat env pat) in
       let context, e = translate Any context e in
         distribute context eq pat e
   | Eblock b ->
-      let v, eqs = translate_eq_list [] b.b_equs in
+      let env_in = add_env env b.b_local in
+      let _, v, eqs, _ = translate_eq_list env_in [] b.b_equs in
       let eq =
         mk_equation ~loc:eq.eq_loc (Eblock { b with b_local = v @ b.b_local; b_equs = eqs})
       in
-      d_list, eq :: eq_list
+      env, d_list, eq :: eq_list, mem
   | _ -> Misc.internal_error "normalize"
 
-and translate_eq_list d_list eq_list =
+and translate_eq_list env d_list eq_list =
   List.fold_left
     (fun context eq -> translate_eq context eq)
-    (d_list, []) eq_list
+    (env, d_list, [], None) eq_list
 
-let eq funs context eq =
+let eq _ context eq =
   let context = translate_eq context eq in
     eq, context
 
-let block funs _ b =
-  let _, (v_acc, eq_acc) = Hept_mapfold.block funs ([],[]) b in
-    { b with b_local = v_acc@b.b_local; b_equs = eq_acc}, ([], [])
+let block funs (env, _, _, _) b =
+  let env_in = add_env env b.b_local in
+  let _, (_, v_acc, eq_acc, _) = Hept_mapfold.block funs (env_in,[],[],None) b in
+    { b with b_local = v_acc@b.b_local; b_equs = eq_acc}, (env, [], [], None)
+
+let node_dec funs _ n =
+  let env = add_env Env.empty n.n_output in
+  let n, _ = Hept_mapfold.node_dec funs (env, [], [], None) n in
+    n, (Env.empty, [], [], None)
 
 let program p =
-  let funs = { defaults with block = block; eq = eq } in
-  let p, _ = Hept_mapfold.program funs ([], []) p in
+  let funs = { defaults with block = block; eq = eq; node_dec = node_dec; } in
+  let p, _ = Hept_mapfold.program funs (Env.empty, [], [], None) p in
     p

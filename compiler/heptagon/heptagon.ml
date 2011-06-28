@@ -16,6 +16,7 @@ open Signature
 open Types
 open Clocks
 open Initial
+open Gpu
 
 type state_name = name
 
@@ -25,6 +26,9 @@ type iterator_type =
   | Ifold
   | Ifoldi
   | Imapfold
+  (* for parallelisation *)
+  | Ipmap
+  | Ipmapi
 
 type exp = {
   e_desc      : desc;
@@ -119,7 +123,8 @@ and var_dec = {
   v_type  : ty;
   v_clock : ck;
   v_last  : last;
-  v_loc   : location }
+  v_loc   : location;
+  v_mem   : mem_loc }
 
 and last = Var | Last of static_exp option
 
@@ -149,7 +154,8 @@ type node_dec = {
   n_block              : block;
   n_loc                : location;
   n_params             : param list;
-  n_param_constraints  : constrnt list }
+  n_param_constraints  : constrnt list;
+  n_gpu                : gpu; }
 
 type const_dec = {
   c_name  : qualname;
@@ -175,7 +181,8 @@ type signature = {
   sig_outputs           : arg list;
   sig_params            : param list;
   sig_param_constraints : constrnt list;
-  sig_loc               : location }
+  sig_loc               : location;
+  sig_gpu               : gpu; }
 
 type interface = interface_decl list
 

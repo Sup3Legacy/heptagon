@@ -4,6 +4,7 @@ open Signature
 open Location
 open Names
 open Types
+open Gpu
 open Hept_parsetree
 
 
@@ -17,7 +18,8 @@ open Hept_parsetree
 %token <float> FLOAT
 %token <bool> BOOL
 %token <string * string> PRAGMA
-%token TYPE FUN NODE RETURNS VAR VAL OPEN END CONST
+%token LOCAL GLOBAL
+%token TYPE FUN NODE KERNEL RETURNS VAR VAL OPEN END CONST
 %token FBY PRE SWITCH EVERY
 %token OR STAR NOT
 %token AMPERSAND
@@ -46,7 +48,7 @@ open Hept_parsetree
 %token DOUBLE_DOT
 %token AROBASE
 %token DOUBLE_LESS DOUBLE_GREATER
-%token MAP MAPI FOLD FOLDI MAPFOLD
+%token MAP MAPI FOLD FOLDI MAPFOLD PMAP PMAPI
 %token <string> PREFIX
 %token <string> INFIX0
 %token <string> INFIX1
@@ -164,19 +166,27 @@ node_dec:
     RETURNS LPAREN o=out_params RPAREN
     c=contract b=block(LET) TEL
       {{ n_name = f;
-         n_stateful = n;
+         n_stateful = is_stateful(n);
          n_input  = i;
          n_output = o;
          n_contract = c;
          n_block = b;
          n_params = fst pc;
          n_constraints = snd pc;
-         n_loc = (Loc($startpos,$endpos)) }}
+         n_loc = (Loc($startpos,$endpos));
+         n_gpu = is_gpu(n); }}
 ;
 
 node_or_fun:
-  | NODE { true }
-  | FUN { false }
+  | NODE { 0 }
+  | FUN { 1 }
+  | KERNEL { 2 }
+;
+
+%inline mem_loc:
+  | /* empty */ { Private }
+  | LOCAL { Local }
+  | GLOBAL { Global }
 ;
 
 in_params:
@@ -194,8 +204,8 @@ nonmt_params:
 ;
 
 param:
-  | idl=ident_list COLON ty=ty_ident ck=ck_annot
-      { List.map (fun id -> mk_var_dec id ty ck Var (Loc($startpos,$endpos))) idl }
+  | idl=ident_list COLON ml=mem_loc ty=ty_ident ck=ck_annot
+      { List.map (fun id -> mk_var_dec id ty ck Var (Loc($startpos,$endpos)) ml) idl }
 ;
 
 out_params:
@@ -253,12 +263,12 @@ loc_params:
 
 
 var_last:
-  | idl=ident_list COLON ty=ty_ident ck=ck_annot
-      { List.map (fun id -> mk_var_dec id ty ck Var (Loc($startpos,$endpos))) idl }
-  | LAST id=IDENT COLON ty=ty_ident ck=ck_annot EQUAL e=exp
-      { [ mk_var_dec id ty ck (Last(Some(e))) (Loc($startpos,$endpos)) ] }
-  | LAST id=IDENT COLON ty=ty_ident ck=ck_annot
-      { [ mk_var_dec id ty ck (Last(None)) (Loc($startpos,$endpos)) ] }
+  | idl=ident_list COLON ml=mem_loc ty=ty_ident ck=ck_annot
+      { List.map (fun id -> mk_var_dec id ty ck Var (Loc($startpos,$endpos)) ml) idl }
+  | LAST id=IDENT COLON ml=mem_loc ty=ty_ident ck=ck_annot EQUAL e=exp
+      { [ mk_var_dec id ty ck (Last(Some(e))) (Loc($startpos,$endpos)) ml ] }
+  | LAST id=IDENT COLON ml=mem_loc ty=ty_ident ck=ck_annot
+      { [ mk_var_dec id ty ck (Last(None)) (Loc($startpos,$endpos)) ml ] }
 ;
 
 ident_list:
@@ -543,6 +553,8 @@ iterator:
   | FOLD { Ifold }
   | FOLDI { Ifoldi }
   | MAPFOLD { Imapfold }
+  | PMAP { Ipmap }
+  | PMAPI { Ipmapi }
 ;
 
 indexes:
@@ -642,11 +654,12 @@ _interface_decl:
     RETURNS LPAREN o=params_signature RPAREN
     { Isignature({ sig_name = f;
                    sig_inputs = i;
-                   sig_stateful = n;
+                   sig_stateful = is_stateful(n);
                    sig_outputs = o;
                    sig_params = fst pc;
                    sig_param_constraints = snd pc;
-                   sig_loc = (Loc($startpos,$endpos)) }) }
+                   sig_loc = (Loc($startpos,$endpos));
+                   sig_gpu = is_gpu_interface(n); }) }
 ;
 
 params_signature:
@@ -660,8 +673,8 @@ nonmt_params_signature:
 ;
 
 param_signature:
-  | IDENT COLON ty_ident ck=ck_annot { mk_arg (Some $1) $3 ck }
-  | ty_ident ck=ck_annot { mk_arg None $1 ck }
+  | i=IDENT COLON ml=mem_loc t=ty_ident ck=ck_annot { mk_arg (Some i) t ck ml }
+  | ml=mem_loc t=ty_ident ck=ck_annot { mk_arg None t ck ml }
 ;
 
 %%

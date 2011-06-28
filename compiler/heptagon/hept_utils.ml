@@ -15,6 +15,7 @@ open Static
 open Signature
 open Types
 open Clocks
+open Gpu
 open Initial
 open Heptagon
 
@@ -39,9 +40,9 @@ let mk_equation ?(loc=no_location) desc =
     eq_stateful = s;
     eq_loc = loc; }
 
-let mk_var_dec ?(last = Var) ?(clock = fresh_clock()) name ty =
+let mk_var_dec ?(mem = Private) ?(last = Var) ?(clock = fresh_clock()) name ty =
   { v_ident = name; v_type = ty; v_clock = clock;
-    v_last = last; v_loc = no_location }
+    v_last = last; v_loc = no_location; v_mem = mem }
 
 let mk_block ?(stateful = true) ?(defnames = Env.empty) ?(locals = []) eqs =
   { b_local = locals; b_equs = eqs; b_defnames = defnames;
@@ -61,18 +62,19 @@ let mk_simple_equation pat e =
 let mk_switch_equation e l =
   mk_equation (Eswitch (e, l))
 
-let mk_signature name ins outs stateful params constraints loc =
+let mk_signature name ins outs stateful params constraints loc gpu =
   { sig_name = name;
     sig_inputs = ins;
     sig_stateful = stateful;
+    sig_gpu = gpu;
     sig_outputs = outs;
     sig_params = params;
     sig_param_constraints = constraints;
     sig_loc = loc }
 
 let mk_node
-    ?(input = []) ?(output = []) ?(contract = None)
-    ?(stateful = true) ?(loc = no_location) ?(param = []) ?(constraints = [])
+    ?(input = []) ?(output = []) ?(contract = None) ?(stateful = true)
+    ?(loc = no_location) ?(param = []) ?(constraints = []) ?(gpu = No_constraint)
     name block =
   { n_name = name;
     n_stateful = stateful;
@@ -82,7 +84,8 @@ let mk_node
     n_block = block;
     n_loc = loc;
     n_params = param;
-    n_param_constraints = constraints }
+    n_param_constraints = constraints;
+    n_gpu = gpu; }
 
 (** @return the set of variables defined in [pat]. *)
 let vars_pat pat =
@@ -103,7 +106,7 @@ let rec vd_mem n = function
 let args_of_var_decs =
   (* before the clocking the clock is wrong in the signature *)
  List.map (fun vd -> Signature.mk_arg (Some (Idents.source_name vd.v_ident))
-                                      vd.v_type Signature.Cbase)
+                                      vd.v_type Signature.Cbase vd.v_mem)
 
 let signature_of_node n =
     { node_inputs = args_of_var_decs n.n_input;
@@ -111,5 +114,6 @@ let signature_of_node n =
       node_stateful = n.n_stateful;
       node_params = n.n_params;
       node_param_constraints = n.n_param_constraints;
-      node_loc = n.n_loc }
+      node_loc = n.n_loc;
+      node_gpu = n.n_gpu }
 

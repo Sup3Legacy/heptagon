@@ -7,9 +7,11 @@
 (*                                                                        *)
 (**************************************************************************)
 
+open Gpu
 open Format
 open List
 open Modules
+open Types
 open Names
 
 let print_list ff print sep l = Pp_tools.print_list_r print "" sep "" ff l
@@ -30,6 +32,12 @@ let cname_of_name name =
   String.iter convert name;
   Buffer.contents buf
 
+let fresh n = Idents.name (Idents.gen_var "opencl" n)
+
+let environment = fresh "env"
+
+let gpu_file = ref false
+
 (******************************)
 
 (** {2 C abstract syntax tree } *)
@@ -42,6 +50,7 @@ let cname_of_name name =
 (** C types relevant for Obc. Note the absence of function pointers. *)
 type cty =
   | Cty_int (** C machine-dependent integer type. *)
+  | Cty_size_t (** C size_t type *)
   | Cty_float (** C machine-dependent single-precision floating-point type. *)
   | Cty_char (** C character type. *)
   | Cty_id of qualname
@@ -49,14 +58,35 @@ type cty =
   | Cty_ptr of cty (** C points-to-other-type type. *)
   | Cty_arr of int * cty (** A static array of the specified size. *)
   | Cty_void (** Well, [void] is not really a C type. *)
+  (** OpenCL-specific types *)
+  | Oty_mem (** OpenCL cl_mem type for memory *)
+  | Oty_event (** OpenCL cl_event type *)
+  | Oty_kernel (**OpenCL cl_kernel type *)
+
+(** OpenCL locations for variables *)
+type location = mem_loc
+
+(** OpenCL options for buffer creation *)
+type oopt =
+  | COPY_READ
+  | READ_WRITE
+  | TRUE
+
+(** OpenCL environment *)
+type oenv =
+  | Error
+  | Context
+  | Command_queue
+  | Event
+  | Program
 
 (** A C block: declarations and statements. In source code form, it begins with
     variable declarations before a list of semicolon-separated statements, the
     whole thing being enclosed in curly braces. *)
 type cblock = {
   (** Variable declarations, where each declaration consists of a variable
-      name and the associated C type. *)
-  var_decls : (string * cty) list;
+      name, the associated C type and the OpenCL location. *)
+  var_decls : (string * (cty * location)) list;
   (** The actual statement forming our block. *)
   block_body : cstm list;
 }
@@ -72,23 +102,33 @@ and cexpr =
   | Cfun_call of string * cexpr list (** Function call with its parameters. *)
   | Caddrof of cexpr (** Take the address of an expression. *)
   | Cstructlit of string * cexpr list (** Structure literal "{ f1, f2, ... }".*)
-  | Carraylit of cexpr list (** Array literal [\[e1, e2, ...\]]. *)
+  | Carrayint_lit of cexpr list (** Array literal [\[e1, e2, ...\]]. *)
+  | Carraysize_t_lit of cexpr list (** Array literal [\[e1, e2, ...\]]. *)
   | Cconst of cconst (** Constants. *)
   | Cvar of string (** A local variable. *)
+  | Cref of cexpr (** Variable reference, &v. *)
   | Cderef of cexpr (** Pointer dereference, *ptr. *)
   | Cfield of cexpr * qualname (** Field access to left-hand-side. *)
   | Carray of cexpr * cexpr (** Array access cexpr[cexpr] *)
+  | Ccast of cty * cexpr (** A cast to a type *)
+  (* OpenCL-specific stuff *)
+  | Oenv_field of oenv (** Field access to the OpenCL environment *)
 and cconst =
   | Ccint of int (** Integer constant. *)
   | Ccfloat of float (** Floating-point number constant. *)
   | Ctag of string (** Tag, member of a previously declared enumeration. *)
   | Cstrlit of string (** String literal, enclosed in double-quotes. *)
+  | Cnull (** NULL pointer *)
+  (* OpenCL *)
+  | Oopt of oopt (** An OpenCL option *)
 (** C left-hand-side (ie. affectable) expressions. *)
 and clhs =
   | CLvar of string (** A local variable. *)
   | CLderef of clhs (** Pointer dereference, *ptr. *)
   | CLfield of clhs * qualname (** Field access to left-hand-side. *)
   | CLarray of clhs * cexpr (** Array access clhs[cexpr] *)
+  (* OpenCL *)
+  | OLenv_field of oenv (** Field access to the OpenCL environment *)
 (** C statements. *)
 and cstm =
   | Csexpr of cexpr (** Expression evaluation, may cause side-effects! *)
@@ -108,17 +148,18 @@ type cdecl =
   | Cdecl_typedef of cty * string
     (** C enum declaration, with associated value tags. *)
   | Cdecl_enum of string * string list
-    (** C structure declaration, with each field's name and type. *)
-  | Cdecl_struct of string * (string * cty) list
     (** C function declaration. *)
-  | Cdecl_function of string * cty * (string * cty) list
+  | Cdecl_function of string * cty * (string * (cty * location)) list * bool
+    (** OpenCL structure declaration, with each field's name, type and location. *)
+  | Cdecl_struct of string * (string * (cty * location)) list
 
 (** C function definitions *)
 type cfundef = {
   f_name : string; (** The function's name. *)
   f_retty : cty; (** The function's return type. *)
-  f_args : (string * cty) list; (** Each parameter's name and type. *)
+  f_args : (string * (cty * location)) list; (** Each parameter's name and type. *)
   f_body : cblock; (** Actual instructions, in the form of a block. *)
+  f_kernel : bool; (** whether the function is a kernel or not *)
 }
 
 (** C top-level definitions. *)
@@ -128,7 +169,7 @@ type cdef =
 
 (** [cdecl_of_cfundef cfd] returns a declaration for the function def. [cfd]. *)
 let cdecl_of_cfundef cfd = match cfd with
-  | Cfundef cfd -> Cdecl_function (cfd.f_name, cfd.f_retty, cfd.f_args)
+  | Cfundef cfd -> Cdecl_function (cfd.f_name, cfd.f_retty, cfd.f_args, cfd.f_kernel)
   | _ -> invalid_arg "cdecl_of_cfundef"
 
 (** A C file can be a source file, containing definitions, or a header file,
@@ -137,7 +178,10 @@ type cfile = string * cfile_desc
 and cfile_desc =
   | Cheader of string list * cdecl list (** Header dependencies * declaration
                                             list *)
+  | Oheader of string list * cdecl list (** Header dependencies * declaration
+                                            list *)
   | Csource of cdef list
+  | Osource of cdef list
 
 (******************************)
 
@@ -172,12 +216,34 @@ let pp_qualname fmt q =
 
 let rec pp_cty fmt cty = match cty with
   | Cty_int -> fprintf fmt "int"
+  | Cty_size_t -> fprintf fmt "size_t"
   | Cty_float -> fprintf fmt "float"
   | Cty_char -> fprintf fmt "char"
   | Cty_id s -> pp_qualname fmt s
   | Cty_ptr cty' -> fprintf fmt "%a*" pp_cty cty'
   | Cty_arr (n, cty') -> fprintf fmt "%a[%d]" pp_cty cty' n
   | Cty_void -> fprintf fmt "void"
+  | Oty_mem -> fprintf fmt "cl_mem"
+  | Oty_event -> fprintf fmt "cl_event"
+  | Oty_kernel -> fprintf fmt "cl_kernel"
+
+(** OpenCL options for buffer creation *)
+let pp_oopt fmt o = match o with
+  | COPY_READ -> fprintf fmt "CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR"
+  | READ_WRITE -> fprintf fmt "CL_MEM_READ_WRITE"
+  | TRUE -> fprintf fmt "CL_TRUE"
+
+let pp_oenv fmt f = match f with
+  | Error -> fprintf fmt "err"
+  | Context -> fprintf fmt "context"
+  | Command_queue -> fprintf fmt "command_queue"
+  | Event -> fprintf fmt "event"
+  | Program -> fprintf fmt "program"
+
+let pp_location fmt l = match l with
+  | Private -> fprintf fmt ""
+  | Local -> if !gpu_file then fprintf fmt "__local " else fprintf fmt ""
+  | Global -> if !gpu_file then fprintf fmt "__global " else fprintf fmt ""
 
 (** [pp_array_decl cty] returns the base type of a (multidimensionnal) array
     and the string of indices. *)
@@ -195,13 +261,20 @@ let rec pp_param_cty fmt = function
 
 (* pp_vardecl, featuring an ugly hack coping with C's inconsistent concrete
    syntax! *)
-let rec pp_vardecl fmt (s, cty) = match cty with
+let rec pp_vardecl fmt (s, (cty, l)) = match !gpu_file, l with
+  | false, Global -> fprintf fmt "cl_mem %a" pp_string s
+  | _ -> match cty with
+		      | Cty_arr _ ->
+		          let ty, indices = pp_array_decl cty in
+		          fprintf fmt "%a%a %a%s" pp_location l  pp_cty ty  pp_string s indices
+	    	  | _ -> fprintf fmt "%a%a %a" pp_location l  pp_cty cty  pp_string s
+and pp_param_list fmt l = pp_list1 pp_vardecl "," fmt l
+and pp_var_list fmt l = pp_list pp_vardecl ";" fmt l
+let rec pp_typedef fmt (s, cty) = match cty with
   | Cty_arr _ ->
       let ty, indices = pp_array_decl cty in
       fprintf fmt "%a %a%s" pp_cty ty  pp_string s indices
   | _ -> fprintf fmt "%a %a" pp_cty cty  pp_string s
-and pp_param_list fmt l = pp_list1 pp_vardecl "," fmt l
-and pp_var_list fmt l = pp_list pp_vardecl ";" fmt l
 
 let rec pp_cblock fmt cb =
   let pp_varlist = pp_list pp_vardecl ";" in
@@ -244,14 +317,19 @@ and pp_cexpr fmt ce = match ce with
   | Caddrof e -> fprintf fmt "&%a" pp_cexpr e
   | Cstructlit (s, el) ->
       fprintf fmt "(%a){@[%a@]}" pp_string s (pp_list1 pp_cexpr ",") el
-  | Carraylit el -> (* TODO master : WRONG *)
+  | Carrayint_lit el -> (* TODO master : WRONG *)
       fprintf fmt "((int []){@[%a@]})" (pp_list1 pp_cexpr ",") el
+  | Carraysize_t_lit el -> (* TODO master : WRONG *)
+      fprintf fmt "((size_t []){@[%a@]})" (pp_list1 pp_cexpr ",") el
   | Cconst c -> pp_cconst fmt c
   | Cvar s -> pp_string fmt s
+  | Cref e -> fprintf fmt "&%a" pp_cexpr e
   | Cderef e -> fprintf fmt "*%a" pp_cexpr e
   | Cfield (Cderef e, f) -> fprintf fmt "%a->%a" pp_cexpr e pp_qualname f
   | Cfield (e, f) -> fprintf fmt "%a.%a" pp_cexpr e pp_qualname f
   | Carray (e1, e2) -> fprintf fmt "%a[%a]" pp_cexpr e1 pp_cexpr e2
+  | Ccast (ty, e) -> fprintf fmt "(%a) %a" pp_cty ty pp_cexpr e
+  | Oenv_field f -> fprintf fmt "%s->%a" environment pp_oenv f
 
 and pp_clhs fmt clhs = match clhs with
   | CLvar s -> pp_string fmt s
@@ -262,12 +340,15 @@ and pp_clhs fmt clhs = match clhs with
       fprintf fmt "%a[%a]"
         pp_clhs lhs
         pp_cexpr e
+  | OLenv_field f -> fprintf fmt "%s->%a" environment pp_oenv f
 
 and pp_cconst fmt cconst = match cconst with
   | Ccint i -> fprintf fmt "%d" i
   | Ccfloat f -> fprintf fmt "%f" f
   | Ctag t -> pp_string fmt t
   | Cstrlit t -> fprintf fmt "\"%s\"" t
+  | Cnull -> fprintf fmt "NULL"
+  | Oopt o -> fprintf fmt "%a" pp_oopt o 
 
 let pp_cdecl fmt cdecl = match cdecl with
   | Cdecl_enum (s, sl) ->
@@ -275,30 +356,41 @@ let pp_cdecl fmt cdecl = match cdecl with
         (pp_list1 pp_string ",") sl  pp_string s
   | Cdecl_typedef (cty, n) ->
       fprintf fmt "@[<v>@[<v 2>typedef %a;@ @]@\n"
-        pp_vardecl (n, cty)
+        pp_typedef (n, cty)
   | Cdecl_struct (s, fl) ->
-      let pp_field fmt (s, cty) =
-        fprintf fmt "@ %a;" pp_vardecl (s,cty) in
+      let pp_field fmt (s, (cty, loc)) =
+        fprintf fmt "@ %a;" pp_vardecl (s,(cty,loc)) in
       fprintf fmt "@[<v>@[<v 2>typedef struct %a {"  pp_string s;
       List.iter (pp_field fmt) fl;
       fprintf fmt "@]@ } %a;@ @]@\n"  pp_string s
-  | Cdecl_function (n, retty, args) ->
+  | Cdecl_function (n, retty, args, kernel) ->
+      if kernel then
+      fprintf fmt "@[<v>__kernel %a %a(@[<hov>%a@]);@ @]@\n"
+        pp_cty retty  pp_string n  pp_param_list args
+      else
       fprintf fmt "@[<v>%a %a(@[<hov>%a@]);@ @]@\n"
         pp_cty retty  pp_string n  pp_param_list args
 
 let pp_cdef fmt cdef = match cdef with
   | Cfundef cfd ->
-      fprintf fmt
-        "@[<v>@[<v 2>%a %a(@[<hov>%a@]) {%a@]@ }@ @]@\n"
-        pp_cty cfd.f_retty  pp_string cfd.f_name  pp_param_list cfd.f_args
-        pp_cblock cfd.f_body
+      if cfd.f_kernel then
+	      fprintf fmt
+	        "@[<v>@[<v 2>__kernel %a %a(@[<hov>%a@]) {%a@]@ }@ @]@\n"
+	        pp_cty cfd.f_retty  pp_string cfd.f_name  pp_param_list cfd.f_args
+	        pp_cblock cfd.f_body
+      else
+	      fprintf fmt
+	        "@[<v>@[<v 2>%a %a(@[<hov>%a@]) {%a@]@ }@ @]@\n"
+	        pp_cty cfd.f_retty  pp_string cfd.f_name  pp_param_list cfd.f_args
+	        pp_cblock cfd.f_body
   | Cvardef (s, cty) -> fprintf fmt "%a %a;@\n" pp_cty cty  pp_string s
 
 let pp_cfile_desc fmt filen cfile =
   (** [filen_wo_ext] is the file's name without the extension. *)
-  let filen_wo_ext = String.sub filen 0 (String.length filen - 2) in
   match cfile with
     | Cheader (deps, cdecls) ->
+        gpu_file := false;
+        let filen_wo_ext = String.sub filen 0 (String.length filen - 2) in
         let headern_macro = String.uppercase filen_wo_ext in
         Compiler_utils.print_header_info fmt "/*" "*/";
         fprintf fmt "#ifndef %s_H@\n" headern_macro;
@@ -307,7 +399,21 @@ let pp_cfile_desc fmt filen cfile =
           deps;
         iter (pp_cdecl fmt) cdecls;
         fprintf fmt "#endif // %s_H@\n@?" headern_macro
+    | Oheader (deps, cdecls) ->
+        gpu_file := true;
+        let filen_wo_ext = String.sub filen 0 (String.length filen - 2) in
+        let headern_macro = String.uppercase filen_wo_ext in
+        Compiler_utils.print_header_info fmt "/*" "*/";
+        fprintf fmt "#ifndef %s_H@\n" headern_macro;
+        fprintf fmt "#define %s_H@\n@\n" headern_macro;
+        fprintf fmt "#include \"pervasives.h\"@\n";
+        iter (fun d -> fprintf fmt "#include \"%s_gpu.h\"@\n" d)
+          deps;
+        iter (pp_cdecl fmt) cdecls;
+        fprintf fmt "#endif // %s_H@\n@?" headern_macro
     | Csource cdefs ->
+        gpu_file := false;
+        let filen_wo_ext = String.sub filen 0 (String.length filen - 2) in
         let headern = filen_wo_ext ^ ".h" in
         Compiler_utils.print_header_info fmt "/*" "*/";
         fprintf fmt "#include <stdio.h>@\n";
@@ -315,6 +421,14 @@ let pp_cfile_desc fmt filen cfile =
         fprintf fmt "#include <stdlib.h>@\n";
         fprintf fmt "#include \"%s\"@\n@\n" headern;
         iter (pp_cdef fmt) cdefs
+    | Osource cdefs ->
+        gpu_file := true;
+        let filen_wo_ext = String.sub filen 0 (String.length filen - 3) in
+        let headern = filen_wo_ext ^ ".h" in
+        Compiler_utils.print_header_info fmt "/*" "*/";
+        fprintf fmt "#include \"%s\"@\n@\n" headern;
+        iter (pp_cdef fmt) cdefs
+
 
 (******************************)
 
@@ -322,7 +436,7 @@ let pp_cfile_desc fmt filen cfile =
     corresponding file in the [dir] directory. *)
 let output_cfile dir (filen, cfile_desc) =
   if !Compiler_options.verbose then
-    Format.printf "C-NG generating %s/%s@." dir filen;
+    Format.printf "OpenCL-NG generating %s/%s@." dir filen;
   let oc = open_out (Filename.concat dir filen) in
   let fmt = Format.formatter_of_out_channel oc in
   pp_cfile_desc fmt filen cfile_desc;

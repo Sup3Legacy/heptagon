@@ -11,7 +11,6 @@ open Names
 open Misc
 open Location
 
-
 type static_exp = { se_desc: static_exp_desc; se_ty: ty; se_loc: location }
 
 and static_exp_desc =

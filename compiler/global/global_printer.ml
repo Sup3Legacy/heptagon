@@ -3,6 +3,7 @@ open Idents
 open Signature
 open Types
 open Clocks
+open Gpu
 open Modules
 open Format
 open Pp_tools
@@ -57,6 +58,14 @@ let rec print_ct ff = function
   | Signature.Cbase -> fprintf ff "."
   | Signature.Con (ck, c, n) -> fprintf ff "%a on %a(%a)" print_sck ck print_qualname c print_name n
 
+let print_gpu ff = function
+  | Undefined -> fprintf ff "undefined"
+  | No_constraint -> fprintf ff "no_constraint"
+  | GPU -> fprintf ff "gpu"
+  | Kernel -> fprintf ff "kernel"
+  | Parallel_kernel _ -> fprintf ff "pkernel"
+  | Kernel_caller _ -> fprintf ff "caller"
+  | CPU -> fprintf ff "cpu"
 
 let rec print_static_exp_desc ff sed = match sed with
   | Sint i -> fprintf ff "%d" i
@@ -101,6 +110,11 @@ and print_type ff = function
   | Tarray (ty, n) ->
       fprintf ff "@[<hov2>%a^%a@]" print_type ty print_static_exp n
 
+and print_mem_loc ff = function
+  | Private -> fprintf ff ""
+  | Local -> fprintf ff "__local "
+  | Global -> fprintf ff "__global "
+
 let print_field ff field =
   fprintf ff "@[%a: %a@]" print_qualname field.f_name  print_type field.f_type
 
@@ -133,10 +147,14 @@ let print_interface_const ff (name,c) =
 
 let print_sarg ff arg = match arg.a_name with
     | None ->
-        fprintf ff "@[%a :: %a@]" print_type arg.a_type print_sck arg.a_clock
+        fprintf ff "@[%a%a :: %a@]"
+          print_mem_loc arg.a_mem
+          print_type arg.a_type
+          print_sck arg.a_clock
     | Some(name) ->
-        fprintf ff "@[%a : %a :: %a@]"
+        fprintf ff "@[%a : %a%a :: %a@]"
           print_name name
+          print_mem_loc arg.a_mem
           print_type arg.a_type
           print_sck arg.a_clock
 

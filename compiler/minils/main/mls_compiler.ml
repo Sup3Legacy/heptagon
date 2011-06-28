@@ -14,6 +14,9 @@ open Compiler_options
 let pp p = if !verbose then Mls_printer.print stdout p
 
 let compile_program p =
+  (* Memory location check *)
+  let p = silent_pass "Memory location check" true Memory_location.program p in
+
   (* Clocking *)
   let p =
     try pass "Clocking" true Clocking.program p pp
@@ -46,5 +49,8 @@ let compile_program p =
 
    (* Normalize memories*)
   let p = pass "Normalize memories" true Normalize_mem.program p pp in
+
+  (* Split kernels *)
+  let p = pass "Split kernels"  true Split_kernels.program p pp in
 
   p

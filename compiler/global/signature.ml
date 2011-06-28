@@ -10,10 +10,11 @@
 open Names
 open Types
 open Location
+open Gpu
 
 (** Warning: Whenever these types are modified,
     interface_format_version should be incremented. *)
-let interface_format_version = "30"
+let interface_format_version = "31"
 
 type ck =
   | Cbase
@@ -24,6 +25,7 @@ type arg = {
   a_name  : name option;
   a_type  : ty;
   a_clock : ck; (** [a_clock] set to [Cbase] means at the node activation clock *)
+  a_mem : mem_loc;
 }
 
 (** Node static parameters *)
@@ -39,7 +41,9 @@ type node = {
   node_stateful           : bool;
   node_params             : param list;
   node_param_constraints  : constrnt list;
-  node_loc                : location}
+  node_loc                : location;
+  node_gpu                : gpu;
+}
 
 type field = { f_name : field_name; f_type : ty }
 type structure = field list
@@ -122,7 +126,12 @@ let types_of_arg_list l = List.map (fun ad -> ad.a_type) l
 
 let types_of_param_list l = List.map (fun p -> p.p_type) l
 
-let mk_arg name ty ck = { a_type = ty; a_name = name; a_clock = ck }
+let mk_arg name ty ck mem = {
+  a_type = ty;
+  a_name = name;
+  a_clock = ck;
+  a_mem =  mem;
+}
 
 let mk_param name ty = { p_name = name; p_type = ty }
 
@@ -131,13 +140,15 @@ let mk_field n ty = { f_name = n; f_type = ty }
 let mk_const_def ty value =
   { c_type = ty; c_value = value }
 
-let mk_node ?(constraints = []) loc ins outs stateful params =
-  { node_inputs = ins;
+let mk_node ?(constraints = []) ?(gpu = No_constraint) loc ins outs stateful params = {
+    node_inputs = ins;
     node_outputs  = outs;
     node_stateful = stateful;
     node_params = params;
     node_param_constraints = constraints;
-    node_loc = loc}
+    node_loc = loc;
+    node_gpu = gpu;
+}
 
 let rec field_assoc f = function
   | [] -> raise Not_found

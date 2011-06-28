@@ -28,6 +28,8 @@ let iterator_to_string i =
     | Ifold -> "fold"
     | Ifoldi -> "foldi"
     | Imapfold -> "mapfold"
+    | Ipmap -> "pmap"
+    | Ipmapi -> "pmapi"
 
 let print_iterator ff it =
   fprintf ff "%s" (iterator_to_string it)
@@ -37,9 +39,9 @@ let rec print_pat ff = function
   | Etuplepat pat_list ->
       fprintf ff "@[<2>(%a)@]" (print_list_r print_pat """,""") pat_list
 
-let rec print_vd ff { v_ident = n; v_type = ty; v_last = last } =
-  fprintf ff "%a%a : %a%a"
-    print_last last  print_ident n
+let rec print_vd ff { v_ident = n; v_type = ty; v_last = last; v_mem = mem } =
+  fprintf ff "%a%a : %a%a%a"
+    print_last last  print_ident n  print_mem_loc mem
     print_type ty  print_last_value last
 
 and print_last ff = function
@@ -278,8 +280,9 @@ let print_contract ff { c_block = b;
 let print_node ff
     { n_name = n; n_input = ni;
       n_block = nb; n_output = no; n_contract = contract;
-      n_params = params } =
-  fprintf ff "@[node %a%a%a@ returns %a@]@\n%a%a@[<v2>let@ %a@]@\ntel@]@\n@."
+      n_params = params; n_gpu = gpu } =
+  fprintf ff "@[%a node %a%a%a@ returns %a@]@\n%a%a@[<v2>let@ %a@]@\ntel@]@\n@."
+    print_gpu gpu
     print_qualname n
     print_node_params params
     print_vd_tuple ni

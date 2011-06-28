@@ -141,7 +141,7 @@ let rec copy_array src dest bounds =
     | [] -> [Caffect (dest, src)]
     | n::bounds ->
         let x = gen_symbol () in
-        [Cfor(x, Cconst (Ccint 0), n,
+        [Cfor(x, Cconst (Ccint 0), n, Cconst (Ccint 1),
               copy_array (Carray (src, Cvar x))
                 (CLarray (dest, Cvar x)) bounds)]
 
@@ -203,7 +203,7 @@ and create_affect_stm dest src ty =
            | src ->
              let x = gen_symbol () in
              [Cfor(x,
-                   Cconst (Ccint 0), Cconst (Ccint n),
+                   Cconst (Ccint 0), Cconst (Ccint n), Cconst (Ccint 1),
                    create_affect_stm
                      (CLarray (dest, Cvar x))
                      (Carray (src, Cvar x)) bty)]
@@ -468,7 +468,8 @@ let rec create_affect_const var_env (dest : clhs) c =
             let x = gen_symbol () in
             let e, replace =
               make_loop power_list
-                        (fun y -> [Cfor(x, Cconst (Ccint 0), cexpr_of_static_exp p, replace y)]) in
+                        (fun y -> [Cfor(x, Cconst (Ccint 0), cexpr_of_static_exp p,
+                                  Cconst (Ccint 1), replace y)]) in
             let e =  (CLarray (e, Cvar x)) in
             e, replace
         in
@@ -531,8 +532,15 @@ let rec cstm_of_act out_env var_env obj_env act =
         translation function on sub-statements. *)
     | Afor ({ v_ident = x }, i1, i2, act) ->
         [Cfor(name x, cexpr_of_exp out_env var_env i1,
-              cexpr_of_exp out_env var_env i2,
+              cexpr_of_exp out_env var_env i2, Cconst (Ccint 1),
               cstm_of_act_list out_env var_env obj_env act)]
+    
+    | Apfor ({ v_ident = x }, i, act) ->
+        let y = Idents.gen_var "cgen" "par_i" in
+        [Cfor(name y, Cconst (Ccint 0), Cconst (Ccint 32), Cconst (Ccint 1),
+          [Cfor(name x, Cvar (name y),
+                cexpr_of_exp out_env var_env i, Cconst (Ccint 32),
+                cstm_of_act_list out_env var_env obj_env act)])]
 
     (** Translate constant assignment *)
     | Aassgn (vn, { e_desc = Eextvalue { w_desc = Wconst c }; }) ->

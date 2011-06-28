@@ -16,6 +16,7 @@ open Signature
 open Static
 open Types
 open Clocks
+open Gpu
 
 (** Warning: Whenever Minils ast is modified,
     minils_format_version should be incremented. *)
@@ -27,6 +28,8 @@ type iterator_type =
   | Ifold
   | Ifoldi
   | Imapfold
+  | Ipmap
+  | Ipmapi
 
 type type_dec = {
   t_name: qualname;
@@ -107,7 +110,8 @@ type var_dec = {
   v_ident : var_ident;
   v_type : ty;
   v_clock : ck;
-  v_loc : location }
+  v_loc : location;
+  v_mem : mem_loc }
 
 type contract = {
   c_assume : extvalue;
@@ -117,15 +121,16 @@ type contract = {
   c_eq : eq list }
 
 type node_dec = {
-  n_name   : qualname;
+  n_name     : qualname;
   n_stateful : bool;
-  n_input  : var_dec list;
-  n_output : var_dec list;
+  n_gpu      : gpu;
+  n_input    : var_dec list;
+  n_output   : var_dec list;
   n_contract : contract option;
-  n_local  : var_dec list;
-  n_equs   : eq list;
-  n_loc    : location;
-  n_params : param list;
+  n_local    : var_dec list;
+  n_equs     : eq list;
+  n_loc      : location;
+  n_params   : param list;
   n_param_constraints : constrnt list }
 
 type const_dec = {
@@ -154,15 +159,15 @@ let mk_extvalue ~ty ?(clock = fresh_clock()) ?(loc = no_location) desc =
 let mk_exp level_ck ty ?(ck = Cbase) ?(ct = fresh_ct ty) ?(loc = no_location) desc =
   { e_desc = desc; e_ty = ty; e_level_ck = level_ck; e_base_ck = ck; e_ct = ct; e_loc = loc }
 
-let mk_var_dec ?(loc = no_location) ident ty ck =
-  { v_ident = ident; v_type = ty; v_clock = ck; v_loc = loc }
+let mk_var_dec ?(mem = Private) ?(loc = no_location) ident ty ck =
+  { v_ident = ident; v_type = ty; v_clock = ck; v_loc = loc; v_mem = mem }
 
 let mk_equation ?(loc = no_location) pat exp =
   { eq_lhs = pat; eq_rhs = exp; eq_loc = loc }
 
 let mk_node
-    ?(input = []) ?(output = []) ?(contract = None) ?(local = []) ?(eq = [])
-    ?(stateful = true) ?(loc = no_location) ?(param = []) ?(constraints = [])
+    ?(input = []) ?(output = []) ?(contract = None) ?(local = []) ?(eq = []) ?(stateful = true)
+    ?(loc = no_location) ?(param = []) ?(constraints = []) ?(gpu = Gpu.No_constraint)
     name =
   { n_name = name;
     n_stateful = stateful;
@@ -173,7 +178,8 @@ let mk_node
     n_equs = eq;
     n_loc = loc;
     n_params = param;
-    n_param_constraints = constraints }
+    n_param_constraints = constraints;
+    n_gpu = gpu }
 
 let mk_type_dec type_desc name loc =
   { t_name = name; t_desc = type_desc; t_loc = loc }

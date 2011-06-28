@@ -98,6 +98,8 @@ let do_iterator_fusion = ref false
 
 let do_scalarize = ref false
 
+let size_workgroup = ref 32
+
 let doc_verbose = "\t\t\tSet verbose mode"
 and doc_version = "\t\tThe version of the compiler"
 and doc_print_types = "\t\t\tPrint types"
@@ -123,3 +125,4 @@ and doc_assert = "<node>\t\tInsert run-time assertions for boolean node <node>"
 and doc_inline = "<node>\t\tInline node <node>"
 and doc_itfusion = "\t\tEnable iterator fusion."
 and doc_tomato = "\t\tEnable automata minimization."
+and doc_size_workgroup = "\t\tChange the size of the work groups in OpenCL."

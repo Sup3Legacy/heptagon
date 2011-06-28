@@ -161,14 +161,15 @@ end
 let mk_app ?(params=[]) ?(unsafe=false) op =
   { Heptagon.a_op = op; Heptagon.a_params = params; Heptagon.a_unsafe = unsafe }
 
-let mk_signature name ins outs stateful params constraints loc =
+let mk_signature name ins outs stateful params constraints loc gpu =
   { Heptagon.sig_name = name;
     Heptagon.sig_inputs = ins;
     Heptagon.sig_stateful = stateful;
     Heptagon.sig_outputs = outs;
     Heptagon.sig_params = params;
     Heptagon.sig_param_constraints = constraints;
-    Heptagon.sig_loc = loc }
+    Heptagon.sig_loc = loc;
+    Heptagon.sig_gpu = gpu; }
 
 
 (** Function to build the defined static parameters set *)
@@ -189,6 +190,8 @@ let translate_iterator_type = function
   | Ifold -> Heptagon.Ifold
   | Ifoldi -> Heptagon.Ifoldi
   | Imapfold -> Heptagon.Imapfold
+  | Ipmap -> Heptagon.Ipmap
+  | Ipmapi -> Heptagon.Ipmapi
 
 (** convention : static params are set as the first static args,
     op<a1,a2> (a3) == op <a1> (a2,a3) == op (a1,a2,a3) *)
@@ -395,7 +398,8 @@ and translate_var_dec env vd =
       Heptagon.v_type = translate_type vd.v_loc vd.v_type;
       Heptagon.v_last = translate_last vd.v_last;
       Heptagon.v_clock = translate_some_clock vd.v_loc env vd.v_clock;
-      Heptagon.v_loc = vd.v_loc }
+      Heptagon.v_loc = vd.v_loc;
+      Heptagon.v_mem = vd.v_mem }
 
 (** [env] should contain the declared variables prior to this translation *)
 and translate_vd_list env =
@@ -443,7 +447,8 @@ let translate_node node =
                Heptagon.n_block = b;
                Heptagon.n_loc = node.n_loc;
                Heptagon.n_params = params;
-               Heptagon.n_param_constraints = constraints; }
+               Heptagon.n_param_constraints = constraints;
+               Heptagon.n_gpu = node.n_gpu; }
   in
   safe_add node.n_loc add_value n (Hept_utils.signature_of_node nnode);
   nnode
@@ -509,17 +514,17 @@ let translate_signature s =
     | Cbase -> Signature.Cbase
     | Con(ck,c,x) -> Signature.Con(translate_clock ck, qualify_constrs c, x)
   and translate_arg a = Signature.mk_arg a.a_name (translate_type s.sig_loc a.a_type)
-                                                  (translate_some_clock a.a_clock)
+                                         (translate_some_clock a.a_clock) a.a_mem
   in
   let n = current_qual s.sig_name in
   let i = List.map translate_arg s.sig_inputs in
   let o = List.map translate_arg s.sig_outputs in
   let p = params_of_var_decs s.sig_params in
   let c = List.map translate_constrnt s.sig_param_constraints in
-  let sig_node = Signature.mk_node s.sig_loc i o s.sig_stateful p in
+  let sig_node = Signature.mk_node ~gpu:s.sig_gpu s.sig_loc i o s.sig_stateful p in
   Signature.check_signature sig_node;
   safe_add s.sig_loc add_value n sig_node;
-  mk_signature n i o s.sig_stateful p c s.sig_loc
+  mk_signature n i o s.sig_stateful p c s.sig_loc s.sig_gpu
 
 
 let translate_interface_desc = function

@@ -12,12 +12,13 @@ open Idents
 open Location
 open Misc
 open Types
+open Gpu
 open Obc
 open Obc_mapfold
 open Global_mapfold
 
-let mk_var_dec ?(loc=no_location) ?(mut=false) ident ty =
-  { v_ident = ident; v_type = ty; v_mutable = mut; v_loc = loc }
+let mk_var_dec ?(mem=Private) ?(loc=no_location) ?(mut=false) ident ty =
+  { v_ident = ident; v_type = ty; v_mutable = mut; v_loc = loc; v_mem = mem }
 
 let mk_ext_value ?(loc=no_location) ty desc =
   { w_desc = desc; w_ty = ty; w_loc = loc; }

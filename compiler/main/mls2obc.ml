@@ -19,6 +19,7 @@ open Types
 open Clocks
 open Static
 open Initial
+open Gpu
 
 
 let build_anon, find_anon =
@@ -201,8 +202,8 @@ let rec translate_pat map ty pat = match pat, ty with
   | Minils.Etuplepat _, _ -> Misc.internal_error "Ill-typed pattern"
 
 let translate_var_dec l =
-  let one_var { Minils.v_ident = x; Minils.v_type = t; v_loc = loc } =
-    mk_var_dec ~loc:loc x t
+  let one_var { Minils.v_ident = x; Minils.v_type = t; v_loc = loc; v_mem = mem } =
+    mk_var_dec ~mem:mem ~loc:loc x t
   in
   List.map one_var l
 
@@ -396,13 +397,15 @@ type obj_array = { oa_index : Obc.pattern list; oa_size : static_exp list }
 (** A [None] context is normal, otherwise, we are in an iteration *)
 type call_context = obj_array option
 
-let mk_obj_call_from_context c n = match c with
-  | None -> Oobj n
-  | Some oa -> Oarray (n, oa.oa_index)
+type context = call_context * gpu
 
-let size_from_call_context c = match c with
-  | None -> None
-  | Some oa -> Some (oa.oa_size)
+let mk_obj_call_from_context c n = match c with
+  | None, _ -> Oobj n
+  | Some oa, _ -> Oarray (n, oa.oa_index)
+
+let size_from_context c = match c with
+  | None, _ -> None
+  | Some oa, _ -> Some (oa.oa_size)
 
 let empty_call_context = None
 
@@ -456,9 +459,11 @@ let rec translate_eq map call_context { Minils.eq_lhs = pat; Minils.eq_rhs = e }
         let p_list = List.map (translate_extvalue_to_exp map) pe_list in
         let c_list = List.map (translate_extvalue_to_exp map) e_list in
         let xl, xdl = List.split (List.map (fun _ -> fresh_it ()) n_list) in
-        let call_context =
-          Some { oa_index = List.map (fun x -> mk_pattern_int (Lvar x)) xl;
-                 oa_size = n_list} in
+        let call_context = match call_context with
+          | _, gpu ->
+		          Some { oa_index = List.map (fun x -> mk_pattern_int (Lvar x)) xl;
+		                  oa_size = n_list}, gpu
+        in
         let n_list = List.map mk_exp_static_int n_list in
         let si', j', action = translate_iterator map call_context it
           name_list app loc n_list xl xdl p_list c_list e.Minils.e_ty in
@@ -524,7 +529,7 @@ and mk_node_call map call_context app loc (name_list : Obc.pattern list) args ty
         let obj =
           { o_ident = obj_ref_name o; o_class = f;
             o_params = app.Minils.a_params;
-            o_size = size_from_call_context call_context; o_loc = loc } in
+            o_size = size_from_context call_context; o_loc = loc } in
         let si = (match app.Minils.a_op with
                    | Minils.Efun _ -> []
                    | Minils.Enode _ -> [reinit o]
@@ -561,6 +566,17 @@ and translate_iterator map call_context it name_list
       | _, _ -> assert false
     in
     mk_loop b (List.rev xdl) nl
+  in
+  let mk_ploop b xdl nl =
+    let rec mk_ploop b xdl nl = match xdl, nl with
+      | xd::[], n::[] -> Apfor (xd, n, b)
+      | xd::xdl, n::nl ->
+          (match call_context with
+            | _, Parallel_kernel _ -> mk_ploop (mk_block [Apfor (xd, n, b)]) xdl nl
+            | _ -> mk_loop (mk_block [Apfor (xd, n, b)]) xdl nl)
+      | _, _ -> assert false
+    in
+    mk_ploop b (List.rev xdl) nl
   in
   match it with
     | Minils.Imap ->
@@ -633,10 +649,34 @@ and translate_iterator map call_context it name_list
           [mk_loop bi xdl n_list], j,
            [ Aassgn (acc_out, acc_in); mk_loop b xdl n_list]
 
+    | Minils.Ipmap ->
+        let c_list = array_of_input c_list in
+        let ty_list = List.map unarray (Types.unprod ty) in
+        let name_list = array_of_output name_list (Types.unprod ty) in
+        let node_out_ty = Types.prod ty_list in
+        let v, si, j, action = mk_node_call map call_context
+          app loc name_list (p_list@c_list) node_out_ty in
+        let v = translate_var_dec v in
+        let b = mk_block ~locals:v action in
+        let bi = mk_block si in
+          [mk_ploop bi xdl n_list], j, [mk_ploop b xdl n_list]
+
+    | Minils.Ipmapi ->
+        let c_list = array_of_input c_list in
+        let ty_list = List.map unarray (Types.unprod ty) in
+        let name_list = array_of_output name_list (Types.unprod ty) in
+        let node_out_ty = Types.prod ty_list in
+        let v, si, j, action = mk_node_call map call_context
+          app loc name_list (p_list@c_list@(List.map mk_evar_int xl)) node_out_ty in
+        let v = translate_var_dec v in
+        let b = mk_block ~locals:v action in
+        let bi = mk_block si in
+          [mk_ploop bi xdl n_list], j, [mk_ploop b xdl n_list]
+
 let remove m d_list =
   List.filter (fun { Minils.v_ident = n } -> not (List.mem_assoc n m)) d_list
 
-let translate_contract map mem_var_tys =
+let translate_contract gpu map mem_var_tys =
   function
     | None -> ([], [], [], [])
     | Some
@@ -644,7 +684,7 @@ let translate_contract map mem_var_tys =
           Minils.c_eq = eq_list;
           Minils.c_local = d_list;
         } ->
-        let (v, si, j, s_list) = translate_eq_list map empty_call_context eq_list in
+        let (v, si, j, s_list) = translate_eq_list map (empty_call_context, gpu) eq_list in
         let d_list = translate_var_dec (v @ d_list) in
         let d_list = List.filter
           (fun vd -> not (List.exists (fun (i,_) -> i = vd.v_ident) mem_var_tys)) d_list in
@@ -665,12 +705,13 @@ let translate_node
     ({ Minils.n_name = f; Minils.n_input = i_list; Minils.n_output = o_list;
       Minils.n_local = d_list; Minils.n_equs = eq_list; Minils.n_stateful = stateful;
       Minils.n_contract = contract; Minils.n_params = params; Minils.n_loc = loc;
+      Minils.n_gpu = gpu;
     } as n) =
   Idents.enter_node f;
   let mem_var_tys = Mls_utils.node_memory_vars n in
   let subst_map = subst_map i_list o_list d_list mem_var_tys in
-  let (v, si, j, s_list) = translate_eq_list subst_map empty_call_context eq_list in
-  let (si', j', s_list', d_list') = translate_contract subst_map mem_var_tys contract in
+  let (v, si, j, s_list) = translate_eq_list subst_map (empty_call_context, gpu) eq_list in
+  let (si', j', s_list', d_list') = translate_contract gpu subst_map mem_var_tys contract in
   let i_list = translate_var_dec i_list in
   let o_list = translate_var_dec o_list in
   let d_list = translate_var_dec (v @ d_list) in
@@ -685,12 +726,13 @@ let translate_node
   let resetm = { m_name = Mreset; m_inputs = []; m_outputs = []; m_body = mk_block si } in
   if stateful
   then { cd_name = f; cd_stateful = true; cd_mems = m; cd_params = params;
-         cd_objs = j; cd_methods = [stepm; resetm]; cd_loc = loc; }
+         cd_objs = j; cd_methods = [stepm; resetm]; cd_loc = loc; 
+         cd_gpu = gpu; }
   else (
     (* Functions won't have [Mreset] or memories,
        they still have [params] and instances (of functions) *)
     { cd_name = f; cd_stateful = false; cd_mems = []; cd_params = params;
-      cd_objs = j; cd_methods = [stepm]; cd_loc = loc; }
+      cd_objs = j; cd_methods = [stepm]; cd_loc = loc; cd_gpu = gpu; }
   )
 
 let translate_ty_def { Minils.t_name = name; Minils.t_desc = tdesc;

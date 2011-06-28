@@ -72,7 +72,7 @@ and act = Anewvar of var_dec * exp
         | Aif of exp * block
         | Aifelse of exp * block * block
         | Ablock of block
-        | Afor of var_dec * exp * exp * block
+        | Afor of var_dec * exp * exp * exp * block
         | Areturn of exp
 
 and exp = Ethis
