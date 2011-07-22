@@ -7,6 +7,8 @@
 (*                                                                        *)
 (**************************************************************************)
 
+(* This is similar to cmain.ml with the creation of the OpenCL environment. *)
+
 open Gpu
 open Format
 open List

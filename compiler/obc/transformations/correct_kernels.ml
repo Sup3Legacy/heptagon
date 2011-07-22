@@ -37,28 +37,33 @@ let rec split vdl s l1 l2 = match vdl with
       else
         split vdl s l1 (vd::l2)
 
+(* Finds the local variables. *)
 let rec find_locals ml = match ml with
   | [] -> assert false
   | { m_name = Mstep; m_body = body } :: _ -> body.b_locals
   | _ :: ml -> find_locals ml
 
+(* Finds the actions of the reset method. *)
 let rec find_reset ml = match ml with
   | [] -> assert false
   | { m_name = Mreset; m_body = body } :: _ -> body.b_body
   | _ :: ml -> find_reset ml
 
+(* Updates the local variables. *)
 let rec modify_locals ml vars = match ml with
   | [] -> []
   | { m_name = Mstep; m_body = body } as m :: ml ->
       {m with m_body = {body with b_locals = vars}} :: ml
   | m :: ml -> m :: (modify_locals ml vars)
 
+(* Updates the actions of the reset method. *)
 let rec modify_reset ml al = match ml with
   | [] -> []
   | { m_name = Mreset; m_body = body } as m :: ml ->
       {m with m_body = {body with b_body = al}} :: ml
   | m :: ml -> m :: (modify_reset ml al)
 
+(* Splits a list of Obc act into calls and everything else. *)
 let rec clean_act_list al = match al with
   | [] -> [], []
   | a :: al ->
@@ -88,6 +93,7 @@ let rec clean_act_list al = match al with
               | Some br, Some bc -> Apfor(vd, e, br) :: resets, Apfor(vd, e, bc) :: calls)
 			  | Acase _ -> assert false
 
+(* Split a block. *)
 and clean_block b =
   let resets, calls = clean_act_list b.b_body in
   match resets, calls with
@@ -95,11 +101,13 @@ and clean_block b =
     | _, [] -> Some {b with b_body = resets}, None
     | _, _ -> Some {b with b_body = resets}, Some {b with b_body = calls}
 
+(* Replaces memories and variables when necessary. *)
 let lhsdesc funs ((env, gpu, l, s) as acc) ld = match ld, gpu with
   | Lmem x, (Kernel | Parallel_kernel _) -> Lvar x, (env, gpu, l, Setid.add x s)
   | Lvar x, Kernel_caller -> if List.mem x l then Lmem x, acc else ld, acc
   | _, _ -> Obc_mapfold.lhsdesc funs acc ld
 
+(* Replaces memories and variables when necessary. *)
 let evdesc funs ((env, gpu, l, s) as acc) wd = match wd, gpu with
   | Wmem x, (Kernel | Parallel_kernel _) -> Wvar x, (env, gpu, l, Setid.add x s)
   | Wvar x, Kernel_caller -> if List.mem x l then Wmem x, acc else wd, acc
@@ -108,14 +116,18 @@ let evdesc funs ((env, gpu, l, s) as acc) wd = match wd, gpu with
 let class_def funs ((env, _, _, _) as acc) cd = match cd.cd_gpu with
   | Kernel
   | Parallel_kernel _ when cd.cd_stateful ->
+      (* Replaces calls to memories by calls to variables in the function. *)
       let cd, (env, gpu, l, s) = Obc_mapfold.class_def funs (env, cd.cd_gpu, [], Setid.empty) cd in
+      (* Split the reset method between calls and other actions. *)
       let reset = find_reset cd.cd_methods in
       let reset, calls = clean_act_list reset in
+      (* Keeps the calls and give the rest to the caller. *)
       let cd = {cd with cd_methods = modify_reset cd.cd_methods calls } in
       let env = QualEnv.add cd.cd_name (s, reset) env in
       cd, (env, gpu, l, s)
   | Kernel_caller when cd.cd_stateful ->
       let vdl = find_locals cd.cd_methods in
+      (* Finds the memories and the reset actions to do in the environment. *)
       let rec aux fn mems vars resets = match fn with
         | [] -> mems, vars, resets
         | { o_class = n } :: fn ->
@@ -124,8 +136,10 @@ let class_def funs ((env, _, _, _) as acc) cd = match cd.cd_gpu with
             aux fn (mem @ mems) vars (reset @ resets)
       in
       let mems, vars, resets = aux cd.cd_objs [] vdl [] in
+      (* Updates the memories and the local variables accordingly. *)
       let mems = List.map (fun x -> { x with v_mem = Global }) mems in
       let methods = modify_locals cd.cd_methods vars in
+      (* Add the new reset actions. *)
       let methods = modify_reset methods ((find_reset methods) @ resets) in
       let cd = {cd with cd_methods = methods; cd_mems = mems } in
       Obc_mapfold.class_def

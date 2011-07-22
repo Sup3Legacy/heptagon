@@ -22,7 +22,6 @@ let is_pervasives qn =
   (qn.qual = Pervasives)
 
 type allowed_cast =
-  | Restricted
   | Normal
   | Parallel
   | All
@@ -70,24 +69,28 @@ let message loc kind =
   end;
   raise Errors.Error
 
+(* Updates an environment with a list of var_dec and verifies that no illegal memory is used. *)
 let rec add_env gpu out_or_local env l = match l with
   | [] -> env
   | a :: l ->
       match gpu with
         | Kernel_caller
         | CPU ->
+            (* Local memory is forbidden on the CPU. *)
 			      if a.v_mem = Local then
 			        message a.v_loc Elocal_on_cpu
 			      else
 			        add_env gpu out_or_local (Env.add a.v_ident a env) l
         | GPU ->
+            (* No global memory can be created from the GPU. *)
 			      if a.v_mem = Global & out_or_local then
 			        message a.v_loc Ecreate_global_on_gpu
 			      else
 			        add_env gpu out_or_local (Env.add a.v_ident a env) l
         | No_constraint ->
+            (* No global or local memory can be created from normal functions. *)
             (match a.v_mem with
-              | (Global | Local) when out_or_local -> 
+              | (Global | Local) when out_or_local ->
 			          message a.v_loc Ecreate_global_or_local_without_constraint
 			        | _ -> add_env gpu out_or_local (Env.add a.v_ident a env) l)
         | _ -> Misc.internal_error "memory location"
@@ -96,7 +99,8 @@ let is_global env vi =
   let vd = Env.find vi env in
   (vd.v_mem = Global)
 
-let rec mem_of_extval gpu env ext = 
+(* Returns the memory location of an extvalue. *)
+let rec mem_of_extval gpu env ext =
   if gpu = Kernel_caller then
     Global
   else
@@ -106,16 +110,12 @@ let rec mem_of_extval gpu env ext =
 		  | Wwhen (e, _, _)
 		  | Wfield (e, _) -> mem_of_extval gpu env e
 
+(* Checks if the transfer needed is possible. *)
 let check_cast gpu env cast loc ext_val in_mem =
   let arg_mem = mem_of_extval gpu env ext_val in
   match cast with
-	  | Restricted ->
-	      (match arg_mem, in_mem with
-	        | _, Private -> ()
-	        | Local, Local -> ()
-          | Global, Global -> ()
-	        | _ -> message loc Enot_private)
 	  | Normal ->
+        (* When calling from a normal function. *)
 	      (match arg_mem, in_mem with
 	        | Private, Local -> message loc Elocal_of_private
 	        | Private, Global -> message loc Eglobal_of_private
@@ -123,13 +123,14 @@ let check_cast gpu env cast loc ext_val in_mem =
 	        | Global, Local -> message loc Elocal_of_global
 	        | _ -> ())
 	  | Parallel ->
+        (* When calling from a GPU function. *)
 	      (match arg_mem, in_mem with
 	        | Local, Global -> message loc Eglobal_of_local
 	        | Private, Global -> message loc Eglobal_of_private
 	        | _ -> ())
 	  | _ -> ()
 
-
+(* If cannot is true and we are on the CPU, we cannot use global memory. *)
 let extvalue funs ((gpu, cannot, env) as acc) w =
 	let w, _ = Mls_mapfold.extvalue funs acc w in
   if gpu = CPU then
@@ -159,6 +160,7 @@ let exp funs ((gpu, _, env) as acc) eq =
     | _ -> Misc.internal_error "memory location"
   in
   if gpu = CPU then
+    (* On the CPU, we check the use of global memories. *)
     match eq.e_desc with
 		  | Eapp(app, extl, _) ->
 	        (match app.a_op with
@@ -168,12 +170,15 @@ let exp funs ((gpu, _, env) as acc) eq =
 	          | Earray_fill
 	          | Eselect_dyn
 	          | Econcat ->
+                (* Not supported operations. *)
 			          let eq, _ = Mls_mapfold.exp funs (gpu, true, env) eq in
 			          eq, acc
 	          | Efun f | Enode f when is_pervasives f ->
+                (* We cannot use global memory for a computation. *)
 			          let eq, _ = Mls_mapfold.exp funs (gpu, true, env) eq in
 			          eq, acc
             | Eifthenelse ->
+                (* We cannot use global memory for the check. *)
                 (match extl with
                   | c :: extl ->
 					            let _, _ = Misc.mapfold (extvalue_it funs) acc extl in
@@ -205,6 +210,7 @@ let exp funs ((gpu, _, env) as acc) eq =
 		      let eq, _ = Mls_mapfold.exp funs (gpu, true, env) eq in
 		      eq, acc
   else if gpu = No_constraint then
+    (* Checks the function calls in order not to create global or local memory. *)
 	  match eq.e_desc with
       | Eapp ({ a_op = Efun f | Enode f}, wl, _) ->
 	        let n = Modules.find_value f in
@@ -220,17 +226,17 @@ let exp funs ((gpu, _, env) as acc) eq =
 					  | Imap
 					  | Ipmap
 					  | Imapi
-					  | Ipmapi -> cast_list Restricted args (cast_list Normal sargs il)
+					  | Ipmapi -> cast_list Normal args (cast_list Normal sargs il)
 					  | Ifold
 					  | Imapfold ->
                 let args, accf = Misc.split_last args in
-                cast_list Normal [accf] 
-                  (cast_list Restricted args 
+                cast_list Normal [accf]
+                  (cast_list Normal args
                     (cast_list Normal sargs il))
 					  | Ifoldi ->
                 let il, i_acc = Misc.split_last il in
                 let args, accf = Misc.split_last args in
-                let _ = (cast_list Restricted args 
+                let _ = (cast_list Normal args
                           (cast_list Normal sargs il)) in
                 cast_list Normal [accf] [i_acc]
           in
@@ -240,6 +246,7 @@ let exp funs ((gpu, _, env) as acc) eq =
           let eq, _ = Mls_mapfold.exp funs acc eq in
           eq, acc
   else
+    (* Checks that no global memory is created. *)
 	  match eq.e_desc with
       | Eapp ({ a_op = Efun f | Enode f}, wl, _) ->
 	        let n = Modules.find_value f in
@@ -251,9 +258,11 @@ let exp funs ((gpu, _, env) as acc) eq =
       | Eiterator (it, { a_op = Efun f | Enode f }, _, sargs, args, _) ->
 	        let n = Modules.find_value f in
 	        let il = n.node_inputs in
-          let _ = match it with 
+          let _ = match it with
 					  | Ipmap
-					  | Ipmapi -> cast_list Restricted args (cast_list Parallel sargs il)
+					  | Ipmapi ->
+                (* Special case for the arguments of a pmap. *)
+                cast_list Normal args (cast_list Parallel sargs il)
 					  | Imap
 					  | Imapi -> cast_list Parallel args (cast_list Parallel sargs il)
 					  | Ifold
@@ -275,7 +284,6 @@ let exp funs ((gpu, _, env) as acc) eq =
           let eq, _ = Mls_mapfold.exp funs acc eq in
           eq, acc
 
-(* Check that no CPU only function is used in a Kernel and update functions *)
 let node_dec funs _ n =
   Idents.enter_node n.n_name;
   let env = add_env n.n_gpu false Env.empty n.n_input in

@@ -6,7 +6,8 @@
 (*  Organization : Demons, LRI, University of Paris-Sud, Orsay            *)
 (*                                                                        *)
 (**************************************************************************)
-(* Split the kernels in a Kernel_caller and multiple kernels. *)
+
+(* Split the Kernel_callers into a Kernel_caller calling multiple kernels. *)
 
 open Gpu
 open Idents
