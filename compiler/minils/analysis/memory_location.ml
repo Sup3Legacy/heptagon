@@ -21,10 +21,11 @@ open Mls_mapfold
 let is_pervasives qn =
   (qn.qual = Pervasives)
 
+(* Usual restrictions on the type of memory transfers allowed. *)
+(* Normal for normal functions, Parallel for GPU functions *)
 type allowed_cast =
   | Normal
   | Parallel
-  | All
 
 type error =
   | Eoperation_on_global_mem
@@ -36,6 +37,7 @@ type error =
   | Elocal_of_private
   | Elocal_of_global
   | Enot_private
+  | Enot_local_pmap
 
 let message loc kind =
   begin match kind with
@@ -65,6 +67,9 @@ let message loc kind =
           print_location loc
     | Eglobal_of_local ->
         Format.eprintf "%aThis expression is local but is expected to be global.@."
+          print_location loc
+    | Enot_local_pmap ->
+        Format.eprintf "%aThe result of a pmap must be put in shared memory.@."
           print_location loc
   end;
   raise Errors.Error
@@ -128,7 +133,6 @@ let check_cast gpu env cast loc ext_val in_mem =
 	        | Local, Global -> message loc Eglobal_of_local
 	        | Private, Global -> message loc Eglobal_of_private
 	        | _ -> ())
-	  | _ -> ()
 
 (* If cannot is true and we are on the CPU, we cannot use global memory. *)
 let extvalue funs ((gpu, cannot, env) as acc) w =
@@ -284,23 +288,32 @@ let exp funs ((gpu, _, env) as acc) eq =
           let eq, _ = Mls_mapfold.exp funs acc eq in
           eq, acc
 
+(* Checks that the result of a pmap is in a shared memory. *)
+let eq funs ((gpu, _, env) as acc) eq = match eq.eq_rhs.e_desc, gpu with
+  | Eiterator ((Ipmap | Ipmapi), _, _, _, _, _), GPU ->
+      (match eq.eq_lhs with
+        | Evarpat vi ->
+            let vd = Env.find vi env in
+              if (vd.v_mem != Local) then
+                message eq.eq_loc Enot_local_pmap
+              else
+                Mls_mapfold.eq funs acc eq
+        | _ -> assert false)
+  | _ -> Mls_mapfold.eq funs acc eq
+
 let node_dec funs _ n =
   Idents.enter_node n.n_name;
   let env = add_env n.n_gpu false Env.empty n.n_input in
   let env = add_env n.n_gpu true env n.n_local in
   let env = add_env n.n_gpu true env n.n_output in
-  match n.n_gpu with
-    | CPU ->
-	      let n, acc = Mls_mapfold.node_dec funs (n.n_gpu, false, env) n in
-	      n, acc
-    | _ ->
-	      let n, acc = Mls_mapfold.node_dec funs (n.n_gpu, false, env) n in
-	      n, acc
+	let n, acc = Mls_mapfold.node_dec funs (n.n_gpu, false, env) n in
+	n, acc
 
 let funs =
   { Mls_mapfold.defaults with
       extvalue = extvalue;
       exp = exp;
+      eq = eq;
       node_dec = node_dec; }
 
 let program p =
