@@ -98,7 +98,23 @@ let do_iterator_fusion = ref false
 
 let do_scalarize = ref false
 
-let size_workgroup = ref 32
+let size_workgroup = Array.init 3
+  (fun i -> match i with
+    | 0 -> 16
+    | 1 -> 16
+    | _ -> 0)
+
+let change_size_workgroup i n = size_workgroup.(i) <- n
+
+let max_dimension = ref 2
+
+let change_maxdim i =
+  if (i > 0 & i < 4) then
+    max_dimension := i
+  else begin
+    Format.eprintf "The number of dimensions for the work-items grid must be between 1 and 3.@.";
+    raise Errors.Error
+  end
 
 let doc_verbose = "\t\t\tSet verbose mode"
 and doc_version = "\t\tThe version of the compiler"
@@ -125,4 +141,8 @@ and doc_assert = "<node>\t\tInsert run-time assertions for boolean node <node>"
 and doc_inline = "<node>\t\tInline node <node>"
 and doc_itfusion = "\t\tEnable iterator fusion."
 and doc_tomato = "\t\tEnable automata minimization."
-and doc_size_workgroup = "\t\tChange the size of the work groups in OpenCL."
+and doc_size_workgroup =
+  "\t\t\tChange the size of the work groups in OpenCL."
+  ^ "\n\t\t\tRequires an integer for each of the three dimensions."
+and doc_max_dimension =
+  "\t\tChange the maximum number of dimensions of the grid of work-items in OpenCL."

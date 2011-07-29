@@ -63,7 +63,7 @@ let assert_node_res cd =
         (fresh ("mem_for_" ^ name), (Cty_id (qn_append cd.cd_name "_mem"), Private)) in
       let args = Caddrof (Cvar (fst mem)) :: Cvar environment :: [] in
       ([mem],
-       [Csexpr (Cfun_call (name ^ "_reset", args))]) in
+       [Csexpr (Cfun_call (name ^ "_init", args))]) in
   let step_i =
     (*
       step(&out, &mem);
@@ -252,12 +252,12 @@ let main_def_of_class_def cd =
        else [Csexpr (Cfun_call ("puts", [Cconst (Cstrlit "")]))])
     @ [Csexpr (Cfun_call ("fflush", [Cvar "stdout"]))] in
 
-  (** Do not forget to initialize memory via reset if needed. *)
+  (** Do not forget to initialize memory if needed. *)
   let rst_i =
     if cd.cd_stateful
     then
       let args = Caddrof (Cvar "mem") :: Cvar environment :: [] in
-      [Csexpr (Cfun_call ((cname_of_qn cd.cd_name) ^ "_reset", args))]
+      [Csexpr (Cfun_call ((cname_of_qn cd.cd_name) ^ "_init", args))]
     else [] in
 
   (varlist, rst_i, step_l)

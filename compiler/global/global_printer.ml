@@ -61,8 +61,8 @@ let rec print_ct ff = function
 let print_gpu ff = function
   | Undefined -> fprintf ff "undefined"
   | No_constraint -> fprintf ff "no_constraint"
-  | GPU -> fprintf ff "gpu"
-  | Kernel -> fprintf ff "kernel"
+  | GPU _ -> fprintf ff "gpu"
+  | Kernel _ -> fprintf ff "kernel"
   | Parallel_kernel _ -> fprintf ff "pkernel"
   | Kernel_caller _ -> fprintf ff "caller"
   | CPU -> fprintf ff "cpu"

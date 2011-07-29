@@ -114,7 +114,11 @@ let main () =
         "-fti", Arg.Set full_type_info, doc_full_type_info;
         "-fname", Arg.Set full_name, doc_full_name;
         "-itfusion", Arg.Set do_iterator_fusion, doc_itfusion;
-        "-wg", Arg.Set_int size_workgroup, doc_size_workgroup;
+        "-wg", Arg.Tuple [
+            Arg.Int (change_size_workgroup 0);
+            Arg.Int (change_size_workgroup 1);
+            Arg.Int (change_size_workgroup 2)], doc_size_workgroup;
+        "-maxdim", Arg.Int change_maxdim, doc_max_dimension
       ]
         compile errmsg;
   with

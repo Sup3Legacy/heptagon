@@ -21,7 +21,6 @@ open Modules
 open Signature
 open Opencl
 open Location
-open Format
 
 open Compiler_options
 
@@ -34,8 +33,8 @@ open Compiler_options
       WG are for kernels *)
 type parallelisation =
   | Parallel
-  | WI
-  | WG of int list
+  | WI of int
+  | WG of int list * int
 
 (* To contain all the needed informations on the kernels to launch in the Kernel_callers *)
 module Kers = Map.Make(struct type t = int let compare = Pervasives.compare end)
@@ -125,10 +124,12 @@ let is_stateful n =
       Not_found -> Error.message no_location (Error.Enode (fullname n))
 
 let is_kernel gpu = match gpu with
-  | Parallel_kernel _ | Kernel -> true
+  | Parallel_kernel _ | Kernel _ -> true
   | _ -> false
 let is_cpu gpu = gpu == CPU
-let is_gpu gpu = (gpu == GPU) || is_kernel gpu
+let is_gpu gpu = match gpu with
+  | GPU _ | Parallel_kernel _ | Kernel _ -> true
+  | _ -> false
 
 let is_clone par = not (par = Parallel)
 
@@ -150,7 +151,7 @@ let mk_int i = Cconst (Ccint i)
 let rec ctype_of_otype ?(ptr = false) oty =
   match oty with
     | Types.Tid id when id = Initial.pint -> if ptr then Cty_ptr Cty_int else Cty_int
-    | Types.Tid id when id = Initial.pfloat -> if ptr then Cty_ptr Cty_int else Cty_float
+    | Types.Tid id when id = Initial.pfloat -> if ptr then Cty_ptr Cty_float else Cty_float
     | Types.Tid id when id = Initial.pbool -> if ptr then Cty_ptr Cty_int else Cty_int
     | Tid id -> if ptr then Cty_ptr (Cty_id id) else Cty_id id
     | Tarray(ty, n) -> Cty_arr(int_of_static_exp n, ctype_of_otype ty)
@@ -473,8 +474,10 @@ let rec create_affect_lit gpu env parallel dest l ty mem_d mem_s =
   _create_affect_lit dest 0 l
 
 (** Creates the expression dest <- src (doing automatic memory transfers
-    and copying arrays if necessary). *)
-and create_affect_stm ?(bar = true) gpu env parallel dest src ty mem_d mem_s =
+    and copying arrays if necessary).
+    [bar] is true if no barrier can be done
+    [partial] is false if partial reads are forbiden (used to copy outputs from CPU functions) *)
+and create_affect_stm ?(bar = true) ?(partial = true) gpu env parallel dest src ty mem_d mem_s =
   (* Transfers between GPU memories on the CPU side. *)
   if is_cpu gpu & mem_d = Global & mem_s = Global then
     match dest with
@@ -508,11 +511,14 @@ and create_affect_stm ?(bar = true) gpu env parallel dest src ty mem_d mem_s =
           }]
   (* Transfers from a GPU memory to a CPU memory. *)
   else if is_cpu gpu & mem_d != Global & mem_s = Global then
-    [generate_mem_partial_read env dest src ty]
+    if partial then
+      [generate_mem_partial_read env dest src ty]
+    else
+      [generate_mem_read (cexpr_of_lhs dest) src ty]
   else
     (* Must synchronize after all reads to persistent memory on the GPU when in clone mode. *)
     let barrier_read = match src with
-      | Cfield (Cderef (Cvar "self"), _) when is_gpu gpu & parallel -> [create_barrier]
+      | Cfield (Cderef (Cvar "self"), _) when is_gpu gpu & is_clone parallel -> [create_barrier]
       | _ -> []
     in
 	  match ty with
@@ -522,7 +528,6 @@ and create_affect_stm ?(bar = true) gpu env parallel dest src ty mem_d mem_s =
            | Carrayint_lit l -> create_affect_lit gpu env parallel dest l bty mem_d mem_s
            | src ->
               let x = gen_symbol () in
-              let loc_id = Cfun_call ("get_local_id", [Cconst (Ccint 0)]) in
               let create_loop b step parallel mem_d mem_s =
                 Cfor(x,
 				             b, mk_int n, step,
@@ -531,26 +536,41 @@ and create_affect_stm ?(bar = true) gpu env parallel dest src ty mem_d mem_s =
 				               (Carray (src, Cvar x)) bty
 			                 mem_d mem_s)
               in
-              match bty with
+              let rec rest_arr bty n =
+                if n == 0 then
+                  true
+                else
+                  match bty with
+                    | Cty_arr (_, bty) -> rest_arr bty (n-1)
+                    | _ -> false
+              in
+              let next_par parallel = match parallel with
+                | WI n -> if n <= 1 then Parallel else WI (n-1)
+                | WG (s, n) -> if (n <= 1) then Parallel else WG (s, n-1)
+                | _ -> Parallel
+              in
+              match bty, parallel with
                 (* When copying an array, parallelizes the inner loop if possible *)
-                | Cty_arr _ when is_gpu gpu & parallel ->
+                | Cty_arr (_, bty), (WI n | WG (_, n)) when is_gpu gpu & rest_arr bty (n-1) ->
 			              [create_loop (mk_int 0) (mk_int 1) parallel mem_d mem_s;
                     create_barrier]
-                | _ when is_gpu gpu & parallel ->
+                | _, (WI dim | WG (_, dim)) when is_gpu gpu ->
+                    let loc_id = Cfun_call ("get_local_id", [Cconst (Ccint (dim-1))]) in
                     let create_barrier = if bar then [create_barrier] else [] in
+                    let parallel = next_par parallel in
                     (* Supresses the loop if possible when parallel. *)
-                    if (n = !size_workgroup) then
-                      create_affect_stm gpu env false (CLarray (dest, loc_id))
-                        (Carray (src, loc_id)) bty Private Private @
+                    if (n = Array.get size_workgroup (dim-1)) then
+                      create_affect_stm ~bar:false gpu env parallel (CLarray (dest, loc_id))
+                        (Carray (src, loc_id)) bty mem_d mem_s @
 		                  create_barrier
-                    else if (n < !size_workgroup) then
+                    else if (n < Array.get size_workgroup (dim-1)) then
                       Cif (Cbop("<", loc_id, mk_int n),
-                        create_affect_stm gpu env false (CLarray (dest, loc_id))
-                          (Carray (src, loc_id)) bty Private Private, []) ::
+                        create_affect_stm ~bar:false gpu env parallel (CLarray (dest, loc_id))
+                          (Carray (src, loc_id)) bty mem_d mem_s, []) ::
 		                  create_barrier
                     else
 		                  create_loop loc_id
-		                    (mk_int !size_workgroup) false Private Private ::
+		                    (mk_int (Array.get size_workgroup (dim-1))) parallel mem_d mem_s ::
 			                create_barrier
                 | _ ->
 			              [create_loop (mk_int 0) (mk_int 1) parallel mem_d mem_s]
@@ -890,11 +910,13 @@ let generate_function_call nc gpu parallel out_env var_env obj_env outvl objn ar
 
   let decls_in, affects_in, desalocs_in, args =
     generate_copies_in gpu parallel sig_info args var_env in
+  let var_env = add_env decls_in var_env in
 
   (* The calling convention is different between the GPU and the CPU *)
   if is_gpu gpu then
 	  let decls_out, affects_out, out =
 	    generate_copies_out gpu parallel sig_info outvl var_env in
+    let var_env = add_env decls_out var_env in
 
 	  let args, decl_obj, obj_in, obj_out =
       step_fun_call nc gpu out_env var_env classln sig_info objn out args in
@@ -948,7 +970,7 @@ let generate_function_call nc gpu parallel out_env var_env obj_env outvl objn ar
         let out_sig = names_mem_of_arg_list sig_info.node_outputs in
         let create_affect outv (out_name, out_mem) =
           let (ty, mem) = assoc_env_lhs gpu outv var_env in
-	        create_affect_stm
+	        create_affect_stm ~partial:false
 	          gpu var_env parallel outv (Cfield (out, local_qn out_name)) ty mem out_mem
         in
           Csblock { var_decls = decls_in;
@@ -962,48 +984,49 @@ let rec create_affect_const gpu parallel var_env (dest : clhs) c =
         let se = Static.simplify QualEnv.empty (find_const ln).c_value in
         create_affect_const gpu parallel var_env dest se
     | Sarray_power(c, n_list) ->
-        let rec make_loop power_list replace = match power_list with
-          | [] -> dest, replace
-          | p :: power_list ->
-            let x = gen_symbol () in
-            let e, replace =
-              make_loop power_list
-                    (fun y -> [Cfor(x, mk_int 0,
-                              cexpr_of_static_exp p, mk_int 1, replace y)]) in
-            let e =  (CLarray (e, Cvar x)) in
-            e, replace
+        let max_dim = match parallel with
+          | WI n -> n
+          | WG (_, n) -> n
+          | _ -> 0
         in
-        let e, b =
-          (* In case we are in a clone mode on the GPU, parallelizes the inner loop created. *)
-	        if is_gpu gpu & is_clone parallel then
-	          match n_list with
-	            | p :: power_list ->
-	              let p = cexpr_of_static_exp p in
-	              (match p with
-	                | Cconst (Ccint vi) when vi = !size_workgroup ->
-					            let e, replace =
-					              make_loop power_list (fun y -> y) in
-					            let e = CLarray (e, Cfun_call("get_local_id", [mk_int 0])) in
-					            e, replace
-	                | Cconst (Ccint vi) when vi < !size_workgroup ->
-					            let e, replace =
-					              make_loop power_list
-	                        (fun y ->
-	                          [Cif (Cbop("<", Cfun_call("get_local_id", [mk_int 0]), p), y, [])]) in
-					            let e = CLarray (e, Cfun_call("get_local_id", [mk_int 0])) in
-					            e, replace
-	                | _ ->
-					            let x = gen_symbol () in
-					            let e, replace =
-					              make_loop power_list
-					                    (fun y ->
-                                [Cfor(x, Cfun_call("get_local_id", [mk_int 0]),
-                                  p, mk_int !size_workgroup, y)]) in
-					            let e = CLarray (e, Cvar x) in
-					            e, replace)
-              | _ -> assert false
-	        else
-		        make_loop n_list (fun y -> y)
+        let rec make_loop dim power_list replace = match power_list with
+          | [] -> dest, replace
+          | p :: power_list when dim < max_dim ->
+              (* In case we are in a clone mode, parallelizes the inner loop created. *)
+              let p = cexpr_of_static_exp p in
+              (match p with
+                | Cconst (Ccint vi) when vi = Array.get size_workgroup dim ->
+				            let e, replace =
+				              make_loop (dim + 1) power_list (fun y -> replace y) in
+				            let e = CLarray (e, Cfun_call("get_local_id", [mk_int dim])) in
+				            e, replace
+                | Cconst (Ccint vi) when vi < Array.get size_workgroup (dim-1) ->
+				            let e, replace =
+				              make_loop (dim + 1) power_list
+                        (fun y ->
+                          [Cif (Cbop("<",
+                            Cfun_call("get_local_id", [mk_int dim]), p), replace y, [])]) in
+				            let e = CLarray (e, Cfun_call("get_local_id", [mk_int dim])) in
+				            e, replace
+                | _ ->
+				            let x = gen_symbol () in
+				            let e, replace =
+				              make_loop (dim + 1) power_list
+				                    (fun y ->
+                            [Cfor(x, Cfun_call("get_local_id", [mk_int dim]),
+                              p, mk_int (Array.get size_workgroup dim), replace y)]) in
+				            let e = CLarray (e, Cvar x) in
+				            e, replace)
+          | p :: power_list ->
+	            let x = gen_symbol () in
+	            let e, replace =
+	              make_loop dim power_list
+	                    (fun y -> [Cfor(x, mk_int 0,
+	                              cexpr_of_static_exp p, mk_int 1, replace y)]) in
+	            let e = (CLarray (e, Cvar x)) in
+	            e, replace
+        in
+        let e, b = make_loop 0 n_list (fun y -> y)
         in
         let affect = b (create_affect_const gpu parallel var_env e c) in
         if is_gpu gpu & is_clone parallel then
@@ -1027,6 +1050,7 @@ let rec create_affect_const gpu parallel var_env (dest : clhs) c =
 (** Translates an Obj action to a list of C statements.
 
     @param  ?init     true when creating the initialization of persistent memory
+            ?br       true when no pmap has been encountered before
             nc        true when translating a No_constraint function
             gpu       the Types.gpu of a function (does not accept No_constraint)
             parallel  an instance of type parallelisation
@@ -1036,23 +1060,23 @@ let rec create_affect_const gpu parallel var_env (dest : clhs) c =
             act       the Obc action to translate
 
     @return A list of cstm *)
-let rec cstm_of_act ?(init = false) nc gpu parallel out_env var_env obj_env act =
+let rec cstm_of_act ?(init = false) ?(br = true) nc gpu parallel out_env var_env obj_env act =
   match act with
       (** Cosmetic : cases on boolean values are converted to if statements. *)
     | Acase (c, [({name = "true"}, te); ({ name = "false" }, fe)])
     | Acase (c, [({name = "false"}, fe); ({ name = "true"}, te)]) ->
         let cc = cexpr_of_exp gpu out_env var_env c in
-        let cte = cstm_of_act_list ~init:init nc gpu parallel out_env var_env obj_env te in
-        let cfe = cstm_of_act_list ~init:init nc gpu parallel out_env var_env obj_env fe in
+        let cte = cstm_of_act_list ~init:init ~br:br nc gpu parallel out_env var_env obj_env te in
+        let cfe = cstm_of_act_list ~init:init ~br:br nc gpu parallel out_env var_env obj_env fe in
         [Cif (cc, cte, cfe)]
     | Acase (c, [({name = "true"}, te)]) ->
         let cc = cexpr_of_exp gpu out_env var_env c in
-        let cte = cstm_of_act_list ~init:init nc gpu parallel out_env var_env obj_env te in
+        let cte = cstm_of_act_list ~init:init ~br:br nc gpu parallel out_env var_env obj_env te in
         let cfe = [] in
         [Cif (cc, cte, cfe)]
     | Acase (c, [({name = "false"}, fe)]) ->
         let cc = Cuop ("!", (cexpr_of_exp gpu out_env var_env c)) in
-        let cte = cstm_of_act_list ~init:init nc gpu parallel out_env var_env obj_env fe in
+        let cte = cstm_of_act_list ~init:init ~br:br nc gpu parallel out_env var_env obj_env fe in
         let cfe = [] in
         [Cif (cc, cte, cfe)]
 
@@ -1066,11 +1090,12 @@ let rec cstm_of_act ?(init = false) nc gpu parallel out_env var_env obj_env act 
         let ccl =
           List.map
             (fun (c,act) -> cname_of_qn c,
-               cstm_of_act_list ~init:init nc gpu parallel out_env var_env obj_env act) cl in
+               cstm_of_act_list ~init:init ~br:br nc gpu
+                  parallel out_env var_env obj_env act) cl in
         [Cswitch (cexpr_of_exp gpu out_env var_env e, ccl)]
 
     | Ablock b ->
-        cstm_of_act_list ~init:init nc gpu parallel out_env var_env obj_env b
+        cstm_of_act_list ~init:init ~br:br nc gpu parallel out_env var_env obj_env b
 
     (** Creates a loop and recursively applies the translation function on sub-statements.
         Parallelizes the work between work-groups when in a kernel. *)
@@ -1078,11 +1103,11 @@ let rec cstm_of_act ?(init = false) nc gpu parallel out_env var_env obj_env act 
         let s, (t, m) = cvar_of_vd vd in
         let var_env = Cenv.add s (t, m) var_env in
         (match parallel with
-          | WG (size :: size_l) ->
+          | WG ((size :: size_l), dim) ->
               (* This mean we have to parallelize *)
               let div_size = List.fold_left ( * ) 1 size_l in
               let mod_size = div_size * size in
-              let next_par = if size_l = [] then WI else WG size_l in
+              let next_par = if size_l = [] then (WI dim) else WG (size_l, dim) in
 			        [Csblock {
 		            var_decls = [name x, (Cty_int, Private)];
 		            block_body =
@@ -1093,24 +1118,25 @@ let rec cstm_of_act ?(init = false) nc gpu parallel out_env var_env obj_env act 
 					                     Cbop("%", Cfun_call ("get_group_id",[Cconst (Ccint 0)]),
 	                               mk_int mod_size),
                                mk_int div_size))) ::
-				          cstm_of_act_list ~init:init nc gpu next_par out_env var_env obj_env act;}]
+				          cstm_of_act_list ~init:init ~br:br nc gpu next_par out_env var_env obj_env act;}]
           | _ ->
               (* Normal case *)
 			        [Cfor(name x, cexpr_of_exp gpu out_env var_env i1,
 			              cexpr_of_exp gpu out_env var_env i2, mk_int 1,
-			              cstm_of_act_list ~init:init nc gpu parallel out_env var_env obj_env act)])
+			              cstm_of_act_list ~init:init ~br:br nc gpu
+                      parallel out_env var_env obj_env act)])
     
     (** Creates a parallel loop and recursively applies
         the translation function on sub-statements. *)
-    | Apfor ({ v_ident = x } as vd, i, act) ->
+    | Apfor ({ v_ident = x } as vd, i, act, n) ->
         let s, (t, m) = cvar_of_vd vd in
         let var_env = Cenv.add s (t, m) var_env in
         (match parallel with
-          | WG (size :: size_l) ->
+          | WG ((size :: size_l), dim) ->
               (* In a kernel, parallelizes between all work-items of all work-groups *)
               let div_size = List.fold_left (fun x y -> x*y) 1 size_l in
               let mod_size = div_size * size in
-              let next_par = if size_l = [] then Parallel else WG size_l in
+              let next_par = if size_l = [] then Parallel else WG (size_l, dim) in
 			        [Csblock {
 		            var_decls = [name x, (Cty_int, Private)];
 		            block_body = [
@@ -1130,41 +1156,45 @@ let rec cstm_of_act ?(init = false) nc gpu parallel out_env var_env obj_env act 
 				              "<",
 				              Cvar (name x),
 				              cexpr_of_exp gpu out_env var_env i),
-				            cstm_of_act_list ~init:init nc gpu next_par out_env var_env obj_env act,
+				            cstm_of_act_list ~init:init ~br:false nc
+                      gpu next_par out_env var_env obj_env act,
 				            [])];}]
-          | _ ->
+          | WI dim ->
               (* Outside a kernel, parallelizes between the local work-items. *)
               let i = cexpr_of_exp gpu out_env var_env i in
+              let next_par = if dim <= 1 then Parallel else WI (dim - 1) in
+              let create_barrier = if br then [create_barrier] else [] in
               (match i with
-                | Cconst (Ccint vi) when vi = !size_workgroup ->
+                | Cconst (Ccint vi) when vi = Array.get size_workgroup (dim-1) ->
                     (* If the loop is the same size as the size of a work-group, *)
                     (* does not create the loop. *)
 						        [Csblock {
 					            var_decls = [name x, (Cty_int, Private)];
 					            block_body =
-                        Caffect ((CLvar (name x)), (Cfun_call ("get_local_id", [mk_int 0]))) ::
-                        cstm_of_act_list ~init:init nc gpu Parallel
+                        Caffect ((CLvar (name x)), (Cfun_call ("get_local_id", [mk_int n]))) ::
+                        cstm_of_act_list ~init:init ~br:false nc gpu next_par
                           out_env var_env obj_env act @
-                        [create_barrier];}]
-                | Cconst (Ccint vi) when vi < !size_workgroup ->
+                        create_barrier;}]
+                | Cconst (Ccint vi) when vi < Array.get size_workgroup (dim-1) ->
 						        [Csblock {
 					            var_decls = [name x, (Cty_int, Private)];
-					            block_body = [
-                        Caffect ((CLvar (name x)), (Cfun_call ("get_local_id", [mk_int 0])));
+					            block_body =
+                        Caffect ((CLvar (name x)), (Cfun_call ("get_local_id", [mk_int n]))) ::
                         Cif (Cbop("<", Cvar (name x), i),
-                          cstm_of_act_list ~init:init nc gpu Parallel
-                            out_env var_env obj_env act, []);
-                        create_barrier];}]
+                          cstm_of_act_list ~init:init ~br:false nc gpu next_par
+                            out_env var_env obj_env act, []) ::
+                        create_barrier;}]
                 | _ ->
-						        [Cfor(name x,
+						        Cfor(name x,
 						          Cfun_call (
 						            "get_local_id",
-						            [Cconst (Ccint 0)]),
+						            [mk_int n]),
 						          i,
-					            mk_int !size_workgroup,
-						          cstm_of_act_list ~init:init nc gpu Parallel
-                        out_env var_env obj_env act);
-					          create_barrier]))
+					            mk_int (Array.get size_workgroup (dim-1)),
+						          cstm_of_act_list ~init:init ~br:false nc gpu next_par
+                        out_env var_env obj_env act) ::
+					          create_barrier)
+          | _ -> assert false)
 
     (** Translate constant assignment *)
     | Aassgn (vn, { e_desc = Eextvalue { w_desc = Wconst c }; }) ->
@@ -1177,7 +1207,7 @@ let rec cstm_of_act ?(init = false) nc gpu parallel out_env var_env obj_env act 
           let var_env = Cenv.add new_v (ty, Private) var_env in
           let affect = create_affect_const gpu parallel var_env (CLvar new_v) c in
           let copy =
-            create_affect_stm gpu var_env (is_clone parallel) vn (Cvar new_v) ty mem Private in
+            create_affect_stm gpu var_env parallel vn (Cvar new_v) ty mem Private in
           [Csblock {
             var_decls = [v];
             block_body = affect @ copy;}]
@@ -1194,13 +1224,13 @@ let rec cstm_of_act ?(init = false) nc gpu parallel out_env var_env obj_env act 
         let v = name_of_ext_value ext in
         let mem_v = Cenv.loc v var_env in
         let ce = cexpr_of_exp gpu out_env var_env e in
-        create_affect_stm gpu var_env (is_clone parallel) vn ce ty mem mem_v
+        create_affect_stm gpu var_env parallel vn ce ty mem mem_v
         
     | Aassgn (vn, e) ->
         let vn = clhs_of_pattern gpu out_env var_env vn in
         let (ty, mem) = assoc_env_lhs gpu vn var_env in
         let ce = cexpr_of_exp gpu out_env var_env e in
-        create_affect_stm gpu var_env (is_clone parallel) vn ce ty mem Private
+        create_affect_stm gpu var_env parallel vn ce ty mem Private
 
     (** Our Aop marks an operator invocation that will perform side effects. Just
         translate to a simple C statement. *)
@@ -1242,7 +1272,7 @@ let rec cstm_of_act ?(init = false) nc gpu parallel out_env var_env obj_env act 
                 let field = cexpr_of_lhs field in
                 [Csexpr (Cfun_call (name_reset, Caddrof field :: gpu_env))]
           | Oarray (_, pl) ->
-              let rec mk_loop pl field = match pl with 
+              let rec mk_loop pl field = match pl with
                 | [] ->
               (* If reseting the memory of a No_constraint function from another type *)
               (* of function on the GPU, must transfer the memory *)
@@ -1263,8 +1293,8 @@ let rec cstm_of_act ?(init = false) nc gpu parallel out_env var_env obj_env act 
                   else
                     let field = cexpr_of_lhs field in
                     [Csexpr (Cfun_call (name_reset, Caddrof field :: gpu_env ))]
-                | p::pl -> 
-                  let field = CLarray(field, cexpr_of_pattern GPU out_env var_env p) in
+                | p::pl ->
+                  let field = CLarray(field, cexpr_of_pattern gpu out_env var_env p) in
                     mk_loop pl field
                in
                  mk_loop pl field
@@ -1276,18 +1306,18 @@ let rec cstm_of_act ?(init = false) nc gpu parallel out_env var_env obj_env act 
     | Acall (outvl, objn, Mstep, el) ->
         let args = cexprs_of_exps gpu out_env var_env el in
         let outvl = clhs_list_of_pattern_list gpu out_env var_env outvl in
-        generate_function_call 
-          nc gpu (is_clone parallel) out_env var_env obj_env outvl objn args
+        generate_function_call
+          nc gpu parallel out_env var_env obj_env outvl objn args
 
 
-and cstm_of_act_list ?(init = false) nc gpu parallel out_env var_env obj_env b =
+and cstm_of_act_list ?(init = false) ?(br = true) nc gpu parallel out_env var_env obj_env b =
   let l = List.map cvar_of_vd b.b_locals in
   let var_env = add_env l var_env in
-  let cstm = List.flatten 
-    (List.map (cstm_of_act ~init:init nc gpu parallel out_env var_env obj_env) b.b_body) in
+  let cstm = List.flatten
+    (List.map (cstm_of_act ~init:init ~br:br nc gpu parallel out_env var_env obj_env) b.b_body) in
 	match l with
 	  | [] -> cstm
-	  | _ -> 
+	  | _ ->
         let rel = rel_of_varlist gpu l in
         [Csblock { var_decls = l; block_body = cstm @ rel }]
 
@@ -1348,8 +1378,8 @@ let generate_arguments obj_env body mem_env =
         let obj = assoc_obj on obj_env in
 	      let s = Modules.find_value obj.o_class in
         let sizes = match s.node_gpu with
-          | Parallel_kernel (si, b) -> si, b
-          | Kernel -> [1], false
+          | Parallel_kernel (si, n) -> si, n, true
+          | Kernel n -> [1], n, false
           | _ -> assert false
         in
         let ker_sizes = Kers.add nbr_ker sizes ker_sizes in
@@ -1378,45 +1408,53 @@ let generate_arguments obj_env body mem_env =
 
     @return the list of kernels as variables
             the list of kernel events as variables
-            the list of kernel sizes as variables
-            the list of expressions to affect the sizes
             the list of expressions to launch the kernels
             the list of releases *)
 let generate_verbose ker_names ker_sizes nbr_ker =
   let rec create_stuff nbr = match nbr with
-    | 0 -> [], [], ["workGroupSize", (Cty_arr (1, Cty_size_t), Private)],
-          [Caffect (CLarray (CLvar "workGroupSize", Cconst (Ccint 0)),
-            Cconst (Ccint !size_workgroup))],
-          [], [], (Cconst Cnull, mk_int 0)
+    | 0 -> [], [], [], [], (Cconst Cnull, mk_int 0)
 
     | nbr ->
-        let a, z, e, r, t, y, (ev_ptr, ev_nbr) = create_stuff (nbr - 1) in
+        let a, z, t, y, (ev_ptr, ev_nbr) = create_stuff (nbr - 1) in
         let ker_name = Kers.find (nbr - 1) ker_names in
-        let (sizes, pmap) = Kers.find (nbr - 1) ker_sizes in
+        let (sizes, n, parallel) = Kers.find (nbr - 1) ker_sizes in
         let ker_event = fresh (ker_name ^ "_event") in
         let size = List.fold_left (fun s n -> s * n) 1 sizes in
-        let size = if pmap then size + !size_workgroup -
-          (size mod !size_workgroup) else size * !size_workgroup in
-        let ker_size = fresh (ker_name ^ "_globalSize") in
+        let rec aux i n =
+          if i > n - 1 then
+            []
+          else
+            mk_int (Array.get size_workgroup i) :: aux (i + 1) n
+        in
+        let size_cexpr, size_wg, dim =
+          if parallel & n == 0 then
+            Carraysize_t_lit
+              [mk_int (size + (Array.get size_workgroup 0) - (size mod (Array.get size_workgroup 0)))],
+            Carraysize_t_lit [mk_int (Array.get size_workgroup 0)], mk_int 1
+          else if parallel then
+            Carraysize_t_lit (mk_int (size * Array.get size_workgroup 0) :: aux 1 n),
+            Carraysize_t_lit (aux 0 n), mk_int n
+          else if n == 0 then
+            Carraysize_t_lit [mk_int 1], Carraysize_t_lit [mk_int 1], mk_int 1
+          else
+            Carraysize_t_lit (aux 0 n), Carraysize_t_lit (aux 0 n), mk_int n
+        in
 	        (ker_name, (Oty_kernel, Private)) :: a,
 	        (ker_event, (Oty_event, Private)) :: z,
-	        (ker_size, (Cty_arr (1, Cty_size_t), Private)) :: e,
-	        (Caffect (
-	          CLarray (CLvar ker_size, Cconst (Ccint 0)), mk_int size)) :: r,
 	        (Caffect (
 	          OLenv_field Error,
 	          Cfun_call (
 	            "clEnqueueNDRangeKernel",
 	            Oenv_field Command_queue :: Cvar ker_name ::
-	            mk_int 1 :: Cconst Cnull :: Cvar ker_size ::
-	            Cvar "workGroupSize" :: ev_nbr :: ev_ptr ::
+	            dim :: Cconst Cnull :: size_cexpr ::
+	            size_wg :: ev_nbr :: ev_ptr ::
 	            Cref (Cvar ker_event) :: []))) :: t,
           (Csexpr (Cfun_call ("clReleaseKernel", [Cvar ker_name])) ::
           Csexpr (Cfun_call ("clReleaseEvent", [Cvar ker_event])) :: y),
           (Cref (Cvar ker_event), mk_int 1)
   in
-	let a, z, e, r, t, y, _ = create_stuff nbr_ker in
-	  List.rev a, List.rev z, List.rev e, List.rev r, List.rev t, List.rev y
+	let a, z, t, y, _ = create_stuff nbr_ker in
+	  List.rev a, List.rev z, List.rev t, List.rev y
 
 (** Translates a list of objects into a list of variables and creates the releases *)
 let cvar_of_objs gpu objs =
@@ -1520,10 +1558,10 @@ let fun_def_of_step_fun ?(nc = false) gpu n mem objs md =
     (** The body *)
     let body =
       match gpu with
-        | Parallel_kernel (s, _) ->
-		        cstm_of_act_list nc gpu (WG s) out_env var_env objs md.m_body
-        | _ when (is_gpu gpu) & (not nc) ->
-		        cstm_of_act_list nc gpu WI out_env var_env objs md.m_body
+        | Parallel_kernel (s, n) ->
+		        cstm_of_act_list nc gpu (WG (s, n)) out_env var_env objs md.m_body
+        | GPU n | Kernel n when (not nc) ->
+		        cstm_of_act_list nc gpu (WI n) out_env var_env objs md.m_body
         | _ ->
 		        cstm_of_act_list nc gpu Parallel out_env var_env objs md.m_body
     in
@@ -1595,13 +1633,13 @@ let fun_def_of_step_fun ?(nc = false) gpu n mem objs md =
       generate_arguments objs md.m_body mem_env in
 
     (* Creates the kernels, sizes and calls *)
-    let def_kers, def_events, def_sizes, sizes, calls, rels =
+    let def_kers, def_events, calls, rels =
       generate_verbose ker_names ker_sizes nbr_ker in
 
-    let var_decls = mems @ def_kers @ def_events @ def_sizes in
+    let var_decls = mems @ def_kers @ def_events in
 
-    let body = mk_block sizes :: mk_block create_kers :: mk_block copy_in ::
-               mk_block set_args :: mk_wait_finish :: mk_block calls :: mk_wait_finish ::
+    let body = mk_block create_kers :: mk_block copy_in :: mk_block set_args ::
+               mk_wait_finish :: mk_block calls :: mk_wait_finish ::
                mk_block copy_out :: mk_block rel_mems :: mk_block rels :: [] in
 
 	  Cfundef {
@@ -1693,14 +1731,14 @@ let reset_fun_def_of_class_def ?(init = false) ?(nc = false) gpu cd =
 	  if gpu != Kernel_caller then
 		  let body =
 	      match gpu with
-	        | Parallel_kernel (s, _) ->
-			        cstm_of_act_list ~init:init nc gpu (WG s) 
+	        | Parallel_kernel (s, n) ->
+			        cstm_of_act_list ~init:init nc gpu (WG (s,n))
                 IdentSet.empty var_env cd.cd_objs reset.m_body
-	        | _ when (is_gpu gpu) & (not nc) ->
-			        cstm_of_act_list ~init:init nc gpu WI 
+	        | GPU n | Kernel n when (not nc) ->
+			        cstm_of_act_list ~init:init nc gpu (WI n)
                 IdentSet.empty var_env cd.cd_objs reset.m_body
 	        | _ ->
-			        cstm_of_act_list ~init:init nc gpu Parallel 
+			        cstm_of_act_list ~init:init nc gpu Parallel
                 IdentSet.empty var_env cd.cd_objs reset.m_body
 		  in
       let body = rel @ body in
@@ -1728,16 +1766,30 @@ let reset_fun_def_of_class_def ?(init = false) ?(nc = false) gpu cd =
 		        let classn = cname_of_qn obj.o_class in
 					  let sig_info = find_value obj.o_class in
             let sig_gpu = sig_info.node_gpu in
-            let size =
+		        let rec aux i n =
+		          if i > n - 1 then
+		            []
+		          else
+		            mk_int (Array.get size_workgroup i) :: aux (i + 1) n
+		        in
+		        let size_cexpr, size_wg, dim =
               match sig_gpu with
-                | Kernel -> Carraysize_t_lit [mk_int !size_workgroup]
-                | Parallel_kernel (sizes, pmap) -> 
-						        let size = List.fold_left (fun s n -> s * n) 1 sizes in
-						        let size = if pmap then size + !size_workgroup -
-                      (size mod !size_workgroup) else size * !size_workgroup in
-                    Carraysize_t_lit [mk_int size]
-                | _  -> assert false
-            in  
+                | Kernel 0 ->
+		                Carraysize_t_lit [mk_int 1], Carraysize_t_lit [mk_int 1], mk_int 1
+                | Kernel n ->
+		                Carraysize_t_lit (aux 0 n), Carraysize_t_lit (aux 0 n), mk_int n
+                | Parallel_kernel (sizes, 0) ->
+		                let size = List.fold_left (fun s n -> s * n) 1 sizes in
+				            Carraysize_t_lit
+				              [mk_int (size + (Array.get size_workgroup 0) -
+                        (size mod (Array.get size_workgroup 0)))],
+				            Carraysize_t_lit [mk_int (Array.get size_workgroup 0)], mk_int 1
+                | Parallel_kernel (sizes, n) ->
+		                let size = List.fold_left (fun s n -> s * n) 1 sizes in
+		                Carraysize_t_lit (mk_int (size * Array.get size_workgroup 0) :: aux 1 n),
+    		            Carraysize_t_lit (aux 0 n), mk_int n
+                | _ -> assert false
+		        in
 	          let ker = fresh "ker_reset" in
             let field = Cfield (Cderef (Cvar "self"), local_qn (name on)) in
             (* All the expressions to launch the kernel. *)
@@ -1748,8 +1800,8 @@ let reset_fun_def_of_class_def ?(init = false) ?(nc = false) gpu cd =
               generate_argument_kernel (Cvar ker) (mk_int 0) (Cref field) :: mk_wait_finish ::
 							Caffect (OLenv_field Error,
 							  Cfun_call ("clEnqueueNDRangeKernel",
-							    Oenv_field Command_queue :: Cvar ker :: mk_int 1 :: Cconst Cnull :: 
-			            size :: Carraysize_t_lit [mk_int !size_workgroup] ::
+							    Oenv_field Command_queue :: Cvar ker :: dim :: Cconst Cnull ::
+			            size_cexpr :: size_wg ::
 	                mk_int 0 :: Cconst Cnull :: Cref (Oenv_field Event) :: [])) ::
 			        mk_wait_finish :: []
             in
@@ -1806,11 +1858,11 @@ let cdefs_and_cdecls_of_class_def cd =
   if cd.cd_gpu = No_constraint then
 	  let c_step_fun_def = fun_def_of_step_fun ~nc:true CPU cd.cd_name
 	    cd.cd_mems cd.cd_objs step_m in
-	  let cl_step_fun_def = fun_def_of_step_fun ~nc:true GPU cd.cd_name
+	  let cl_step_fun_def = fun_def_of_step_fun ~nc:true (GPU 0) cd.cd_name
 	    cd.cd_mems cd.cd_objs step_m in
 	  (* C function for resetting our memory structure. *)
 	  let c_reset_fun_def = reset_fun_def_of_class_def ~nc:true CPU cd in
-	  let cl_reset_fun_def = reset_fun_def_of_class_def ~nc:true GPU cd in
+	  let cl_reset_fun_def = reset_fun_def_of_class_def ~nc:true (GPU 0) cd in
 	  let c_res_fun_decl = cdecl_of_cfundef c_reset_fun_def in
 	  let cl_res_fun_decl = cdecl_of_cfundef cl_reset_fun_def in
 	  let c_init_fun_def = reset_fun_def_of_class_def ~init:true ~nc:true CPU cd in

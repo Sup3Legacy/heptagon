@@ -535,7 +535,7 @@ let rec cstm_of_act out_env var_env obj_env act =
               cexpr_of_exp out_env var_env i2, Cconst (Ccint 1),
               cstm_of_act_list out_env var_env obj_env act)]
     
-    | Apfor ({ v_ident = x }, i, act) ->
+    | Apfor ({ v_ident = x }, i, act, _) ->
         let y = Idents.gen_var "cgen" "par_i" in
         [Cfor(name y, Cconst (Ccint 0), Cconst (Ccint 32), Cconst (Ccint 1),
           [Cfor(name x, Cvar (name y),

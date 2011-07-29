@@ -329,7 +329,7 @@ let rec act_list param_env act_l acts =
     | Obc.Ablock b ->
         let ablock = Ablock (block param_env b) in
         ablock::acts
-    | Obc.Apfor (v, se, b) ->
+    | Obc.Apfor (v, se, b, _) ->
         let y = Idents.gen_var "par_id" "obc2java" in
         let afor = Afor (var_dec param_env v,
                         Evar y, exp param_env se, Sint 32, block param_env b) in

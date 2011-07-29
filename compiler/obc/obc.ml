@@ -81,8 +81,8 @@ type act =
   | Acase of exp * (constructor_name * block) list
   | Afor of var_dec * exp * exp * block
   | Ablock of block
-  (* parallel for *)
-  | Apfor of var_dec * exp * block
+  (* parallel for loop, the last integer is the dimension of the grid *)
+  | Apfor of var_dec * exp * block * int
 
 and block =
     { b_locals : var_dec list;

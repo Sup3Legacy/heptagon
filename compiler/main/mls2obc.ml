@@ -568,15 +568,28 @@ and translate_iterator map call_context it name_list
     mk_loop b (List.rev xdl) nl
   in
   let mk_ploop b xdl nl =
-    let rec mk_ploop b xdl nl = match xdl, nl with
-      | xd::[], n::[] -> Apfor (xd, n, b)
+    let s = match app.Minils.a_op with
+      | Minils.Efun f | Minils.Enode f -> Modules.find_value f
+      | _ -> assert false
+    in
+    let nbr_apfor = match s.node_gpu with
+      | GPU i -> i
+      | _ -> 0
+    in
+    let rec mk_ploop b xdl nl nbr_apfor = match xdl, nl with
+      | xd::[], n::[] when nbr_apfor < !Compiler_options.max_dimension ->
+          Apfor (xd, n, b, nbr_apfor)
+      | xd::[], n::[] -> Afor (xd, mk_exp_const_int 0, n, b)
       | xd::xdl, n::nl ->
           (match call_context with
-            | _, Parallel_kernel _ -> mk_ploop (mk_block [Apfor (xd, n, b)]) xdl nl
-            | _ -> mk_loop (mk_block [Apfor (xd, n, b)]) xdl nl)
+            | _, Parallel_kernel _ ->
+                mk_ploop (mk_block [Apfor (xd, n, b, nbr_apfor)]) xdl nl nbr_apfor
+            | _ when nbr_apfor < !Compiler_options.max_dimension ->
+                mk_ploop (mk_block [Apfor (xd, n, b, nbr_apfor)]) xdl nl (nbr_apfor + 1)
+            | _ -> mk_loop (mk_block [Afor (xd, mk_exp_const_int 0, n, b)]) xdl nl)
       | _, _ -> assert false
     in
-    mk_ploop b (List.rev xdl) nl
+    mk_ploop b (List.rev xdl) nl nbr_apfor
   in
   match it with
     | Minils.Imap ->

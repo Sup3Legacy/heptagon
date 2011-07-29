@@ -85,12 +85,12 @@ let rec clean_act_list al = match al with
               | _, None -> a :: resets, calls
               | Some br, Some bc -> Ablock br :: resets, Ablock bc :: calls)
 			  (* parallel for *)
-			  | Apfor (vd, e, b) ->
+			  | Apfor (vd, e, b, n) ->
             let resb, callb = clean_block b in
             (match resb, callb with
               | None, _ -> resets, a :: calls
               | _, None -> a :: resets, calls
-              | Some br, Some bc -> Apfor(vd, e, br) :: resets, Apfor(vd, e, bc) :: calls)
+              | Some br, Some bc -> Apfor(vd, e, br, n) :: resets, Apfor(vd, e, bc, n) :: calls)
 			  | Acase _ -> assert false
 
 (* Split a block. *)
@@ -103,18 +103,18 @@ and clean_block b =
 
 (* Replaces memories and variables when necessary. *)
 let lhsdesc funs ((env, gpu, l, s) as acc) ld = match ld, gpu with
-  | Lmem x, (Kernel | Parallel_kernel _) -> Lvar x, (env, gpu, l, Setid.add x s)
+  | Lmem x, (Kernel _ | Parallel_kernel _) -> Lvar x, (env, gpu, l, Setid.add x s)
   | Lvar x, Kernel_caller -> if List.mem x l then Lmem x, acc else ld, acc
   | _, _ -> Obc_mapfold.lhsdesc funs acc ld
 
 (* Replaces memories and variables when necessary. *)
 let evdesc funs ((env, gpu, l, s) as acc) wd = match wd, gpu with
-  | Wmem x, (Kernel | Parallel_kernel _) -> Wvar x, (env, gpu, l, Setid.add x s)
+  | Wmem x, (Kernel _ | Parallel_kernel _) -> Wvar x, (env, gpu, l, Setid.add x s)
   | Wvar x, Kernel_caller -> if List.mem x l then Wmem x, acc else wd, acc
   | _, _ -> Obc_mapfold.evdesc funs acc wd
 
 let class_def funs ((env, _, _, _) as acc) cd = match cd.cd_gpu with
-  | Kernel
+  | Kernel _
   | Parallel_kernel _ when cd.cd_stateful ->
       (* Replaces calls to memories by calls to variables in the function. *)
       let cd, (env, gpu, l, s) = Obc_mapfold.class_def funs (env, cd.cd_gpu, [], Setid.empty) cd in

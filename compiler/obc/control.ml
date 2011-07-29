@@ -35,7 +35,7 @@ let is_deadcode = function
         )
     | Acase (_, []) -> true
     | Afor(_, _, _, { b_body = [] }) -> true
-    | Apfor(_, _, { b_body = [] }) -> true
+    | Apfor(_, _, { b_body = [] }, _) -> true
     | _ -> false
 
 let rec joinlist l =

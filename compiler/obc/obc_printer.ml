@@ -115,7 +115,7 @@ let rec print_act ff a =
           print_exps es
     | Ablock b ->
         fprintf ff "do@\n  %a@\ndone" print_block b
-    | Apfor(x, i2, act_list) ->
+    | Apfor(x, i2, act_list, _) ->
         fprintf ff "@[<v>@[<v 2>parallel for %a = 0 to %a {@  %a @]@,}@]"
           print_vd x
           print_exp i2

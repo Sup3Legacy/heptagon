@@ -18,6 +18,7 @@ open Signature
 open Modules
 open Heptagon
 open Hept_mapfold
+open Compiler_options
 
 (* Puts all the function definitions in a QualEnv to be able to analyze functions in any order. *)
 let rec create_env env l = match l with
@@ -36,6 +37,7 @@ let is_pervasives qn =
 type error =
   | Egpu_in_cpu_function
   | Ecpu_in_gpu_function
+  | Egpu_in_gpu_function
   | Ecpu_in_Kernel
   | Emix
 
@@ -46,6 +48,9 @@ let message loc kind =
           print_location loc
     | Ecpu_in_gpu_function ->
         Format.eprintf "%aThe expression is CPU only but was preceded by GPU only functions.@."
+          print_location loc
+    | Egpu_in_gpu_function ->
+        Format.eprintf "%aThere are too many nested pmaps.@."
           print_location loc
     | Ecpu_in_Kernel ->
         Format.eprintf "%aA CPU only function is used in a Kernel.@."
@@ -61,11 +66,12 @@ let message loc kind =
 let add_res res const = match (res, const) with
   | (_, true), _ -> res
   | (No_constraint, _), Kernel_caller -> (CPU, false)
+  | (No_constraint, _), GPU u -> (GPU (min u !max_dimension), false)
   | (No_constraint, _), _ -> (const, false)
-  | (GPU, _), No_constraint -> (GPU, false)
-  | (GPU, _), GPU -> (GPU, false)
-  | (GPU, _), _ -> (GPU, true)
-  | (CPU, _), GPU -> (CPU, true)
+  | (GPU u, _), No_constraint -> (GPU u, false)
+  | (GPU u, _), GPU v -> (GPU (min (max u v) !max_dimension), false)
+  | (GPU u, _), _ -> (GPU u, true)
+  | (CPU, _), GPU _ -> (CPU, true)
   | (CPU, _), _ -> (CPU, false)
   | _ -> Misc.internal_error "parallelisation"
 
@@ -73,11 +79,14 @@ let add_res res const = match (res, const) with
 let mount_res res const = match (res, const) with
   | (_, true), _ -> res
   | (No_constraint, _), Kernel_caller -> (CPU, false)
+  | (No_constraint, _), GPU u -> (GPU (min u !max_dimension), false)
   | (No_constraint, _), _ -> (const, false)
-  | (GPU, _), No_constraint -> (GPU, false)
-  | (GPU, _), GPU -> (GPU, true)
-  | (GPU, _), _ -> (GPU, true)
-  | (CPU, _), GPU -> (CPU, true)
+  | (GPU u, _), No_constraint -> (GPU u, false)
+  | (GPU u, _), GPU _ ->
+        (* This a hack to differenciate nested pmaps from a CPU call from a GPU function. *)
+        (Kernel u, true)
+  | (GPU u, _), _ -> (GPU u, true)
+  | (CPU, _), GPU _ -> (CPU, true)
   | (CPU, _), _ -> (CPU, false)
   | _ -> Misc.internal_error "parallelisation"
 
@@ -85,23 +94,26 @@ let mount_res res const = match (res, const) with
 (* Checks that pmaps are correct and changes maps in pmaps if necessary. *)
 let edesc funs ((res, env, gpu) as acc) ed =
     match ed with
-		  | Eiterator (Ipmap, _, _, _, _, _)
-		  | Eiterator (Ipmapi, _, _, _, _, _) ->
-          let (_, err) = add_res res GPU in
+		  | Eiterator (Ipmap, _, l, _, _, _)
+		  | Eiterator (Ipmapi, _, l, _, _, _) ->
+          let (temp_gpu, err) = add_res res (GPU (List.length l)) in
           let ed, (res, _, _) = Hept_mapfold.edesc funs ((No_constraint, err), env, gpu) ed in
-		      ed, ((mount_res res GPU), env, gpu)
+		      ed, ((mount_res res temp_gpu), env, gpu)
       (* Changes a map into a pmap when the function called is without constraint in a kernel. *)
-		  | Eiterator (Imap, _, _, _, _, _)
-		  | Eiterator (Imapi, _, _, _, _, _) when gpu = Kernel_caller ->
-          let (_, err) = add_res res GPU in
-          let ed, (res, _, _) = Hept_mapfold.edesc funs ((No_constraint, err), env, gpu) ed in
-          (match ed, res with
-            | Eiterator (Imap, a, sl, el1, el2, e), (No_constraint, _) ->
-                Eiterator (Ipmap, a, sl, el1, el2, e), ((mount_res res GPU), env, gpu)
-            | Eiterator (Imapi, a, sl, el1, el2, e), (No_constraint, _) ->
-                Eiterator (Ipmapi, a, sl, el1, el2, e), ((mount_res res GPU), env, gpu)
-            | _, _ ->
-		            ed, (res, env, gpu))
+		  | Eiterator (Imap, {a_op = Efun f | Enode f}, l, _, _, _)
+		  | Eiterator (Imapi, {a_op = Efun f | Enode f}, l, _, _, _) when gpu = Kernel_caller ->
+          let s = Modules.find_value f in
+          (match s.node_gpu with
+            | No_constraint ->
+			          let (temp_gpu, err) = add_res res (GPU (List.length l)) in
+			          let ed, (res, _, _) = Hept_mapfold.edesc funs ((No_constraint, err), env, gpu) ed in
+                (match ed with
+                  | Eiterator (Imap, a, sl, el1, el2, e) ->
+                      Eiterator (Ipmap, a, sl, el1, el2, e), ((mount_res res temp_gpu), env, gpu)
+                  | Eiterator (Imapi, a, sl, el1, el2, e) ->
+                      Eiterator (Ipmapi, a, sl, el1, el2, e), ((mount_res res temp_gpu), env, gpu)
+                  | _ -> assert false)
+            | _ -> Hept_mapfold.edesc funs acc ed)
       | _ ->
           Hept_mapfold.edesc funs acc ed
 
@@ -110,7 +122,9 @@ let eq funs acc eq =
   let eq, acc = Hept_mapfold.eq funs acc eq in
     match acc with
       | (CPU, true), _, _ -> message eq.eq_loc Egpu_in_cpu_function
-      | (GPU, true), _, _ -> message eq.eq_loc Ecpu_in_gpu_function
+      | (GPU _, true), _, _ -> message eq.eq_loc Ecpu_in_gpu_function
+      (* As we said, a hack to differenciate from the previous case. *)
+      | (Kernel _, true), _, _ -> message eq.eq_loc Egpu_in_gpu_function
       | (_, true), _, _ -> message eq.eq_loc Emix
       | _ -> eq, acc
 

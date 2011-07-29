@@ -86,7 +86,7 @@ let rec add_env gpu out_or_local env l = match l with
 			        message a.v_loc Elocal_on_cpu
 			      else
 			        add_env gpu out_or_local (Env.add a.v_ident a env) l
-        | GPU ->
+        | GPU _ ->
             (* No global memory can be created from the GPU. *)
 			      if a.v_mem = Global & out_or_local then
 			        message a.v_loc Ecreate_global_on_gpu
@@ -290,7 +290,7 @@ let exp funs ((gpu, _, env) as acc) eq =
 
 (* Checks that the result of a pmap is in a shared memory. *)
 let eq funs ((gpu, _, env) as acc) eq = match eq.eq_rhs.e_desc, gpu with
-  | Eiterator ((Ipmap | Ipmapi), _, _, _, _, _), GPU ->
+  | Eiterator ((Ipmap | Ipmapi), _, _, _, _, _), GPU _ ->
       (match eq.eq_lhs with
         | Evarpat vi ->
             let vd = Env.find vi env in

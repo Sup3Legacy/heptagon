@@ -19,10 +19,12 @@
 type gpu =
   | Undefined
   | No_constraint
-  | GPU
-  | Kernel
-  (* the list of sizes for parallelization and whether the operator is a pmap (true) or a map *)
-  | Parallel_kernel of int list * bool
+  (* The integer is the number of dimensions already taken for parallelism. *)
+  | GPU of int
+  (* The maximum number of the GPU functions called or 0. *)
+  | Kernel of int
+  (* The list of sizes for parallelization and the integer of the GPU called (0 if a pmap). *)
+  | Parallel_kernel of int list * int
   | Kernel_caller
   | CPU
 
