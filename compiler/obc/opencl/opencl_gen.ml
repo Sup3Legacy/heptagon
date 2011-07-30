@@ -481,7 +481,9 @@ and create_affect_stm ?(bar = true) ?(partial = true) gpu env parallel dest src 
   (* Transfers between GPU memories on the CPU side. *)
   if is_cpu gpu & mem_d = Global & mem_s = Global then
     match dest with
-      | CLfield (CLderef (CLvar "self"), _) -> [Caffect (dest, src)]
+      | CLfield (CLderef (CLvar "self"), _) ->
+          let cdest = cexpr_of_lhs dest in
+          [generate_mem_release cdest; Caffect (dest, src); generate_mem_retain cdest]
       | CLarray (_, _) ->
           let var_out, clhs = name_clhs_of_clhs dest in
           let cvar_out = cexpr_of_lhs clhs in
