@@ -438,8 +438,7 @@ let generate_mem_retain arg  =
 (** Creates the expression to release a memory.
     TODO : does not release the memory because of memory corruption with Nvidia after some time. *)
 let generate_mem_release arg  =
-  (*Cif (arg, [Csexpr (Cfun_call ("clReleaseMemObject", [arg]))], [])*)
-  Cif (arg, [Csexpr (Cfun_call ("printf", [Cconst (Cstrlit "Should release memory\\n")]))], [])
+  Cif (arg, [Csexpr (Cfun_call ("clReleaseMemObject", [arg]))], [])
 
 (** Creates the expressions to release the GPU memories of a list of variables when possible. *)
 let rec rel_of_varlist gpu vars = match vars with

@@ -1,0 +1,37 @@
+const size : int = 32
+const ssize : int = 16
+
+
+fun add_mult(a, b : local float^ssize^ssize; i, j, k : int; c : float) returns (o : float)
+  let
+    o = a[>i<][>k<] *. b[>k<][>j<] +. c;
+  tel
+
+fun elt_mult(a, b : local float^ssize^ssize; c : float; i, j : int)
+    returns(o : float)
+  let
+    o = foldi<<ssize>> add_mult<(a, b, i, j)> (c);
+  tel
+
+fun add_mult_block(a, b : global float^ssize^ssize^size^size; i, j, k : int; c : local float^ssize^ssize)
+    returns(o : local float^ssize^ssize)
+  var la, lb : local float^ssize^ssize;
+  let
+    la = a[>i<][>k<];
+    lb = b[>k<][>j<];
+    o = pmapi<<ssize, ssize>> elt_mult<(la,lb)> (c);
+  tel
+
+fun block_mult(a, b : global float^ssize^ssize^size^size; i, j : int)
+    returns(o : local float^ssize^ssize)
+  let
+    o = foldi<<size>> add_mult_block<(a, b, i, j)> (0.0^ssize^ssize)
+  tel
+
+(* multiplication of two matrices : o = a*b *)
+kernel mat_mult(a, b : float^ssize^ssize^size^size)
+       returns(o : float^ssize^ssize^size^size)
+  let
+    o = mapi<<size, size>> block_mult<(a,b)> ();
+  tel
+
