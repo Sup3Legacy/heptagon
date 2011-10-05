@@ -1,0 +1,17 @@
+const n : int = 2048
+const m : int = 128
+
+fun swap(i, j : int; t_in : int^n) returns (t_out : int^n)
+var t_tmp : int^n;
+let
+  t_tmp = [ t_in with [i] = t_in[>j<] ];
+  t_out = [ t_tmp with [j] = t_in[>i<] ];
+tel
+
+node shuffle(t0 : int^n; i_arr, j_arr : int^m; q : int) returns (v : int)
+var t, t_next : int^n;
+let
+  t = t0 fby t_next;
+  t_next = fold <<m>> swap(i_arr , j_arr , t);
+  v = t_next[>q<];
+tel
