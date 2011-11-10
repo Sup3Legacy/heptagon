@@ -85,8 +85,9 @@ and expect_extvalue h expected_ck e =
   let actual_ck = typing_extvalue h e in
   try unify_ck actual_ck expected_ck
   with
-  | Unify -> eprintf "%a : " print_extvalue e;
-      error_message e.w_loc (Eclockclash (actual_ck, expected_ck))
+  | Unify ->
+    eprintf "%a : " print_extvalue e;
+    error_message e.w_loc (Eclockclash (actual_ck, expected_ck))
 
 let rec typing_pat h = function
   | Evarpat x -> Ck (ck_of_name h x)
@@ -262,6 +263,8 @@ let typing_node node =
   node
 
 let program p =
+  if !Compiler_options.no_clocking_error
+  then Printf.printf "Note: clock checking disabled.\n";
   let program_desc pd = match pd with
     | Pnode nd -> Pnode (typing_node nd)
     | _ -> pd
