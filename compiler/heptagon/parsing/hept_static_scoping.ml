@@ -9,7 +9,9 @@ open Hept_scoping
 
 exception Not_static
 
-let assert_se e = match e.e_desc with
+let assert_se e =
+  if e.e_ct_annot <> None then raise Not_static;
+  match e.e_desc with
   | Econst se -> se
   | _ -> raise Not_static
 
@@ -33,6 +35,7 @@ let static_app_from_app app args =
 let exp funs local_const e =
   let e, _ = Hept_parsetree_mapfold.exp funs local_const e in
     try
+      if e.e_ct_annot <> None then raise Not_static;
       let sed =
         match e.e_desc with
           | Evar n ->
