@@ -641,10 +641,11 @@ let rec typing h e =
           let typed_e = expect h t1 e in
             Epre(Some typed_c, typed_e), t1
 
-      | Efby (e1, e2) ->
+      | Efby (e1, se_o, e2) ->
+          let se_o = Misc.optional (expect_static_exp (Tid Initial.pint)) se_o in
           let typed_e1, t1 = typing h e1 in
           let typed_e2 = expect h t1 e2 in
-            Efby (typed_e1, typed_e2), t1
+            Efby (typed_e1, se_o, typed_e2), t1
 
       | Eiterator (it, ({ a_op = (Enode f | Efun f);
                           a_params = params } as app),

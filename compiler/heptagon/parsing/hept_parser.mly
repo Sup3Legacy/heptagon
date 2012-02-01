@@ -172,7 +172,7 @@ returns: RETURNS | EQUAL {}
 ;
 
 node_dec:
-  | u=unsafe n=node_or_fun f=ident pc=node_params LPAREN i=var_list RPAREN
+  | u=unsafe n=node_or_fun f=ident pc=node_params LPAREN i=var_last_list RPAREN
     returns LPAREN o=var_last_list RPAREN
     c=contract b=block(LET) TEL
       {{ n_name = f;
@@ -344,9 +344,8 @@ _equ:
   | PRESENT opt_bar present_handlers DEFAULT DO b=sblock(IN) END
       { Epresent(List.rev $3, b) }
   | IF exp THEN tb=sblock(IN) ELSE fb=sblock(IN) END
-      { Eswitch($2,
-                   [{ w_name = ptrue; w_block = tb };
-                    { w_name = pfalse; w_block = fb }]) }
+      { Eswitch($2, [{ w_name = ptrue; w_block = tb };
+                     { w_name = pfalse; w_block = fb }]) }
   | RESET b=sblock(IN) EVERY e=exp
       { Ereset(b,e) }
   | DO b=sblock(IN) DONE
@@ -472,6 +471,8 @@ exp:
 _exp:
   | simple_exp FBY exp
       { Efby ($1, $3) }
+  | se=simple_exp FBY POWER i=simple_exp e=exp
+      { Efby_n (se,i,e) }
   | PRE exp
       { Epre (None, $2) }
   /* node call*/

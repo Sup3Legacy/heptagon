@@ -95,6 +95,7 @@ and edesc =
   | Elast of var_name
   | Epre of exp option * exp
   | Efby of exp * exp
+  | Efby_n of exp * exp * exp
   | Estruct of (qualname * exp) list
   | Eapp of app * exp list
   | Eiterator of iterator_type * app * exp list * exp list * exp list

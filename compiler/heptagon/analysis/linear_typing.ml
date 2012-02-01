@@ -416,7 +416,7 @@ let rec typing_exp env e =
       let lin = (not_linear_for_exp e) in
       let env = safe_expect env lin e in
         lin, env
-    | Efby (e1, e2) ->
+    | Efby (e1, _, e2) ->
         let env = safe_expect env (not_linear_for_exp e1) e1 in
         let env = safe_expect env (not_linear_for_exp e1) e2 in
           not_linear_for_exp e1, env

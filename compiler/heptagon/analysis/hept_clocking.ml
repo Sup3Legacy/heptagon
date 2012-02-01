@@ -78,7 +78,7 @@ let rec typing h pat e =
     | Evar x ->
         let ck = ck_of_name h x in
         Ck ck, ck
-    | Efby (e1, e2) ->
+    | Efby (e1, _, e2) ->
         let ct,ck = typing h pat e1 in
         expect h pat ct e2;
         ct, ck

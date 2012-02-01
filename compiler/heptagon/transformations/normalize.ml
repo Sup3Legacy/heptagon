@@ -128,7 +128,9 @@ let rec translate kind context e =
     | Econst _
     | Evar _ -> context, e
     | Epre(v, e1) -> fby kind context e v e1
-    | Efby({ e_desc = Econst v }, e1) -> fby kind context e (Some v) e1
+    | Efby({ e_desc = Econst v },se, e1) ->
+        assert (se = None);
+        fby kind context e (Some v) e1
     | Estruct l ->
         let translate_field context (f, e) =
           let context, e = translate ExtValue context e in

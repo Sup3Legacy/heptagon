@@ -51,6 +51,7 @@ struct
     | Estatic_exp_expected
     | Eredefinition of qualname
     | Elinear_type_no_memalloc
+    | Efbyn
 
   let message loc kind =
     begin match kind with
@@ -87,6 +88,9 @@ struct
             print_qualname qualname
       | Elinear_type_no_memalloc ->
           eprintf "%aLinearity annotations cannot be used without memory allocation.@."
+            print_location loc
+      | Efbyn ->
+          eprintf "%aFby^n needs n to be a constant integer.@."
             print_location loc
     end;
     raise Errors.Error
@@ -260,8 +264,12 @@ and translate_desc loc env = function
   | Epre (Some c, e) ->
       Heptagon.Epre (Some (expect_static_exp c),
                      translate_exp env e)
-  | Efby (e1, e2) -> Heptagon.Efby (translate_exp env e1,
-                                    translate_exp env e2)
+  | Efby (e1, e2) -> Heptagon.Efby (translate_exp env e1, None, translate_exp env e2)
+  | Efby_n (e1,i,e) ->
+      let i = expect_static_exp i in
+      let se = expect_static_exp e1 in
+      let e = translate_exp env e in
+      Heptagon.Efby (se, Some i, translate_exp env e)
   | Estruct f_e_list ->
       let f_e_list =
         List.map (fun (f,e) -> qualify_field f, translate_exp env e)

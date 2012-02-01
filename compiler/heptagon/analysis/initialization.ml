@@ -239,7 +239,7 @@ let rec typing h e =
     | Epre(Some _, e) ->
         initialized_exp h e;
         skeleton izero e.e_ty
-    | Efby (e1, e2) ->
+    | Efby (e1, _, e2) ->
         initialized_exp h e2;
         skeleton (itype (typing h e1)) e.e_ty
     | Eapp({ a_op = Etuple }, e_list, _) ->

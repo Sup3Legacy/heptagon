@@ -42,6 +42,9 @@ let compile_program p =
   (* Shared variables (last) *)
   let p = pass "Last" true Last.program p pp in
 
+  (* Remove fby_n *)
+  let p = pass "Fby^n" true Fbyn.program p pp in
+
   (* Reset *)
   let p = pass "Reset" true Reset.program p pp in
 

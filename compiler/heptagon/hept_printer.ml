@@ -117,8 +117,10 @@ and print_exp_desc ff = function
   | Epre(None, e) -> fprintf ff "pre %a" print_exp e
   | Epre(Some c, e) ->
       fprintf ff "@[<2>%a fby@ %a@]" print_static_exp c  print_exp e
-  | Efby(e1, e2) ->
-      fprintf ff "@[<2>%a fby@ %a@]" print_exp e1  print_exp e2
+  | Efby(e1, se, e2) ->
+      (match se with
+        | None -> fprintf ff "@[<2>%a fby@ %a@]" print_exp e1  print_exp e2
+        | Some s -> fprintf ff "@[<2>%a fby^%a@ %a@]" print_exp e1 print_static_exp s print_exp e2)
   | Eapp(app, args, reset) ->
       fprintf ff "@[<2>%a@,%a@]"
         print_app (app, args) print_every reset

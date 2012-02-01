@@ -101,10 +101,11 @@ and edesc funs acc ed = match ed with
       let se, acc = optional_wacc (static_exp_it funs.global_funs) acc se in
       let e, acc = exp_it funs acc e in
       Epre (se, e), acc
-  | Efby (e1, e2) ->
+  | Efby (e1, se, e2) ->
+      let se, acc = Misc.optional_wacc (static_exp_it funs.global_funs) acc se in 
       let e1, acc = exp_it funs acc e1 in
       let e2, acc = exp_it funs acc e2 in
-      Efby (e1,e2), acc
+      Efby (e1,se,e2), acc
   | Estruct n_e_list ->
       let aux acc (n,e) =
         let e, acc = exp_it funs acc e in

@@ -105,7 +105,7 @@ let rec typing e =
           | _ -> read x)
     | Elast(x) -> lastread x
     | Epre (_, e) -> pre (typing e)
-    | Efby (e1, e2) ->
+    | Efby (e1, _, e2) -> (*TODO intelligent causality with fbyn ? *)
         let t1 = typing e1 in
         let t2 = pre (typing e2) in
           candlist [t1; t2]

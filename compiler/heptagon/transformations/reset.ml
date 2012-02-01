@@ -58,7 +58,8 @@ let default e =
 
 
 let edesc funs ((res,_) as acc) ed = match ed with
-    | Efby (e1, e2) ->
+    | Efby (e1, x, e2) ->
+        assert (x = None);
         let e1,_ = Hept_mapfold.exp_it funs acc e1 in
         let e2,_ = Hept_mapfold.exp_it funs acc e2 in
         (match res, e1 with
