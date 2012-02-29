@@ -1,0 +1,13 @@
+(* The printing module *)
+
+type file
+
+(*
+const file stdout
+const file stdin
+const file stderr
+*)
+
+(* Basic Printing *)
+unsafe val fun printf(string;...) returns ()
+unsafe val fun fprintf(file;string;...) returns ()

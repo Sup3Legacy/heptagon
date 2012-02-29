@@ -17,8 +17,9 @@ open Hept_parsetree
 %token <int> INT
 %token <float> FLOAT
 %token <bool> BOOL
+%token <string> STRING
 %token <string * string> PRAGMA
-%token TYPE FUN NODE RETURNS VAR VAL OPEN END CONST
+%token TYPE FUN NODE RETURNS VAR VAL OPEN END CONST UNSAFE
 %token FBY PRE SWITCH EVERY
 %token OR STAR NOT
 %token AMPERSAND
@@ -50,6 +51,7 @@ open Hept_parsetree
 %token DOUBLE_LESS DOUBLE_GREATER
 %token MAP MAPI FOLD FOLDI MAPFOLD
 %token AT INIT SPLIT REINIT
+%token THREE_DOTS
 %token <string> PREFIX
 %token <string> INFIX0
 %token <string> INFIX1
@@ -170,11 +172,12 @@ returns: RETURNS | EQUAL {}
 ;
 
 node_dec:
-  | n=node_or_fun f=ident pc=node_params LPAREN i=in_params RPAREN
+  | u=unsafe n=node_or_fun f=ident pc=node_params LPAREN i=in_params RPAREN
     returns LPAREN o=out_params RPAREN
     c=contract b=block(LET) TEL
       {{ n_name = f;
          n_stateful = n;
+         n_unsafe = u;
          n_input  = i;
          n_output = o;
          n_contract = c;
@@ -606,6 +609,7 @@ _const:
   | INT                { Sint $1 }
   | FLOAT              { Sfloat $1 }
   | BOOL               { Sbool $1 }
+  | STRING             { Sstring $1 }
   | constructor        { Sconstructor $1 }
   | q=qualified(ident) { Svar q }
 ;
@@ -655,14 +659,19 @@ interface:
     { { i_modname = ""; i_opened = o; i_desc = i } }
 ;
 
+unsafe:
+  | UNSAFE    { true }
+  | /*empty*/ { false }
+
 interface_desc:
   | type_dec         { Itypedef $1 }
   | const_dec        { Iconstdef $1 }
-  | VAL n=node_or_fun f=ident pc=node_params LPAREN i=params_signature RPAREN
+  | u=unsafe VAL n=node_or_fun f=ident pc=node_params LPAREN i=params_signature RPAREN
     returns LPAREN o=params_signature RPAREN
     { Isignature({ sig_name = f;
                    sig_inputs = i;
                    sig_stateful = n;
+                   sig_unsafe = u;
                    sig_outputs = o;
                    sig_params = fst pc;
                    sig_param_constraints = snd pc;
@@ -682,6 +691,7 @@ nonmt_params_signature:
 param_signature:
   | IDENT COLON located_ty_ident ck=ck_annot { mk_arg (Some $1) $3 ck }
   | located_ty_ident ck=ck_annot { mk_arg None $1 ck }
+  | THREE_DOTS ck=ck_annot { mk_arg None (Tinvalid, Linearity.Ltop) ck }
 ;
 
 %%

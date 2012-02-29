@@ -54,9 +54,14 @@ let write_obc_file p =
     close_out obc;
     comment "Generation of Obc code"
 
+
+let java_conf () =
+  Compiler_options.do_scalarize := true;
+  ()
+
 let targets =
   [ mk_target ~interface:(IObc Cmain.interface) "c" (Obc_no_params Cmain.program);
-    mk_target "java" (Obc Java_main.program);
+    mk_target ~load_conf:java_conf "java" (Obc Java_main.program);
     mk_target "z3z" (Minils_no_params Sigalimain.program);
     mk_target "obc" (Obc write_obc_file);
     mk_target "obc_np" (Obc_no_params write_obc_file);
@@ -100,7 +105,10 @@ let generate_interface i s =
     | IMinils convert_fun -> convert_fun i
 
 let load_conf () =
-  List.iter (fun s -> (find_target s).t_load_conf ()) !target_languages
+  List.iter (fun s -> (find_target s).t_load_conf ()) !target_languages;
+  try
+    check_options ()
+  with Arg.Bad m -> raise (Arg.Bad ("After loading target configurations: "^m))
 
 (** Translation into dataflow and sequential languages, defaults to obc. *)
 let program p =

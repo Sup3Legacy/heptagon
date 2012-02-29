@@ -17,8 +17,9 @@ open Obc
 open Obc_mapfold
 open Global_mapfold
 
-let mk_var_dec ?(loc=no_location) ?(linearity = Ltop) ?(mut=false) ident ty =
-  { v_ident = ident; v_type = ty; v_linearity = linearity; v_mutable = mut; v_loc = loc }
+let mk_var_dec ?(loc=no_location) ?(linearity = Ltop) ?(mut=false) ?(alias=false) ident ty =
+  { v_ident = ident; v_type = ty; v_linearity = linearity;
+    v_alias = alias; v_mutable = mut; v_loc = loc }
 
 let mk_ext_value ?(loc=no_location) ty desc =
   { w_desc = desc; w_ty = ty; w_loc = loc; }
@@ -58,7 +59,9 @@ let mk_ext_value_exp_int desc = mk_ext_value_exp Initial.tint desc
 
 let mk_ext_value_exp_bool desc = mk_ext_value_exp Initial.tbool desc
 
-let mk_ext_value_static ty sed = mk_ext_value_exp ty (Wconst sed)
+let mk_ext_value_exp_static ty sed = mk_ext_value_exp ty (Wconst sed)
+
+let mk_ext_value_const_int i = mk_ext_value Initial.tint (Wconst (Initial.mk_static_int i))
 
 let mk_evar ty id =
   mk_ext_value_exp ty (Wvar id)
@@ -72,6 +75,9 @@ let mk_block ?(locals=[]) eq_list =
 
 let mk_ifthenelse cond true_act false_act =
   Acase (cond, [ Initial.ptrue, mk_block true_act; Initial.pfalse, mk_block false_act ])
+
+let mk_if cond true_act =
+  Acase (cond, [Initial.ptrue, mk_block true_act])
 
 let rec var_name x =
   match x.pat_desc with
@@ -151,7 +157,7 @@ struct
     | Module _ | QualModule _ -> ModulSet.add qn.qual deps
     | _ -> deps
 
-  let deps_ty funs deps ty = match ty with
+  let deps_ty _ deps ty = match ty with
     | Tid ln -> ty, deps_longname deps ln
     | _ -> raise Errors.Fallback
 

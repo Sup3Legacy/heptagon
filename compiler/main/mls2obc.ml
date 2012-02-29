@@ -64,7 +64,7 @@ let fresh_for = fresh_for "mls2obc"
 let op_from_string op = { qual = Pervasives; name = op; }
 
 let rec pattern_of_idx_list p l =
-  let rec aux p l = match p.pat_ty, l with
+  let rec aux p l = match Modules.unalias_type p.pat_ty, l with
     | _, [] -> p
     | Tarray (ty',_), idx :: l -> aux (mk_pattern ty' (Larray (p, idx))) l
     | _ -> internal_error "mls2obc"
@@ -158,7 +158,7 @@ let mk_plus_one e = match e.e_desc with
 
 (** Creates the action list that copies [src] to [dest],
     updating the value at index [idx_list] with the value [v]. *)
-let rec update_array dest src idx_list v = match Modules.unalias_type dest.pat_ty, idx_list with
+let rec ssa_update_array dest src idx_list v = match Modules.unalias_type dest.pat_ty, idx_list with
   | Tarray (t, n), idx::idx_list ->
       (*Body of the copy loops*)
       let copy i =
@@ -171,7 +171,7 @@ let rec update_array dest src idx_list v = match Modules.unalias_type dest.pat_t
       (* Update the correct element*)
       let src_idx = array_elt_of_exp idx src in
       let dest_idx = mk_pattern t (Larray (dest, idx)) in
-      let a_update = update_array dest_idx src_idx idx_list v in
+      let a_update = ssa_update_array dest_idx src_idx idx_list v in
       (*Copy values > idx*)
       let idx_plus_one = mk_plus_one idx in
       let a_upper = fresh_for idx_plus_one (mk_exp_static_int n) copy in
@@ -181,7 +181,7 @@ let rec update_array dest src idx_list v = match Modules.unalias_type dest.pat_t
 
 (** Creates the action list that copies [src] to [dest],
     updating the value of field [f] with the value [v]. *)
-let update_record dest src f v =
+let ssa_update_record dest src f v =
   let assgn_act { f_name = l; f_type = ty } =
     let dest_l = mk_pattern ty (Lfield(dest, l)) in
     let src_l = mk_ext_value_exp ty (Wfield(src, l)) in
@@ -384,18 +384,29 @@ and translate_act map pat
         let e1 = translate_extvalue_to_exp map e1 in
         let e2 = translate_extvalue_to_exp map e2 in
         let cond = bound_check_expr idx bounds in
-        let true_act = update_array x e1 idx e2 in
-        let false_act = Aassgn (x, e1) in
-          [ mk_ifthenelse cond true_act [false_act] ]
+        let copy = Aassgn (x, e1) in
+        if !Compiler_options.strict_ssa
+        then (
+          let ssa_up = ssa_update_array x e1 idx e2 in
+          [ mk_ifthenelse cond ssa_up [copy] ]
+        ) else (
+          let assgn = Aassgn (pattern_of_idx_list x idx, e2) in
+          [copy; mk_if cond [assgn]]
+        )
 
     | Minils.Evarpat x,
       Minils.Eapp ({ Minils.a_op = Minils.Efield_update;
                      Minils.a_params = [{ se_desc = Sfield f }] }, [e1; e2], _) ->
         let x = var_from_name map x in
-        let e1 = translate_extvalue map e1 in
+        let e1' = translate_extvalue map e1 in
         let e2 = translate_extvalue_to_exp map e2 in
-        update_record x e1 f e2
-
+        if !Compiler_options.strict_ssa
+        then ssa_update_record x e1' f e2
+        else (
+          let copy = Aassgn (x, translate_extvalue_to_exp map e1) in
+          let action = Aassgn (mk_pattern (Types.Tid (Modules.find_field f)) (Lfield (x, f)), e2) in
+          [copy; action]
+        )
     | Minils.Evarpat n, _ ->
         [Aassgn (var_from_name map n, translate map act)]
     | _ ->
@@ -423,15 +434,19 @@ let empty_call_context = None
     [j] obj decs
     [s] the actions used in the step method.
     [v] var decs *)
-let rec translate_eq map call_context { Minils.eq_lhs = pat; Minils.eq_rhs = e }
+let rec translate_eq map call_context
+    ({ Minils.eq_lhs = pat; Minils.eq_base_ck = ck; Minils.eq_rhs = e } as eq)
     (v, si, j, s) =
-  let { Minils.e_desc = desc; Minils.e_base_ck = ck; Minils.e_loc = loc } = e in
+  let { Minils.e_desc = desc; Minils.e_loc = loc } = e in
   match (pat, desc) with
+    | pat, Minils.Ewhen (e,_,_) ->
+        translate_eq map call_context {eq with Minils.eq_rhs = e} (v, si, j, s)
+    (* TODO Efby and Eifthenelse should be dealt with in translate_act, no ? *)
     | Minils.Evarpat n, Minils.Efby (opt_c, e) ->
         let x = var_from_name map n in
         let si = (match opt_c with
                     | None -> si
-                    | Some c -> (Aassgn (x, mk_ext_value_static x.pat_ty c)) :: si) in
+                    | Some c -> (Aassgn (x, mk_ext_value_exp_static x.pat_ty c)) :: si) in
         let action = Aassgn (var_from_name map n, translate_extvalue_to_exp map e) in
         v, si, j, (control map ck action) :: s
 (* should be unnecessary
@@ -449,6 +464,12 @@ let rec translate_eq map call_context { Minils.eq_lhs = pat; Minils.eq_rhs = e }
         let false_act = translate_act_extvalue map pat e3 in
         let action = mk_ifthenelse cond true_act false_act in
         v, si, j, (control map ck action) :: s
+
+    | pat, Minils.Eapp({ Minils.a_op =
+        Minils.Efun ({ qual = Module "Iostream"; name = "printf" | "fprintf" } as q)},
+                       args, _) ->
+      let action = Aop (q, List.map (translate_extvalue_to_exp map) args) in
+      v, si, j, (control map ck action) :: s
 
     | pat, Minils.Eapp ({ Minils.a_op = Minils.Efun _ | Minils.Enode _ } as app, e_list, r) ->
         let name_list = translate_pat map e.Minils.e_ty pat in
@@ -533,20 +554,20 @@ and mk_node_call map call_context app loc (name_list : Obc.pattern list) args ty
           v @ nd.Minils.n_local, si, j, subst_act_list env s
 
     | Minils.Enode f | Minils.Efun f ->
-	let id =
-	  begin match app.Minils.a_id with
-	    None -> gen_obj_ident f
-	  | Some id -> id
-	  end in
+        let id = match app.Minils.a_id with
+          | None -> gen_obj_ident f
+          | Some id -> id
+        in
         let o = mk_obj_call_from_context call_context id in
         let obj =
           { o_ident = obj_ref_name o; o_class = f;
             o_params = app.Minils.a_params;
             o_size = size_from_call_context call_context; o_loc = loc } in
-        let si = (match app.Minils.a_op with
-                   | Minils.Efun _ -> []
-                   | Minils.Enode _ -> [reinit o]
-                   | _ -> assert false) in
+        let si = match app.Minils.a_op with
+          | Minils.Efun _ -> []
+          | Minils.Enode _ -> [reinit o]
+          | _ -> assert false
+        in
         let s = [Acall (name_list, o, Mstep, args)] in
         [], si, [obj], s
     | _ -> assert false
@@ -699,6 +720,9 @@ let translate_node
   let d_list = translate_var_dec (v @ d_list) in
   let m, d_list = List.partition
     (fun vd -> List.exists (fun (i,_) -> i = vd.v_ident) mem_var_tys) d_list in
+  let m', o_list =
+    List.partition
+      (fun vd -> List.exists (fun (i,_) -> i = vd.v_ident) mem_var_tys) o_list in
   let s = s_list @ s_list' in
   let j = j' @ j in
   let si = si @ si' in
@@ -707,7 +731,7 @@ let translate_node
   in
   let resetm = { m_name = Mreset; m_inputs = []; m_outputs = []; m_body = mk_block si } in
   if stateful
-  then { cd_name = f; cd_stateful = true; cd_mems = m; cd_params = params;
+  then { cd_name = f; cd_stateful = true; cd_mems = m' @ m; cd_params = params;
          cd_objs = j; cd_methods = [stepm; resetm]; cd_loc = loc; cd_mem_alloc = mem_alloc }
   else (
     (* Functions won't have [Mreset] or memories,

@@ -39,7 +39,7 @@ let add_classe, get_classes =
     with [body] a function from [var_ident] (the iterator) to [act] list *)
 let fresh_for size body =
   let i = Idents.gen_var "obc2java" "i" in
-  let id = mk_var_dec i Tint in
+  let id = mk_var_dec i false Tint in
   Afor (id, Sint 0, size, mk_block (body i))
 
 (** fresh nested Afor from 0 to [size]
@@ -54,11 +54,11 @@ let fresh_nfor s_l body =
   let rec aux s_l i_l = match s_l with
     | [s] ->
         let i = Idents.gen_var "obc2java" "i" in
-        let id = (mk_var_dec i Tint) in
+        let id = (mk_var_dec i false Tint) in
         Afor (id, Sint 0, s, mk_block (body (List.rev (i::i_l))))
     | s::s_l ->
         let i = Idents.gen_var "obc2java" "i" in
-        let id = mk_var_dec i Tint in
+        let id = mk_var_dec i false Tint in
         Afor (id, Sint 0, s, mk_block ([aux s_l (i::i_l)]))
     | [] -> Misc.internal_error "Fresh nfor called with empty size list"
   in
@@ -102,7 +102,7 @@ let translate_constructor_name_2 q q_ty =
   { qual = QualModule classe; name = String.uppercase q.name }
 
 let translate_constructor_name q =
-  match Modules.find_constrs q with
+  match Modules.unalias_type (Types.Tid (Modules.find_constrs q)) with
     | Types.Tid q_ty when q_ty = Initial.pbool -> q |> shortname |> local_qn
     | Types.Tid q_ty -> translate_constructor_name_2 q q_ty
     | _ -> assert false
@@ -171,7 +171,7 @@ let rec static_exp param_env se = match se.Types.se_desc with
   | Types.Srecord _ -> Misc.unsupported "Srecord in java" (* TODO java *)
   | Types.Sop (f, se_l) -> Efun (qualname_to_class_name f, List.map (static_exp param_env) se_l)
 
-and boxed_ty param_env t = match t with
+and boxed_ty param_env t = match Modules.unalias_type t with
   | Types.Tprod [] -> Tunit
   | Types.Tprod ty_l -> tuple_ty param_env ty_l
   | Types.Tid t when t = Initial.pbool -> Tclass (Names.local_qn "Boolean")
@@ -193,7 +193,9 @@ and tuple_ty param_env ty_l =
   let ln = ty_l |> List.length |> Pervasives.string_of_int in
   Tclass (java_pervasive_class ("Tuple"^ln))
 
-and ty param_env t :Java.ty = match t with
+and ty param_env t =
+  let t = Modules.unalias_type t in
+  match t with
   | Types.Tprod [] -> Tunit
   | Types.Tprod ty_l -> tuple_ty param_env ty_l
   | Types.Tid t when t = Initial.pbool -> Tbool
@@ -203,15 +205,17 @@ and ty param_env t :Java.ty = match t with
   | Types.Tarray _ ->
       let rec gather_array t = match t with
         | Types.Tarray (t,size) ->
-            let t, s_l = gather_array t in
-            t, (static_exp param_env size)::s_l
+            let tin, s_l = gather_array t in
+            tin, (static_exp param_env size)::s_l
         | _ -> ty param_env t, []
       in
-      let t, s_l = gather_array t in
-      Tarray (t, s_l)
+      let tin, s_l = gather_array t in
+      Tarray (tin, s_l)
   | Types.Tinvalid -> Misc.internal_error "obc2java invalid type"
 
-and var_dec param_env vd = { vd_type = ty param_env vd.v_type; vd_ident = vd.v_ident }
+and var_dec param_env vd = { vd_type = ty param_env vd.v_type;
+                             vd_alias = vd.v_alias;
+                             vd_ident = vd.v_ident }
 
 and var_dec_list param_env vd_l = List.map (var_dec param_env) vd_l
 
@@ -224,7 +228,7 @@ and exp param_env e = match e.e_desc with
 and exp_list param_env e_l = List.map (exp param_env) e_l
 
 and tuple param_env se_l =
-  let t = tuple_ty param_env (List.map (fun e -> e.Types.se_ty) se_l) in
+  let t = tuple_ty param_env (List.map (fun e -> Modules.unalias_type e.Types.se_ty) se_l) in
   Enew (t, List.map (static_exp param_env) se_l)
 
 
@@ -288,7 +292,7 @@ let rec act_list param_env act_l acts =
     | Obc.Acall (p_l, obj, Mstep, e_l) ->
         let return_ty = p_l |> pattern_list_to_type |> (ty param_env) in
         let return_id = Idents.gen_var "obc2java" "out" in
-        let return_vd = { vd_type = return_ty; vd_ident = return_id } in
+        let return_vd = mk_var_dec return_id false return_ty in
         let ecall = Emethod_call (obj_ref param_env obj, "step", exp_list param_env e_l) in
         let assgn = Anewvar (return_vd, ecall) in
         let copy_return_to_var i p =
@@ -347,7 +351,7 @@ and block param_env ?(locals=[]) ?(end_acts=[]) ob =
 let sig_params_to_vds p_l =
   let param_to_arg param_env p =
     let p_ident = Idents.gen_var "obc2java" (String.uppercase p.Signature.p_name) in
-    let p_vd = { vd_ident = p_ident; vd_type = ty param_env p.Signature.p_type } in
+    let p_vd = mk_var_dec p_ident false (ty param_env p.Signature.p_type) in
     let param_env = NamesEnv.add p.Signature.p_name p_ident param_env in
     p_vd, param_env
   in Misc.mapfold param_to_arg NamesEnv.empty p_l
@@ -357,7 +361,7 @@ let sig_args_to_vds param_env a_l =
   let arg_to_vd { a_name = n; a_type = t } =
     let n = match n with None -> "v" | Some s -> s in
     let id = Idents.gen_var "obc2java" n in
-    mk_var_dec id (ty param_env t)
+    mk_var_dec id false (ty param_env t)
   in List.map arg_to_vd a_l
 
 (** [copy_to_this vd_l] creates [this.x = x] for all [x] in [vd_l] *)
@@ -419,7 +423,7 @@ let class_def_list classes cd_l =
                  :: acts
         in
         (* function to allocate the arrays *)
-        let allocate acts vd = match vd.v_type with
+        let allocate acts vd = match Modules.unalias_type vd.v_type with
           | Types.Tarray _ ->
               let t = ty param_env vd.v_type in
               ( Aassgn (Pthis vd.v_ident, Enew_array (t,[])) ):: acts
@@ -480,7 +484,9 @@ let type_dec_list classes td_l =
     Idents.enter_node classe_name;
     match td.t_desc with
       | Type_abs -> Misc.unsupported "obc2java, abstract type."
-      | Type_alias _ -> Misc.unsupported "obc2java, type alias."
+      | Type_alias t -> (*verify that it is possible to unalias and skip it*)
+          let _ = Modules.unalias_type t in
+          classes
       | Type_enum c_l ->
           let mk_constr_enum c = translate_constructor_name_2 c td.t_name in
           (mk_enum (List.map mk_constr_enum c_l) classe_name) :: classes

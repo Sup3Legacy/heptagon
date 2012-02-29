@@ -60,6 +60,7 @@ type ty =
   | Tprod of ty list
   | Tid of qualname
   | Tarray of ty * exp
+  | Tinvalid
 
 and ck =
   | Cbase
@@ -177,6 +178,7 @@ type contract =
 type node_dec =
   { n_name        : dec_name;
     n_stateful    : bool;
+    n_unsafe      : bool;
     n_input       : var_dec list;
     n_output      : var_dec list;
     n_contract    : contract option;
@@ -213,6 +215,7 @@ type signature =
   { sig_name        : dec_name;
     sig_inputs      : arg list;
     sig_stateful    : bool;
+    sig_unsafe      : bool;
     sig_outputs     : arg list;
     sig_params      : var_dec list;
     sig_param_constraints : exp list;

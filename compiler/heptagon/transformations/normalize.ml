@@ -90,14 +90,27 @@ let equation (d_list, eq_list) e =
 
 (* [(e1,...,ek) when C(n) = (e1 when C(n),...,ek when C(n))] *)
 let rec whenc context e c n e_orig =
-  let when_on_c c n e =
-    { e_orig with e_desc = Ewhen(e, c, n); }
+  let when_on_c c n context e =
+    (* If memalloc is activated, there cannot be a stateful exp inside a when. Indeed,
+       the expression inside the when will be called on a fast rhythm and write its result
+       in a variable that is slow because of the when. Although this value won't be used,
+       we have to be careful not to share this variable with another on the same clock as
+       the value of the latter will be overwritten.  *)
+    let context, e =
+      if !Compiler_options.do_mem_alloc && Stateful.exp_is_stateful e then
+        let context, n = equation context e in
+        context, { e with e_desc = n }
+      else
+        context, e
+    in
+    { e_orig with e_desc = Ewhen(e, c, n) }, context
   in
     if is_list e then (
-      let e_list = List.map (when_on_c c n) (e_to_e_list e) in
+      let e_list, context = Misc.mapfold (when_on_c c n) context (e_to_e_list e) in
           context, { e_orig with e_desc = Eapp(mk_app Etuple, e_list, None) }
     ) else
-      context, when_on_c c n e
+      let e, context = when_on_c c n context e in
+      context, e
 
 type kind = ExtValue | Any
 
@@ -105,7 +118,7 @@ type kind = ExtValue | Any
 let add context expected_kind e =
   let up = match e.e_desc, expected_kind with
      (* static arrays should be normalized to simplify code generation *)
-    | Econst { se_desc = Sarray _ }, ExtValue -> true
+    | Econst { se_desc = Sarray _ | Sarray_power _ }, ExtValue -> true
     | (Evar _ | Eapp ({ a_op = Efield | Etuple | Ereinit }, _, _) | Ewhen _
           | Econst _) , ExtValue -> false
     | _ , ExtValue -> true
@@ -138,7 +151,7 @@ let rec translate kind context e =
           context, { e with e_desc = Estruct l }
     | Ewhen(e1, c, n) ->
         let context, e1 = translate kind context e1 in
-          whenc context e1 c n e
+        whenc context e1 c n e
     | Emerge(n, tag_e_list) ->
         merge context e n tag_e_list
     | Eapp({ a_op = Eifthenelse }, [e1; e2; e3], _) ->
@@ -237,21 +250,21 @@ and merge context e x c_e_list =
       let ty = (List.hd (List.hd e_lists)).e_ty in
       let lin = (List.hd (List.hd e_lists)).e_linearity in
       let rec build_c_e_list c_list e_lists =
-	match c_list, e_lists with
-	| [], [] -> [], []
-	| c::c_l, (e::e_l)::e_ls ->
-	    let c_e_list, e_lists = build_c_e_list c_l e_ls in
-	    (c,e)::c_e_list, e_l::e_lists
-	| _ -> assert false in
+        match c_list, e_lists with
+        | [], [] -> [], []
+        | c::c_l, (e::e_l)::e_ls ->
+            let c_e_list, e_lists = build_c_e_list c_l e_ls in
+            (c,e)::c_e_list, e_l::e_lists
+        | _ -> assert false in
       let rec build_merge_list c_list e_lists =
-	match e_lists with
-	  [] -> assert false
-	| []::_ -> []
-	| _ ::_ ->
-	    let c_e_list, e_lists = build_c_e_list c_list e_lists in
-	    let e_merge = mk_exp ~loc:e.e_loc (Emerge(x, c_e_list)) ty ~linearity:lin in
-	    let e_merge_list = build_merge_list c_list e_lists in
-	    e_merge::e_merge_list in
+        match e_lists with
+          [] -> assert false
+        | []::_ -> []
+        | _ ::_ ->
+            let c_e_list, e_lists = build_c_e_list c_list e_lists in
+            let e_merge = mk_exp ~loc:e.e_loc (Emerge(x, c_e_list)) ty ~linearity:lin in
+            let e_merge_list = build_merge_list c_list e_lists in
+            e_merge::e_merge_list in
       build_merge_list c_list e_lists
     in
     let c_e_list, context = mapfold translate_tag context c_e_list in
@@ -263,14 +276,14 @@ and merge context e x c_e_list =
               let e_lists = List.map (fun (_,e) -> e_to_e_list e) c_e_list in
               let e_lists, context =
                 mapfold
-		  (fun context e_list -> add_list context ExtValue e_list)
-		  context e_lists in
+                  (fun context e_list -> add_list context ExtValue e_list)
+                  context e_lists in
               let e_list = mk_merge x c_list e_lists in
                 context, { e with
-			     e_desc = Eapp(mk_app Etuple, e_list, None) }
+                             e_desc = Eapp(mk_app Etuple, e_list, None) }
             ) else
               context, { e with
-			   e_desc = Emerge(x, c_e_list) }
+                           e_desc = Emerge(x, c_e_list) }
 
 (* applies distribution rules *)
 (* [(p1,...,pn) = (e1,...,en)] into [p1 = e1;...;pn = en] *)
@@ -332,8 +345,8 @@ let contract funs context c =
       c_assume = e_a;
       c_enforce = e_e;
       c_block = { b with
-		    b_local = d_list@b.b_local;
-		    b_equs = eq_list@b.b_equs; }
+                    b_local = d_list@b.b_local;
+                    b_equs = eq_list@b.b_equs; }
   }, void_context
 
 let program p =

@@ -27,6 +27,13 @@ let rec static_exp_of_exp e =
       | _ -> err_message e Enot_static_exp)
     | _ -> err_message e Enot_static_exp
 
+let rec ident_of_extvalue w = match w.w_desc with
+  | Wvar x -> Some x
+  | Wfield(w, _) -> ident_of_extvalue w
+  | Wwhen(w, _, _) -> ident_of_extvalue w
+  | Wconst _ -> None
+  | Wreinit (_, w) -> ident_of_extvalue w
+
 (** @return the list of bounds of an array type*)
 let rec bounds_list ty =
   match Modules.unalias_type ty with
@@ -142,10 +149,14 @@ struct
          else read_extvalue is_left [] e1
     | _ -> read_exp is_left [] e
 
-  let antidep { eq_rhs = e } =
-    match e.e_desc with Efby _ -> true | _ -> false
+  let rec is_fby e = match e.e_desc with
+    | Ewhen (e, _, _) -> is_fby e
+    | Efby (_, _) -> true
+    | _ -> false
 
-  let clock { eq_rhs = e } = e.e_base_ck
+  let antidep { eq_rhs = e } = is_fby e
+
+  let clock eq = eq.eq_base_ck
 
   let head ck =
     let rec headrec ck l =
@@ -159,8 +170,9 @@ struct
 
   (** Returns a list of memory vars (x in x = v fby e)
       appearing in an equation. *)
-  let memory_vars ({ eq_lhs = _; eq_rhs = e } as eq) = match e.e_desc with
+  let rec memory_vars ({ eq_lhs = _; eq_rhs = e } as eq) = match e.e_desc with
     | Efby(_, _) -> def [] eq
+    | Ewhen(e,_,_) -> memory_vars {eq with eq_rhs = e}
     | _ -> []
 
   let linear_read e =
@@ -180,18 +192,20 @@ struct
     acc
 end
 
-(* Assumes normal form, all fby are solo rhs *)
+(* Assumes normal form, all fby are solo rhs or inside a when *)
 let node_memory_vars n =
-  let eq _ acc ({ eq_lhs = pat; eq_rhs = e } as eq) =
+  let rec eq funs acc ({ eq_lhs = pat; eq_rhs = e } as equ) =
     match pat, e.e_desc with
+    | Evarpat x, Ewhen(e,_,_) -> eq funs acc {equ with eq_rhs = e}
     | Evarpat x, Efby(_, _) ->
         let acc = (x, e.e_ty) :: acc in
-          eq, acc
-    | _, _ -> eq, acc
+        equ, acc
+    | _, _ -> equ, acc
   in
   let funs = { Mls_mapfold.defaults with eq = eq } in
   let _, acc = node_dec_it funs [] n in
     acc
+
 
 (* data-flow dependences. pre-dependences are discarded *)
 module DataFlowDep = Dep.Make
@@ -222,12 +236,34 @@ let ident_list_of_pat pat =
   in
   List.rev (f [] pat)
 
+let find_var_node nd x =
+  try vd_find x nd.n_input with Not_found ->
+  try vd_find x nd.n_output with Not_found ->
+  vd_find x nd.n_local
+
 let remove_eqs_from_node nd ids =
   let walk_vd vd vd_list = if IdentSet.mem vd.v_ident ids then vd_list else vd :: vd_list in
   let walk_eq eq eq_list =
     let defs = ident_list_of_pat eq.eq_lhs in
-    if List.for_all (fun v -> IdentSet.mem v ids) defs then eq_list else eq :: eq_list
+    if (not eq.eq_unsafe) & List.for_all (fun v -> IdentSet.mem v ids) defs
+    then eq_list
+    else eq :: eq_list
   in
   let vd_list = List.fold_right walk_vd nd.n_local [] in
   let eq_list = List.fold_right walk_eq nd.n_equs [] in
   { nd with n_local = vd_list; n_equs = eq_list; }
+
+let args_of_var_decs =
+ List.map
+   (fun vd -> Signature.mk_arg (Some (Idents.source_name vd.v_ident))
+                               vd.v_type (Linearity.check_linearity vd.v_linearity)
+                               (ck_to_sck (Clocks.ck_repr vd.v_clock)))
+
+let signature_of_node n =
+  { node_inputs = args_of_var_decs n.n_input;
+    node_outputs  = args_of_var_decs n.n_output;
+    node_stateful = n.n_stateful;
+    node_unsafe = n.n_unsafe;
+    node_params = n.n_params;
+    node_param_constraints = n.n_param_constraints;
+    node_loc = n.n_loc }

@@ -6,9 +6,13 @@ open Mls_utils
 open Misc
 open Sgraph
 
-
-let eq_clock eq =
-  eq.eq_rhs.e_base_ck
+(** In order to put together equations with the same control structure, we have to take into
+    account merge equations, that will to be translated to two instructions on slow clocks
+    although the activation clock of the equation is fast. *)
+let control_ck eq =
+  match eq.eq_rhs.e_desc with
+    | Emerge (_, (_, w)::_) ->  w.w_ck
+    | _ -> Mls_utils.Vars.clock eq
 
 module Cost =
 struct
@@ -52,23 +56,36 @@ struct
 
   (** Returns the next equation, chosen from the list of equations rem_eqs *)
   let next_equation rem_eqs ck env =
+    let bonus eq = match eq.eq_rhs.e_desc with
+      | Eapp ({a_op = (Eupdate _ | Efield_update _) },_,_) -> 1
+      | _ -> 0
+    in
     let cost eq =
       let nb_killed_vars = killed_vars eq env in
       let nb_def_vars = IvarSet.cardinal (all_ivars_set (InterfRead.def eq)) in
-        nb_def_vars - nb_killed_vars
+      let b = bonus eq in
+      if verbose_mode then
+      Format.eprintf "(%d,%d,%d)%a@." nb_killed_vars nb_def_vars b Mls_printer.print_eq eq;
+      nb_def_vars - nb_killed_vars + b
+
     in
-    let eqs_wcost = List.map (fun eq -> (eq, cost eq)) rem_eqs in
-    let compare_eqs_wcost (_,c1) (_,c2) = compare c1 c2 in
-    let sorted_eqs_wcost = List.stable_sort compare_eqs_wcost eqs_wcost in
-    let rec min_same_ck sorted_eqs = match sorted_eqs with
-      | [] -> Misc.internal_error "no next equation to schedule"
-      | [(eq,_)] -> eq
-      | (eq1,c1)::(eq2,c2)::l ->
-        if (c2 > c1) || (Clocks.same_control (eq_clock eq1) ck)
-        then eq1 (* choosen since either the last with min cost or min and right clock *)
-        else min_same_ck ((eq2,c2)::l)
+    (* returns the minimum element of the list with same_ctrl = true. If there is no such element,
+       return the minimum of the list. *)
+    let rec min_same_ck (min_eq, min_c, min_same_ctrl) l = match l with
+      | [] -> min_eq
+      | (eq, c, same_ctrl)::l ->
+          if (c < min_c && (same_ctrl = min_same_ctrl)) or (same_ctrl && not min_same_ctrl) then
+            min_same_ck (eq, c, same_ctrl) l
+          else
+            min_same_ck (min_eq, min_c, min_same_ctrl) l
     in
-    min_same_ck sorted_eqs_wcost
+    let eqs_wcost =
+      List.map
+        (fun eq -> (eq, cost eq, Clocks.same_control (control_ck eq) ck))
+        rem_eqs
+    in
+    let (eq, c, same_ctrl), eqs_wcost = Misc.assert_1min eqs_wcost in
+    min_same_ck (eq, c, same_ctrl) eqs_wcost
 end
 
 (** Returns the list of 'free' nodes in the dependency graph (nodes without
@@ -99,6 +116,7 @@ let remove_eq eq node_list =
 (** Main function to schedule a node. *)
 let schedule eq_list inputs node_list =
   let uses = Interference.compute_uses eq_list in
+  Interference.print_debug_ivar_env "uses" uses;
   let rec schedule_aux rem_eqs sched_eqs node_list ck costs =
     match rem_eqs with
       | [] ->
@@ -114,7 +132,7 @@ let schedule eq_list inputs node_list =
         let rem_eqs = free_eqs node_list in
         (* compute new costs for the next step *)
         let costs = Cost.update_cost eq uses costs in
-          schedule_aux rem_eqs (eq::sched_eqs) node_list (eq_clock eq) costs
+          schedule_aux rem_eqs (eq::sched_eqs) node_list (control_ck eq) costs
   in
   let costs = Cost.init_cost uses inputs in
   let rem_eqs = free_eqs node_list in
@@ -131,6 +149,9 @@ let node _ () f =
     f, ()
 
 let program p =
+  let m = !Compiler_options.interf_all in
+  Compiler_options.interf_all := false;
   let funs = { Mls_mapfold.defaults with Mls_mapfold.node_dec = node } in
   let p, () = Mls_mapfold.program_it funs () p in
-    p
+  Compiler_options.interf_all := m;
+  p

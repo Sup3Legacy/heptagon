@@ -29,8 +29,8 @@ let rec print_pat ff = function
   | Etuplepat pat_list ->
       fprintf ff "@[<2>(%a)@]" (print_list_r print_pat """,""") pat_list
 
-let print_vd ff { v_ident = n; v_type = ty; v_linearity = lin; v_clock = ck } =
- if !Compiler_options.full_type_info then
+let print_vd ?(show_ck=false) ff { v_ident = n; v_type = ty; v_linearity = lin; v_clock = ck } =
+ if show_ck or !Compiler_options.full_type_info then
     fprintf ff "%a : %a%a :: %a" print_ident n print_type ty print_linearity lin print_ck ck
   else fprintf ff "%a : %a%a" print_ident n print_type ty print_linearity lin
 
@@ -61,7 +61,10 @@ and print_w_tuple ff l =
   fprintf ff "@[<2>(%a)@]" (print_list_r print_extvalue """,""") l
 
 and print_vd_tuple ff l =
-  fprintf ff "@[<2>%a@]" (print_list_r print_vd "("";"")") l
+  fprintf ff "@[<2>%a@]" (print_list_r (print_vd ~show_ck:false) "("";"")") l
+
+and print_full_vd_tuple ff l =
+  fprintf ff "@[<2>%a@]" (print_list_r (print_vd ~show_ck:true) "("";"")") l
 
 and print_index ff idx =
   fprintf ff "@[<2>%a@]" (print_list print_static_exp "[""][""]") idx
@@ -170,10 +173,10 @@ and print_tag_w_list ff tag_w_list =
   fprintf ff "@[%a@]" (print_list print_handler """""") tag_w_list
 
 
-and print_eq ff { eq_lhs = p; eq_rhs = e } =
+and print_eq ff { eq_lhs = p; eq_rhs = e; eq_base_ck = base_ck } =
   if !Compiler_options.full_type_info
   then fprintf ff "@[<2>%a :: %a =@ %a@]"
-    print_pat p  print_ck e.e_base_ck  print_exp e
+    print_pat p  print_ck base_ck  print_exp e
   else fprintf ff "@[<2>%a =@ %a@]" print_pat p  print_exp e
 
 

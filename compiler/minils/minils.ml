@@ -57,7 +57,6 @@ and extvalue_desc =
 and exp = {
   e_desc            : edesc;
   e_level_ck        : ck; (*when no data dep, execute the exp on this clock (set by [switch] *)
-  mutable e_base_ck : ck;
   mutable e_ct      : ct;
   e_ty              : ty;
   e_linearity : linearity;
@@ -106,38 +105,42 @@ type pat =
   | Evarpat of var_ident
 
 type eq = {
-  eq_lhs : pat;
-  eq_rhs : exp;
-  eq_loc : location }
+  eq_lhs    : pat;
+  eq_rhs    : exp;
+  eq_unsafe : bool;
+  eq_base_ck : ck;
+  eq_loc    : location }
 
 type var_dec = {
-  v_ident : var_ident;
-  v_type : ty;
+  v_ident     : var_ident;
+  v_type      : ty;
   v_linearity : linearity;
-  v_clock : ck;
-  v_loc : location }
+  v_clock     : ck;
+  v_loc       : location }
 
 type contract = {
-  c_assume : extvalue;
-  c_enforce : extvalue;
+  c_assume        : extvalue;
+  c_enforce       : extvalue;
   c_controllables : var_dec list;
-  c_local : var_dec list;
-  c_eq : eq list }
+  c_local         : var_dec list;
+  c_eq            : eq list }
 
 type node_dec = {
-  n_name   : qualname;
+  n_name     : qualname;
   n_stateful : bool;
-  n_input  : var_dec list;
-  n_output : var_dec list;
+  n_unsafe   : bool;
+  n_input    : var_dec list;
+  n_output   : var_dec list;
   n_contract : contract option;
   (* GD: inglorious hack for controller call *)
   mutable n_controller_call : string list * string list;
-  n_local  : var_dec list;
-  n_equs   : eq list;
-  n_loc    : location;
-  n_params : param list;
+  n_local    : var_dec list;
+  n_equs     : eq list;
+  n_loc      : location;
+  n_params   : param list;
   n_param_constraints : constrnt list;
   n_mem_alloc : (ty * Interference_graph.ivar list) list; }
+
 
 type const_dec = {
   c_name : qualname;
@@ -182,30 +185,42 @@ let mk_extvalue ~ty ~linearity ?(clock = fresh_clock()) ?(loc = no_location) des
   { w_desc = desc; w_ty = ty; w_linearity = linearity;
     w_ck = clock; w_loc = loc }
 
-let mk_exp level_ck ty ~linearity ?(ck = Cbase)
+let extvalue_true, extvalue_false =
+  let extvalue_bool b ck =
+    mk_extvalue ~ty:Initial.tbool ~linearity:Linearity.Ltop
+                ~clock:ck (Wconst (Initial.mk_static_bool b))
+  in
+  extvalue_bool true, extvalue_bool false
+
+let mk_vd_extvalue vd =
+  mk_extvalue ~ty:vd.v_type ~linearity:vd.v_linearity
+              ~clock:vd.v_clock ~loc:vd.v_loc (Wvar vd.v_ident)
+
+let mk_exp level_ck ty ~linearity
     ?(ct = fresh_ct ty) ?(loc = no_location) desc =
   { e_desc = desc; e_ty = ty; e_linearity = linearity;
-    e_level_ck = level_ck; e_base_ck = ck; e_ct = ct; e_loc = loc }
+    e_level_ck = level_ck; e_ct = ct; e_loc = loc }
 
 let mk_var_dec ?(loc = no_location) ident ty linearity ck =
   { v_ident = ident; v_type = ty; v_linearity = linearity;  v_clock = ck; v_loc = loc }
 
 let mk_extvalue_exp ?(clock = fresh_clock())
     ?(loc = no_location) level_ck ty ~linearity desc =
-  mk_exp ~ck:clock ~loc:loc level_ck ty ~linearity:linearity
+  mk_exp ~loc:loc level_ck ty ~linearity:linearity
     (Eextvalue (mk_extvalue ~clock:clock ~loc:loc ~linearity:linearity ~ty:ty desc))
 
-let mk_equation ?(loc = no_location) pat exp =
-  { eq_lhs = pat; eq_rhs = exp; eq_loc = loc }
+let mk_equation ?(loc = no_location) ?(base_ck=fresh_clock()) unsafe pat exp =
+  { eq_lhs = pat; eq_rhs = exp; eq_unsafe = unsafe; eq_base_ck = base_ck; eq_loc = loc }
 
 let mk_node
     ?(input = []) ?(output = []) ?(contract = None) ?(pinst = ([],[]))
     ?(local = []) ?(eq = [])
-    ?(stateful = true) ?(loc = no_location) ?(param = []) ?(constraints = [])
+    ?(stateful = true) ~unsafe ?(loc = no_location) ?(param = []) ?(constraints = [])
     ?(mem_alloc=[])
     name =
   { n_name = name;
     n_stateful = stateful;
+    n_unsafe = unsafe;
     n_input = input;
     n_output = output;
     n_contract = contract;

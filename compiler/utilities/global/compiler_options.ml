@@ -66,7 +66,7 @@ let boolean = ref false
 let target_languages : string list ref = ref []
 
 let add_target_language s =
-  if s = "z3z" then boolean := true;
+  if s = "z3z" then boolean := true; (* TODO use load_conf instead *)
   target_languages := s :: !target_languages
 
 (* Optional path for generated files (C or Java) *)
@@ -104,6 +104,7 @@ let add_tomato_check s = tomato_check := s :: !tomato_check
 let do_iterator_fusion = ref false
 
 let do_scalarize = ref false
+let do_simplify = ref true
 
 let do_mem_alloc = ref false
 let do_linear_typing = ref false
@@ -114,14 +115,29 @@ let do_mem_alloc_and_typing () =
 
 let use_old_scheduler = ref false
 
+let strict_ssa = ref false
+
+let unroll_loops = ref false
+
 let no_clocking_error = ref false
 
 let optim = ref false
 let do_optim () =
+(*  do_iterator_fusion := true; *)(*TODO reset when itfusion is fixed *)
   do_mem_alloc_and_typing ();
   tomato := true;
-  deadcode := true;
-  do_iterator_fusion := true
+  deadcode := true
+
+
+let check_options () =
+  let err m = raise (Arg.Bad m) in
+  if !strict_ssa
+  then (
+    if !do_mem_alloc then err "Unable to activate memory allocation with strict SSA activated.";
+    if !do_linear_typing then err "Unable to activate linear typing with strict SSA activated."
+  )
+
+let interf_all = ref false
 
 let doc_verbose = "\t\t\tSet verbose mode"
 and doc_version = "\t\tThe version of the compiler"
@@ -138,7 +154,7 @@ and doc_target =
   "<lang>\tGenerate code in language <lang>\n\t\t\t(with <lang>=c,"
   ^ " java or z3z)"
 and doc_full_type_info = "\t\t\tPrint full type information"
-and doc_stateful_info = "\t\t\tPrint stateful information"
+and doc_stateful_info = "\t\tPrint stateful information"
 and doc_full_name = "\t\tPrint full variable name information"
 and doc_target_path =
   "<path>\tGenerated files will be placed in <path>\n\t\t\t(the directory is"
@@ -151,9 +167,12 @@ and doc_assert = "<node>\tInsert run-time assertions for boolean node <node>"
 and doc_inline = "<node>\tInline node <node>"
 and doc_itfusion = "\t\tEnable iterator fusion."
 and doc_tomato = "\t\tEnable automata minimization."
+and doc_strict_ssa = "\t\tEnsure that the generated code is SSA, even for array elements."
 and doc_memalloc = "\t\tEnable memory allocation and linear annotations"
 and doc_memalloc_only = "\tEnable memory allocation"
 and doc_linear_only = "\t\tEnable linear annotations"
 and doc_interf_scheduler = "\tUse the old scheduler"
 and doc_no_clocking_error = "\tDisable clocking errors (use at your own risk!)"
 and doc_optim = "\t\t\tOptimize with deadcode, tomato, itfusion and memalloc"
+and doc_interf_all = "\t\tPerform memory allocation on all types"
+and doc_unroll = "\t\tUnroll all loops"

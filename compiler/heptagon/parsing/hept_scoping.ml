@@ -200,19 +200,10 @@ let translate_iterator_type = function
   | Ifoldi -> Heptagon.Ifoldi
   | Imapfold -> Heptagon.Imapfold
 
-(** convention : static params are set as the first static args,
-    op<a1,a2> (a3) == op <a1> (a2,a3) == op (a1,a2,a3) *)
-let static_app_from_app app args=
-  match app.a_op with
-    | Efun (Q ({ qual = Pervasives } as q))
-    | Enode (Q ({ qual = Pervasives } as q)) ->
-        q, (app.a_params @ args)
-    | _ -> raise Not_static
-
 let rec translate_static_exp se =
   try
     let se_d = translate_static_exp_desc se.se_loc se.se_desc in
-    Types.mk_static_exp Tinvalid ~loc:se.se_loc se_d
+    Types.mk_static_exp Types.Tinvalid ~loc:se.se_loc se_d
   with
     | ScopingError err -> message se.se_loc err
 
@@ -248,6 +239,7 @@ let rec translate_type loc ty =
       | Tarray (ty, e) ->
           let ty = translate_type loc ty in
           Types.Tarray (ty, expect_static_exp e)
+      | Tinvalid -> Types.Tinvalid
     )
   with
     | ScopingError err -> message loc err
@@ -430,11 +422,10 @@ let translate_contract env opt_ct =
   | Some ct ->
       let env' = Rename.append env ct.c_controllables in
       let b, env = translate_block env ct.c_block in
-      Some
-	{ Heptagon.c_assume = translate_exp env ct.c_assume;
-	  Heptagon.c_enforce = translate_exp env ct.c_enforce;
-	  Heptagon.c_controllables = translate_vd_list env' ct.c_controllables;
-	  Heptagon.c_block = b }, env'
+      Some { Heptagon.c_assume = translate_exp env ct.c_assume;
+             Heptagon.c_enforce = translate_exp env ct.c_enforce;
+             Heptagon.c_controllables = translate_vd_list env' ct.c_controllables;
+             Heptagon.c_block = b }, env'
 
 let params_of_var_decs env p_l =
   let pofvd env vd =
@@ -476,6 +467,7 @@ let translate_node node =
   (* add the node signature to the environment *)
   let nnode = { Heptagon.n_name = n;
                Heptagon.n_stateful = node.n_stateful;
+               Heptagon.n_unsafe = node.n_unsafe;
                Heptagon.n_input = inputs;
                Heptagon.n_output = outputs;
                Heptagon.n_contract = contract;
@@ -555,8 +547,8 @@ let translate_signature s =
   let o = List.map translate_arg s.sig_outputs in
   let p, _ = params_of_var_decs Rename.empty s.sig_params in
   let c = List.map translate_constrnt s.sig_param_constraints in
-  let sig_node = Signature.mk_node s.sig_loc i o s.sig_stateful p in
-  Signature.check_signature sig_node;
+  let sig_node = Signature.mk_node s.sig_loc i o s.sig_stateful s.sig_unsafe p in
+  Check_signature.check_signature sig_node;
   safe_add s.sig_loc add_value n sig_node;
   mk_signature n i o s.sig_stateful p c s.sig_loc
 

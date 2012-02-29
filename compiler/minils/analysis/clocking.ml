@@ -19,6 +19,7 @@
 
 open Misc
 open Idents
+open Names
 open Minils
 open Global_printer
 open Mls_printer
@@ -99,6 +100,10 @@ let typing_app h base pat op w_list = match op with
   | Eselect_slice | Econcat | Earray | Efield_update | Eifthenelse ->
       List.iter (expect_extvalue h base) w_list;
       Ck base
+  | Efun { qual = Module "Iostream"; name = "printf" }
+  | Efun { qual = Module "Iostream"; name = "fprintf" } ->
+    List.iter (expect_extvalue h base) w_list;
+    Cprod []
   | ( Efun f | Enode f) ->
       let node = Modules.find_value f in
       let pat_id_list = Mls_utils.ident_list_of_pat pat in
@@ -132,9 +137,15 @@ let typing_app h base pat op w_list = match op with
       Clocks.prod (List.map (fun a -> sigck_to_ck a.a_clock) node.node_outputs)
 
 
+let rec stateful e = match e.e_desc with
+  | Efby _ -> true
+  | Ewhen (e,_,_) -> stateful e
+  | Eapp({a_unsafe = unsafe}, _, _) when unsafe -> true
+  | Eapp({a_op = Enode _}, _, _) -> true
+  | _ -> false
 
 
-let typing_eq h { eq_lhs = pat; eq_rhs = e; eq_loc = loc } =
+let typing_eq h ({ eq_lhs = pat; eq_rhs = e; eq_loc = loc } as eq) =
   (* typing the expression, returns ct, ck_base *)
   let rec typing e =
     let ct,base = match e.e_desc with
@@ -145,7 +156,8 @@ let typing_eq h { eq_lhs = pat; eq_rhs = e; eq_loc = loc } =
       | Ewhen (e,c,n) ->
           let ck_n = ck_of_name h n in
           let base = expect (skeleton ck_n e.e_ty) e in
-          skeleton (Con (ck_n, c, n)) e.e_ty, Con (ck_n, c, n)
+          let base_ck = if stateful e then ck_n else Con (ck_n, c, n) in
+          skeleton (Con (ck_n, c, n)) e.e_ty, base_ck
       | Emerge (x, c_e_list) ->
           let ck = ck_of_name h x in
           List.iter (fun (c,e) -> expect_extvalue h (Con (ck,c,x)) e) c_e_list;
@@ -190,7 +202,6 @@ let typing_eq h { eq_lhs = pat; eq_rhs = e; eq_loc = loc } =
           in
           ct, base_ck
     in
-    e.e_base_ck <- base;
     (try unify ct e.e_ct
      with Unify ->
        eprintf "Inconsistent clock annotation for exp %a.@\n"
@@ -204,14 +215,15 @@ let typing_eq h { eq_lhs = pat; eq_rhs = e; eq_loc = loc } =
      with Unify -> error_message e.e_loc (Etypeclash (actual_ct, expected_ct)));
     base
   in
-  let ct,_ = typing e in
+  let ct,base_ck = typing e in
   let pat_ct = typing_pat h pat in
   (try unify ct pat_ct
     with Unify ->
       eprintf "Incoherent clock between right and left side of the equation.@\n";
-      error_message loc (Etypeclash (ct, pat_ct)))
+      error_message loc (Etypeclash (ct, pat_ct)));
+  { eq with eq_base_ck = base_ck }
 
-let typing_eqs h eq_list = List.iter (typing_eq h) eq_list
+let typing_eqs h eq_list = List.map (typing_eq h) eq_list
 
 let append_env h vds =
   List.fold_left (fun h { v_ident = n; v_clock = ck } -> Env.add n ck h) h vds
@@ -219,47 +231,41 @@ let append_env h vds =
 
 let typing_contract h contract =
   match contract with
-    | None -> h
-    | Some { c_local = l_list;
+    | None -> None, h
+    | Some ({ c_local = l_list;
              c_eq = eq_list;
              c_assume = e_a;
              c_enforce = e_g;
-             c_controllables = c_list } ->
+             c_controllables = c_list } as contract) ->
         let h' = append_env h l_list in
         (* assumption *)
         (* property *)
-        typing_eqs h' eq_list;
+        let eq_list = typing_eqs h' eq_list in
         expect_extvalue h' Cbase e_a;
         expect_extvalue h' Cbase e_g;
-        append_env h c_list
+        let h = append_env h c_list in
+        Some { contract with c_eq = eq_list }, h
 
-(* check signature causality and update it in the global env *)
-let update_signature h node =
-  let set_arg_clock vd ad =
-    { ad with a_clock = Signature.ck_to_sck (ck_repr (Env.find vd.v_ident h)) }
-  in
-  let sign = Modules.find_value node.n_name in
-  let sign =
-    { sign with node_inputs = List.map2 set_arg_clock node.n_input sign.node_inputs;
-                node_outputs = List.map2 set_arg_clock node.n_output sign.node_outputs } in
-  Signature.check_signature sign;
-  Modules.replace_value node.n_name sign
 
 let typing_node node =
   let h0 = append_env Env.empty node.n_input in
   let h0 = append_env h0 node.n_output in
-  let h = typing_contract h0 node.n_contract in
+  let contract, h = typing_contract h0 node.n_contract in
   let h = append_env h node.n_local in
-  typing_eqs h node.n_equs;
+  let equs = typing_eqs h node.n_equs in
   (* synchronize input and output on base : find the free vars and set them to base *)
   Env.iter (fun _ ck -> unify_ck Cbase (root_ck_of ck)) h0;
   (*update clock info in variables descriptions *)
   let set_clock vd = { vd with v_clock = ck_repr (Env.find vd.v_ident h) } in
   let node = { node with n_input = List.map set_clock node.n_input;
                          n_output = List.map set_clock node.n_output;
-                         n_local = List.map set_clock node.n_local }
+                         n_local = List.map set_clock node.n_local;
+                         n_equs = equs;
+                         n_contract = contract; }
   in
-  update_signature h node;
+  let sign = Mls_utils.signature_of_node node in
+  Check_signature.check_signature sign;
+  Modules.replace_value node.n_name sign;
   node
 
 let program p =

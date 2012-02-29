@@ -64,14 +64,14 @@ let compile_program modname source_f =
     let p = Hept_parser_scoper.parse_program modname lexbuf in
   (* Process the Heptagon AST *)
     let p = Hept_compiler.compile_program p in
-  (* Output the .epci *)
-    output_value epci_c (Modules.current_module ());
   (* Compile Heptagon to MiniLS *)
     let p = do_pass "Translation into MiniLs" Hept2mls.program p Mls_compiler.pp in
   (* Output the .mls *)
     Mls_printer.print mls_c p;
   (* Process the MiniLS AST *)
     let p = Mls_compiler.compile_program p in
+  (* Output the .epci *)
+    output_value epci_c (Modules.current_module ());
   (* Generate the sequential code *)
     Mls2seq.program p;
     close_all_files ()
@@ -84,7 +84,7 @@ let compile source_f =
   let modul = Names.modul_of_string modname in
   Initial.initialize modul;
   source_f |> Filename.dirname |> add_include;
-
+  check_options ();
   match Misc.file_extension source_f with
     | "ept" -> compile_program modname source_f
     | "epi" -> compile_interface modname source_f
@@ -124,12 +124,16 @@ let main () =
         "-statefuli", Arg.Set stateful_info, doc_stateful_info;
         "-fname", Arg.Set full_name, doc_full_name;
         "-itfusion", Arg.Set do_iterator_fusion, doc_itfusion;
+        "-strict_ssa", Arg.Set strict_ssa, doc_strict_ssa;
         "-memalloc", Arg.Unit do_mem_alloc_and_typing, doc_memalloc;
         "-only-memalloc", Arg.Set do_mem_alloc, doc_memalloc_only;
         "-only-linear", Arg.Set do_linear_typing, doc_linear_only;
         "-old-scheduler", Arg.Set use_old_scheduler, doc_interf_scheduler;
         "-no-clocking-error", Arg.Set no_clocking_error, doc_interf_scheduler;
         "-O", Arg.Unit do_optim, doc_optim;
+        "-unroll", Arg.Set unroll_loops, doc_unroll;
+        "-O", Arg.Unit do_optim, doc_optim;
+        "-mall", Arg.Set interf_all, doc_interf_all;
       ]
         compile errmsg;
   with

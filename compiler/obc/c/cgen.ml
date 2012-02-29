@@ -109,7 +109,18 @@ let copname = function
   | "+." -> "+" | "-." -> "-" | "<"  -> "<" | ">"  -> ">" | "<=" -> "<="
   | ">=" -> ">=" | "<=." -> "<=" | "<." -> "<" | ">=." -> ">=" | ">." -> ">"
   | "~-" -> "-" | "not" -> "!" | "%" -> "%"
+  | ">>>" -> ">>" | "<<<" -> "<<" | "&&&" -> "&" | "|||" -> "|"
   | op   -> op
+
+
+let cformat_of_format s =
+  let aux m = match m with
+    | "b" -> "d" (*no booleans in C*)
+    | _ -> m
+  in
+  match s with
+    | Cconst (Cstrlit s) -> Cconst (Cstrlit (Printf_parser.tr_format aux s))
+    | _ -> assert false
 
 (** Translates an Obc var_dec to a tuple (name, cty). *)
 let cvar_of_vd vd =
@@ -232,11 +243,9 @@ let rec cexpr_of_static_exp se =
           (List.fold_left (fun cc n -> Carraylit (repeat_list cc (int_of_static_exp n)))
                      (cexpr_of_static_exp c) n_list)
     | Svar ln ->
-        (* (try
-          let cd = find_const ln in
-          cexpr_of_static_exp (Static.simplify QualEnv.empty cd.c_value)
-        with Not_found -> assert false) *)
-      Cvar (cname_of_qn ln)
+      if !Compiler_options.unroll_loops && se.se_ty = Initial.tint
+      then cexpr_of_static_exp (Static.simplify QualEnv.empty (find_const ln).c_value)
+      else Cvar (cname_of_qn ln)
     | Sop _ ->
         let se' = Static.simplify QualEnv.empty se in
           if se = se' then
@@ -267,16 +276,25 @@ and cop_of_op_aux op_name cexps = match op_name with
     | { qual = Pervasives; name = op } ->
         begin match op,cexps with
           | ("~-" | "~-."), [e] -> Cuop ("-", e)
+          | ("~~"), [e] -> Cuop ("~", e)
           | "not", [e] -> Cuop ("!", e)
           | (
               "=" | "<>"
             | "&" | "or"
             | "+" | "-" | "*" | "/"
-            | "*." | "/." | "+." | "-." | "%"
+            | "*." | "/." | "+." | "-." | "%" | "<<<" | ">>>" | "&&&" | "|||"
             | "<" | ">" | "<=" | ">=" | "<=." | "<." | ">=." | ">."), [el;er] ->
               Cbop (copname op, el, er)
           | _ -> Cfun_call(op, cexps)
         end
+    | { qual = Module "Iostream"; name = "printf" } ->
+      let s, args = assert_1min cexps in
+      let s = cformat_of_format s in
+      Cfun_call("printf", s::args)
+    | { qual = Module "Iostream"; name = "fprintf" } ->
+      let file, s, args = assert_2min cexps in
+      let s = cformat_of_format s in
+      Cfun_call("fprintf", file::s::args)
     | { name = op } -> Cfun_call(op,cexps)
 
 and cop_of_op out_env var_env op_name exps =
@@ -799,9 +817,13 @@ let cdefs_and_cdecls_of_program_decl id = match id with
   | Pconst cd -> cdefs_and_cdecls_of_const_decl cd
   | _ -> [], []
 
+let header_of_module m = match m with
+  | Module "Iostream" -> "stdio"
+  | _ -> String.uncapitalize (modul_to_string m)
+
 let global_file_header name prog =
   let dependencies = ModulSet.elements (Obc_utils.Deps.deps_program prog) in
-  let dependencies = List.map (fun m -> String.uncapitalize (modul_to_string m)) dependencies in
+  let dependencies = List.map header_of_module dependencies in
 
   let classes = program_classes prog in
   let (decls, defs) =
@@ -827,8 +849,7 @@ let global_file_header name prog =
 
 let interface_header name i =
   let dependencies = ModulSet.elements (Obc_utils.Deps.deps_interface i) in
-  let dependencies =
-    List.map (fun m -> String.uncapitalize (modul_to_string m)) dependencies in
+  let dependencies = List.map header_of_module dependencies in
 
   let cdefs_and_cdecls = List.map cdefs_and_cdecls_of_interface_decl i.i_desc in
 
