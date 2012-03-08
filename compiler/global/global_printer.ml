@@ -59,7 +59,7 @@ let rec print_ct ff = function
 
 
 let rec print_static_exp_desc ff sed = match sed with
-  | Sint i -> fprintf ff "%d" i
+  | Sint i -> fprintf ff "%ld" i
   | Sbool b -> fprintf ff "%b" b
   | Sfloat f -> fprintf ff "%f" f
   | Sstring s -> fprintf ff "\"%s\"" (String.escaped s)

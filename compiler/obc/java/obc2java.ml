@@ -40,7 +40,7 @@ let add_classe, get_classes =
 let fresh_for size body =
   let i = Idents.gen_var "obc2java" "i" in
   let id = mk_var_dec i false Tint in
-  Afor (id, Sint 0, size, mk_block (body i))
+  Afor (id, Sint 0l, size, mk_block (body i))
 
 (** fresh nested Afor from 0 to [size]
     with [body] a function from [var_ident] list (the iterator list) to [act] list :
@@ -55,11 +55,11 @@ let fresh_nfor s_l body =
     | [s] ->
         let i = Idents.gen_var "obc2java" "i" in
         let id = (mk_var_dec i false Tint) in
-        Afor (id, Sint 0, s, mk_block (body (List.rev (i::i_l))))
+        Afor (id, Sint 0l, s, mk_block (body (List.rev (i::i_l))))
     | s::s_l ->
         let i = Idents.gen_var "obc2java" "i" in
         let id = mk_var_dec i false Tint in
-        Afor (id, Sint 0, s, mk_block ([aux s_l (i::i_l)]))
+        Afor (id, Sint 0l, s, mk_block ([aux s_l (i::i_l)]))
     | [] -> Misc.internal_error "Fresh nfor called with empty size list"
   in
   aux s_l []
@@ -139,7 +139,7 @@ let rec static_exp param_env se = match se.Types.se_desc with
                               Global_printer.print_static_exp se;
                               raise Errors.Error)
             in
-            Enew_array (tyl, Misc.repeat_list (make_array t pow_list) pow)
+            Enew_array (tyl, Misc.repeat_list (make_array t pow_list) (Int32.to_int pow))
         | _ -> static_exp param_env see
       in
       make_array (ty param_env se.Types.se_ty) pow_list
