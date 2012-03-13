@@ -88,6 +88,15 @@ let vars_pat pat =
     | Etuplepat pat_list -> List.fold_left (_vars_pat locals) acc pat_list
   in _vars_pat IdentSet.empty IdentSet.empty pat
 
+(** @return the list of variables defined in [pat] *)
+let ident_list_of_pat pat =
+  let rec f acc pat = match pat with
+    | Evarpat id -> id::acc
+    | Etuplepat pat_l -> List.fold_left f acc pat_l
+  in
+  List.rev (f [] pat)
+
+
 (** @return whether an object of name [n] belongs to
     a list of [var_dec]. *)
 let rec vd_mem n = function

@@ -158,6 +158,7 @@ let source_name id = id.source
 let name id = UniqueNames.name id
 
 let enter_node n = UniqueNames.enter_node n
+let current_node () = !UniqueNames.current_node
 let clone_node f f' = UniqueNames.clone_node f f'
 
 let local_qn name = { Names.qual = Names.LocalModule (Names.QualModule !UniqueNames.current_node);

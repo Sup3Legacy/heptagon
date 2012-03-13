@@ -39,6 +39,7 @@ val is_reset : ident -> bool
 
 (** /!\ [enter_node qualname] should be called every time we enter a node with name [qualname]. *)
 val enter_node : Names.qualname -> unit
+val current_node : unit -> Names.qualname
 
 (** [clone_node f fc] allows to clone node [f] so that all idents used in [f] are also in [f'] *)
 val clone_node : Names.qualname -> Names.qualname -> unit
