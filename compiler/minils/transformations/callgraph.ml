@@ -370,14 +370,17 @@ and _called_nodes ln =
 
 (** @return the list of nodes, called by the node named [ln], needing instanciation, with the
     corresponding params (static parameters appear as free variables). *)
-and called_nodes ln = match ln.qual with
-  | LocalModule _ -> [] (* high-order so we can't know *)
-  | _ ->
-      try QualEnv.find ln info.called_nodes
-      with Not_found ->
-        let called = _called_nodes ln in
-        info.called_nodes <- QualEnv.add ln called info.called_nodes;
-        called
+and called_nodes ln =
+  (* external nodes don't call others *)
+  if (Modules.find_value ln).node_external then []
+  else match ln.qual with
+    | LocalModule _ -> [] (* high-order so we can't know *)
+    | _ ->
+        try QualEnv.find ln info.called_nodes
+        with Not_found ->
+          let called = _called_nodes ln in
+          info.called_nodes <- QualEnv.add ln called info.called_nodes;
+          called
 
 (** Call add_node_instance, to generates the instances
     needed to call [ln] with static parameters [params]. *)
