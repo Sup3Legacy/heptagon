@@ -21,11 +21,11 @@ let compile_program p =
   let p = pass "Typing" true Typing.program p pp in
   let p = pass "Linear Typing" !do_linear_typing Linear_typing.program p pp in
 
-  (* Completion of partial definitions *)
-  let p = pass "Completion" true Completion.program p pp in
-
   (* Initialization check *)
   let p = silent_pass "Initialization check" !init Initialization.program p in
+
+  (* Completion of partial definitions *)
+  let p = pass "Completion" true Completion.program p pp in
 
   (* Automata *)
   let p = pass "Automata" true Automata.program p pp in
@@ -35,6 +35,9 @@ let compile_program p =
 
   (* Shared variables (last) *)
   let p = pass "Last" true Last.program p pp in
+
+  (* Reset *)
+  let p = pass "Reset" true Reset.program p pp in
 
   (* Remove switch statements *)
   let p = pass "Switch" true Switch.program p pp in
@@ -51,20 +54,13 @@ let compile_program p =
   (* Inlining *)
   let p = pass "Inlining" true Inline.program p pp in
 
-  (* Causality check *)
+  (* Causality check Needs to be after Inlining *)
   let p = silent_pass "Causality check" !causality Causality.program p in
-
-  (* Reset *)
-  let p = pass "Reset" true Reset.program p pp in
-
-  (* Normalization *)
-  let p = pass "Normalization" true Normalize.program p pp in
 
   (* Boolean pass *)
   let p = pass "Clocking(Heptagon)" !boolean Hept_clocking.program p pp in
   let p = pass "Boolean" !boolean Boolean.program p pp in
   let p = pass "Normalization" !boolean Normalize.program p pp in
-
 
   (* Block flatten *)
   let p = pass "Block" true Block.program p pp in

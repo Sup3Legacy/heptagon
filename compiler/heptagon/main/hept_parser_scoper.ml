@@ -12,8 +12,6 @@ open Compiler_utils
 open Location
 open Global_printer
 
-let pp p = if !verbose then Hept_printer.print stdout p
-
 let parse parsing_fun lexbuf =
   try
     parsing_fun Hept_lexer.token lexbuf
@@ -28,6 +26,7 @@ let parse parsing_fun lexbuf =
 
 (** Parse an implementation [lexbuf] *)
 let parse_program modname lexbuf =
+  let pp p = if !verbose then Hept_printer.print stdout p in
   (* Parsing of the file *)
   let p = do_silent_pass "Parsing" (parse Hept_parser.program) lexbuf in
   let p = { p with Hept_parsetree.p_modname = modname } in
@@ -42,6 +41,7 @@ let parse_program modname lexbuf =
 
 (** Parse an interface [lexbuf] *)
 let parse_interface modname lexbuf =
+  let pp i = if !verbose then Hept_printer.print_interface stdout i in
   (* Parsing of the file *)
   let i = do_silent_pass "Parsing" (parse Hept_parser.interface) lexbuf in
   let i = { i with Hept_parsetree.i_modname = modname } in
@@ -50,6 +50,6 @@ let parse_interface modname lexbuf =
   let i = do_silent_pass "Static Scoping" Hept_static_scoping.interface i in
 
   (* Convert the parse tree to Heptagon AST *)
-  let i = do_silent_pass "Scoping" Hept_scoping.translate_interface i in
+  let i = do_pass "Scoping" Hept_scoping.translate_interface i pp in
   i
 

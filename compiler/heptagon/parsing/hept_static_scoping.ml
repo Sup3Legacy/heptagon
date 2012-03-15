@@ -130,7 +130,6 @@ let program p =
                 node_dec = node_dec;
                 exp = exp;
                 app = app;
-                static_exp = static_exp;
                 const_dec = const_dec }
   in
   List.iter open_module p.p_opened;
@@ -138,8 +137,11 @@ let program p =
   p
 
 let interface i =
-  let funs = { Hept_parsetree_mapfold.defaults
-               with node_dec = node_dec; exp = exp; const_dec = const_dec } in
+  let funs = { Hept_parsetree_mapfold.defaults with
+                node_dec = node_dec;
+                exp = exp;
+                const_dec = const_dec }
+  in
   List.iter open_module i.i_opened;
   let i, _ = Hept_parsetree_mapfold.interface_it funs Names.NamesEnv.empty i in
   i

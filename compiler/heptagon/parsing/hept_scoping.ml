@@ -534,6 +534,7 @@ and translate_program p =
 
 
 and translate_signature s n =
+  Idents.enter_node n;
   let rec translate_some_clock ck = match ck with
     | None -> Signature.Cbase
     | Some ck -> translate_clock ck

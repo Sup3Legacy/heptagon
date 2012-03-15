@@ -354,6 +354,14 @@ let print_pdesc ff pd = match pd with
   | Pconst c -> print_const_dec ff c
   | Ptype t -> print_type_def ff t
 
+let print_node_sig ff s =
+  fprintf ff "@[%a@]@." print_interface_value (s.sig_name.name, s.sig_sig)
+
+let print_interface_desc ff id = match id with
+  | Itypedef td -> print_type_def ff td
+  | Iconstdef cd -> print_const_dec ff cd
+  | Isignature s -> print_node_sig ff s
+
 let print_open_module ff name = fprintf ff "open %s@." (modul_to_string name)
 
 let print oc { p_opened = po; p_desc = pd; } =
@@ -363,3 +371,12 @@ let print oc { p_opened = po; p_desc = pd; } =
   List.iter (print_pdesc ff) pd;
   fprintf ff "@]";
   fprintf ff "@?"
+
+let print_interface oc { i_opened = io; i_desc = id; } =
+  let ff = Format.formatter_of_out_channel oc in
+  fprintf ff "@[<v>";
+  List.iter (print_open_module ff) io;
+  List.iter (print_interface_desc ff) id;
+  fprintf ff "@]";
+  fprintf ff "@?"
+

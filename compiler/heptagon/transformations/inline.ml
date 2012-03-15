@@ -50,7 +50,6 @@ let var_dec funs (inline, nenv, cenv, subst) vd =
   Hept_mapfold.var_dec funs (inline, nenv, cenv, subst) new_vd
 
 let var_ident _ (inline, nenv, cenv, subst) id =
-  
   let id =
     if inline then
       try Format.eprintf "Looking for %a@." Idents.print_ident id; Idents.Env.find id subst
@@ -92,7 +91,8 @@ let combine_cenv cenv old_l new_l =
   in
   List.fold_left2 add cenv old_l new_l
 
-(* TODO allow this function to load the necessary .epo and update the [nenv]. *)
+(* TODO allow this function to load the necessary .epo and update the [nenv].*)
+(* Beware that one need to inline normalized code. *)
 let node_dec_from_qualname nn loc nenv = match nn.qual with
   | m when m = Modules.g_env.Modules.current_mod ->
       QualEnv.find nn nenv
