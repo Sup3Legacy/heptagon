@@ -563,8 +563,8 @@ let build_interf_graph f =
     add_records_field_interferences ();
     (* Splill inputs that are not modified *)
     spill_inputs f;
-    if not !Compiler_options.normalize_register_outputs then
-      spill_registers_outputs f;
+   (* if not !Compiler_options.normalize_register_outputs then
+      spill_registers_outputs f;*)
     (* Spill outputs and memories that are not arrays or struts*)
     if !Compiler_options.interf_all then
       spill_mems_outputs f;
