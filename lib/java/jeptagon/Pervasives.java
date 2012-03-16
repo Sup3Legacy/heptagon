@@ -28,7 +28,7 @@ public class Pervasives {
 		return b?1:0;
 	}
 
-	public static boolean int_of_bool(int i) {
+	public static boolean bool_of_int(int i) {
 		return i!=0;
 	}
 
