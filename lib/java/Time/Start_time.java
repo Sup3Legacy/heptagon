@@ -10,4 +10,5 @@ public class Start_time {
 	public long step() {
 		return (long) start_time;
 	}
+	public void reset(){}
 }
