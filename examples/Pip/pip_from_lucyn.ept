@@ -1,3 +1,4 @@
+
 (****** NON-STRICT BUFFERS *******)
 
 node int_buffer<<n : int>>(w : bool :: .; i : int :: . on w; r : bool :: .)
@@ -6,26 +7,6 @@ var buff, next_buff : int^n at r;
     i_w, i_r : int; v : int; empty : bool; o2 : int;
 let
   init<<r>> buff = (21^n) fby next_buff;
-
-  v = merge w i (buff[> i_w % n <] whenot w);
-
-  next_buff = [buff with [ i_w % n ] = v];
-
-  i_r = 0 fby (i_r + if r then 1 else 0);
-  i_w = 0 fby (i_w + if w then 1 else 0);
-
-  empty = i_w = i_r;
-
-  o2 = if empty then v else buff[> i_r % n <];
-  o = o2 when r;
-tel
-
-node float_buffer<<n : int>>(w : bool :: .; i : float :: . on w; r : bool :: .)
-                    returns (o : float :: . on r)
-var buff, next_buff : float^n at r;
-    i_w, i_r : int; v : float; empty : bool; o2 : float;
-let
-  init<<r>> buff = (255.0 ^n) fby next_buff;
 
   v = merge w i (buff[> i_w % n <] whenot w);
 
@@ -78,11 +59,11 @@ let
   o = buff[> i_r % n <] when r;
 tel
 
-node future_float_sbuffer<<n : int>>(w : bool :: .; i : future float :: . on w; r : bool :: .)
-                     returns (o : future float :: . on r)
-var buff, next_buff : (future float)^n; i_w, i_r : int; v : future float;
+node future_int_sbuffer<<n : int>>(w : bool :: .; i : future int :: . on w; r : bool :: .)
+                     returns (o : future int :: . on r)
+var buff, next_buff : (future int)^n; i_w, i_r : int; v : future int;
 let
-  buff = ((async 255.0) ^n) fby next_buff;
+  buff = ((async 255) ^n) fby next_buff;
 
   v = merge w i (buff[> i_w % n <] whenot w);
 
@@ -94,22 +75,6 @@ let
   o = buff[> i_r % n <] when r;
 tel
 
-
-node float_sbuffer<<n : int>>(w : bool :: .; i : float :: . on w; r : bool :: .)
-                     returns (o : float :: . on r)
-var buff, next_buff : float^n; i_w, i_r : int; v : float;
-let
-  buff = (255.0 ^n) fby next_buff;
-
-  v = merge w i (buff[> i_w % n <] whenot w);
-
-  next_buff = [buff with [ i_w % n ] = v];
-
-  i_r = 0 fby (i_r + if r then 1 else 0);
-  i_w = 0 fby (i_w + if w then 1 else 0);
-
-  o = buff[> i_r % n <] when r;
-tel
 
 node bool_sbuffer<<n : int>>(w : bool :: .; i : bool :: . on w; r : bool :: .)
                      returns (o : bool :: . on r)
@@ -189,29 +154,29 @@ let
 tel
 
 (******************************************************************************)
-node cast_float3(x_416 : float :: .; x_417 : float :: .; x_418 : float :: .)
-     returns (x_419 : float :: .; x_420 : float :: .; x_421 : float :: .)
+node cast_int3(x_416 : int :: .; x_417 : int :: .; x_418 : int :: .)
+     returns (x_419 : int :: .; x_420 : int :: .; x_421 : int :: .)
 var base_1 : bool :: .;
 let
   base_1 = true;
-  x_421 = (if true then x_418 else 0.000000);
-  x_420 = (if true then x_417 else 0.000000);
-  x_419 = (if true then x_416 else 0.000000)
+  x_421 = (if true then x_418 else 0);
+  x_420 = (if true then x_417 else 0);
+  x_419 = (if true then x_416 else 0)
 tel
 
-node convo(c0 : float :: .; c1 : float :: .; c2 : float :: .)
-     returns (o_97 : float :: .)
+node convo(c0 : int :: .; c1 : int :: .; c2 : int :: .)
+     returns (o_97 : int :: .)
 var base_1 : bool :: .;
 let
   base_1 = true;
-  o_97 = (((c0 +. c1) +. c2) /. 3.000000)
+  o_97 = (((c0 + c1) + c2) / 3)
 tel
 
-node convolution(x_401 : float :: .; x_402 : float :: .; x_403 : float :: 
-                 .; x_404 : float :: .; x_405 : float :: .;
-                 x_406 : float :: .; x_407 : float :: .; x_408 : float :: 
-                 .; x_409 : float :: .)
-     returns (r : float :: .; g : float :: .; b : float :: .)
+node convolution(x_401 : int :: .; x_402 : int :: .; x_403 : int :: 
+                 .; x_404 : int :: .; x_405 : int :: .;
+                 x_406 : int :: .; x_407 : int :: .; x_408 : int :: 
+                 .; x_409 : int :: .)
+     returns (r : int :: .; g : int :: .; b : int :: .)
 var base_1 : bool :: .;
 let
   base_1 = true;
@@ -224,14 +189,14 @@ tel
 
 
 node horizontal_filter(wabs_485 (* hf_1 :: 'a *) : bool :: .;
-                       x_380 : float :: .; x_381 : float :: .;
-                       x_382 : float :: .)
-     returns (x_395 : float :: . on true(wabs_485);
-              x_396 : float :: . on true(wabs_485);
-              x_397 : float :: . on true(wabs_485))
-var base_1 : bool :: .; x_400 : float :: .; x_399 : float :: .;
-    x_398 : float :: .; x_391 : float; x_390 : float; x_389 : float;
-    x_388 : float; x_387 : float; x_386 : float;
+                       x_380 : int :: .; x_381 : int :: .;
+                       x_382 : int :: .)
+     returns (x_395 : int :: . on true(wabs_485);
+              x_396 : int :: . on true(wabs_485);
+              x_397 : int :: . on true(wabs_485))
+var base_1 : bool :: .; x_400 : int :: .; x_399 : int :: .;
+    x_398 : int :: .; x_391 : int; x_390 : int; x_389 : int;
+    x_388 : int; x_387 : int; x_386 : int;
 let
   base_1 = true;
   x_388 = ((x_382 fby x_391) :: .);
@@ -256,43 +221,43 @@ tel
   (0^776880 1^720) *)
 
 
-node my_fby_sd_line_inst_1(x_368 : float :: .; x_369 : float :: .;
-                           x_370 : float :: .; x_371 : float :: .;
-                           x_372 : float :: .; x_373 : float :: .)
-     returns (x_374 : float :: .; x_375 : float :: .; x_376 : float :: .)
-var base_1 : bool :: .; x_379 : float; x_378 : float; x_377 : float;
+node my_fby_sd_line_inst_1(x_368 : int :: .; x_369 : int :: .;
+                           x_370 : int :: .; x_371 : int :: .;
+                           x_372 : int :: .; x_373 : int :: .)
+     returns (x_374 : int :: .; x_375 : int :: .; x_376 : int :: .)
+var base_1 : bool :: .; x_379 : int; x_378 : int; x_377 : int;
     wabs_484 (* first_sd_line_2 :: 'a *) : bool :: .;
 let
   base_1 = true;
   x_376 = merge wabs_484 (true -> (x_370 when wabs_484)) (false -> x_379);
   x_375 = merge wabs_484 (true -> (x_369 when wabs_484)) (false -> x_378);
   x_374 = merge wabs_484 (true -> (x_368 when wabs_484)) (false -> x_377);
-  x_379 = inlined float_sbuffer<<720>>(base_1, x_373, merge wabs_484
+  x_379 = inlined int_sbuffer<<720>>(base_1, x_373, merge wabs_484
                                        (true -> false) (false -> base_1));
-  x_378 = inlined float_sbuffer<<720>>(base_1, x_372, merge wabs_484
+  x_378 = inlined int_sbuffer<<720>>(base_1, x_372, merge wabs_484
                                        (true -> false) (false -> base_1));
-  x_377 = inlined float_sbuffer<<720>>(base_1, x_371, merge wabs_484
+  x_377 = inlined int_sbuffer<<720>>(base_1, x_371, merge wabs_484
                                        (true -> false) (false -> base_1));
   wabs_484 = before<<720>>()
 tel
 
 node reorder_inst_0(wabs_479 (* first_sd_line_2 :: 'a *) : bool :: .;
-                    x_344 : float :: .; x_345 : float :: .;
-                    x_346 : float :: .)
-     returns (x_347 : float :: . on false(wabs_479);
-              x_348 : float :: . on false(wabs_479);
-              x_349 : float :: . on false(wabs_479);
-              x_350 : float :: . on false(wabs_479);
-              x_351 : float :: . on false(wabs_479);
-              x_352 : float :: . on false(wabs_479);
-              x_353 : float :: . on false(wabs_479);
-              x_354 : float :: . on false(wabs_479);
-              x_355 : float :: . on false(wabs_479))
-var base_1 : bool :: .; x_367 : float :: . on false(wabs_479);
-    x_366 : float :: . on false(wabs_479);
-    x_365 : float :: . on false(wabs_479); x_364 : float; x_363 : float;
-    x_362 : float; x_361 : float; x_360 : float; x_359 : float;
-    x_358 : float; x_357 : float; x_356 : float;
+                    x_344 : int :: .; x_345 : int :: .;
+                    x_346 : int :: .)
+     returns (x_347 : int :: . on false(wabs_479);
+              x_348 : int :: . on false(wabs_479);
+              x_349 : int :: . on false(wabs_479);
+              x_350 : int :: . on false(wabs_479);
+              x_351 : int :: . on false(wabs_479);
+              x_352 : int :: . on false(wabs_479);
+              x_353 : int :: . on false(wabs_479);
+              x_354 : int :: . on false(wabs_479);
+              x_355 : int :: . on false(wabs_479))
+var base_1 : bool :: .; x_367 : int :: . on false(wabs_479);
+    x_366 : int :: . on false(wabs_479);
+    x_365 : int :: . on false(wabs_479); x_364 : int; x_363 : int;
+    x_362 : int; x_361 : int; x_360 : int; x_359 : int;
+    x_358 : int; x_357 : int; x_356 : int;
     w_482 (* first_line_of_img_3 :: 'a on not first_sd_line_2 *) : bool :: 
     . on false(wabs_479);
     w_480 (* last_line_of_img_4 :: 'a on not first_sd_line_2 *) : bool :: 
@@ -319,11 +284,11 @@ let
      w_482 = (if (cpt_483 < 720) then true else false);
      cpt_483 = periodic<<777600>>()
   done;
-  x_361 = inlined float_sbuffer<<720>>(base_1, x_346, merge wabs_479
+  x_361 = inlined int_sbuffer<<720>>(base_1, x_346, merge wabs_479
                                        (true -> false) (false -> base_1));
-  x_360 = inlined float_sbuffer<<720>>(base_1, x_345, merge wabs_479
+  x_360 = inlined int_sbuffer<<720>>(base_1, x_345, merge wabs_479
                                        (true -> false) (false -> base_1));
-  x_359 = inlined float_sbuffer<<720>>(base_1, x_344, merge wabs_479
+  x_359 = inlined int_sbuffer<<720>>(base_1, x_344, merge wabs_479
                                        (true -> false) (false -> base_1));
   x_364 = merge w_480 (true -> (x_361 when w_480)) (false -> ((x_346
           whenot wabs_479) whenot w_480));
@@ -346,23 +311,23 @@ tel
 node vertical_filter(w_477 (* vf_5 :: 'a on not first_sd_line_2 *) : 
                      bool :: . on false(wabs_476);
                      wabs_476 (* first_sd_line_2 :: 'a *) : bool :: .;
-                     x_320 : float :: .; x_321 : float :: .;
-                     x_322 : float :: .)
-     returns (x_335 : float :: . on false(wabs_476) on true(w_477);
-              x_336 : float :: . on false(wabs_476) on true(w_477);
-              x_337 : float :: . on false(wabs_476) on true(w_477))
-var base_1 : bool :: .; x_340 : float :: . on false(wabs_476);
-    x_339 : float :: . on false(wabs_476);
-    x_338 : float :: . on false(wabs_476);
-    x_334 : float :: . on false(wabs_476);
-    x_333 : float :: . on false(wabs_476);
-    x_332 : float :: . on false(wabs_476);
-    x_331 : float :: . on false(wabs_476);
-    x_330 : float :: . on false(wabs_476);
-    x_329 : float :: . on false(wabs_476);
-    x_328 : float :: . on false(wabs_476);
-    x_327 : float :: . on false(wabs_476);
-    x_326 : float :: . on false(wabs_476);
+                     x_320 : int :: .; x_321 : int :: .;
+                     x_322 : int :: .)
+     returns (x_335 : int :: . on false(wabs_476) on true(w_477);
+              x_336 : int :: . on false(wabs_476) on true(w_477);
+              x_337 : int :: . on false(wabs_476) on true(w_477))
+var base_1 : bool :: .; x_340 : int :: . on false(wabs_476);
+    x_339 : int :: . on false(wabs_476);
+    x_338 : int :: . on false(wabs_476);
+    x_334 : int :: . on false(wabs_476);
+    x_333 : int :: . on false(wabs_476);
+    x_332 : int :: . on false(wabs_476);
+    x_331 : int :: . on false(wabs_476);
+    x_330 : int :: . on false(wabs_476);
+    x_329 : int :: . on false(wabs_476);
+    x_328 : int :: . on false(wabs_476);
+    x_327 : int :: . on false(wabs_476);
+    x_326 : int :: . on false(wabs_476);
 let
   base_1 = true;
   (x_326, x_327, x_328, x_329, x_330, x_331, x_332, x_333, x_334) =
@@ -378,17 +343,17 @@ node downscaler(w_474 (* vf_5 :: 'a on hf_1 on not first_sd_line_2 *) :
                 bool :: . on true(wabs_472) on false(wabs_473);
                 wabs_473 (* first_sd_line_2 :: 'a on hf_1 *) : bool :: 
                 . on true(wabs_472); wabs_472 (* hf_1 :: 'a *) : bool :: 
-                .; x_311 : float :: .; x_312 : float :: .; x_313 : float :: 
+                .; x_311 : int :: .; x_312 : int :: .; x_313 : int :: 
                 .)
-     returns (x_314 : float :: . on true(wabs_472) on false(wabs_473)
+     returns (x_314 : int :: . on true(wabs_472) on false(wabs_473)
                                on true(w_474);
-              x_315 : float :: . on true(wabs_472) on false(wabs_473)
+              x_315 : int :: . on true(wabs_472) on false(wabs_473)
                                on true(w_474);
-              x_316 : float :: . on true(wabs_472) on false(wabs_473)
+              x_316 : int :: . on true(wabs_472) on false(wabs_473)
                                on true(w_474))
-var base_1 : bool :: .; x_319 : float :: . on true(wabs_472);
-    x_318 : float :: . on true(wabs_472);
-    x_317 : float :: . on true(wabs_472);
+var base_1 : bool :: .; x_319 : int :: . on true(wabs_472);
+    x_318 : int :: . on true(wabs_472);
+    x_317 : int :: . on true(wabs_472);
 let
   base_1 = true;
   (x_314, x_315, x_316) =
@@ -407,19 +372,19 @@ tel
 
 
 node picture_in_picture_leonard(wabs_435 (* 0^4315(1) :: 'a *) : bool :: 
-                                .; x_209 : float :: .; x_210 : float :: 
-                                .; x_211 : float :: .;
-                                x_212 : float :: . on true(wabs_435);
-                                x_213 : float :: . on true(wabs_435);
-                                x_214 : float :: . on true(wabs_435))
-     returns (x_221 : float :: . on true(wabs_435);
-              x_222 : float :: . on true(wabs_435);
-              x_223 : float :: . on true(wabs_435))
+                                .; x_209 : int :: .; x_210 : int :: 
+                                .; x_211 : int :: .;
+                                x_212 : int :: . on true(wabs_435);
+                                x_213 : int :: . on true(wabs_435);
+                                x_214 : int :: . on true(wabs_435))
+     returns (x_221 : int :: . on true(wabs_435);
+              x_222 : int :: . on true(wabs_435);
+              x_223 : int :: . on true(wabs_435))
 var base_1 : bool :: .;
-    x_226 : future float :: . on true(wabs_436) on false(wabs_437) on true(w_438);
-    x_225 : future float :: . on true(wabs_436) on false(wabs_437) on true(w_438);
-    x_224 : future float :: . on true(wabs_436) on false(wabs_437) on true(w_438);
-    x_220 : future float; x_219 : future float; x_218 : future float;
+    x_226 : future int :: . on true(wabs_436) on false(wabs_437) on true(w_438);
+    x_225 : future int :: . on true(wabs_436) on false(wabs_437) on true(w_438);
+    x_224 : future int :: . on true(wabs_436) on false(wabs_437) on true(w_438);
+    x_220 : future int; x_219 : future int; x_218 : future int;
     wabs_437 (* first_sd_line_2 :: 'a on hf_1 *) : bool :: .
                                                            on true(wabs_436);
     wabs_436 (* hf_1 :: 'a *) : bool :: .;
@@ -432,7 +397,7 @@ var base_1 : bool :: .;
                                                                     on false(wabs_437);
 let
   base_1 = true;
-  x_220 = inlined future_float_sbuffer<<192240>>(merge wabs_436
+  x_220 = inlined future_int_sbuffer<<192240>>(merge wabs_436
                                           (true -> merge wabs_437
                                           (true -> false)
                                           (false -> merge w_438
@@ -443,7 +408,7 @@ let
                                           (false -> merge w_442
                                           (true -> false) (false -> base_1)))
                                           (false -> false));
-  x_219 = inlined future_float_sbuffer<<192240>>(merge wabs_436
+  x_219 = inlined future_int_sbuffer<<192240>>(merge wabs_436
                                           (true -> merge wabs_437
                                           (true -> false)
                                           (false -> merge w_438 (true -> base_1) (false -> false)))
@@ -453,7 +418,7 @@ let
                                           (false -> merge w_442
                                           (true -> false) (false -> base_1)))
                                           (false -> false));
-  x_218 = inlined future_float_sbuffer<<192240>>(merge wabs_436
+  x_218 = inlined future_int_sbuffer<<192240>>(merge wabs_436
                                           (true -> merge wabs_437
                                           (true -> false)
                                           (false -> merge w_438
@@ -495,23 +460,23 @@ let
 tel
 
 node pip_leonard(wabs_434 (* 0^4315(1) :: 'a *) : bool :: .;
-                 x_197 : float :: .; x_198 : float :: .; x_199 : float :: 
-                 .; x_200 : float :: .; x_201 : float :: .;
-                 x_202 : float :: .)
-     returns (x_203 : float :: . on true(wabs_434);
-              x_204 : float :: . on true(wabs_434);
-              x_205 : float :: . on true(wabs_434))
-var base_1 : bool :: .; x_208 : float; x_207 : float; x_206 : float;
+                 x_197 : int :: .; x_198 : int :: .; x_199 : int :: 
+                 .; x_200 : int :: .; x_201 : int :: .;
+                 x_202 : int :: .)
+     returns (x_203 : int :: . on true(wabs_434);
+              x_204 : int :: . on true(wabs_434);
+              x_205 : int :: . on true(wabs_434))
+var base_1 : bool :: .; x_208 : int; x_207 : int; x_206 : int;
 let
   base_1 = true;
   (x_203, x_204, x_205) =
   picture_in_picture_leonard(wabs_434, x_197, x_198, x_199, x_206, x_207,
                              x_208);
-  x_208 = inlined float_sbuffer<<4315>>(base_1, x_202, merge wabs_434
+  x_208 = inlined int_sbuffer<<4315>>(base_1, x_202, merge wabs_434
                                         (true -> base_1) (false -> false));
-  x_207 = inlined float_sbuffer<<4315>>(base_1, x_201, merge wabs_434
+  x_207 = inlined int_sbuffer<<4315>>(base_1, x_201, merge wabs_434
                                         (true -> base_1) (false -> false));
-  x_206 = inlined float_sbuffer<<4315>>(base_1, x_200, merge wabs_434
+  x_206 = inlined int_sbuffer<<4315>>(base_1, x_200, merge wabs_434
                                         (true -> base_1) (false -> false))
 tel
 
@@ -522,14 +487,14 @@ tel
 
 
 node pip_feedback(wabs_428 (* 0^5632(1) :: 'a *) : bool :: .;
-                  x_131 : float :: .; x_132 : float :: .; x_133 : float :: 
-                  .; x_134 : float :: .; x_135 : float :: .;
-                  x_136 : float :: .)
-     returns (x_140 : float :: . on true(wabs_428);
-              x_141 : float :: . on true(wabs_428);
-              x_142 : float :: . on true(wabs_428))
-var base_1 : bool :: .; x_148 : float; x_147 : float; x_146 : float;
-    x_145 : float; x_144 : float; x_143 : float;
+                  x_131 : int :: .; x_132 : int :: .; x_133 : int :: 
+                  .; x_134 : int :: .; x_135 : int :: .;
+                  x_136 : int :: .)
+     returns (x_140 : int :: . on true(wabs_428);
+              x_141 : int :: . on true(wabs_428);
+              x_142 : int :: . on true(wabs_428))
+var base_1 : bool :: .; x_148 : int; x_147 : int; x_146 : int;
+    x_145 : int; x_144 : int; x_143 : int;
     wabs_429 (* one_image_12 :: 'a *) : bool :: .;
 let
   base_1 = true;
@@ -538,25 +503,25 @@ let
   x_145 = merge wabs_429 (true -> (x_133 when wabs_429)) (false -> x_148);
   x_144 = merge wabs_429 (true -> (x_132 when wabs_429)) (false -> x_147);
   x_143 = merge wabs_429 (true -> (x_131 when wabs_429)) (false -> x_146);
-  x_148 = inlined float_sbuffer<<2067968>>(merge wabs_428 (true -> base_1)
+  x_148 = inlined int_sbuffer<<2067968>>(merge wabs_428 (true -> base_1)
                                            (false -> false), x_142,
                                            merge wabs_429 (true -> false)
                                            (false -> base_1));
-  x_147 = inlined float_sbuffer<<2067968>>(merge wabs_428 (true -> base_1)
+  x_147 = inlined int_sbuffer<<2067968>>(merge wabs_428 (true -> base_1)
                                            (false -> false), x_141,
                                            merge wabs_429 (true -> false)
                                            (false -> base_1));
-  x_146 = inlined float_sbuffer<<2067968>>(merge wabs_428 (true -> base_1)
+  x_146 = inlined int_sbuffer<<2067968>>(merge wabs_428 (true -> base_1)
                                            (false -> false), x_140,
                                            merge wabs_429 (true -> false)
                                            (false -> base_1));
   wabs_429 = before<<2073600>>()
 tel
 
-node pip_leonard_wrapper(i1 : float; i2 : float; i3 : float; i4 : float;
-                         i5 : float; i6 : float)
+node pip_leonard_wrapper(i1 : int; i2 : int; i3 : int; i4 : int;
+                         i5 : int; i6 : int)
      returns (valid1 : bool :: .; valid2 : bool :: .; valid3 : bool :: 
-              .; o1 : float :: .; o2 : float :: .; o3 : float :: .)
+              .; o1 : int :: .; o2 : int :: .; o3 : int :: .)
 var wabs_427 (* 0^4315(1) :: 'a *) : bool :: .;
 let
   (o1,
@@ -568,10 +533,10 @@ let
   wabs_427 = (not before<<4315>>())
 tel
 
-node pip_feedback_wrapper(i1 : float; i2 : float; i3 : float; i4 : float;
-                          i5 : float; i6 : float)
+node pip_feedback_wrapper(i1 : int; i2 : int; i3 : int; i4 : int;
+                          i5 : int; i6 : int)
      returns (valid1 : bool :: .; valid2 : bool :: .; valid3 : bool :: 
-              .; o1 : float :: .; o2 : float :: .; o3 : float :: .)
+              .; o1 : int :: .; o2 : int :: .; o3 : int :: .)
 var wabs_426 (* 0^5632(1) :: 'a *) : bool :: .;
 let
   (o1,
@@ -581,4 +546,16 @@ let
   valid2 = merge wabs_426 (true -> true) (false -> false);
   valid3 = merge wabs_426 (true -> true) (false -> false);
   wabs_426 = (not before<<5632>>())
+tel
+
+unsafe node main<<in1,in2,out :string>>() returns (finished,finished2 :bool)
+var in1_pixel,in2_pixel,out_pixel :int^3; v1,v2,v3 :bool;r,g,b : int;
+let
+  in1_pixel = Image.read_int<<in1>>();
+  in2_pixel = Image.read_int<<in2>>();
+  (v1,v2,v3,r,g,b) = pip_leonard_wrapper(in1_pixel[0],in1_pixel[1],in1_pixel[2],in2_pixel[0],in2_pixel[1],in2_pixel[2]);
+  (*oout_pixel[0],out_pixel[1],out_pixel[2]*)
+  out_pixel = [r,g,b];
+  finished = merge v1 (periodic<<1920*1080>>()=0) (false);
+  finished2 = Image.write_int<<out,1920,1080>>(out_pixel);
 tel
