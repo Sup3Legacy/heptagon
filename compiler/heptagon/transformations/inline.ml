@@ -16,6 +16,9 @@
   one for the static params and one for the linear annotations
 *)
 
+
+(* Create some reseted blocks : reset should be done afterward. *)
+
 open Misc
 open Idents
 open Signature

@@ -57,6 +57,14 @@ let compile_program p =
   (* Causality check Needs to be after Inlining *)
   let p = silent_pass "Causality check" !causality Causality.program p in
 
+
+  (* Reset again after inlining *)
+  let p = pass "Reset" true Reset.program p pp in
+
+  (* Every again after reset *)
+  let p = pass "Every" true Every.program p pp in
+
+
   (* Boolean pass *)
   let p = pass "Clocking(Heptagon)" !boolean Hept_clocking.program p pp in
   let p = pass "Boolean" !boolean Boolean.program p pp in
