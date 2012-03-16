@@ -164,4 +164,8 @@ let clone_node f f' = UniqueNames.clone_node f f'
 let local_qn name = { Names.qual = Names.LocalModule (Names.QualModule !UniqueNames.current_node);
                       Names.name = name }
 
-let print_ident ff id = Format.fprintf ff "%s" (name id)
+let print_ident ff id =
+  if !Compiler_options.full_name then
+    Format.fprintf ff "%s" (id.source ^ "_" ^ (string_of_int id.num))
+  else
+    Format.fprintf ff "%s" (name id)

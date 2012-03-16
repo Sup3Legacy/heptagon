@@ -771,6 +771,9 @@ let fun_dec_list fd_l = match fd_l with
     [mk_classe ~methodes:funs classe_name]
 
 let program p =
+  (* save full_qual_info, we need to disable it to generate the java code. *)
+  let fqi = !Compiler_options.full_qual_info in
+  Compiler_options.full_qual_info := false;
   let rec program_descs pds (ns,fs,cs,ts) = match pds with
     | [] -> ns,fs,cs,ts
     | Obc.Pclass n :: pds ->
@@ -786,7 +789,9 @@ let program p =
   let funs_classe = fun_dec_list fs in
   let classes = type_dec_list (consts_classe@funs_classe) ts in
   let p = class_def_list classes ns in
-  get_classes()@p
+  let p_l = get_classes()@p in
+  Compiler_options.full_qual_info := fqi;
+  p_l
 
 
 
