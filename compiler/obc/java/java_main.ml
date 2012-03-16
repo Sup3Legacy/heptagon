@@ -7,7 +7,7 @@ open Java
 open Java_printer
 
 let load_conf () =
-  Compiler_options.normalize_register_outputs := true; (* TODO make it work before desactivating *)
+(* TODO Compiler_options.normalize_register_outputs := false; make it work before desactivating *)
   Compiler_options.do_scalarize := true;
   Compiler_options.callgraph_only_on_higherorder := true;
   Compiler_options.functions_are_classes := false;
@@ -60,6 +60,7 @@ let program p =
         let jint = Eclass(Name_utils.qualname_of_string "Integer") in
         let jfloat = Eclass(Name_utils.qualname_of_string "Float") in
         let jbool = Eclass(Name_utils.qualname_of_string "Boolean") in
+        let jstring = Eclass(Name_utils.qualname_of_string "String") in
         let jsys = Eclass(Name_utils.qualname_of_string "java.lang.System") in
         let jminus = pervasives_qn "-" in
 
@@ -77,6 +78,9 @@ let program p =
                 :: parse_args t_l (Int32.succ i)
           | (Ttype t)::t_l when t = Initial.tint ->
               (Emethod_call(jbool, "parseBool", [get_arg i]))
+                :: parse_args t_l (Int32.succ i)
+          | (Ttype t)::t_l when t = Initial.tstring ->
+              (get_arg i)
                 :: parse_args t_l (Int32.succ i)
           | _ -> Misc.unsupported "java main does not support parsing complexe static args"
         in
