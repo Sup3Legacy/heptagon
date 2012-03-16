@@ -84,9 +84,7 @@ struct
 
   (** Instantiate the static parameters to create an [instance]. *)
   let apply_subst_params m se_l =
-    try List.map (fun s -> eval (apply_subst_se m s)) se_l
-    with Errors.Error ->
-      Error.message no_location (Error.Epartial_evaluation se_l)
+    List.map (fun s -> simplify (apply_subst_se m s)) se_l
 
   (** Instantiate node, should correctly deal with partial application. *)
   let rec instantiate_node m n params = match n.qual with
