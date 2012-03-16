@@ -1,0 +1,27 @@
+open Utils
+
+
+type ball = {
+  x :float;
+  y :float;
+  v_x :float;
+  v_y :float;
+  radius :float
+}
+
+const ball0 : ball = { y=0.0; x=1.0; v_x=0.0; v_y=0.0; radius=1.0 }
+
+
+(*node main(x :float) returns ()
+var world : ball
+let
+  world = { y = 0.0; x = x; v_x = 0.0; v_y = 0.0; radius = 1.0};
+tel
+*)
+
+node main<<n :int>>() returns ()
+var world : ball ^n; y :bool;
+let
+  y = period<<n>>();
+  world = ball0 ^ n;
+tel

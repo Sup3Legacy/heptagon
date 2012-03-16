@@ -1,0 +1,5 @@
+
+node period<<n :int>>() returns (y:bool)
+let
+  y = false;
+tel
