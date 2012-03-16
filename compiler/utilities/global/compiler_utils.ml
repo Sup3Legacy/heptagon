@@ -33,19 +33,17 @@ let syntax_error loc =
 let language_error lang =
   Format.eprintf "Unknown language: '%s'.@." lang
 
-let separateur = "\n*********************************************\
-    *********************************\n*** "
 
-let comment ?(sep=separateur) s =
-  if !verbose then Format.printf "%s%s@." sep s
+let comment s =
+  if !verbose then Format.printf "\n(* **** %s **** *)@." s
 
 let do_pass d f p pp =
-  comment (d ^ " ...\n");
+  comment (d ^ " ...");
   let start = Unix.gettimeofday () in
   let r = Compiler_timings.time_pass d f p in
   let stop = Unix.gettimeofday () in
   pp r;
-  comment ~sep:"*** " (d ^ " done.");
+  comment (d ^ " done.");
   r
 
 let do_silent_pass d f p = do_pass d f p (fun _ -> ())
