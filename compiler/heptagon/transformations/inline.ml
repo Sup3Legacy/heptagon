@@ -55,10 +55,10 @@ let var_dec funs (inline, nenv, cenv, subst) vd =
 let var_ident _ (inline, nenv, cenv, subst) id =
   let id =
     if inline then
-      try Format.eprintf "Looking for %a@." Idents.print_ident id; Idents.Env.find id subst
+      try (*Format.eprintf "Looking for %a@." Idents.print_ident id; *)Idents.Env.find id subst
       with Not_found ->
-         Format.eprintf "not found %a in %a@." Idents.print_ident id
-         (Idents.Env.print_t Idents.print_ident) subst; 
+         (*Format.eprintf "not found %a in %a@." Idents.print_ident id
+         (Idents.Env.print_t Idents.print_ident) subst;*)
         id
     else
       id
@@ -122,35 +122,38 @@ let eq funs (inline, nenv, cenv, subst) eq =
   | Eeq(pat, {e_desc = Eapp ({ a_op = (Enode nn | Efun nn);
              a_unsafe = false; (* Unsafe can't be inlined *)
              a_inlined = inlined } as op, arg_l, rso)}) when inlined || to_be_inlined nn ->
-      (*get the code to inline *)
-      let code = node_dec_from_qualname nn eq.eq_loc nenv in
-      (* Compute new_cenv *)
-      let current_node = Idents.current_node () in (* store current node *)
-      Idents.enter_node nn; (* Enter inlined node to have correct local_qn *)
-      let code_params = List.map (fun p -> (local_qn p.p_name)) code.n_params in
-      let new_cenv = combine_cenv cenv code_params op.a_params in
-      Idents.enter_node current_node; (* get back to the current node *)
-      (*Compute new_subst *)
-      let code_inputs = List.map (fun vd -> vd.v_ident) code.n_input in
-      let inputs = List.map
-        (fun e -> match e.e_desc with
-          | Evar i | Elast i -> i
-          | _ -> Misc.internal_error "inlining needs arguments in normal form")
-        arg_l in
-      let new_subst = combine_subst subst code_inputs inputs in
-      let code_outputs = List.map (fun vd -> vd.v_ident) code.n_output in
-      let outputs = ident_list_of_pat pat in
-      let new_subst = combine_subst new_subst code_outputs outputs in
-      (* Apply the substitutions and inline the block *)
-      let block, (_, nenv, _,_) =
-        Hept_mapfold.block_it funs (true, nenv, new_cenv, new_subst) code.n_block
-      in
-      (* Add the reset *)
-      let eqd = match rso with
-        | None -> Eblock block
-        | Some x -> (Ereset (block, x))
-      in
-      mk_equation eqd, (inline, nenv, cenv, subst)
+
+      (try (* try to get the code to inline, if not possible, do not inline. *)
+        let code = node_dec_from_qualname nn eq.eq_loc nenv in
+        (* Compute new_cenv *)
+        let current_node = Idents.current_node () in (* store current node *)
+        Idents.enter_node nn; (* Enter inlined node to have correct local_qn *)
+        let code_params = List.map (fun p -> (local_qn p.p_name)) code.n_params in
+        let new_cenv = combine_cenv cenv code_params op.a_params in
+        Idents.enter_node current_node; (* get back to the current node *)
+        (*Compute new_subst *)
+        let code_inputs = List.map (fun vd -> vd.v_ident) code.n_input in
+        let inputs = List.map
+          (fun e -> match e.e_desc with
+            | Evar i | Elast i -> i
+            | _ -> Misc.internal_error "inlining needs arguments in normal form")
+          arg_l in
+        let new_subst = combine_subst subst code_inputs inputs in
+        let code_outputs = List.map (fun vd -> vd.v_ident) code.n_output in
+        let outputs = ident_list_of_pat pat in
+        let new_subst = combine_subst new_subst code_outputs outputs in
+        (* Apply the substitutions and inline the block *)
+        let block, (_, nenv, _,_) =
+          Hept_mapfold.block_it funs (true, nenv, new_cenv, new_subst) code.n_block
+        in
+        (* Add the reset *)
+        let eqd = match rso with
+          | None -> Eblock block
+          | Some x -> (Ereset (block, x))
+        in
+        mk_equation eqd, (inline, nenv, cenv, subst)
+      with Not_found ->
+        eq, (inline, nenv,cenv,subst))
   | _ -> (* nothing to do *) eq, (inline, nenv, cenv, subst)
 
 

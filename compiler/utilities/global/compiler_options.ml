@@ -114,6 +114,8 @@ let do_iterator_fusion = ref false
 let do_scalarize = ref false
 let do_simplify = ref true
 
+let do_lho = ref false
+
 let do_mem_alloc = ref false
 let do_linear_typing = ref false
 
@@ -187,6 +189,7 @@ and doc_assert = "<node>\tInsert run-time assertions for boolean node <node>"
 and doc_inline = "<node>\tInline node <node>"
 and doc_itfusion = "\t\tEnable iterator fusion."
 and doc_tomato = "\t\tEnable automata minimization."
+and doc_lho = "\t\tEnable LHO."
 and doc_strict_ssa = "\t\tEnsure that the generated code is SSA, even for array elements."
 and doc_memalloc = "\t\tEnable memory allocation and linear annotations"
 and doc_memalloc_only = "\tEnable memory allocation"

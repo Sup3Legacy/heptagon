@@ -115,6 +115,7 @@ let main () =
         "-tomato", Arg.Set tomato, doc_tomato;
         "-tomanode", read_qualname add_tomato_node, doc_tomato;
         "-tomacheck", read_qualname add_tomato_check, "";
+        "-lho", Arg.Set do_lho, doc_lho;
         "-inline", read_qualname add_inlined_node, doc_inline;
         "-flatten", Arg.Set flatten, doc_flatten;
         "-assert", Arg.String add_assert, doc_assert;

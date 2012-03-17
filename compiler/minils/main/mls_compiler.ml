@@ -31,18 +31,13 @@ let compile_program p =
   let p = pass "Level clock" true Level_clock.program p pp in
 
   (* Oversampling *)
-  let p = pass "Add oversampler equations" true Oversampler.program p pp in
+  let p = pass "Add oversampler equations" !Compiler_options.do_lho Oversampler.program p pp in
 
   (* Dataglow minimization *)
   let p =
     let call_tomato = !tomato or (List.length !tomato_nodes > 0) in
     let p = pass "Extended value inlining" call_tomato Inline_extvalues.program p pp in
     pass "Data-flow minimization" call_tomato Tomato.program p pp in
-
-(** TODO: re enable when ported to the new AST
-  let p =
-    pass "Automata minimization checks" true Tomato.tomato_checks p pp in
-*)
 
   (* Normalize memories*)
   let p = pass "Normalize memories" true Normalize_mem.program p pp in

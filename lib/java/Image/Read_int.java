@@ -1,5 +1,6 @@
 package Image;
 
+import java.awt.image.BufferedImage;
 import java.awt.image.Raster;
 import java.io.File;
 import java.io.IOException;
@@ -9,32 +10,31 @@ import javax.imageio.ImageIO;
 
 
 public class Read_int {
-	private Raster img;
-	private final int w;
-	private final int h;
-	private int x = 0;
-	private int y = 0;
+	private int[] pixels;
+	private final int maxid;
+	private int idx = 0;
 
 	public Read_int (String name) {
 		File inputFile = new File(name);
+		BufferedImage img = null;
 		try {
-			this.img = ImageIO.read(inputFile).getData();
+			img = ImageIO.read(inputFile);
 		} catch (IOException e) {
-			this.img = null;
 			e.printStackTrace();
 		}
-		this.w = img.getWidth();
-		this.h = img.getHeight();
+		int w = img.getWidth();
+		int h = img.getHeight();
+		this.maxid = w*h;
+		pixels = new int[w * h];
+		img.getRGB(0, 0, w, h, pixels, 0, w);
+		System.out.printf("maxid %d",maxid);
 	}
 	public int[] step() {
-		int [] pixel = img.getPixel(x, y, new int[3]);
-		x = x + 1;
-		if (x == w) {
-			x = 0;
-			if (y == h) y = 0;
-			else y = y + 1;
-		}
+		int [] pixel = new int[] {(pixels[idx] >> 16) & 0xff,(pixels[idx] >> 8) & 0xff,(pixels[idx] & 0xff)};
+		idx = idx + 1;
+		if (idx >= maxid)
+			idx = 0;
 		return pixel;
 	}
-	public void reset(){ x=0; y=0; }
+	public void reset(){ idx=0; }
 }

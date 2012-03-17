@@ -1,6 +1,9 @@
 package Image;
 
+import java.awt.Image;
 import java.awt.image.BufferedImage;
+import java.awt.image.MemoryImageSource;
+import java.awt.image.Raster;
 import java.awt.image.RenderedImage;
 import java.awt.image.WritableRaster;
 import java.io.File;
@@ -16,43 +19,38 @@ import javax.imageio.ImageIO;
 //}
 
 public class Write_int {
-	private final WritableRaster img;
-	private final int w;
-	private final int h;
+	private final int maxid;
+	private final int w,h;
 	private final String name;
 	private Integer nbreset = 0;
-	private int x = 0;
-	private int y = 0;
+	private int[] pixels;
+	private int idx = 0;
 	private boolean finished = false;
 
 	public Write_int (String name,int w,int h) {
-		BufferedImage image = new BufferedImage(w, h, BufferedImage.TYPE_INT_RGB);
 		this.name = name;
-		this.img = (WritableRaster) image.getData();
-		this.w = img.getWidth();
-		this.h = img.getHeight();
+		this.maxid = h*w;
+		this.w = w;
+		this.h = h;
+		this.pixels = new int[maxid];
 	}
 	public boolean step(int [] pixel) {
 		if (!finished) {
-			img.setPixel(x, y, pixel);
-			x = x + 1;
-			if (x == w) {
-				x = 0;
-				if (y == h) {
-					finished = true;
-					try {
-						ImageIO.write((RenderedImage) img, "png",
-								new File(name+"___"+ nbreset.toString()));
-					} catch (IOException e) {
-						e.printStackTrace();
-					}
-					y = 0;
+			pixels[idx] = ((pixel[0] & 0xff) << 16) | ((pixel[1] & 0xff) << 8) | (pixel[2] & 0xff);
+			idx = idx + 1;
+			if (idx == maxid) {
+				finished = true;
+				try {
+				    BufferedImage image = new BufferedImage(w, h, BufferedImage.TYPE_INT_RGB);
+				    image.setRGB(0, 0, w, h, pixels, 0, w);
+					ImageIO.write(image, "png", new File(name+"___"+ nbreset.toString()));
+				} catch (IOException e) {
+					e.printStackTrace();
 				}
-				else y = y + 1;
 			}
 		}
 		return finished;
 	}
 
-	public void reset(){ x=0;y=0;finished=false; nbreset++;}
+	public void reset(){ idx=0;finished=false; nbreset++;}
 }

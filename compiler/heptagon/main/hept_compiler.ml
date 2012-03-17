@@ -54,9 +54,14 @@ let compile_program p =
   (* Inlining *)
   let p = pass "Inlining" true Inline.program p pp in
 
-  (* Causality check Needs to be after Inlining *)
-  let p = silent_pass "Causality check" !causality Causality.program p in
+  (* Typing, just to make sure.*)
+  let p = silent_pass "Statefulness check" true Stateful.program p in
+  let p = silent_pass "Unsafe check" true Unsafe.program p in
+  let p = pass "Typing" true Typing.program p pp in
+  let p = pass "Linear Typing" !do_linear_typing Linear_typing.program p pp in
 
+  (* Causality check needs to be after Inlining *)
+  let p = silent_pass "Causality check" !causality Causality.program p in
 
   (* Reset again after inlining *)
   let p = pass "Reset" true Reset.program p pp in
