@@ -1,11 +1,7 @@
 package Image;
 
 import java.awt.Image;
-import java.awt.image.BufferedImage;
-import java.awt.image.MemoryImageSource;
-import java.awt.image.Raster;
-import java.awt.image.RenderedImage;
-import java.awt.image.WritableRaster;
+import java.awt.image.*;
 import java.io.File;
 import java.io.IOException;
 
@@ -41,8 +37,13 @@ public class Write_int {
 			if (idx == maxid) {
 				finished = true;
 				try {
-				    BufferedImage image = new BufferedImage(w, h, BufferedImage.TYPE_INT_RGB);
-				    image.setRGB(0, 0, w, h, pixels, 0, w);
+					DataBuffer b = new DataBufferInt(pixels,maxid);
+					WritableRaster r = Raster.createPackedRaster(b, w, h, w,
+							new int[] {0xFF0000, 0xFF00, 0xFF}, null);
+				    //BufferedImage image = new BufferedImage(w, h, BufferedImage.TYPE_INT_RGB);
+				    //image.setRGB(0, 0, w, h, pixels, 0, w);
+					ColorModel cm = new DirectColorModel(32, 0xff0000, 0xff00, 0xff, 0);
+					BufferedImage image = new BufferedImage(cm, r, false, null);
 					ImageIO.write(image, "png", new File(name+"___"+ nbreset.toString()));
 				} catch (IOException e) {
 					e.printStackTrace();
