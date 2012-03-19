@@ -69,7 +69,7 @@ let rec occur_check index ck =
     | Cbase -> ()
     | Cvar { contents = Cindex n } when index <> n -> ()
     | Con (ck, _, _) -> occur_check index ck
-    | _ -> fail_to_unify ()
+    | _ -> raise Unify
 
 
 (** unify ck *)
@@ -78,7 +78,7 @@ and unify_ck ck1 ck2 =
   let ck2 = ck_repr ck2 in
   if ck1 == ck2 then ()
   else
-    match (ck1, ck2) with
+    try match (ck1, ck2) with
      | Cbase, Cbase -> ()
      | Cvar { contents = Cindex n1 }, Cvar { contents = Cindex n2 } when n1 = n2 -> ()
      | Con (ck1, c1, n1), Con (ck2, c2, n2) when (c1 = c2) & (n1 = n2) ->
@@ -87,18 +87,22 @@ and unify_ck ck1 ck2 =
      | ck, Cvar ({ contents = Cindex n } as v) ->
           occur_check n ck;
          v.contents <- Clink ck
-     | _ -> fail_to_unify ()
+     | _ -> raise Unify
+    with Unify ->
+      fail_to_unify ()
 
 
 (** unify ct *)
 let rec unify t1 t2 =
   if t1 == t2 then () else
-  match (t1, t2) with
+  try match (t1, t2) with
     | (Ck (Cbase | Cvar { contents = Cindex _; }), Cprod [])
     | (Cprod [], Ck (Cbase | Cvar { contents = Cindex _; })) -> ()
     | (Ck ck1, Ck ck2) -> unify_ck ck1 ck2
     | (Cprod t1_list, Cprod t2_list) -> unify_list t1_list t2_list
-    | _ -> fail_to_unify ()
+    | _ -> raise Unify
+  with Unify ->
+    fail_to_unify ()
 
 and unify_list t1_list t2_list =
   try List.iter2 unify t1_list t2_list
