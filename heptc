@@ -67,7 +67,7 @@ java )
     #call javac to compile the file given as last argument
     last_arg=$#
     base_f=`basename ${!last_arg} .ept`
-    pushd "java/$(echo ${base_f} | sed 's/^./\u&/')" > /dev/null
+    pushd "java/$(echo ${base_f} | python -c 'print raw_input().capitalize()')" > /dev/null
     ${JAVAC}:.. *.java
     popd > /dev/null
   fi
