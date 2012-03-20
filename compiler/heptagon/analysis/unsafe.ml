@@ -20,10 +20,9 @@ type error =
 let message loc kind =
   begin match kind with
     | Eshould_be_unsafe ->
-        Format.eprintf "%aThis exp is unsafe but the current node is not declared unsafe.@."
+        Format.eprintf "%aWarning : This exp is unsafe but the current node is not declared unsafe.@."
           print_location loc
-  end;
-  raise Errors.Error
+  end
 
 (* Returns whether an op is unsafe *)
 let unsafe_op op = match op with
@@ -39,15 +38,12 @@ let exp funs unsafe e =
     match e.e_desc with
       | Eapp({ a_op = op } as app, e_l, r) ->
           let u = (unsafe_op op) or app.a_unsafe in
-          if u & (not unsafe)
-          then message e.e_loc Eshould_be_unsafe
-          else {e with e_desc = Eapp({ app with a_unsafe = u }, e_l, r)}, (unsafe or u)
+          if u & (not unsafe) then message e.e_loc Eshould_be_unsafe;
+          {e with e_desc = Eapp({ app with a_unsafe = u }, e_l, r)}, (unsafe or u)
       | Eiterator(it, ({ a_op = op } as app), n, pe_list, e_list, r) ->
           let u = (unsafe_op op) or app.a_unsafe in
-          if u & (not unsafe)
-          then message e.e_loc Eshould_be_unsafe
-          else
-            {e with e_desc = Eiterator(it, { app with a_unsafe = u }, n, pe_list, e_list, r)}
+          if u & (not unsafe) then message e.e_loc Eshould_be_unsafe;
+          {e with e_desc = Eiterator(it, { app with a_unsafe = u }, n, pe_list, e_list, r)}
             , (unsafe or u)
       | _ -> e, unsafe
 
