@@ -85,7 +85,7 @@ and unify_ck ck1 ck2 =
          unify_ck ck1 ck2
      | Cvar ({ contents = Cindex n } as v), ck
      | ck, Cvar ({ contents = Cindex n } as v) ->
-          occur_check n ck;
+         occur_check n ck;
          v.contents <- Clink ck
      | _ -> raise Unify
     with Unify ->

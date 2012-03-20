@@ -24,7 +24,7 @@ let eq _ acc eq =
     | Cvar {contents = Cindex _} -> unify_ck eq.eq_base_ck eq.eq_rhs.e_level_ck
     | _ -> ()
   in
-  eq,acc (* no recursion since in minils exps are not recursive *)
+  eq,acc (* no recursion since in minils eqs are not recursive *)
 
 let program p =
   let funs = { Mls_mapfold.defaults with Mls_mapfold.eq = eq } in

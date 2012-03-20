@@ -30,6 +30,9 @@ let compile_program p =
   (* Level clocks *)
   let p = pass "Level clock" true Level_clock.program p pp in
 
+  (* Direct clocks *)
+  let p = pass "Direct clock" true Direct_clock.program p pp in
+
   (* Oversampling *)
   let p = pass "Add oversampler equations" !Compiler_options.do_lho Oversampler.program p pp in
 
