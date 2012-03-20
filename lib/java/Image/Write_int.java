@@ -19,7 +19,7 @@ public class Write_int {
 	private final int w,h;
 	private final String name;
 	private Integer nbreset = 0;
-	private int[] pixels;
+	private final int[] pixels;
 	private int idx = 0;
 	private boolean finished = false;
 
