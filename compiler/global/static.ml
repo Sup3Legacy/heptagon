@@ -105,6 +105,8 @@ let apply_op partial loc op se_list =
       | "&&&", [Sint n1; Sint n2] -> Sint (Int32.logand n1 n2)
       | "|||", [Sint n1; Sint n2] -> Sint (Int32.logor n1 n2)
       | "%", [Sint n1; Sint n2] -> Sint (Int32.rem n1 n2)
+      | "int_of_bool", [Sbool b] -> Sint (if b then 1l else 0l)
+      | "bool_of_int", [Sint n] -> Sbool (n <> 0l)
       | f,_ -> Misc.internal_error ("Static evaluation failed of the pervasive operator "^f)
   )
   else ( (* symbolic evaluation *)
