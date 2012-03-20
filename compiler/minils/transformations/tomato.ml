@@ -47,6 +47,10 @@ end
 module IntSet = Set.Make(OrderedInts)
 module IntMap = Map.Make(OrderedInts)
 
+type ('a, 'b) either =
+  | Left of 'a
+  | Right of 'b
+
 module TomEnv =
 struct
 
@@ -82,15 +86,22 @@ struct
     | Cr_input w -> print_extvalue fmt w
 
   let debug_tenv fmt tenv =
-    let debug pat repr =
-      Format.fprintf fmt "%a => @[class %d,@ pattern %a,@ head { %a },@ children [%a]@]@."
+    let l = PatMap.fold (fun pat repr l -> (pat, repr) :: l) tenv [] in
+    let l =
+      List.sort (fun (_, { er_class = c1; }) (_, { er_class = c2; }) -> Pervasives.compare c1 c2) l
+    in
+
+    let debug (pat, repr) =
+      Format.fprintf fmt
+        "%a => @[class %d,@ pattern %a,@ clock type %a,@ head { %a },@ children [%a]@]@."
         print_pat pat
         repr.er_class
         print_pat repr.er_pattern
+        Global_printer.print_ct repr.er_clock_type
         print_exp repr.er_head
         (print_list_r print_class_ref "" ";" "") repr.er_children
     in
-    PatMap.iter debug tenv
+    List.iter debug l
 end
 
 open TomEnv
@@ -478,16 +489,17 @@ and reconstruct_pattern mapping pat = match pat with
 
 module EqClasses = Map.Make(
   struct
-    type t = exp * ct * (int * int list) option list
+    type t = exp * ct * (extvalue, int * int list) either list
 
     let unsafe { e_desc = ed } = match ed with
       | Eapp (app, _, _) | Eiterator (_, app, _, _, _, _) -> app.a_unsafe
       | _ -> false
 
     let compare_children c1 c2 = match c1, c2 with
-      | None, _ -> -1
-      | _, None -> 1
-      | Some c1', Some c2' -> Pervasives.compare c1' c2'
+      | Left w1, Left w2 -> Mls_compare.extvalue_compare w1 w2
+      | Right c1', Right c2' -> Pervasives.compare c1' c2'
+      | Left _, Right _ -> -1
+      | Right _, Left _ -> 1
 
     let compare (e1, ck1, cr_list1) (e2, ck2, cr_list2) =
       let cr = ClockCompareModulo.clock_type_compare ck1 ck2 in
@@ -528,9 +540,9 @@ let compute_new_class (tenv : tom_env) =
 
   let add_eq_repr _ eqr classes =
     let map_class_ref cref = match cref with
-      | Cr_input _ -> None
+      | Cr_input id -> Left id
       | Cr_plain x ->
-        try Some (Env.find x mapping)
+        try Right (Env.find x mapping)
         with Not_found -> Format.eprintf "Unknown class %a@." print_ident x; assert false
     in
     let children = List.map map_class_ref eqr.er_children in
@@ -548,10 +560,11 @@ let compute_new_class (tenv : tom_env) =
   (get_id (), tenv)
 
 let rec separate_classes tenv =
-  let rec fix (id, tenv) =
-    let new_id, tenv = compute_new_class tenv in
-    debug_do (fun () -> Format.printf "New tenv %d:\n%a@." id debug_tenv tenv) ();
-    if new_id = id then tenv else fix (new_id, tenv)
+  let rec fix (class_count, tenv) =
+    let new_class_count, tenv = compute_new_class tenv in
+    debug_do
+      (fun () -> Format.printf "@\n@\n@\nNew tenv %d %d:\n%a@." class_count new_class_count debug_tenv tenv) ();
+    if new_class_count = class_count then tenv else fix (new_class_count, tenv)
   in
   debug_do (fun () -> Format.printf "Initial tenv:\n%a@." debug_tenv tenv) ();
   let id, tenv = compute_new_class tenv in
