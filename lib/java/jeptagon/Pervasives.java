@@ -21,6 +21,10 @@ public class Pervasives {
 		else return i;
 	}
 
+  public static bool is_between(int i, int a, int b) {
+    return (a <= i) && (i < b);
+  }
+
   public static int int_of_bool(boolean b) {
     return (int)b;
   }

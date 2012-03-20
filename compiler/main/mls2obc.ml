@@ -134,11 +134,8 @@ let rec array_elt_of_exp_list idx_list e =
     0<= e1 < n1 && .. && 0 <= ep < np *)
 let rec bound_check_expr idx_list bounds =
   let mk_comp idx n =
-        let e1 = mk_exp_bool (Eop (op_from_string "<",
-                                 [idx; mk_ext_value_exp_int (Wconst n)])) in
-        let e2 = mk_exp_bool (Eop (op_from_string "<=",
-                                 [mk_ext_value_exp_int (Wconst (mk_static_int 0)); idx])) in
-          mk_exp_bool (Eop (op_from_string "&", [e1;e2]))
+    mk_exp_bool (Eop (op_from_string "is_between",
+                      [idx; mk_ext_value_exp_int (Wconst (mk_static_int 0)); mk_ext_value_exp_int (Wconst n)]))
   in
   match (idx_list, bounds) with
     | [idx], n::_ -> mk_comp idx n
