@@ -1,0 +1,166 @@
+(***** ABSTRACTIONS ******)
+
+node abs_early<<k0, k1, n, l : int>>() returns (w : bool)
+var i, j : int;
+let
+  i = 1 fby (i + 1);
+  j = 0 fby (j + if w then 1 else 0);
+
+  w = (j + 1) * l <= n * i + k1;
+tel
+
+node abs_late<<k0, k1, n, l : int>>() returns (w : bool)
+var i, j : int;
+let
+  i = 1 fby (i + 1);
+  j = 0 fby (j + if w then 1 else 0);
+
+  w = j * l < n * i + k0;
+tel
+
+(****** MISC *******)
+
+node affine<<d, l : int>>() returns (o : bool)
+var after : bool; c : int;
+let
+  after = false fby (after or (c + 1 = d));
+  c = 0 fby ((c + 1) % (if after then l else d));
+  o = after & (c = 0);
+tel
+
+node pure<<l : int>>() returns (o : bool)
+var c : int;
+let
+  c = 0 fby ((c + 1) % l);
+  o = c = 0;
+tel
+
+node periodic<<p : int>>() returns (o : int)
+let
+  o = 0 fby (o + 1) % p;
+tel
+
+node before<<n : int>>() returns (o : bool)
+var cpt, incr : int;
+let
+  cpt = 0 fby (cpt + incr);
+  incr = if o then 1 else 0;
+  o = cpt < n;
+tel
+
+(****** NON-STRICT BUFFERS *******)
+
+node int_buffer<<n : int>>(w : bool :: .; i : int :: . on w; r : bool :: .)
+                  returns (o : int :: . on r)
+var buff, next_buff : int^n at r;
+    i_w, i_r, fill_count : int; v, o2 : int; empty : bool;
+let
+  init<<r>> buff = (21^n) fby next_buff;
+
+  v = merge w i (buff[> i_w <] whenot w);
+
+  next_buff = [buff with [ i_w ] = v];
+
+  i_r = 0 fby (i_r + if r then 1 else 0) % n;
+  i_w = 0 fby (i_w + if w then 1 else 0) % n;
+  fill_count = 0 fby (fill_count + (if r then -1 else 0) + (if w then 1 else 0));
+
+  empty = fill_count = 0;
+
+  o2 = if empty then v else buff[> i_r <];
+  o = o2 when r;
+tel
+
+node float_buffer<<n : int>>(w : bool :: .; i : float :: . on w; r : bool :: .)
+                  returns (o : float :: . on r)
+var buff, next_buff : float^n at r;
+    i_w, i_r, fill_count : int; v, o2 : float; empty : bool;
+let
+  init<<r>> buff = (21.0^n) fby next_buff;
+
+  v = merge w i (buff[> i_w <] whenot w);
+
+  next_buff = [buff with [ i_w ] = v];
+
+  i_r = 0 fby (i_r + if r then 1 else 0) % n;
+  i_w = 0 fby (i_w + if w then 1 else 0) % n;
+  fill_count = 0 fby (fill_count + (if r then -1 else 0) + (if w then 1 else 0));
+
+  empty = fill_count = 0;
+
+  o2 = if empty then v else buff[> i_r <];
+  o = o2 when r;
+tel
+
+node bool_buffer<<n : int>>(w : bool :: .; i : bool :: . on w; r : bool :: .)
+                   returns (o : bool :: . on r)
+var buff, next_buff : bool^n at r;
+    i_w, i_r, fill_count : int; v, o2 : bool; empty : bool;
+let
+  init<<r>> buff = (false^n) fby next_buff;
+
+  v = merge w i (buff[> i_w <] whenot w);
+
+  next_buff = [buff with [ i_w ] = v];
+
+  i_r = 0 fby (i_r + if r then 1 else 0);
+  i_w = 0 fby (i_w + if w then 1 else 0);
+  fill_count = 0 fby (fill_count + (if r then -1 else 0) + (if w then 1 else 0));
+
+  empty = fill_count = 0;
+
+  o2 = if empty then v else buff[> i_r <];
+  o = o2 when r;
+tel
+
+(****** STRICT BUFFERS *******)
+
+node int_sbuffer<<n : int>>(w : bool :: .; i : int :: . on w; r : bool :: .)
+                     returns (o : int :: . on r)
+var buff, next_buff : int^n; i_w, i_r : int; v : int;
+let
+  buff = (42 ^n) fby next_buff;
+
+  v = merge w i (buff[> i_w <] whenot w);
+
+  next_buff = [buff with [ i_w ] = v];
+
+  i_r = 0 fby (i_r + if r then 1 else 0) % n;
+  i_w = 0 fby (i_w + if w then 1 else 0) % n;
+
+  o = buff[> i_r <] when r;
+tel
+
+node float_sbuffer<<n : int>>(w : bool :: .; i : float :: . on w; r : bool :: .)
+                     returns (o : float :: . on r)
+var buff, next_buff : float^n; i_w, i_r : int; v : float;
+let
+  buff = (255.0 ^n) fby next_buff;
+
+  v = merge w i (buff[> i_w <] whenot w);
+
+  next_buff = [buff with [ i_w ] = v];
+
+  i_r = 0 fby (i_r + if r then 1 else 0) % n;
+  i_w = 0 fby (i_w + if w then 1 else 0) % n;
+
+  o = buff[> i_r <] when r;
+tel
+
+node bool_sbuffer<<n : int>>(w : bool :: .; i : bool :: . on w; r : bool :: .)
+                     returns (o : bool :: . on r)
+var buff, next_buff : bool^n; i_w, i_r : int; v : bool;
+let
+  buff = (false ^ n) fby next_buff;
+
+  v = merge w i (buff[> i_w <] whenot w);
+
+  next_buff = [buff with [ i_w ] = v];
+
+  i_r = 0 fby (i_r + if r then 1 else 0) % n;
+  i_w = 0 fby (i_w + if w then 1 else 0) % n;
+
+  o = buff[> i_r <] when r;
+tel
+
+(******************************************************************************)

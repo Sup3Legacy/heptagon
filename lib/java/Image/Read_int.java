@@ -10,11 +10,13 @@ import javax.imageio.ImageIO;
 
 
 public class Read_int {
+	
+	private final String name;
+	private int maxid;
 	private int[] pixels;
-	private final int maxid;
 	private int idx = 0;
 
-	public Read_int (String name) {
+	private int _read_file() {
 		File inputFile = new File(name);
 		BufferedImage img = null;
 		try {
@@ -24,10 +26,16 @@ public class Read_int {
 		}
 		int w = img.getWidth();
 		int h = img.getHeight();
-		this.maxid = w*h;
-		pixels = new int[w * h];
+		int maxid = w*h;
+		pixels = new int[maxid];
 		img.getRGB(0, 0, w, h, pixels, 0, w);
-		System.out.printf("maxid %d",maxid);
+		return maxid;
+	}
+	
+	public Read_int (String name) {
+		this.name = name;
+		this.idx = 0;
+		this.maxid = _read_file();
 	}
 	public int[] step() {
 		int [] pixel = new int[] {(pixels[idx] >> 16) & 0xff,(pixels[idx] >> 8) & 0xff,(pixels[idx] & 0xff)};
@@ -36,5 +44,7 @@ public class Read_int {
 			idx = 0;
 		return pixel;
 	}
-	public void reset(){ idx=0; }
+	public void reset(){
+		this.idx = 0;
+		this.maxid = _read_file(); }
 }

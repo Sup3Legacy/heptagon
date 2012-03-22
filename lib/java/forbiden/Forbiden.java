@@ -8,7 +8,6 @@ public class Forbiden {
 	void array_of_generics () {
 		Future<Integer>[] m = new Future<Integer>[N];
 	}
-	
 	int init_match (E e) {
 		int x;
 		switch(e) {

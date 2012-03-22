@@ -1,3 +1,4 @@
 
 external val node read_int<<infile :string>>() returns (pixel :int^3)
 external val node write_int<<outfile :string; w,h :int>>(pixel :int^3) returns (finished :bool)
+external val node display_int<<window_name :string; w,h :int>>(pixel :int^3) returns (finished :bool)

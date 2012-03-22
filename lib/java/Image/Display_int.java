@@ -1,6 +1,7 @@
 package Image;
 
 import java.awt.Graphics;
+import java.awt.Panel;
 import java.awt.image.BufferedImage;
 import javax.swing.JFrame;
 import javax.swing.JPanel;
@@ -12,7 +13,6 @@ public class Display_int {
 	
 	private final int maxid;
 	private final int w,h;
-	private Integer nbreset = 0;
 	private final int[] pixels;
 	private int idx = 0;
 	private boolean finished = false;
@@ -28,7 +28,7 @@ public class Display_int {
 		frame.getContentPane().add(panel);
 		JFrame.setDefaultLookAndFeelDecorated(true);
 		frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-		frame.pack();
+		frame.setSize(w,h);
 		frame.setVisible(true);
 		
 	}
@@ -58,4 +58,5 @@ public class Display_int {
 		}
 	}
 
+	public void reset(){ idx=0; finished=false;}
 }

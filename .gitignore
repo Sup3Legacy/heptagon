@@ -22,3 +22,4 @@ _build
 test/**/java
 test/_check_builds
 test/async/build/*
+/lib/java/.settings/
