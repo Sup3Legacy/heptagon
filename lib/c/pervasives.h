@@ -13,7 +13,7 @@ static inline int between(int idx, int n)
 #endif
   return o;
 }
-v
+
 /* is_between(i, a, b) returns a <= i < b */
 static inline bool is_between(int idx, int a, int b)
 {

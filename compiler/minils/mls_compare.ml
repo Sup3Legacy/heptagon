@@ -127,12 +127,59 @@ struct
     if cr <> 0 then cr
     else
       let cr = match app1.a_op, app2.a_op with
-        | Efun ln1, Efun ln2 -> compare ln1 ln2
+        | Efun ln1, Efun ln2 | Enode ln1, Enode ln2 -> compare ln1 ln2
         | x, y when x = y -> 0 (* all constructors can be compared with P.compare *)
-        | (Eequal | Efun _ | Enode _ | Eifthenelse
-              | Efield_update), _ -> -1
-        | (Earray | Earray_fill | Eselect | Eselect_slice | Eselect_dyn
-              | Eselect_trunc | Eupdate | Econcat ), _ -> 1
+
+
+        | Eequal, _ -> 1
+
+        | Efun _, Eequal -> -1
+        | Efun _, _ -> 1
+
+        | Enode _, (Eequal | Efun _) -> -1
+        | Enode _, _ -> 1
+
+        | Eifthenelse, (Eequal | Efun _ | Enode _) -> -1
+        | Eifthenelse, _ -> -1
+
+        | Efield_update, (Eifthenelse | Eequal | Efun _ | Enode _) -> -1
+        | Efield_update, _ -> 1
+
+        | Earray, (Efield_update | Eifthenelse | Eequal | Efun _ | Enode _) -> -1
+        | Earray, _ -> 1
+
+        | Earray_fill, (Earray | Efield_update | Eifthenelse | Eequal | Efun _ | Enode _) -> -1
+        | Earray_fill, _ -> 1
+
+        | Eselect,
+          (Earray_fill | Earray | Efield_update | Eifthenelse | Eequal | Efun _ | Enode _) -> -1
+        | Eselect, _ -> 1
+
+        | Eselect_slice,
+          (Eselect | Earray_fill | Earray | Efield_update
+              | Eifthenelse | Eequal | Efun _ | Enode _) -> -1
+        | Eselect_slice, _ -> 1
+
+        | Eselect_dyn,
+          (Eselect_slice | Eselect | Earray_fill | Earray | Efield_update
+              | Eifthenelse | Eequal | Efun _ | Enode _) -> -1
+        | Eselect_dyn, _ -> 1
+
+        | Eselect_trunc,
+          (Eselect_dyn | Eselect_slice | Eselect | Earray_fill | Earray | Efield_update
+              | Eifthenelse | Eequal | Efun _ | Enode _) -> -1
+        | Eselect_trunc, _ -> 1
+
+        | Eupdate,
+          (Eselect_trunc |Eselect_dyn | Eselect_slice | Eselect | Earray_fill | Earray
+              | Efield_update | Eifthenelse | Eequal | Efun _ | Enode _) -> -1
+        | Eupdate, _ -> 1
+
+        | Econcat,
+          (Eupdate | Eselect_trunc |Eselect_dyn | Eselect_slice | Eselect | Earray_fill | Earray
+              | Efield_update | Eifthenelse | Eequal | Efun _ | Enode _) -> -1
+        | Econcat, _ -> 1
+
       in
       if cr <> 0 then cr
       else list_compare Global_compare.static_exp_compare app1.a_params app2.a_params
