@@ -27,15 +27,15 @@ let debug_do f () = if debug then f () else ()
 (*
   Data-flow minimization on MiniLS:
 
-   1. Put each equation into a big map. It maps variable names to triples (class_id * truncated
-   expression * class_id list). Initially, all local variables are mapped to the same class .
+  1. Put each equation into a big map. It maps variable names to triples (class_id * truncated
+  expression * class_id list). Initially, all local variables are mapped to the same class .
 
-   2. Compute the new class_id of each equation: two equations are in the same class if they are
-   equal and have the same child equations.
+  2. Compute the new class_id of each equation: two equations are in the same class if they are
+  equal and have the same child equations.
 
-   3. If anything has changed: go to 2
+  3. If anything has changed: go to 2
 
-   4. Reconstruct: one equation for one equivalence class.
+  4. Reconstruct: one equation for one equivalence class.
 *)
 
 module OrderedInts =
@@ -83,25 +83,27 @@ struct
 
   let print_class_ref fmt cr = match cr with
     | Cr_plain id -> print_ident fmt id
-    | Cr_input w -> print_extvalue fmt w
+    | Cr_input w -> Format.fprintf fmt "%a (input)" print_extvalue w
+
+  let class_list_of_tenv tenv =
+    let l = PatMap.fold (fun pat repr l -> (pat, repr) :: l) tenv [] in
+    (* List.rev l *)
+    List.sort (fun (_, { er_class = c1; }) (_, { er_class = c2; }) -> Pervasives.compare c1 c2) l
+
+  let print_eq_repr fmt (pat, repr) =
+    Format.fprintf fmt
+      "%a => @[class %d,@ pattern %a,@ clock type %a, base ck %a,@ head { %a },@ children [%a]@]@\n"
+      print_pat pat
+      repr.er_class
+      print_pat repr.er_pattern
+      Global_printer.print_ct repr.er_clock_type
+      Global_printer.print_ck repr.er_base_ck
+      print_exp repr.er_head
+      (print_list_r print_class_ref "" ";" "") repr.er_children
 
   let debug_tenv fmt tenv =
-    let l = PatMap.fold (fun pat repr l -> (pat, repr) :: l) tenv [] in
-    let l =
-      List.sort (fun (_, { er_class = c1; }) (_, { er_class = c2; }) -> Pervasives.compare c1 c2) l
-    in
-
-    let debug (pat, repr) =
-      Format.fprintf fmt
-        "%a => @[class %d,@ pattern %a,@ clock type %a,@ head { %a },@ children [%a]@]@."
-        print_pat pat
-        repr.er_class
-        print_pat repr.er_pattern
-        Global_printer.print_ct repr.er_clock_type
-        print_exp repr.er_head
-        (print_list_r print_class_ref "" ";" "") repr.er_children
-    in
-    List.iter debug l
+    let l = class_list_of_tenv tenv in
+    List.iter (print_eq_repr fmt) l
 end
 
 open TomEnv
@@ -181,10 +183,10 @@ let class_ref_of_var is_input w x = if is_input x then Cr_input w else Cr_plain 
 let pattern_for_map =
   let r = ref 0 in
   (fun patt -> match patt with
-    | Etuplepat [] ->
-      incr r;
-      Etuplepat (repeat_list (Etuplepat []) !r)
-    | _ -> patt)
+  | Etuplepat [] ->
+    incr r;
+    Etuplepat (repeat_list (Etuplepat []) !r)
+  | _ -> patt)
 
 let map_for_pattern patt = match patt with
   | Etuplepat p_l when List.for_all ((=) (Etuplepat [])) p_l -> Etuplepat []
@@ -224,7 +226,7 @@ let rec add_equation is_input (tenv : tom_env) eq =
         ed, (fun e' -> { e with e_desc = Ewhen (add_when e', cn, x) }), when_count + 1,
         class_ref_of_var is_input
           (mk_extvalue ~clock:(Clocks.first_ck e'.e_ct) ~ty:Initial.tbool
-                       ~linearity:Linearity.Ltop (Wvar x)) x
+             ~linearity:Linearity.Ltop (Wvar x)) x
         :: class_id_list
 
       | Emerge (x, clause_list) ->
@@ -232,7 +234,7 @@ let rec add_equation is_input (tenv : tom_env) eq =
         let x_id =
           class_ref_of_var is_input
             (mk_extvalue ~clock:(Clocks.first_ck e.e_ct) ~ty:Initial.tbool
-                         ~linearity:Linearity.Ltop (Wvar x)) x
+               ~linearity:Linearity.Ltop (Wvar x)) x
         in
         Emerge (dummy_var, clause_list), id, 0, x_id :: class_id_list
 
@@ -324,8 +326,8 @@ let new_name mapping x =
 let construct_mapping (_, cenv) =
   let construct_mapping_eq_repr _ eq_repr_list mapping =
     let rec ty_list_of_ty ty acc = match ty with
-        | Tprod ty_list -> List.fold_right ty_list_of_ty ty_list acc
-        | _ -> ty :: acc
+      | Tprod ty_list -> List.fold_right ty_list_of_ty ty_list acc
+      | _ -> ty :: acc
     in
 
     let rec ck_list_of_ct ct acc = match ct with
@@ -487,7 +489,7 @@ and reconstruct_pattern mapping pat = match pat with
 (* Compute the next equivalence classes for a minimization environment *)
 (***********************************************************************)
 
-module EqClasses = Map.Make(
+module Key =
   struct
     type t = exp * ct * (extvalue, int * int list) either list
 
@@ -495,14 +497,15 @@ module EqClasses = Map.Make(
       | Eapp (app, _, _) | Eiterator (_, app, _, _, _, _) -> app.a_unsafe
       | _ -> false
 
-    let compare_children c1 c2 = match c1, c2 with
+    let compare_children c1 c2 =
+      match c1, c2 with
       | Left w1, Left w2 -> Mls_compare.extvalue_compare w1 w2
       | Right c1', Right c2' -> Pervasives.compare c1' c2'
       | Left _, Right _ -> -1
       | Right _, Left _ -> 1
 
-    let compare (e1, ck1, cr_list1) (e2, ck2, cr_list2) =
-      let cr = ClockCompareModulo.clock_type_compare ck1 ck2 in
+    let compare (e1, ct1, cr_list1) (e2, ct2, cr_list2) =
+      let cr = ClockCompareModulo.clock_type_compare ct1 ct2 in
       if cr <> 0 then cr
       else
         (let cr = CompareModulo.exp_compare e1 e2 in
@@ -510,8 +513,11 @@ module EqClasses = Map.Make(
          else
            if unsafe e1 then 1
            else
-             (if unsafe e2 then -1 else list_compare compare_children cr_list1 cr_list2))
-  end)
+             if unsafe e2 then -1
+             else list_compare compare_children cr_list1 cr_list2)
+  end
+
+module EqClasses = Map.Make(Key)
 
 let rec path_environment tenv =
   let enrich_env pat { er_class = id } env =
@@ -536,18 +542,21 @@ let compute_new_class (tenv : tom_env) =
   (* Do comparisons with respect to tenv! *)
   ClockCompareModulo.env := mapping;
 
-  let fresh_id, get_id = let id = ref 0 in ((fun () -> incr id; !id), (fun () -> !id)) in
-
-  let add_eq_repr _ eqr classes =
+  let compute_key eqr =
     let map_class_ref cref = match cref with
-      | Cr_input id -> Left id
+      | Cr_input w -> Left w
       | Cr_plain x ->
         try Right (Env.find x mapping)
         with Not_found -> Format.eprintf "Unknown class %a@." print_ident x; assert false
     in
     let children = List.map map_class_ref eqr.er_children in
+    (eqr.er_head, eqr.er_clock_type, children)
+  in
 
-    let key = (eqr.er_head, eqr.er_clock_type, children) in
+  let fresh_id, get_id = let id = ref 0 in ((fun () -> incr id; !id), (fun () -> !id)) in
+
+  let add_eq_repr pat eqr classes =
+    let key = compute_key eqr in
     let id = try EqClasses.find key classes with Not_found -> fresh_id () in
 
     eqr.er_class <- id;
@@ -557,19 +566,25 @@ let compute_new_class (tenv : tom_env) =
 
   let classes = PatMap.fold add_eq_repr tenv EqClasses.empty in
 
-  (get_id (), tenv)
+  get_id ()
 
 let rec separate_classes tenv =
-  let rec fix (class_count, tenv) =
-    let new_class_count, tenv = compute_new_class tenv in
+  let rec fix class_count =
+    let class_list = class_list_of_tenv tenv in
+    let new_class_count = compute_new_class tenv in
     debug_do
-      (fun () -> Format.printf "@\n@\n@\nNew tenv %d %d:\n%a@." class_count new_class_count debug_tenv tenv) ();
-    if new_class_count = class_count then tenv else fix (new_class_count, tenv)
+      (fun () ->
+        Format.printf "@\n@\n@\nNew tenv %d %d:\n%a@." class_count new_class_count debug_tenv tenv
+      )
+      ();
+    if new_class_count < class_count
+    then Misc.internal_error "minimization, decreasing class count";
+    if new_class_count = class_count then tenv else fix new_class_count
   in
   debug_do (fun () -> Format.printf "Initial tenv:\n%a@." debug_tenv tenv) ();
-  let id, tenv = compute_new_class tenv in
-  debug_do (fun () -> Format.printf "New tenv %d:\n%a@." id debug_tenv tenv) ();
-  fix (id, tenv)
+  let class_count = compute_new_class tenv in
+  debug_do (fun () -> Format.printf "New tenv %d:\n%a@." class_count debug_tenv tenv) ();
+  fix class_count
 
 (********************************************************************)
 (* Top-level functions: plug everything together to minimize a node *)
@@ -610,7 +625,6 @@ and fix_output_var_decs tenv (equs, vd_list) =
   let (_, eq_list, vd_list) =
     List.fold_right (fix_output_var_dec tenv) vd_list (IdentSet.empty, equs, []) in
   eq_list, vd_list
-
 
 let node nd =
   debug_do (fun () -> Format.eprintf "Minimizing %a@." print_qualname nd.n_name) ();
