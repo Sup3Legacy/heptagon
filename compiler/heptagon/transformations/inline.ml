@@ -120,7 +120,7 @@ let eq funs (inline, nenv, cenv, subst) eq =
         (Hept_printer.iterator_to_string it) (fullname nn);
       eq, (inline, nenv,cenv,subst)
   | Eeq(pat, {e_desc = Eapp ({ a_op = (Enode nn | Efun nn);
-             a_unsafe = false; (* Unsafe can't be inlined *)
+             a_async = None; (* Async can't be inlined *)
              a_inlined = inlined } as op, arg_l, rso)}) when inlined || to_be_inlined nn ->
 
       (try (* try to get the code to inline, if not possible, do not inline. *)
