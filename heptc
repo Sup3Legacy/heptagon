@@ -10,13 +10,30 @@ RUN_DIR="`pwd`"
 SCRIPT_DIR=`dirname $(python -c "import os, sys; print os.path.realpath(\"$0\")")`
 
 COMPILER_DIR="$SCRIPT_DIR/compiler"
-if [ -x $COMPILER_DIR/heptc.native ];
-then
-    COMPILER=heptc.native
-else
-    COMPILER=heptc.byte
-fi
-COMPILER_DEBUG=heptc.d.byte
+
+case $1 in
+	debug)
+		shift;
+		COMPILER=heptc.d.byte
+		;;
+	native)
+		shift;
+		COMPILER=heptc.native
+		;;
+	byte)
+		shift;
+		COMPILER=heptc.byte
+		;;
+	*)
+		if [ -x $COMPILER_DIR/heptc.byte ]; then COMPILER=heptc.byte
+		elif [ -x $COMPILER_DIR/heptc.d.byte ]; then COMPILER=heptc.d.byte
+		elif [ -x $COMPILER_DIR/heptc.native ]; then COMPILER=heptc.native
+		else COMPILER=heptc.byte
+	        fi
+esac
+
+
+
 LIB_DIR="$SCRIPT_DIR/lib"
 
 JAVA_LIB_DIR="$LIB_DIR/java"
@@ -24,20 +41,13 @@ JAVAC="javac -Xlint:unchecked -cp $JAVA_LIB_DIR"
 
 #the symlink
 HEPTC="$COMPILER_DIR/$COMPILER"
-HEPTC_DEBUG="$COMPILER_DIR/$COMPILER_DEBUG"
 
 #compile the compiler
 if [ ! -x "$HEPTC" ]
 then
-  if [ -x "$HEPTC_DEBUG" ]
-  then
-    #use the debug
-    HEPTC=$HEPTC_DEBUG
-  else
     pushd "$COMPILER_DIR" > /dev/null
     ocamlbuild -j 0 "$COMPILER"
     popd > /dev/null
-  fi
 fi
 
 #compile the stdlib
@@ -46,6 +56,12 @@ then
   pushd "$LIB_DIR" > /dev/null
   echo "Recompile pervasives.epci"
   "$HEPTC" -nopervasives pervasives.epi
+  for i in *.epi; do
+	  if [[ $i != "pervasives.epi" ]]
+	  then "$HEPTC" $i
+	  fi
+  done
+  "$HEPTC" -c -target java -target c *.ept
   popd > /dev/null
 fi
 
@@ -72,7 +88,20 @@ java )
     popd > /dev/null
   fi
 ;;
-c )
+java_m )
+  shift
+  compile -target java -s main "$@"
+  if [[ $STATUS = 0 ]]
+  then
+    #call javac to compile the file given as last argument
+    last_arg=$#
+    base_f=`basename ${!last_arg} .ept`
+    pushd "java/$(echo ${base_f} | python -c 'print raw_input().capitalize()')" > /dev/null
+    ${JAVAC}:.. *.java
+    popd > /dev/null
+  fi
+;;
+c99 )
   shift
   set -e
   compile -target c "$@"
