@@ -146,11 +146,11 @@ public class Pervasives {
 	}
 	
 	public static Tuple2 at_to_ta2 ( final Future<Tuple2> at) {
-		FutureTask t0 = new FutureTask(new Callable () {
+		Future t0 = executor_cached.submit(new Callable () {
 			public Object call() throws Exception {
 				return at.get().c0;
 			} });
-		FutureTask t1 = new FutureTask(new Callable () {
+		Future t1 = executor_cached.submit(new Callable () {
 			public Object call() throws Exception {
 				return at.get().c1;
 			} });
@@ -172,15 +172,15 @@ public class Pervasives {
 	}
 
 	public static Tuple3 at_to_ta3 ( final Future<Tuple3> at) {
-		FutureTask t0 = new FutureTask(new Callable () {
+		Future t0 = executor_cached.submit(new Callable () {
 			public Object call() throws Exception {
 				return at.get().c0;
 			} });
-		FutureTask t1 = new FutureTask(new Callable () {
+		Future t1 = executor_cached.submit(new Callable () {
 			public Object call() throws Exception {
 				return at.get().c1;
 			} });
-		FutureTask t2 = new FutureTask(new Callable () {
+		Future t2 = executor_cached.submit(new Callable () {
 			public Object call() throws Exception {
 				return at.get().c2;
 			} });
