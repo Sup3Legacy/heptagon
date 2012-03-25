@@ -35,10 +35,12 @@ let compile_interface modname source_f =
     let p = Hept_compiler.compile_interface p in
     (* Output the .epci *)
     output_value epci_c (Modules.get_current_module ());
+  (* TODO pourquoi faire tout ca :
     (* Translate to Obc *)
     let p = Hept2mls.interface p in
     (* Generate the sequential code *)
     Mls2seq.interface p;
+  *)
     close_all_files ()
   with
     | x -> close_all_files (); raise x
@@ -53,9 +55,9 @@ let compile_program modname source_f =
 
   (* input/output channels *)
   let source_c, lexbuf = lexbuf_from_file source_f in
-  let epci_c = open_out_bin epci_f in
-  let mls_c = open_out mls_f in
-  let close_all_files () = close_in source_c; close_out epci_c; close_out mls_c in
+(*  let epci_c = open_out_bin epci_f in
+  let mls_c = open_out mls_f in *)
+  let close_all_files () = close_in source_c (*;close_out epci_c; close_out mls_c*) in
 
   try
   (* Activates passes according to the backend used *)
@@ -68,12 +70,16 @@ let compile_program modname source_f =
     let p = Hept_compiler.compile_program p in
   (* Compile Heptagon to MiniLS *)
     let p = do_pass "Translation into MiniLS" Hept2mls.program p Mls_compiler.pp in
+(* TODO should not be done everytime ...
   (* Output the .mls *)
     do_silent_pass "MiniLS serialization" (fun () -> Mls_printer.print mls_c p) ();
+*)
   (* Process the MiniLS AST *)
     let p = Mls_compiler.compile_program p in
+(* TODO should not be done everytime ...
   (* Output the .epci *)
     output_value epci_c (Modules.get_current_module ());
+*)
   (* Generate the sequential code *)
     Mls2seq.program p;
     close_all_files ();
