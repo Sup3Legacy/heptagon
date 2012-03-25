@@ -1,0 +1,1 @@
+external val fun stuff(int) returns (int)
