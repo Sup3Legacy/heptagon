@@ -1,0 +1,17 @@
+open Time
+
+
+node main<<in1, in2:string; delay :int>>() returns (waited :bool)
+var im1,im2,im :int^3; flipflop,r :bool; display_time :time :: . on r;
+let
+  reset im1 = Image.read_int<<in1>>() every (false fby r);
+  reset im2 = Image.read_int<<in2>>() every (false fby r);
+
+  im = merge flipflop (im1) (im2);
+  r = Image.display_int<<"coucou",1920,1080>>(im);
+  flipflop = false -> if pre r then not pre flipflop else pre flipflop;
+  (*r = Nsync.pure<<1920*1080>>();*)
+
+  display_time = (start_time()) fby add_time(display_time, delay);
+  waited = sleep_until(display_time)
+tel
