@@ -122,7 +122,7 @@ let program p =
             | _ ->
               Aexp (
                 Emethod_call(out, "printf",
-                             [Sstring "%d => %s\n";
+                             [Sstring "=%d> %s\n";
                               Evar i;
                               Emethod_call(java_pervasives, "genToString", [exp_ret])]))
           in
