@@ -69,12 +69,34 @@ java )
     popd > /dev/null
   fi
 ;;
-c )
+c | cgen )
+  if [ $1 = cgen ]
+  then
+      CGEN=1
+  else
+      CGEN=0
+  fi
   shift
   set -e
   compile -target c "$@"
   base_f=`basename ${!#} .ept`
-  cd ${base_f}_c && cc -I`$HEPTC -where`/c *.c -o ../${base_f}
+  # copy template Makefile and edit
+  cp `$HEPTC -where`/../tools/Makefile.* ${base_f}_c
+  pushd ${base_f}_c > /dev/null
+  mv Makefile.tmpl Makefile
+  echo "HCDIR=`$HEPTC -where`" >> Makefile.config
+  echo "TARGET=${base_f}" >> Makefile.config
+  echo "OBJS=`ls *.c | grep -v _main | sed -e 's/\.c/.o/' | tr '\n' ' '`" >> Makefile.config
+  if [ ${CGEN} = 0 ]
+  then
+      if [ -f _main.c ]
+      then
+          make all ${base_f}
+      else
+          make all
+      fi
+  fi
+  popd > /dev/null
 ;;
 -- | * )
   compile "$@"

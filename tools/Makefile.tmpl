@@ -1,0 +1,21 @@
+include ./Makefile.config
+
+override CFLAGS += -I$(HCDIR)/c
+
+LIB=lib$(TARGET).a
+
+.PHONY:	all clean
+
+all:    $(LIB)
+
+clean:
+	rm -f $(TARGET) $(LIB).a $(OBJS)
+
+$(TARGET):	$(LIB) _main.o
+	$(LD) $(LDFLAGS) -o $@ $^
+
+$(LIB):	$(OBJS)
+	$(AR) rcs $@ $^
+
+%.o:	%.c
+	$(CC) $(CFLAGS) -c $< -o $@
