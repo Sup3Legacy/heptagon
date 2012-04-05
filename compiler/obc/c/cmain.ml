@@ -246,8 +246,9 @@ let main_def_of_class_def cd =
     @
       (if !Compiler_options.hepts_simulation
        then []
-       else [Csexpr (Cfun_call ("puts", [Cconst (Cstrlit "")]))])
-    @ [Csexpr (Cfun_call ("fflush", [Cvar "stdout"]))] in
+       else [Csexpr (Cfun_call ("puts", [Cconst (Cstrlit "")]));
+             Csexpr (Cfun_call ("fflush", [Cvar "stdout"]))])
+  in
 
   (** Do not forget to initialize memory via reset if needed. *)
   let rst_i =
