@@ -259,6 +259,9 @@ let main_def_of_class_def cd =
 
   (mem_decl, varlist, rst_i, step_l)
 
+let global_argc = "global_argc"
+let global_argv = "global_argv"
+
 (** [main_skel var_list prologue body] generates a C main() function using the
     variable list [var_list], prologue [prologue] and loop body [body]. *)
 let main_skel var_list prologue body =
@@ -271,6 +274,8 @@ let main_skel var_list prologue body =
         (step_counter, Cty_int) :: (max_step, Cty_int) :: var_list;
       block_body =
         [
+          Caffect (CLvar global_argc, Cvar "argc");
+          Caffect (CLvar global_argv, Cvar "argv");
           (*
             step_count = 0;
             max_step = 0;
@@ -324,7 +329,13 @@ let mk_main name p =
 
       let n = !Compiler_options.simulation_node in
       let (mem, nvar_l, res, nstep_l) = main_def_of_class_def (find_class n) in
-      let defs = match mem with None -> [] | Some m -> [m] in
+      let defs =
+        [
+          Cvardef (global_argc, Cty_int);
+          Cvardef (global_argv, Cty_ptr (Cty_ptr Cty_char));
+        ]
+      in
+      let defs = match mem with None -> defs | Some m -> m :: defs in
       let (var_l, res_l, step_l) =
         (nvar_l @ var_l, res @ res_l, nstep_l @ step_l) in
 

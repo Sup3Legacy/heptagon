@@ -1,0 +1,9 @@
+type image
+
+external unsafe val node open_image_stream(param_index : int;
+                                           w : int; h : int; read : bool)
+                    returns (img : image)
+external unsafe val node read_pixel(img : image)
+                           returns (r : int; g : int; b : int)
+external unsafe val node write_pixel(img : image; r : int; g : int; b : int)
+                             returns ()
