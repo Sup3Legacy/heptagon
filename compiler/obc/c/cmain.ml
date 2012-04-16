@@ -246,8 +246,7 @@ let main_def_of_class_def cd =
     @
       (if !Compiler_options.hepts_simulation
        then []
-       else [Csexpr (Cfun_call ("puts", [Cconst (Cstrlit "")]));
-             Csexpr (Cfun_call ("fflush", [Cvar "stdout"]))])
+       else [Csexpr (Cfun_call ("puts", [Cconst (Cstrlit "")]))])
   in
 
   (** Do not forget to initialize memory via reset if needed. *)
@@ -304,6 +303,7 @@ let main_skel var_list prologue body =
                                  Cvar step_counter,
                                  mk_int 1l))
                   :: body);
+          Csexpr (Cfun_call ("fflush", [Cvar "stdout"]));
           Creturn (mk_int 0l);
         ];
     }
