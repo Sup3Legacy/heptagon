@@ -3,6 +3,8 @@ extern "C" {
 #include <sys/stat.h>
 }
 
+#include <cassert>
+
 #include "CImg.h"
 
 using namespace cimg_library;
@@ -45,7 +47,9 @@ extern "C" void Image__open_image_stream_step(
   {
     if(param_index < 0 || param_index + 1 >= global_argc)
     {
-      fprintf(stderr, "Not enough command-line arguments\n", global_argc);
+      fprintf(stderr,
+              "Not enough command-line arguments: %d, expected at least %d\n",
+              global_argc, param_index + 1);
       exit(1);
     }
 
@@ -126,6 +130,12 @@ extern "C" void Image__write_pixel_step(Image__image img, int r, int g, int b,
   (*iimg->image)(iimg->x, iimg->y, 0, 1) = g;
   (*iimg->image)(iimg->x, iimg->y, 0, 2) = b;
 
+  // if(iimg->x != r || iimg->y != g || b != 0)
+  // {
+  //   fprintf(stderr, "[%dx%d]: %d, %d, %d\n", iimg->x, iimg->y, r, g, b);
+  //   abort();
+  // }
+
   if(++iimg->x == iimg->w)
   {
     iimg->x = 0;
@@ -134,6 +144,9 @@ extern "C" void Image__write_pixel_step(Image__image img, int r, int g, int b,
       printf("Saving %s\n", iimg->filename);
       iimg->y = 0;
       iimg->image->save(iimg->filename);
+      static int cpt = 0;
+      if(++cpt == 1)
+        exit(0);
     }
   }
 }
