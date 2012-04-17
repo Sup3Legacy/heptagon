@@ -28,7 +28,7 @@ public class AsyncNode<T> {
   }
 
   @SuppressWarnings("unchecked")
-  public AsyncNode(int queueNb, int queueSize, int priority) {
+  public AsyncNode(int queueSize, int queueNb, int priority) {
     if (queueNb<1) { java.lang.System.err.println("asyncnode given with 0 thread to execute"); }
     this.queue = new ArrayBlockingQueue[queueNb];
     this.t = new Thread[queueNb];
@@ -43,7 +43,7 @@ public class AsyncNode<T> {
     }
   }
 
-  public AsyncNode(int queueNb, int queueSize) {
+  public AsyncNode(int queueSize, int queueNb) {
     this(queueNb, queueSize, Thread.NORM_PRIORITY);
   }
 

@@ -1257,7 +1257,6 @@ let rec check_params_type ps =
       | Tsig n -> Tsig (typing_signature n name)
     in
     let p = { p with p_type = ty } in
-    let n = local_qn p.p_name in
     p
   in
   List.map check_param ps
