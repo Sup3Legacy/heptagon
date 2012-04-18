@@ -33,12 +33,12 @@ let name id =
     id.source
 
 (* used only for debuging *)
-let print_ident ff id = Format.fprintf ff "%s" (name id)
+let debug_print_ident ff id = Format.fprintf ff "%s" (name id)
 
 module M = struct
   type t = ident
   let compare = ident_compare
-  let print_t = print_ident
+  let print_t = debug_print_ident
 end
 
 module Env =

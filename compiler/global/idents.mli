@@ -67,3 +67,4 @@ sig
 end
 
 val print_ident : Format.formatter -> ident -> unit
+val debug_print_ident : Format.formatter -> ident -> unit
