@@ -6,7 +6,7 @@ let
   o = a+1;
 tel
 
-fun f() returns (o:int^n)
+node f() returns (o:int^n)
 let
   o = mapi<<n>> plusone ();
 tel
