@@ -1,19 +1,19 @@
 
-type pixel = float^3
+type pixel = int^3
 
 fun pix_sum(x1,x2 :pixel) returns (r :pixel)
 let
-  r = map<<3>> (+.) (x1,x2);
+  r = map<<3>> (+) (x1,x2);
 tel
 
-fun pix_div(x :pixel; c :float) returns (r :pixel)
+fun pix_div(x :pixel; c :int) returns (r :pixel)
 let
-  r = map<<3>> (/.) (x, c^3);
+  r = map<<3>> (/) (x, c^3);
 tel
 
-const pix_zero :pixel = 0.0^3
-const pix_o :pixel = 1.0^3
-const future_pix_o :future (float^3) = async (1.0^3)
+const pix_zero :pixel = 0^3
+const pix_o :pixel = 1^3
+const future_pix_o :future (int^3) = async (1^3)
 
 node counter() returns (cpt :int)
 let
@@ -23,7 +23,7 @@ tel
 node counter_r(res :bool) returns (cpt :int)
 let
   reset
-    cpt = inlined counter()
+    cpt = counter()
   every res
 tel
 
@@ -38,7 +38,7 @@ tel
 (* count from 1 to m included *)
 node mod_counter<<m:int>>() returns (cpt :int)
 let
-  cpt = inlined mod_counter_r<<m>>(false)
+  cpt = mod_counter_r<<m>>(false)
 tel
 
 
@@ -96,7 +96,7 @@ let
   o_y = mod_counter<<y>>() -1;
   o_line = o_y = 0;
   o_x = current (mod_counter<<x>>()-1, o_line);
-  store = (async (1.0^3)^x^y^2) fby [store with [i_buff][i_y][i_x] = i];
+  store = (async (1^3)^x^y^2) fby [store with [i_buff][i_y][i_x] = i];
   o = store[>o_buff<][>o_y<][>o_x<];
 tel
 
@@ -108,11 +108,11 @@ var x1, x2 : pixel;
 let
   x1 = x fby x;
   x2 = x fby x1;
-  r = pix_div(pix_sum(x when out, pix_sum(x1 when out, x2 when out)), 3.0 );
+  r = pix_div(pix_sum(x when out, pix_sum(x1 when out, x2 when out)), 3 );
 tel
 
 
-node down_img <<size_x, size_y, ratio_x, ratio_y :int>> (x :pixel :: .)
+node down_img <<size_x, size_y, ratio_x, ratio_y :int; threads, queue :int>> (x :pixel :: .)
 returns (y_flat :pixel; y_clock :bool)
 var y, y_dhv_t :pixel;
     y_dh, y_dh_t : future pixel;
@@ -122,7 +122,7 @@ let
     x_line = mod_counter<<size_x>>() = 1;
     reset
       ck_y_dh = mod_counter<<ratio_x>>() = ratio_x;
-      y_dh = async<<size_y,size_x+1>> down(x, ck_y_dh)
+      y_dh = async<<threads, queue>> down(x, ck_y_dh)
     every x_line;
     y_dh_t = transpose_future<<size_x/ratio_x, size_y>>(y_dh);
     y_dh_t_line = current_bool(mod_counter<<size_y>>() = 1, ck_y_dh);
@@ -136,17 +136,15 @@ let
 tel
 
 
-(*node main () returns (img, out : pixel; ck_out, ck_out_2 :bool)
-(*var img : pixel;*)
-let
-  img = pix_o;
-  (out, ck_out, ck_out_2) = down_img<<2,2,2,2>>(img);
-tel*)
 
-node main<<sx, sy:int>> () returns (img, out : pixel; ck_out :bool)
+
+
+node main<<size_x, size_y :int; in_f :string; threads, queue :int>> () returns ()
+var img, out : pixel; finished, out_ck :bool;
 let
-  img = pix_o fby pix_sum(img, pix_o);
-  (out, ck_out) = down_img<<sx,sy,3,3>>(img);
+  img = Image.read_int<<in_f>>();
+  (out, out_ck) = down_img<<size_x,size_y,24,24,threads, queue>>(img);
+  finished = Image.display_int<<"bli", size_x/24, size_y/24>>(out);
 tel
 
 

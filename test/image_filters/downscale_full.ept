@@ -1,5 +1,5 @@
 
-type pixel = float^3
+type pixel = int^3
 
 node nat() returns (n :int)
 let
@@ -8,16 +8,15 @@ tel
 
 fun pix_sum(x1,x2 :pixel) returns (r :pixel)
 let
-  r = map<<3>> (+.) (x1,x2);
+  r = map<<3>> (+) (x1,x2);
 tel
 
-fun pix_div(x :pixel; c :float) returns (r :pixel)
+fun pix_div(x :pixel; c :int) returns (r :pixel)
 let
-  r = map<<3>> (/.) (x, c^3);
+  r = map<<3>> (/) (x, c^3);
 tel
 
-const pix_zero :pixel = 0.0^3
-const pix_o :pixel = [1.0,1.0,1.0]
+const pix_zero :pixel = 0^3
 
 node counter() returns (cpt :int)
 let
@@ -27,7 +26,7 @@ tel
 node counter_r(res :bool) returns (cpt :int)
 let
   reset
-    cpt = inlined counter()
+    cpt = counter()
   every res
 tel
 
@@ -42,7 +41,7 @@ tel
 (* count from 1 to m included *)
 node mod_counter<<m:int>>() returns (cpt :int)
 let
-  cpt = inlined mod_counter_r<<m>>(false)
+  cpt = mod_counter_r<<m>>(false)
 tel
 
 
@@ -58,8 +57,8 @@ tel
 fun flatten_clock(x :pixel ::.on ck on ck2; ck :bool ::.; ck2 :bool ::.on ck) returns (y :pixel; ck2_flat :bool :: .)
 var x_ck, x_base : pixel;
 let
-  x_ck = merge ck2 x pix_o;
-  x_base = merge ck x_ck pix_o;
+  x_ck = merge ck2 x pix_zero;
+  x_base = merge ck x_ck pix_zero;
   ck2_flat = merge ck ck2 false;
   y = x_base when ck2_flat;
 tel
@@ -92,7 +91,7 @@ var x1, x2 : pixel;
 let
   x1 = x fby x;
   x2 = x fby x1;
-  r = pix_div(pix_sum(x when out, pix_sum(x1 when out, x2 when out)), 3.0 );
+  r = pix_div(pix_sum(x when out, pix_sum(x1 when out, x2 when out)), 3 );
 tel
 
 node down_line<<ratio :int>>(x :pixel) returns (r :pixel; r_clock :bool)
@@ -103,13 +102,11 @@ tel
 
 
 node down_img <<size_x, size_y, ratio_x, ratio_y :int>> (x :pixel :: .)
-returns (y_flat :pixel; y_clock :bool;
-           y, y_dh, y_dh_t, y_dhv_t :pixel;
-         ck_y_dh, ck_y_dhv :bool
-        )
+returns (y_flat :pixel; y_clock :bool;)
 var
-    x_line, y_dh_t_line :bool;
-
+  y, y_dh, y_dh_t, y_dhv_t :pixel;
+  ck_y_dh, ck_y_dhv :bool;
+  x_line, y_dh_t_line :bool;
 let
     x_line = mod_counter<<size_x>>() = 1;
     reset
@@ -133,14 +130,12 @@ let
   (out, ck_out, ck_out_2) = down_img<<2,2,2,2>>(img);
 tel*)
 
-node main<<size_x, size_y:int>> () returns (img, out : pixel; ck_out :bool;
-        y, y_dh, y_dh_t, y_dhv_t :pixel;
-        ck_y_dh, ck_y_dhv :bool)
-(*var img : pixel;*)
+node main<<size_x, size_y :int; in_f, out_f :string;>> () returns ()
+var img, out : pixel; finished, out_ck :bool;
 let
-  (*ck_out = true fby false fby not ck_out;*)
-  img = pix_o fby pix_sum(img, pix_o);
-  (out, ck_out, y, y_dh, y_dh_t, y_dhv_t, ck_y_dh, ck_y_dhv) = down_img<<size_x,size_y,3,3>>(img);
+  img = Image.read_int<<in_f>>();
+  (out, out_ck) = down_img<<size_x,size_y,3,3>>(img);
+  finished = Image.display_int<<"bli", size_x/3, size_y/3>>(out);
 tel
 
 
