@@ -143,7 +143,7 @@ let new_name v vdt =
 
 
 
-(** returns wether it is a new used name, the accordingly updated env and the substitution name *)
+(** returns whether it is a new used name, the accordingly updated env and the substitution name *)
 let rename v (h, vdt) = match vdt with
   | Base vds
   | Level (_, vds, _) ->
@@ -223,12 +223,18 @@ let block funs uenv b =
   in
   let uenv, defnames = rename_defnames b.b_defnames uenv in
   let b = { b with b_defnames = defnames } in
-  Hept_mapfold.block funs uenv b
+  let b, (used,env) = Hept_mapfold.block funs uenv b in
+  (* used vars are minus the local ones *)
+  let local_vars =
+    List.fold_left (fun s vd -> Idents.IdentSet.add vd.v_ident s) Idents.IdentSet.empty b.b_local
+  in
+  let used = Idents.IdentSet.diff used local_vars in
+  b, (used,env)
 
 (* apply the sampling on shared vars *)
 let exp funs (used,env) e =
-  let e = Env.annot_exp e env in
-  Hept_mapfold.exp funs (used,env) e
+  let e, uenv = Hept_mapfold.exp funs (used,env) e in
+  Env.annot_exp e env, uenv
 
 let edesc funs uenv ed =
   let ed, uenv = Hept_mapfold.edesc funs uenv ed in
@@ -317,7 +323,7 @@ let eqdesc funs (old_used, env) eqd = match eqd with
         Idents.Env.fold new_merge defnames equs
       in
 
-      let (uenv, c_env_l, equs) =
+      let ((used,env), c_env_l, equs) =
         (* create a split equation for each used names *)
         let new_split n ((used,env), c_env_l, equs) =
           (* fold over used in order to collect all the used vars *)
@@ -349,8 +355,12 @@ let eqdesc funs (old_used, env) eqd = match eqd with
       in
       (* return the transformation in a block *)
       let b = mk_block ~defnames:defnames ~locals:locals equs in
-      let uenv = (Idents.IdentSet.union old_used used, env) in
-      Eblock b, uenv
+      (* used vars are the union of vars used before and the new one, minus the local ones *)
+      let local_vars =
+        List.fold_left (fun s vd -> Idents.IdentSet.add vd.v_ident s) Idents.IdentSet.empty locals
+      in
+      let used = Idents.IdentSet.diff (Idents.IdentSet.union old_used used) local_vars in
+      Eblock b, (used,env)
   | _ -> raise Errors.Fallback
 
 let program p =
