@@ -318,6 +318,7 @@ while [ $# -gt 0 ]; do
       echo "usage : $0 <options> <compilo>"
       echo "options : "
       echo "-clean    : clean build dir"
+      echo "-java_gen : test of code generation (java code without compilation)"
       echo "-java     : test of code generation (java code)"
       echo "-caml     : test of code generation (caml code)"
       echo "-lustre   : test of code generation (lustre code)"
