@@ -9,15 +9,13 @@
 
 
 (** Require function and node calls to be normalized :
-  (y,..,y) = f (x,..,x)
+  (y,..,y) = f<<se...se>> (x,..,x) every b
   No expression is allowed around the call or as arguments.
   Thanks to that, The correct substitution is computed.
   There are 3 environments, one for the idents,
   one for the static params and one for the linear annotations
-*)
 
-
-(* Create some reseted blocks : reset should be done afterward. *)
+   Create some reseted blocks : reset should be done afterward. *)
 
 open Misc
 open Idents
