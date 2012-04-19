@@ -55,9 +55,9 @@ let compile_program modname source_f =
 
   (* input/output channels *)
   let source_c, lexbuf = lexbuf_from_file source_f in
-(*  let epci_c = open_out_bin epci_f in
-  let mls_c = open_out mls_f in *)
-  let close_all_files () = close_in source_c (*;close_out epci_c; close_out mls_c*) in
+  let epci_c = open_out_bin epci_f in
+  (*let mls_c = open_out mls_f in *)
+  let close_all_files () = close_in source_c ;close_out epci_c; (*close_out mls_c*) in
 
   try
   (* Activates passes according to the backend used *)
@@ -76,10 +76,8 @@ let compile_program modname source_f =
 *)
   (* Process the MiniLS AST *)
     let p = Mls_compiler.compile_program p in
-(* TODO should not be done everytime ...
   (* Output the .epci *)
     output_value epci_c (Modules.get_current_module ());
-*)
   (* Generate the sequential code *)
     Mls2seq.program p;
     close_all_files ();
