@@ -1,4 +1,7 @@
+type pixel = int^3
 
-external val node read_int<<infile :string>>() returns (pixel :int^3)
-external val node write_int<<outfile :string; w,h :int>>(pixel :int^3) returns (finished :bool)
-external val node display_int<<window_name :string; w,h :int>>(pixel :int^3) returns (finished :bool)
+const pixel_zero :pixel = [0,0,0]
+
+external val node read_int<<infile :string>>() returns (o :pixel)
+external val node write_int<<outfile :string; w,h :int>>(i :pixel) returns (finished :bool)
+external val node display_int<<window_name :string; w,h :int>>(i :pixel) returns (finished :bool)

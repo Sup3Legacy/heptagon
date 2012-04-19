@@ -1,0 +1,28 @@
+open Image
+
+node average (x :int) = (y :int)
+let
+  y = (0 fby 0 fby x + 0 fby x + x)/3;
+tel
+
+node average_pixel (x :pixel) = (y :pixel)
+let
+  y = map<<3>> average (x);
+tel
+
+
+node down_line<<w, ratio :int>> (x :pixel^w) = (y :pixel^(w/ratio))
+var x_stream, y_stream :pixel; x_line, y_line, down :bool; y_y :pixel^(w/ratio);
+let
+  x_line = Misc.timer<<w>>(); (* needs to be removed by LHO *)
+  x_stream = Stream_arrays.a2s_pixel<<w>>(x, x_line);
+  
+  down = Misc.timer<<ratio>>();
+  y_stream = (average_pixel (x_stream)) when down;
+  y_line = x_line when down;
+  y_y = Stream_arrays.s2a_pixel<<w/ratio>>(y_stream, y_line);
+  (* needed to remove the uneeded sampling down of y_y *)
+  y = (merge down (merge y_line (y_y) (pixel_zero^(w/ratio))) (pixel_zero^(w/ratio))) when x_line;
+tel
+
+  

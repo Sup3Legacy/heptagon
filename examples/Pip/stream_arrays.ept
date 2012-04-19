@@ -1,0 +1,73 @@
+open Misc
+open Image
+
+(* Array to stream
+    the boolean new_array should be declared as being true every [n] ticks (Misc.timer<<n>>())*)
+node a2s <<n :int>> (x :int^n :: . on new_array; new_array :bool) = (y :int)
+var current_x :int^n; index :int;
+let
+  current_x = merge new_array (x) (((0^n) fby current_x) whenot new_array);
+  index = mod_counter_r<<n>>(new_array);
+  y = current_x[>index<];
+tel
+
+
+(* Stream to array
+    a new array [y] is returned each n ticks (with a delay of n-1 ticks)*)
+node s2a_independant <<n:int>> (x :int) = (y :int^n :: . on new_array; new_array :bool)
+var current_y :int^n; index :int;
+let
+  current_y = (0^n) fby [current_y with [index] = x];
+  index = mod_counter<<n>>();
+  new_array = index = n-1;
+  y = current_y when new_array;
+tel
+
+(* Stream to array
+    a new array [y] is returned each n ticks (with a delay of n-1 ticks)*)
+node s2a <<n:int>> (x :int; new_array :bool) = (y :int^n :: . on new_array)
+var current_y :int^n; index :int;
+let
+  current_y = (0^n) fby [current_y with [index] = x];
+  index = mod_counter_r<<n>>(new_array);
+  y = current_y when new_array;
+tel
+
+
+
+(** Pixel version *)
+
+
+(* Array to stream
+    the boolean new_array should be declared as being true every [n] ticks (Misc.timer<<n>>())*)
+node a2s_pixel <<n :int>> (x :pixel^n :: . on new_array; new_array :bool) = (y :pixel)
+var current_x :pixel^n; index :int;
+let
+  current_x = merge new_array (x) (((pixel_zero^n) fby current_x) whenot new_array);
+  index = mod_counter_r<<n>>(new_array);
+  y = current_x[>index<];
+tel
+
+
+(* Stream to array
+    a new array [y] is returned each n ticks (with a delay of n-1 ticks)*)
+node s2a_independant_pixel <<n:int>> (x :pixel) = (y :pixel^n :: . on new_array; new_array :bool)
+var current_y :pixel^n; index :int;
+let
+  current_y = (pixel_zero^n) fby [current_y with [index] = x];
+  index = mod_counter<<n>>();
+  new_array = index = n-1;
+  y = current_y when new_array;
+tel
+
+
+
+(* Stream to array
+    a new array [y] is returned each n ticks (with a delay of n-1 ticks)*)
+node s2a_pixel <<n:int>> (x :pixel; new_array :bool) = (y :pixel^n :: . on new_array)
+var current_y :pixel^n; index :int;
+let
+  current_y = (pixel_zero^n) fby [current_y with [index] = x];
+  index = mod_counter_r<<n>>(new_array);
+  y = current_y when new_array;
+tel

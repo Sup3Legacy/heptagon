@@ -1,0 +1,23 @@
+open Misc
+open Stream_arrays
+open Downscale
+open Image
+
+(*
+node main() = (t:int^3^6;y:int^3^3)
+(*var t:int^4; c :bool;*)
+let
+  t = ([1,1,1]^6) fby ([2,2,2]^6) fby ([3,3,3]^6) fby t;
+  y = down_line<<6,2>>(t);
+tel
+*)
+node main <<image :string>> () = (finished :bool)
+var i, o :pixel; in_array :pixel^1920; out_array :pixel^(1920/2); ck :bool;
+let
+  i = Image.read_int<<image>>();
+  ck = timer<<1920>>();
+  in_array = s2a_pixel<<1920>>(i, ck);
+  out_array = down_line<<1920,2>>(in_array);
+  o = a2s_pixel<<1920/2>>(out_array,ck);
+  finished = Image.display_int<<"bonjour", 1920,1080>>(o);
+tel
