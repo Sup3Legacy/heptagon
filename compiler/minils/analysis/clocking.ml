@@ -265,21 +265,33 @@ let typing_node node =
   (* Find the free vars in signature and set them to base *)
   Env.iter (fun _ ck -> unify_ck Cbase (root_ck_of ck)) h0;
 
+  (* Update node dec *)
   let vd_to_ck vd = ck_repr (Env.find vd.v_ident h) in
-  let input_cks = List.map vd_to_ck node.n_input in
-  let out_in_cks = List.fold_right (fun vd acc ->(vd_to_ck vd) :: acc) node.n_output input_cks in
-
-  (* Find the best root for the node *)
-  let (new_out_in_cks, root) = Clocks.common_root_ck_list out_in_cks in
-  let (new_out_ck, new_in_ck) = split_nlast (List.length node.n_input) new_out_in_cks in
-  let set_clock vd ck = { vd with v_clock = ck } in
   let set_clock_h vd = { vd with v_clock = vd_to_ck vd } in
-  let node = { node with n_input = List.map2 set_clock node.n_input new_in_ck;
-                         n_output = List.map2 set_clock node.n_output new_out_ck;
-                         n_local = List.map set_clock_h node.n_local;
-                         n_base_ck = root;
-                         n_equs = equs;
-                         n_contract = contract; }
+  let node = { node with
+      n_local = List.map set_clock_h node.n_local;
+      n_input = List.map set_clock_h node.n_input;
+      n_output = List.map set_clock_h node.n_output;
+      n_equs = equs;
+      n_contract = contract;}
+  in
+
+  (* Update node dec with LHO *)
+  let node =
+    if !Compiler_options.do_lho
+    then
+      (* Collect input and output clocks *)
+      let in_cks = List.fold_right (fun vd acc -> vd.v_clock :: acc) node.n_input [] in
+      let out_in_cks = List.fold_right (fun vd acc -> vd.v_clock :: acc) node.n_output in_cks in
+      (* Find the biggest common root *)
+      let (new_out_in_cks, root) = Clocks.common_root_ck_list out_in_cks in
+      let (new_out_ck, new_in_ck) = split_nlast (List.length node.n_input) new_out_in_cks in
+      let set_clock vd ck = { vd with v_clock = ck } in
+      { node with n_input = List.map2 set_clock node.n_input new_in_ck;
+                  n_output = List.map2 set_clock node.n_output new_out_ck;
+                  n_base_ck = root; }
+    else
+      node
   in
   Mls_utils.update_node_signature node;
   node
