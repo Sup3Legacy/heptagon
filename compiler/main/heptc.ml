@@ -121,6 +121,7 @@ let main () =
         "-tomacheck", read_qualname add_tomato_check, "";
         "-lho", Arg.Set do_lho, doc_lho;
         "-inline", read_qualname add_inlined_node, doc_inline;
+        "-notemplate", Arg.Set enforce_callgraph, doc_enforce_callgraph;
         "-flatten", Arg.Set flatten, doc_flatten;
         "-assert", Arg.String add_assert, doc_assert;
         "-nopervasives", Arg.Unit set_no_pervasives, doc_no_pervasives;

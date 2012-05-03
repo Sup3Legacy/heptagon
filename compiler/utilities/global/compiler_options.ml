@@ -135,10 +135,7 @@ let functions_are_classes = ref true
 
 let unroll_loops = ref false
 
-
-let callgraph = ref true
-let callgraph_only_on_higherorder = ref false
-(** disable it to generate functions for every calls *)
+let enforce_callgraph = ref false
 
 let optim = ref false
 let do_optim () =
@@ -170,7 +167,8 @@ and doc_sim = "<node>\t\tCreate simulation for node <node>"
 and doc_hepts = "\t\tSimulation for hepts (graphical simulator)"
 and doc_locate_stdlib = "\t\tLocate standard libray"
 and doc_no_pervasives = "\tDo not load the pervasives module"
-and doc_flatten = "\t\tInline everything."
+and doc_flatten = "\t\tInline everything"
+and doc_enforce_callgraph = "\tPrevent generation of templates"
 and doc_target =
   "<lang>\tGenerate code in language <lang>\n\t\t\t(with <lang>=c,"
   ^ " java or z3z)"

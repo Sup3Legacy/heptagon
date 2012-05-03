@@ -579,8 +579,9 @@ let class_def_list classes cd_l =
       let e = vds_to_exps v in
       f, v, e, env
     in
-    (* [reset] is the reset method of the class,
-       [reset_mems] is the block to reset the members of the class
+    (* [reset] is the reset method of the class.
+       To ease the constructor creation, [reset_mems]
+         is the block to reset the members of the class
          without call to the reset method of inner instances,
          it retains [this.x = 0] but not [this.I.reset()] *)
     let reset, reset_mems =

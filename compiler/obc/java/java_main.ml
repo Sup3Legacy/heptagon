@@ -9,7 +9,6 @@ open Java_printer
 let load_conf () =
 (* TODO Compiler_options.normalize_register_outputs := false; make it work before desactivating *)
   Compiler_options.do_scalarize := true;
-  Compiler_options.callgraph_only_on_higherorder := true;
   Compiler_options.functions_are_classes := false;
   ()
 

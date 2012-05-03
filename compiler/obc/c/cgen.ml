@@ -21,6 +21,11 @@ open C
 open Location
 open Format
 
+
+
+let load_conf () =
+  Compiler_options.enforce_callgraph := true
+
 module Error =
 struct
   type error =
@@ -123,7 +128,8 @@ let cformat_of_format s =
 
 (** Translates an Obc var_dec to a tuple (name, cty). *)
 let cvar_of_vd vd =
-  name vd.v_ident, ctype_of_otype vd.v_type
+  name vd.v_ident,
+  ctype_of_otype vd.v_type
 
 (** Returns the type of a pointer to a type, except for
     types which are already pointers. *)
@@ -270,7 +276,7 @@ let rec cexpr_of_exp out_env var_env exp =
     | Earray e_list ->
         Carraylit (cexprs_of_exps out_env var_env e_list)
     | Ebang _ ->
-        (* TODO async *) assert false
+        Misc.internal_error "C backend not yet supporting futures."
 
 and cexprs_of_exps out_env var_env exps =
   List.map (cexpr_of_exp out_env var_env) exps

@@ -316,8 +316,10 @@ let rec _need_instanciation ln =
   if (Modules.find_value ln).node_external
   then false
   else begin
-    if !Compiler_options.callgraph_only_on_higherorder
-    then (* Am I high-order, or is there a child requiring me to be instanciated ? *)
+    if !Compiler_options.enforce_callgraph
+    then (* If I'm not parameterless, I need instanciation *)
+      (Modules.find_value ln).node_params != []
+    else (* Am I high-order, or is there a child requiring me to be instanciated ? *)
       let is_high_order (ln,_) = match ln with
         | { qual = LocalModule _ } -> true
         | _ -> false
@@ -338,8 +340,6 @@ List.iter (fun (n,_) -> Format.eprintf "%a@." Global_printer.print_qualname n) c
   Global_printer.print_qualname ln (List.exists child_require_instanciation childs);
   *)
       (List.exists is_high_order childs) or (List.exists child_require_instanciation childs)
-    else (* If I'm not parameterless, I need instanciation *)
-      (Modules.find_value ln).node_params != []
   end
 
 (** Is responsible to decide whether a node may be generated,
