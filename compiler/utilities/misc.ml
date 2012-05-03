@@ -244,13 +244,13 @@ let rec map3 f l1 l2 l3 = match l1, l2, l3 with
   | v1::l1, v2::l2, v3::l3 -> (f v1 v2 v3)::(map3 f l1 l2 l3)
   | _ -> invalid_arg "Misc.map3"
 
-exception Assert_false
+exception Internal_error
 let internal_error passe =
   Format.eprintf "@.---------@\n\
                   Internal compiler error@\n\
                   Passe : %s@\n\
                   ----------@." passe;
-  raise Assert_false
+  raise Internal_error
 
 exception Unsupported
 let unsupported passe =
@@ -265,13 +265,13 @@ let _arity_error i l =
   Format.eprintf "@.---------@\n\
 Internal compiler error: wrong list size (found %d, expected %d).@\n\
 ----------@." (List.length l) i;
-  raise Assert_false
+  raise Internal_error
 
 let _arity_min_error i l =
   Format.eprintf "@.---------@\n\
 Internal compiler error: wrong list size (found %d, expected %d at least).@\n\
 ----------@." (List.length l) i;
-  raise Assert_false
+  raise Internal_error
 
 let assert_empty = function
   | [] -> ()
