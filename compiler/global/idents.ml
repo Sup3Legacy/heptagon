@@ -7,13 +7,17 @@
 (*                                                                        *)
 (**************************************************************************)
 
+open Names
+
+
 (* naming and local environment *)
 
 
 type ident = {
-  num : int;        (* a unique index *)
+  hash : int;        (* to speed up things *)
   source : string;  (* the original name in the source *)
-  is_generated : bool;
+  unique_name : string;
+  generated_by : string option;
   is_reset : bool;
 }
 
@@ -21,24 +25,113 @@ let is_reset id = id.is_reset
 
 type var_ident = ident
 
-let num = ref 0
+(* Warning this comparison is correct only between idents of a same node *)
+let ident_compare id1 id2 =
+  let c = compare id1.hash id2.hash in
+  if c = 0 then compare id1.unique_name id2.unique_name else c
 
-let ident_compare id1 id2 = compare id1.num id2.num
-
-(* used only for debuging *)
-let name id =
+(*
+(* used only for debugging *)
+let debug_name id =
   if id.is_generated then
     id.source ^ "_" ^ (string_of_int id.num)
   else
     id.source
 
-(* used only for debuging *)
-let debug_print_ident ff id = Format.fprintf ff "%s" (name id)
+(* used only for debugging *)
+let debug_print_ident ff id = Format.fprintf ff "%s" (debug_name id)*)
+
+
+(* Type used to store for each node an hash-table storing the ident counters.*)
+(* One counter exist per source name. It is used to define the unique name. *)
+type nodes = (string,int) Hashtbl.t QualEnv.t
+let (node_env : nodes ref) = ref QualEnv.empty
+
+(* Stores the current node, initialized with a dummy *)
+let current_node = ref Names.dummy_qualname
+(* Stores the current counters, initialized with a dummy *)
+let current_counters = ref (Hashtbl.create 0)
+
+
+
+let load_nodes nds =
+  node_env := QualEnv.append nds !node_env
+
+let save_nodes modul =
+  QualEnv.filter (fun m _ -> m.qual = modul) !node_env
+
+
+(** This function should be called every time we enter a node *)
+let enter_node n =
+  current_node := n;
+  current_counters :=
+    try QualEnv.find n !node_env
+    with Not_found ->
+      let c = Hashtbl.create 100 in
+      node_env := QualEnv.add n c !node_env;
+      c
+
+let clone_node f f' =
+  (if (QualEnv.mem f' !node_env)
+   then Misc.internal_error "Cloning node overwriting an existing one");
+  node_env := QualEnv.add f' (Hashtbl.copy (QualEnv.find f !node_env)) !node_env
+
+
+let rec fresh_string s =
+  try
+    let num = Hashtbl.find !current_counters s in
+    let new_name = s ^ "_" ^ string_of_int num in
+    Hashtbl.add !current_counters s (num + 1);
+    if Hashtbl.mem !current_counters new_name
+    then fresh_string s
+    else new_name
+  with
+    | Not_found -> (* it is already a fresh name *)
+        Hashtbl.add !current_counters s 1;
+        s
+(*
+    with Not_found -> 1 in
+  Hashtbl.add !current_counters s (num + 1);
+  let new_name = if num = 1 then s else s ^ "_" ^ string_of_int num in
+  if Hashtbl.mem !current_counters new_name
+  then fresh_string s
+  else new_name
+*)
+
+let gen_var pass_name ?(reset=false) name =
+  let unique_name = fresh_string name in
+  { hash = Hashtbl.hash unique_name; source = name; generated_by = Some pass_name;
+    is_reset = reset; unique_name = unique_name }
+
+let ident_of_name ?(reset=false) name =
+  let unique_name = fresh_string name in
+  { hash = Hashtbl.hash unique_name; source = name; generated_by = None;
+    is_reset = reset; unique_name = unique_name }
+
+let source_name id = id.source
+let name id = id.unique_name
+
+let current_node () = !current_node
+
+let local_qn name = { Names.qual = Names.LocalModule (Names.QualModule (current_node ()));
+                      Names.name = name }
+
+
+let print_ident ff id =
+  let s =
+    if !Compiler_options.full_name then
+    match id.generated_by with
+      | None -> name id
+      | Some p -> p ^ (name id)
+    else name id
+  in
+  Format.fprintf ff "%s" s
+
 
 module M = struct
   type t = ident
   let compare = ident_compare
-  let print_t = debug_print_ident
+  let print_t = print_ident
 end
 
 module Env =
@@ -86,86 +179,3 @@ module S = Set.Make (struct type t = string
                             let compare = Pervasives.compare end)
 
 
-(** Module used to generate unique string (inside a node) per ident.
-    /!\ Any pass generating a name must call [enter_node] and use gen_fresh *)
-module UniqueNames =
-struct
-  open Names
-  let used_names = ref (ref NamesSet.empty) (** Used strings in the current node *)
-  let env = ref Env.empty (** Map idents to their string *)
-  let current_node = ref Names.dummy_qualname (** Stores the current node *)
-  let (node_env : NamesSet.t ref QualEnv.t ref) = ref QualEnv.empty
-  let name_counters = Hashtbl.create 500
-
-  (** This function should be called every time we enter a node *)
-  let enter_node n =
-    current_node := n;
-    (if not (QualEnv.mem n !node_env)
-    then node_env := QualEnv.add n (ref NamesSet.empty) !node_env);
-    used_names := QualEnv.find n !node_env
-
-  let clone_node f f' =
-    let f'env =
-      try QualEnv.find f' !node_env
-      with Not_found -> ref NamesSet.empty
-    in
-    NamesSet.iter (fun s -> f'env := NamesSet.add s !f'env) !(QualEnv.find f !node_env);
-    node_env := QualEnv.add f' f'env !node_env
-
-  (** @return a unique string for each identifier. Idents corresponding
-      to variables defined in the source file have the same name unless
-      there is a collision. *)
-  let assign_name n =
-
-    let find_and_increment_counter s =
-      let num = try Hashtbl.find name_counters s with Not_found -> 1 in
-      Hashtbl.add name_counters s (num + 1);
-      num
-    in
-
-    let rec fresh_string s =
-      let num = find_and_increment_counter s in
-      let new_name = s ^ "_" ^ string_of_int num in
-      if NamesSet.mem new_name !(!used_names) then fresh_string s else new_name
-    in
-
-    if not (Env.mem n !env) then
-      (let s = n.source in
-       let s = if NamesSet.mem s !(!used_names) then fresh_string s else s in
-       !used_names := NamesSet.add s !(!used_names);
-       env := Env.add n s !env)
-
-  let name id =
-    Env.find id !env
-end
-
-let gen_fresh pass_name kind_to_string kind =
-  let reset, s = kind_to_string kind in
-  let s = if !Compiler_options.full_name then "__"^pass_name ^ "_" ^ s else s in
-  num := !num + 1;
-  let id = { num = !num; source = s; is_generated = true; is_reset = reset } in
-    UniqueNames.assign_name id; id
-
-let gen_var pass_name ?(reset=false) name =
-  gen_fresh pass_name (fun () -> reset, name) ()
-
-let ident_of_name ?(reset=false) s =
-  num := !num + 1;
-  let id = { num = !num; source = s; is_generated = false; is_reset = reset } in
-    UniqueNames.assign_name id; id
-
-let source_name id = id.source
-let name id = UniqueNames.name id
-
-let enter_node n = UniqueNames.enter_node n
-let current_node () = !UniqueNames.current_node
-let clone_node f f' = UniqueNames.clone_node f f'
-
-let local_qn name = { Names.qual = Names.LocalModule (Names.QualModule !UniqueNames.current_node);
-                      Names.name = name }
-
-let print_ident ff id =
-  if !Compiler_options.full_name then
-    Format.fprintf ff "%s" (id.source ^ "_" ^ (string_of_int id.num))
-  else
-    Format.fprintf ff "%s" (name id)

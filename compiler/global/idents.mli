@@ -21,11 +21,6 @@ val name : ident -> string
 (** Get the source name of an identifier (useful when dealing with signatures *)
 val source_name : ident -> string
 
-(** [gen_fresh pass_name kind_to_string kind]
-    generate a fresh ident with a sweet [name].
-    It should be used to define a [fresh] function specific to a pass. *)
-val gen_fresh : string -> ('a -> bool * string) -> 'a -> ident
-
 (* TODO now : make reset compulsory *)
 (** [gen_var pass_name name]
     generates a fresh ident with a sweet [name] *)
@@ -47,6 +42,11 @@ val clone_node : Names.qualname -> Names.qualname -> unit
 (** [local_qn name] returns [name] as being local to the current node *)
 val local_qn : Names.name -> Names.qualname
 
+type nodes
+val load_nodes : nodes -> unit
+val save_nodes : Names.modul -> nodes
+
+
 (** Maps taking an identifier as a key. *)
 module Env :
 sig
@@ -67,4 +67,3 @@ sig
 end
 
 val print_ident : Format.formatter -> ident -> unit
-val debug_print_ident : Format.formatter -> ident -> unit

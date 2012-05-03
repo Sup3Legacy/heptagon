@@ -45,9 +45,12 @@ struct
     raise Errors.Error
 end
 
-let fresh = Idents.gen_fresh "hept2mls"
-  (function Heptagon.Enode f -> false, (shortname f)
-    | _ -> false, "n")
+let fresh v =
+  let s = match v with
+    | Heptagon.Enode f -> (shortname f)
+    | _ -> "n"
+  in
+  Idents.gen_var "hept2mls" ~reset:false s
 
 (* This function set every variable with v_is_memory=false,
    this is corrected at the end of the pass *)

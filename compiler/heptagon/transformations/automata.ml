@@ -21,10 +21,15 @@ open Initial
 open Modules
 
 type var = S | NS | R | NR | PNR
-let fresh = Idents.gen_fresh "automata"
-  (function
-    | S -> false, "s" | NS -> false, "ns"
-    | R -> true, "r" | NR -> false, "nr" | PNR -> false, "pnr")
+let fresh t =
+  let reset,name = match t with
+  | S -> false, "s"
+  | NS -> false, "ns"
+  | R -> true, "r"
+  | NR -> false, "nr"
+  | PNR -> false, "pnr"
+  in
+  Idents.gen_var "automata" ~reset:reset name
 
 let mk_var_exp n ty =
   mk_exp (Evar n) ty ~linearity:Linearity.Ltop

@@ -15,7 +15,7 @@ open Linearity
 
 (** Warning: Whenever these types are modified,
     interface_format_version should be incremented. *)
-let interface_format_version = "4"
+let interface_format_version = "5"
 
 (***************************************************************************)
 (* Types *)

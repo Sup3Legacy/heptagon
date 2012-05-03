@@ -7,7 +7,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(* Module objects and global environnement management *)
+(* Module objects and global environment management *)
 
 
 open Misc
@@ -15,6 +15,7 @@ open Compiler_options
 open Signature
 open Names
 open Signature
+open Idents
 
 exception Already_defined
 
@@ -25,6 +26,7 @@ exception Already_defined
 type module_object =
   { m_name    : Names.modul;
     m_values  : node NamesEnv.t;
+    m_idents  : Idents.nodes;
     m_types   : type_def NamesEnv.t;
     m_consts  : const_def NamesEnv.t;
     m_constrs : name NamesEnv.t;
@@ -51,7 +53,7 @@ type env = {
   (** Accepted compiled interface version *)
   format_version  : string }
 
-(** The global environnement *)
+(** The global environment *)
 let g_env =
   { current_mod = Module "";
     opened_mod  = [];
@@ -67,7 +69,7 @@ let g_env =
 let is_loaded m = List.mem m g_env.loaded_mod
 let is_opened m = List.mem m g_env.opened_mod
 
-(** Append a module to the global environnment *)
+(** Append a module to the global environment *)
 let _append_module mo =
   (* Transforms a module object NamesEnv into its qualified version *)
   let qualify mo_env = (* qualify env keys *)
@@ -83,7 +85,8 @@ let _append_module mo =
   g_env.types <- QualEnv.append (qualify mo.m_types) g_env.types;
   g_env.constrs <- QualEnv.append (qualify_all mo.m_constrs) g_env.constrs;
   g_env.fields <- QualEnv.append (qualify_all mo.m_fields) g_env.fields;
-  g_env.consts <- QualEnv.append (qualify mo.m_consts) g_env.consts
+  g_env.consts <- QualEnv.append (qualify mo.m_consts) g_env.consts;
+  Idents.load_nodes mo.m_idents
 
 (** Load a module into the global environment unless already loaded *)
 let _load_module modul =
@@ -140,7 +143,7 @@ let initialize modul =
   List.iter open_module !default_used_modules
 
 
-(** { 3 Add functions prevent redefinitions } *)
+(** { 3 Add functions preventing redefinitions } *)
 
 let _check_not_defined env f =
   if QualEnv.mem f env then raise Already_defined
@@ -161,7 +164,7 @@ let add_const f v =
   _check_not_defined g_env.consts f;
   g_env.consts <- QualEnv.add f v g_env.consts
 
-(** Same as add_value but without checking for redefinition *)
+(** Same as add functions but without checking for redefinition *)
 let replace_value f v =
   g_env.values <- QualEnv.add f v g_env.values
 let replace_type f v =
@@ -169,7 +172,7 @@ let replace_type f v =
 let replace_const f v =
   g_env.consts <- QualEnv.add f v g_env.consts
 
-(** { 3 Find functions look in the global environement, nothing more } *)
+(** { 3 Find functions look in the global environment, nothing more } *)
 
 (* will find signature of nodes, even local static parameter ones *)
 let find_value x = QualEnv.find x g_env.values
@@ -314,20 +317,23 @@ let get_current_module () =
       (fun x v current ->
         if x.qual = g_env.current_mod
         then NamesEnv.add x.name v current
-        else current) env NamesEnv.empty in
+        else current) env NamesEnv.empty
+  in
   let unqualify_all env = (* unqualify and filter env keys and values *)
     QualEnv.fold
       (fun x v current ->
         if x.qual = g_env.current_mod
         then NamesEnv.add x.name v.name current
-        else current) env NamesEnv.empty in
-    { m_name = g_env.current_mod;
-      m_values = unqualify g_env.values;
-      m_types = unqualify g_env.types;
-      m_consts = unqualify g_env.consts;
-      m_constrs = unqualify_all g_env.constrs;
-      m_fields = unqualify_all g_env.fields;
-      m_format_version = g_env.format_version }
+        else current) env NamesEnv.empty
+  in
+  { m_name = g_env.current_mod;
+    m_values = unqualify g_env.values;
+    m_idents = Idents.save_nodes g_env.current_mod;
+    m_types = unqualify g_env.types;
+    m_consts = unqualify g_env.consts;
+    m_constrs = unqualify_all g_env.constrs;
+    m_fields = unqualify_all g_env.fields;
+    m_format_version = g_env.format_version }
 
 
 
