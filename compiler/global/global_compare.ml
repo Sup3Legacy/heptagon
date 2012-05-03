@@ -69,6 +69,8 @@ and static_exp_desc_compare sed1 sed2 =
     | Sop (fn1, sel1), Sop (fn2, sel2) ->
         let cr = c fn1 fn2 in
         if cr <> 0 then cr else list_compare static_exp_compare sel1 sel2
+    | Sasync se1, Sasync se2 ->
+        static_exp_compare se1 se2
 
     | Svar _, _ -> 1
 
@@ -90,7 +92,7 @@ and static_exp_desc_compare sed1 sed2 =
     | Sfield _, (Svar _ | Sint _ | Sfloat _ | Sbool _ | Sstring _ | Sconstructor _) -> -1
     | Sfield _, _ -> 1
 
-    | Sasync _, (Svar _ | Sint _ | Sfloat _ | Sbool _ | Sconstructor _ | Sfield _) -> -1
+    | Sasync _, (Svar _ | Sint _ | Sfloat _ | Sbool _ | Sstring _ | Sconstructor _ | Sfield _) -> -1
     | Sasync _, _ -> 1
 
     | Stuple _, (Srecord _ | Sop _ | Sarray _ | Sarray_power _ | Sfun _) -> 1
