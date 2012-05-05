@@ -1,4 +1,6 @@
-open Image
+type pixel = int^3
+
+const pixel_zero : pixel = [0,0,0]
 
 node average (x :int) = (y :int)
 let

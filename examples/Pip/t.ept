@@ -1,8 +1,0 @@
-
-
-
-node main() returns (f :bool)
-let
-  f = Image.write_int<<"gg.png",1920,1080>>(Image.read_int<<"img1.png">>());
-tel
-

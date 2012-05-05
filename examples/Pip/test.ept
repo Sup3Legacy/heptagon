@@ -1,7 +1,11 @@
 open Misc
 open Stream_arrays
 open Downscale
-open Image
+
+
+(*open Image*)
+
+type pixel = int^3
 
 (*
 node main() = (t:int^3^6;y:int^3^3)
@@ -11,16 +15,19 @@ let
   y = down_line<<6,2>>(t);
 tel
 *)
-const image:string = "../img1.png"
 
 
-node main () = (finished :bool)
-var i, o :pixel; in_array :pixel^1920; out_array :pixel^(1920/2); ck :bool;
+const image :string = "../img1.png"
+node main (*<<image :string>>*) () = (finished :bool)
+var i, o :pixel; in_array :pixel^1920; out_array :pixel^(1920); ck :bool;
 let
-  i = Image.read_int<<image>>();
+  i = 0^3 (*Image.read_int<<image>>()*);
   ck = timer<<1920>>();
   in_array = s2a_pixel<<1920>>(i, ck);
-  out_array = down_line<<1920,2>>(in_array);
-  o = a2s_pixel<<1920/2>>(out_array,ck);
-  finished = Image.display_int<<"bonjour", 1920,1080>>(o);
+  out_array = down_line<<1920,1>>(in_array);
+  (* skip first dummy values
+  ok = wait<<1920>>();*)
+(*  o = a2s_pixel<<1920/2>>(out_array,ck);*)
+  o = a2s_pixel<<1920>>(out_array,ck);
+  finished = true (*Image.write_int<<"bonjour.png", 1920,1080>>(o)*);
 tel

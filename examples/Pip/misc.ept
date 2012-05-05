@@ -26,8 +26,17 @@ let
 tel
 
 
+(** Is false until the input is true, then stays true. *)
+node watch(b : bool) = (o :bool)
+let
+  o = b or (false fby o)
+tel
 
-(** Clock manipulations *)
+(** Waits [n] ticks before getting true *)
+node wait<<n :int>>() = (go :bool)
+let
+    go = watch(false -> timer<<n>>())
+tel
 
 node current_i<<ini :int>>(x : int; ck : bool) = (y :int)
 let

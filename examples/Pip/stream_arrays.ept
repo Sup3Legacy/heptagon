@@ -41,9 +41,9 @@ tel
 (* Array to stream
     the boolean new_array should be declared as being true every [n] ticks (Misc.timer<<n>>())*)
 node a2s_pixel <<n :int>> (x :pixel^n :: . on new_array; new_array :bool) = (y :pixel)
-var current_x :pixel^n; index :int;
+var current_x :pixel^n at r; index :int;
 let
-  current_x = merge new_array (x) (((pixel_zero^n) fby current_x) whenot new_array);
+  init<<r>> current_x = merge new_array (x) (((pixel_zero^n) fby current_x) whenot new_array);
   index = mod_counter_r<<n>>(new_array);
   y = current_x[>index<];
 tel
@@ -65,9 +65,9 @@ tel
 (* Stream to array
     a new array [y] is returned each n ticks (with a delay of n-1 ticks)*)
 node s2a_pixel <<n:int>> (x :pixel; new_array :bool) = (y :pixel^n :: . on new_array)
-var current_y :pixel^n; index :int;
+var current_y :pixel^n at r; index :int;
 let
-  current_y = (pixel_zero^n) fby [current_y with [index] = x];
+  init<<r>> current_y = (pixel_zero^n) fby [current_y with [index] = x];
   index = mod_counter_r<<n>>(new_array);
   y = current_y when new_array;
 tel
