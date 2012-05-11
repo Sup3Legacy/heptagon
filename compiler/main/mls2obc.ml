@@ -146,7 +146,7 @@ let rec bound_check_expr idx_list bounds =
         let e = mk_comp idx n in
           mk_exp_bool (Eop (op_from_string "&",
                            [e; bound_check_expr idx_list bounds]))
-    | (_, _) -> internal_error "mls2obc"
+    | (_, _) -> internal_error "mls2obc bounds"
 
 let mk_plus_one e = match e.e_desc with
   | Eextvalue ({ w_desc = Wconst idx } as w) ->
