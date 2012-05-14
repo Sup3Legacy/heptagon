@@ -20,14 +20,14 @@ node loop(r, t : bool; s, e, incr : int) returns (l : bool; i : int)
     every (true -> t & (r or pre l))
   tel
 
-node edge(s : bool) returns(s' : bool)
+node edge(s : bool) returns(s2 : bool)
   let
-    s' = false -> not pre s & s;
+    s2 = false -> not pre s & s;
   tel
 
-node nedge(s : bool) returns(s' : bool)
+node nedge(s : bool) returns(s2 : bool)
   let
-    s' = false -> pre s & not s;
+    s2 = false -> pre s & not s;
   tel
 
 node wait(r, x : bool) returns(last passed : bool = false)
@@ -37,7 +37,7 @@ node wait(r, x : bool) returns(last passed : bool = false)
     every r
   tel
 
-node for(nbi : int; t : bool) returns(i : int; end_for : bool)
+node for1(nbi : int; t : bool) returns(i : int; end_for : bool)
   let
     (end_for, i) = loop(false, t, 0, nbi, 1);
   tel
@@ -45,7 +45,7 @@ node for(nbi : int; t : bool) returns(i : int; end_for : bool)
 node for2(nbi, nbj : int; t : bool) returns(i, j : int; end_for : bool)
   var end_i, end_j : bool;
   let
-    (j, end_j) = for(nbj, t);
+    (j, end_j) = for1(nbj, t);
     (end_i, i) = loop(false, nedge(end_j), 0, nbi, 1);
     end_for    = end_j & end_i;
   tel
