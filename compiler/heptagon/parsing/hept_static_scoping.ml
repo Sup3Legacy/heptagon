@@ -95,7 +95,7 @@ let app funs local_const a =
   a, local_const
 
 let node_dec funs _ n =
-  Idents.enter_node (current_qual n.n_name);
+  Idents.push_node (current_qual n.n_name);
     (** Function to build the defined static parameters set [local_const].
         [local_const] associate to a name whether it is a fun instead of a var. *)
   let build_const loc p_list =
@@ -115,6 +115,7 @@ let node_dec funs _ n =
   (* /!\ we need to add the node to detect all the nodes,*)
   (* /!\ but we can't give their correct signature, scoping will correct this *)
   Hept_scoping.safe_add nd.n_loc add_value n_name Signature.dummy_node;
+  let _ = Idents.pop_node () in
   nd, local_const
 
 let const_dec funs local_const cd =

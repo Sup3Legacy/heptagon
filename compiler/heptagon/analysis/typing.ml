@@ -1265,7 +1265,7 @@ and typing_arg a =
   { a with a_type = check_type a.a_type }
 
 and typing_signature s n =
-  Idents.enter_node n;
+  Idents.push_node n;
   let params = check_params_type s.node_params in
   let inputs = List.map (typing_arg ) s.node_inputs in
   let outputs = List.map (typing_arg ) s.node_outputs in
@@ -1274,6 +1274,7 @@ and typing_signature s n =
                    node_outputs = outputs }
   in
   replace_value n s;
+  let _ = Idents.pop_node () in
   s
 
 
@@ -1281,7 +1282,7 @@ let node ({ n_name = f; n_input = i_list; n_output = o_list;
             n_contract = contract;
             n_block = b; n_loc = loc;
             n_params = node_params; } as n) =
-  Idents.enter_node f;
+  Idents.push_node f;
   try
     let typed_params = check_params_type node_params in
     let typed_i_list, (input_names, h) = build Env.empty i_list in
@@ -1306,7 +1307,7 @@ let node ({ n_name = f; n_input = i_list; n_output = o_list;
     let node_outputs = List.map (typing_arg ) s.node_outputs in
     replace_value f { s with node_param_constraints = cl;
                              node_inputs = node_inputs; node_outputs = node_outputs };
-
+    let _ = Idents.pop_node () in
     { n with
         n_input = typed_i_list;
         n_output = typed_o_list;

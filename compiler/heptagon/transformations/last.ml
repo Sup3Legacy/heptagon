@@ -45,10 +45,11 @@ let block funs env b =
         b_equs = eq_lastn_n_list @ b.b_equs }, env
 
 let node_dec funs _ n =
-  Idents.enter_node n.n_name;
+  Idents.push_node n.n_name;
   let _, env, _ = extend_env Env.empty n.n_input in
   let eq_lasto_list, env, last_o = extend_env env n.n_output in
   let n, _  = Hept_mapfold.node_dec funs env n in
+  let _ = Idents.pop_node () in
     { n with n_block =
         { n.n_block with b_local = n.n_block.b_local @ last_o;
             b_equs = eq_lasto_list @ n.n_block.b_equs } }, env

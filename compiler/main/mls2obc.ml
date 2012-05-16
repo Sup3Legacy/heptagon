@@ -719,7 +719,7 @@ let translate_node
       Minils.n_contract = contract; Minils.n_params = params; Minils.n_loc = loc;
       Minils.n_mem_alloc = mem_alloc; n_base_id = oversampler
     } as n) =
-  Idents.enter_node f;
+  Idents.push_node f;
   let mems = Is_memory.memory_set n in
   let c_list, c_locals =
     match contract with
@@ -741,6 +741,7 @@ let translate_node
                 m_body = body }
   in
   let resetm = { m_name = Mreset; m_inputs = []; m_outputs = []; m_body = mk_block si } in
+  let _ = Idents.pop_node () in
   if stateful
   then { cd_name = f; cd_stateful = true; cd_mems = m' @ m; cd_params = params;
          cd_objs = j; cd_methods = [stepm; resetm]; cd_loc = loc; cd_mem_alloc = mem_alloc }

@@ -641,7 +641,7 @@ and fix_output_var_decs tenv (equs, vd_list) =
 
 let node nd =
   debug_do (fun () -> Format.eprintf "Minimizing %a@." print_qualname nd.n_name) ();
-  Idents.enter_node nd.n_name;
+  Idents.push_node nd.n_name;
 
   (* Initial environment *)
   let tenv =
@@ -668,6 +668,7 @@ let node nd =
 
   let nd = { nd with n_equs = eq_list; n_output = output; n_local = local; } in
   update_node_signature nd;
+  let _ = Idents.pop_node () in
   nd
 
 let program_desc pd pd_list = match pd with

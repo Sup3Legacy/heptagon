@@ -25,7 +25,6 @@ open Compiler_utils
 
 (** {1 Main C function generation} *)
 
-let _ = Idents.enter_node (Modules.fresh_value "cmain" "main")
 
 let fresh n = Idents.name (Idents.gen_var "cmain" n)
 
@@ -305,13 +304,13 @@ let main_skel var_list prologue body =
 
 let mk_main name p =
   if !Compiler_options.simulation then (
+      Idents.push_node (Modules.fresh_value "cmain" "main");
       let classes = program_classes p in
       let n_names = !Compiler_options.assert_nodes in
       let find_class n =
-        try List.find (fun cd -> cd.cd_name.name = n) classes
-        with Not_found ->
-          Format.eprintf "Unknown node %s.@." n;
-          exit 1 in
+        try List.find (fun cd -> cd.cd_name = qualify_value n) classes
+        with Not_found -> Misc.internal_error "Unknown node %s.@." n
+      in
 
       let a_classes = List.map find_class n_names in
 
@@ -326,7 +325,7 @@ let mk_main name p =
       let defs = match mem with None -> [] | Some m -> [m] in
       let (var_l, res_l, step_l) =
         (nvar_l @ var_l, res @ res_l, nstep_l @ step_l) in
-
+      let _ = Idents.pop_node () in
       [("_main.c", Csource (defs @ [main_skel var_l res_l step_l]));
        ("_main.h", Cheader ([name], []))];
   ) else

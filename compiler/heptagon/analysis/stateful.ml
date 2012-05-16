@@ -101,10 +101,11 @@ let param stateful p = match p.p_type with
 
 
 let node_dec funs _ n =
-  Idents.enter_node n.n_name;
+  Idents.push_node n.n_name;
   let n, stateful = Hept_mapfold.node_dec funs false n in
   let stateful = List.fold_left param stateful n.n_params in
   if stateful & (not n.n_stateful) then message n.n_loc Eshould_be_a_node;
+  let _ = Idents.pop_node () in
   n, n.n_stateful (* keep stateful even if unecessary *)
 
 

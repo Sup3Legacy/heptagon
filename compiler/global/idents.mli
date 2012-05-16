@@ -33,7 +33,8 @@ val ident_of_name : ?reset:bool -> string -> ident
 val is_reset : ident -> bool
 
 (** /!\ [enter_node qualname] should be called every time we enter a node with name [qualname]. *)
-val enter_node : Names.qualname -> unit
+val push_node : Names.qualname -> unit
+val pop_node : unit -> Names.qualname
 val current_node : unit -> Names.qualname
 
 (** [clone_node f fc] allows to clone node [f] so that all idents used in [f] are also in [f'] *)

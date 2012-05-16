@@ -47,10 +47,11 @@ let debug_print_ident ff id = Format.fprintf ff "%s" (debug_name id)*)
 type nodes = (string,int) Hashtbl.t QualEnv.t
 let (node_env : nodes ref) = ref QualEnv.empty
 
-(* Stores the current node, initialized with a dummy *)
-let current_node = ref Names.dummy_qualname
+(* Stores the current node heap *)
+let current_node_heap = ref []
 (* Stores the current counters, initialized with a dummy *)
-let current_counters = ref (Hashtbl.create 0)
+let dummy_counters = Hashtbl.create 0
+let current_counters = ref dummy_counters
 
 
 
@@ -62,14 +63,26 @@ let save_nodes modul =
 
 
 (** This function should be called every time we enter a node *)
-let enter_node n =
-  current_node := n;
+let push_node n =
+  current_node_heap := n::!current_node_heap;
   current_counters :=
     try QualEnv.find n !node_env
     with Not_found ->
       let c = Hashtbl.create 100 in
       node_env := QualEnv.add n c !node_env;
       c
+
+let pop_node () =
+  let nh, cc, o = match !current_node_heap with
+    | [] -> Misc.internal_error "pop node before pushing one."
+    | o::[] -> [], dummy_counters, o
+    | o::n::t -> n::t, QualEnv.find n !node_env, o
+  in
+  current_node_heap := nh;
+  current_counters := cc;
+  o
+  
+  
 
 let clone_node f f' =
   (if (QualEnv.mem f' !node_env)
@@ -111,7 +124,7 @@ let ident_of_name ?(reset=false) name =
 let source_name id = id.source
 let name id = id.unique_name
 
-let current_node () = !current_node
+let current_node () = List.hd (!current_node_heap)
 
 let local_qn name = { Names.qual = Names.LocalModule (Names.QualModule (current_node ()));
                       Names.name = name }

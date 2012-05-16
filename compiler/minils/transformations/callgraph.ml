@@ -200,13 +200,14 @@ struct
     let global_funs = { Global_mapfold.defaults with static_exp = static_exp }
 
     let instanciate_node_body n m =
-      Idents.enter_node n.n_name;
+      Idents.push_node n.n_name;
       let funs = { Mls_mapfold.defaults with edesc = edesc; global_funs = global_funs } in
       let n, _ = Mls_mapfold.node_dec_it funs m n in
+      let _ = Idents.pop_node () in
       n
 
     let clone_instance n params =
-      Idents.enter_node n.n_name;
+      Idents.push_node n.n_name;
       let m = build n.n_params params in
       let n = instanciate_node_body n m in
 
@@ -220,6 +221,7 @@ struct
       if not (check_value ln) then Modules.add_value ln node_sig;
       (* Clone the idents *)
       Idents.clone_node n.n_name ln;
+      let _ = Idents.pop_node () in
       { n with n_name = ln; n_params = []; n_param_constraints = []; }
 
     let get_new_instances_of_node n =
@@ -385,7 +387,7 @@ and called_nodes ln =
 let rec call_node (ln, params) =
   (* First, add the instance for this node *)
   let n = node_by_longname ln in
-  Idents.enter_node n.n_name;
+  Idents.push_node n.n_name;
   let m = if params = [] (* there is no substitution for the root nodes *)
     then QualEnv.empty
     else build n.n_params params
@@ -394,7 +396,8 @@ let rec call_node (ln, params) =
   let childs = called_nodes ln in
   let childs = List.map (fun (ln, p) -> instantiate_node m ln p) childs in
   List.iter (fun (n,p) -> add_node_instance n p) childs;
-  List.iter call_node childs
+  List.iter call_node childs;
+  let _ = Idents.pop_node () in ()
 
 let program p =
   (* Open the current module *)

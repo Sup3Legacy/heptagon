@@ -39,7 +39,7 @@ let program p =
     let ty_main = sig_main.node_outputs |> types_of_arg_list |> prod in
     let ty_main_args = sig_main.node_params |> types_of_param_list in
     let class_name = Obc2java.fresh_classe (!Compiler_options.simulation_node ^ "_sim") in
-    Idents.enter_node class_name;
+    Idents.push_node class_name;
     let field_step_dnb, id_step_dnb =
       let id = Idents.gen_var "java_main" "default_step_nb" in
       mk_field ~static:true ~final:true ~value:(Some (Sint 30000l)) Tint id, id
@@ -151,5 +151,6 @@ let program p =
     let c = mk_classe ~imports:import_async ~fields:[field_step_dnb]
                                             ~methodes:[main_methode] class_name
     in
+    let _ = Idents.pop_node () in
     output_program dir [c]
   )

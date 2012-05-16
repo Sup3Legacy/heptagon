@@ -124,11 +124,10 @@ let eq funs (inline, nenv, cenv, subst) eq =
       (try (* try to get the code to inline, if not possible, do not inline. *)
         let code = node_dec_from_qualname nn eq.eq_loc nenv in
         (* Compute new_cenv *)
-        let current_node = Idents.current_node () in (* store current node *)
-        Idents.enter_node nn; (* Enter inlined node to have correct local_qn *)
+        Idents.push_node nn; (* Enter inlined node to have correct local_qn *)
         let code_params = List.map (fun p -> (local_qn p.p_name)) code.n_params in
         let new_cenv = combine_cenv cenv code_params op.a_params in
-        Idents.enter_node current_node; (* get back to the current node *)
+        let _ = Idents.pop_node () in
         (*Compute new_subst *)
         let code_inputs = List.map (fun vd -> vd.v_ident) code.n_input in
         let inputs = List.map

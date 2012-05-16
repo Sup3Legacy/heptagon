@@ -197,8 +197,10 @@ and method_def funs acc md =
 
 
 and class_def_it funs acc cd =
-    Idents.enter_node cd.cd_name;
-    funs.class_def funs acc cd
+    Idents.push_node cd.cd_name;
+    let cd, acc = funs.class_def funs acc cd in
+    let _ = Idents.pop_node () in
+    cd, acc
 and class_def funs acc cd =
   let cd_mems, acc = var_decs_it funs acc cd.cd_mems in
   let cd_objs, acc = obj_decs_it funs acc cd.cd_objs in

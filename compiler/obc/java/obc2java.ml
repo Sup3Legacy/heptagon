@@ -416,7 +416,7 @@ let create_async_classe async base_classe =
                                         |> (fun n -> "Async_factory_"^n) |> fresh_classe in
   let callable_name = base_classe.o_class |> Names.shortname |> (fun n -> "Async_"^n) in
   let callable_classe_name = {qual = QualModule classe_name; name = callable_name } in
-  Idents.enter_node classe_name;
+  Idents.push_node classe_name;
 
   (* Base class signature *)
   let { node_inputs    = b_in;
@@ -563,13 +563,13 @@ let create_async_classe async base_classe =
     in mk_classe ~protection:Pprotected ~static:true ~fields:fields ~implements:[java_callable]
                  ~constrs:[constructor] ~methodes:[call] callable_classe_name
   in
-
+  let _ = Idents.pop_node () in
   mk_classe ~fields:fields ~constrs:[constructor]
             ~methodes:[step;reset] ~classes:[callable_class] classe_name
 
 let class_def_list classes cd_l =
   let class_def classes cd =
-    Idents.enter_node cd.cd_name;
+    Idents.push_node cd.cd_name;
     let class_name = qualname_to_package_classe cd.cd_name in
     (* [param_env] is an env mapping local param name to ident *)
     (* [params] : fields to stock the static parameters, arguments of the constructors *)
@@ -688,6 +688,7 @@ let class_def_list classes cd_l =
     in
     let classe = mk_classe ~fields:fields
                            ~constrs:[constructeur] ~methodes:[step;reset] class_name in
+    let _ = Idents.pop_node () in
     classe::classes
   in
   List.fold_left class_def classes cd_l
@@ -697,8 +698,8 @@ let type_dec_list classes td_l =
   let param_env = NamesEnv.empty in
   let _td classes td =
     let classe_name = qualname_to_package_classe td.t_name in
-    Idents.enter_node classe_name;
-    match td.t_desc with
+    Idents.push_node classe_name;
+    let classes = match td.t_desc with
       | Type_abs -> Misc.unsupported "obc2java, abstract type."
       | Type_alias t -> (*verify that it is possible to unalias and skip it*)
           let _ = Modules.unalias_type t in
@@ -722,6 +723,9 @@ let type_dec_list classes td_l =
             mk_methode ~args:vds body (Names.shortname classe_name)
           in
           (mk_classe ~fields:fields ~constrs:[constructor] classe_name) :: classes
+    in
+    let _ = Idents.pop_node () in
+    classes
   in
   List.fold_left _td classes td_l
 
@@ -730,7 +734,7 @@ let const_dec_list cd_l = match cd_l with
   | [] -> []
   | _ ->
       let classe_name = "CONSTANTES" |> name_to_classe_name in
-      Idents.enter_node classe_name;
+      Idents.push_node classe_name;
       let param_env = NamesEnv.empty in
       let mk_const_field { Obc.c_name = oname ; Obc.c_value = ovalue; Obc.c_type = otype } =
         let name = oname |> translate_const_name |> Names.shortname |> Idents.ident_of_name in
@@ -742,6 +746,7 @@ let const_dec_list cd_l = match cd_l with
         mk_field ~static:true ~final:true ~value:value t name
       in
       let fields = List.map mk_const_field cd_l in
+      let _ = Idents.pop_node () in
       [mk_classe ~fields: fields classe_name]
 
 
@@ -749,7 +754,7 @@ let fun_dec_list fd_l = match fd_l with
   | [] -> []
   | _ ->
     let mk_fun_method fd =
-      Idents.enter_node fd.cd_name;
+      Idents.push_node fd.cd_name;
       (* [param_env] is an env mapping local param name to ident *)
       let vds_params, param_env = sig_params_to_vds fd.cd_params in
       let ostep = find_step_method fd in
@@ -762,6 +767,7 @@ let fun_dec_list fd_l = match fd_l with
                 | vd_l -> Enew (return_ty, List.map (fun vd -> Evar vd.vd_ident) vd_l))
       in
       let body = block param_env ~locals:vd_output ~end_acts:[return_act] ostep.Obc.m_body in
+      let _ = Idents.pop_node () in
       mk_methode ~args:(vds_params @(var_dec_list param_env ostep.Obc.m_inputs))
                ~returns:return_ty
                ~static:true

@@ -130,11 +130,11 @@ let import_async = [Name_utils.qualname_of_string "java.util.concurrent.Future";
                     Name_utils.qualname_of_string "jeptagon.AsyncNode";
                     Name_utils.qualname_of_string "jeptagon.AsyncFun"]
 
-let throws_async = [Name_utils.qualname_of_string "InterruptedException";
-                    Name_utils.qualname_of_string "ExecutionException"]
+let throws_async = [Name_utils.qualname_of_string "java.lang.InterruptedException";
+                    Name_utils.qualname_of_string "java.util.concurrent.ExecutionException"]
 
-let async_node = Name_utils.qualname_of_string "AsyncNode"
-let async_fun = Name_utils.qualname_of_string "AsyncFun"
+let async_node = Name_utils.qualname_of_string "jeptagon.AsyncNode"
+let async_fun = Name_utils.qualname_of_string "jeptagon.AsyncFun"
 
 
 

@@ -454,7 +454,7 @@ let args_of_var_decs =
 
 and translate_node node =
   let n = current_qual node.n_name in
-  Idents.enter_node n;
+  Idents.push_node n;
   let params, env = translate_params Rename.empty node.n_params in
   let constraints = List.map translate_constrnt node.n_constraints in
   let env = Rename.append env (node.n_input) in
@@ -479,6 +479,7 @@ and translate_node node =
                Heptagon.n_param_constraints = constraints; }
   in
   replace_value n (Hept_utils.signature_of_node nnode);
+  let _ = Idents.pop_node () in
   nnode
 
 and translate_typedec ty =
@@ -534,7 +535,7 @@ and translate_program p =
 
 
 and translate_signature s n =
-  Idents.enter_node n;
+  Idents.push_node n;
   let rec translate_some_clock ck = match ck with
     | None -> Signature.Cbase
     | Some ck -> translate_clock ck
@@ -552,6 +553,7 @@ and translate_signature s n =
   let sig_node = Signature.mk_node ~extern:s.sig_external c s.sig_loc i o s.sig_stateful s.sig_unsafe p in
   Check_signature.check_signature sig_node;
   safe_add s.sig_loc add_value n sig_node;
+  let _ = Idents.pop_node () in
   { Heptagon.sig_name = n; Heptagon.sig_sig = sig_node }
 
 

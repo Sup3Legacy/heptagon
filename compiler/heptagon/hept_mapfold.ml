@@ -268,8 +268,10 @@ and param funs acc vd =
   { vd with v_last = v_last }, acc
 
 and node_dec_it funs acc nd =
-  Idents.enter_node nd.n_name;
-  funs.node_dec funs acc nd
+  Idents.push_node nd.n_name;
+  let nd, acc = funs.node_dec funs acc nd in
+  let _ = Idents.pop_node () in
+  nd, acc
 and node_dec funs acc nd =
   let n_input, acc = mapfold (var_dec_it funs) acc nd.n_input in
   let n_output, acc = mapfold (var_dec_it funs) acc nd.n_output in

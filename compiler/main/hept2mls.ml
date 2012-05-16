@@ -195,8 +195,8 @@ let translate_contract contract =
                c_controllables = List.map translate_var l_c }
 
 let node n =
-  enter_node n.Heptagon.n_name;
-  Is_memory.update_node
+  Idents.push_node n.Heptagon.n_name;
+  let n = Is_memory.update_node
     { n_name = n.Heptagon.n_name;
       n_stateful = n.Heptagon.n_stateful;
       n_unsafe = n.Heptagon.n_unsafe;
@@ -212,6 +212,9 @@ let node n =
       n_mem_alloc = [];
       n_base_ck = Clocks.Cbase;
       n_base_id = None }
+  in
+  let _ = Idents.pop_node () in
+  n
 
 
 let typedec
