@@ -309,7 +309,7 @@ let mk_main name p =
       let n_names = !Compiler_options.assert_nodes in
       let find_class n =
         try List.find (fun cd -> cd.cd_name = qualify_value n) classes
-        with Not_found -> Misc.internal_error "Unknown node %s.@." n
+        with Not_found -> Misc.internal_errorf "Unknown node %s.@." n
       in
 
       let a_classes = List.map find_class n_names in

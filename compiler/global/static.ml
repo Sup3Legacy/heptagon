@@ -127,7 +127,7 @@ let apply_op partial loc op se_list =
       | "&&&", [Sint n1; Sint n2] -> Sint (Int32.logand n1 n2)
       | "|||", [Sint n1; Sint n2] -> Sint (Int32.logor n1 n2)
       | "%", [Sint n1; Sint n2] -> Sint (Int32.rem n1 n2)
-      | f,_ -> Misc.internal_error ("Static evaluation failed of the pervasive operator "^f)
+      | f,_ -> Misc.internal_errorf "Static evaluation failed of the pervasive operator %s" f
   )
   else ( (* symbolic evaluation *)
     match op, sed_l with

@@ -143,8 +143,11 @@ val (|>) : 'a -> ('a -> 'b) -> 'b
 (** Return the extension of a filename string *)
 val file_extension : string -> string
 
+(** Internal error : Is used with a format when an assertion is wrong *)
+val internal_errorf : ('a->'b, Format.formatter, unit) Pervasives.format -> 'a -> 'c
+
 (** Internal error : Is used when an assertion wrong *)
-val internal_error : string -> 'a
+val internal_error : string -> 'b
 
 (** Unsupported : Is used when something should work but is not currently supported *)
 val unsupported : string -> 'a

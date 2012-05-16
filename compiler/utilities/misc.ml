@@ -113,8 +113,8 @@ let drop n l =
   l
 
 let rec nth_of_list n l = match n, l with
-  | 1, h::t -> h
-  | n, h::t -> nth_of_list (n-1) t
+  | 1, h::_ -> h
+  | n, _::t -> nth_of_list (n-1) t
   | _ -> raise List_too_short
 
 
@@ -245,12 +245,14 @@ let rec map3 f l1 l2 l3 = match l1, l2, l3 with
   | _ -> invalid_arg "Misc.map3"
 
 exception Internal_error
-let internal_error passe =
-  Format.eprintf "@.---------@\n\
+let internal_errorf passe arg =
+  Format.eprintf ("@.---------@\n\
                   Internal compiler error@\n\
-                  Passe : %s@\n\
-                  ----------@." passe;
+                  Passe : "^^passe^^"@\n\
+                  ----------@.") arg;
   raise Internal_error
+
+let internal_error passe = internal_errorf "%s" passe
 
 exception Unsupported
 let unsupported passe =

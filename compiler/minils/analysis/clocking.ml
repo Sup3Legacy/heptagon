@@ -61,7 +61,7 @@ let ck_of_name h x =
     with Not_found ->
       (* Format.eprintf "looking for %a/%d@." print_ident x x.num; *)
       (* Env.iter (fun k ck -> Format.eprintf "%a/%d => %a@." print_ident k k.num print_ck ck) h; *)
-      Misc.internal_error ("clocking: unknown clock name " ^ name x)
+      Misc.internal_errorf "clocking: unknown clock name %s" (name x)
 
 let rec typing_extvalue h w =
   let ck = match w.w_desc with

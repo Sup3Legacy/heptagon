@@ -120,9 +120,7 @@ let rec _get_vd v vdt = match vdt with
   | Base vds ->
       (try Idents.Env.find v vds
       with Not_found ->
-        Misc.internal_error
-          (Format.sprintf
-            "Switch could not find %s" (Idents.name v)))
+        Misc.internal_errorf "Switch could not find %s" (Idents.name v))
   | Level (_,vds, vdt) ->
       try Idents.Env.find v vds
       with Not_found -> _get_vd v vdt
