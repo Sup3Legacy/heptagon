@@ -71,3 +71,16 @@ let
   index = mod_counter_r<<n>>(new_array);
   y = current_y when new_array;
 tel
+
+
+(** Burstify *)
+
+(* burstify a node, note that the first array is dummy *)
+node burstify <<val node f(int)=(int); m : int;>> (x :int^m) = (y :int^m)
+var base_clock : bool; stream_x, stream_y : int;
+let
+  base_clock = timer<<m>>();
+  stream_x = a2s<<m>>(x, base_clock);
+  stream_y = stream_x;
+  y = s2a<<m>>(stream_y, base_clock);
+tel

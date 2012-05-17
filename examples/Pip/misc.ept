@@ -24,3 +24,17 @@ node timer<<n :int>>() = (t :bool)
 let
   t = mod_counter<<n>>() = 0;
 tel
+
+
+
+(** Clock manipulations *)
+
+node current_i<<ini :int>>(x : int; ck : bool) = (y :int)
+let
+  y = merge ck (x) ((ini fby y) whenot ck)
+tel
+
+node current_ai<<n :int; ini :int^n>>(x :int^n; ck :bool) = (y :int^n)
+let
+  y = merge ck (x) ((ini fby y) whenot ck)
+tel

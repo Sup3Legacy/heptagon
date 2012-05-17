@@ -11,7 +11,10 @@ let
   y = down_line<<6,2>>(t);
 tel
 *)
-node main <<image :string>> () = (finished :bool)
+const image:string = "../img1.png"
+
+
+node main () = (finished :bool)
 var i, o :pixel; in_array :pixel^1920; out_array :pixel^(1920/2); ck :bool;
 let
   i = Image.read_int<<image>>();
