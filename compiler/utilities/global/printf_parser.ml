@@ -14,7 +14,7 @@ let rec format_of_string s =
     let i = String.index s '%' in
     let l = format_of_string (tail s (i+2)) in
     if i = 0 then
-      let modifier = String.sub s 0 1 in
+      let modifier = String.sub s 1 1 in
       (Modifier modifier)::l
     else
       let lit = String.sub s 0 i in
@@ -29,6 +29,7 @@ let types_of_format_string s =
     | Modifier "b" -> Initial.tbool::acc
     | Modifier "d" -> Initial.tint::acc
     | Modifier "f" -> Initial.tfloat::acc
+    | Modifier "s" -> Initial.tstring::acc
     | _ -> acc
   in
   let sl = format_of_string s in
