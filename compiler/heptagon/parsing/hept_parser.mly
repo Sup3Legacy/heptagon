@@ -72,12 +72,12 @@ open Hept_parsetree
 %left INFIX0 EQUAL LESS_GREATER BANG
 %right INFIX1
 %right WHEN WHENOT
+%right FBY
 %left INFIX2 SUBTRACTIVE
 %left STAR INFIX3
 %left INFIX4
 %right NOT
 %right prec_uminus
-%right FBY
 %right PRE
 %left POWER
 %right PREFIX
