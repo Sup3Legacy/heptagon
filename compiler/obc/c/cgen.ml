@@ -404,6 +404,8 @@ let assoc_cn instance obj_env =
 
 let is_op = function
   | { qual = Pervasives; name = _ } -> true
+  | { qual = Module "Iostream"; name = "printf" } -> true
+  | { qual = Module "Iostream"; name = "fprintf" } -> true
   | _ -> false
 
 let out_var_name_of_objn o =
