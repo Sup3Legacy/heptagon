@@ -755,6 +755,7 @@ let cdefs_and_cdecls_of_class_def cd =
       variables and the state of other nodes. For a class named ["cname"], the
       structure will be called ["cname_mem"]. *)
   let step_m = find_step_method cd in
+  Idents.push_node cd.cd_name;
   let memory_struct_decl = mem_decl_of_class_def cd in
   let out_struct_decl = out_decl_of_class_def cd in
   let step_fun_def = fun_def_of_step_fun cd.cd_name
@@ -768,7 +769,7 @@ let cdefs_and_cdecls_of_class_def cd =
       ([res_fun_decl; step_fun_decl], [reset_fun_def; step_fun_def])
     else
       ([step_fun_decl], [step_fun_def]) in
-
+  let _ = Idents.pop_node () in
   memory_struct_decl @ out_struct_decl @ decls,
   defs
 
