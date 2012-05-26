@@ -65,7 +65,7 @@ and exp = { e_desc : exp_desc; e_ty : ty; e_loc : location }
 and exp_desc =
   | Eextvalue of ext_value
   | Eop of op_name * exp list
-  | Estruct of type_name * (field_name * exp) list
+  | Estruct of (field_name * exp) list
   | Earray of exp list
   | Ebang of exp
 

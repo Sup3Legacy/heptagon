@@ -54,12 +54,12 @@ and edesc funs acc ed = match ed with
   | Eop (op, args) ->
        let args, acc = mapfold (exp_it funs) acc args in
          Eop (op, args), acc
-  | Estruct(tyn, f_e_list) ->
+  | Estruct(f_e_list) ->
       let aux acc (f,e) =
         let e, acc = exp_it funs acc e in
           (f,e), acc in
       let f_e_list, acc = mapfold aux acc f_e_list in
-        Estruct(tyn, f_e_list), acc
+        Estruct(f_e_list), acc
   | Earray args ->
       let args, acc = mapfold (exp_it funs) acc args in
         Earray args, acc

@@ -207,7 +207,7 @@ and create_affect_stm dest src ty =
   match ty with
     | Cty_arr (n, bty) ->
         (match src with
-           | Carraylit l -> create_affect_lit dest l bty
+           | Carraylit (_,l) -> create_affect_lit dest l bty
            | src ->
              let x = gen_symbol () in
              [Cfor(x,
@@ -235,17 +235,17 @@ let rec cexpr_of_static_exp se =
     | Sstring s -> Cconst (Cstrlit s)
     | Sfield _ -> assert false
     | Sconstructor c -> Cconst (Ctag (cname_of_qn c))
-    | Sarray sl -> Carraylit (List.map cexpr_of_static_exp sl)
+    | Sarray sl -> Carraylit (ctype_of_otype se.se_ty, List.map cexpr_of_static_exp sl)
     | Srecord fl ->
-        let ty_name =
+       (* let ty_name =
           match Modules.unalias_type se.se_ty with
             | Signature.Tid n -> cname_of_qn n
             | _ -> assert false
-        in
-          Cstructlit (ty_name,
+        in*)
+          Cstructlit (ctype_of_otype se.se_ty,
                      List.map (fun (_, se) -> cexpr_of_static_exp se) fl)
     | Sarray_power(c,n_list) ->
-          (List.fold_left (fun cc n -> Carraylit (repeat_list cc (Int32.to_int (int_of_static_exp n))))
+          (List.fold_left (fun cc n -> Carraylit (ctype_of_otype se.se_ty, repeat_list cc (Int32.to_int (int_of_static_exp n))))
                      (cexpr_of_static_exp c) n_list)
     | Svar ln ->
         if !Compiler_options.unroll_loops && se.se_ty = Initial.tint
@@ -269,12 +269,11 @@ let rec cexpr_of_exp out_env var_env exp =
     (** Operators *)
     | Eop(op, exps) -> cop_of_op out_env var_env op exps
     (** Structure literals. *)
-    | Estruct (tyn, fl) ->
+    | Estruct fl ->
         let cexps = List.map (fun (_,e) -> cexpr_of_exp out_env var_env e) fl in
-        let ctyn = cname_of_qn tyn in
-        Cstructlit (ctyn, cexps)
+        Cstructlit (ctype_of_otype exp.e_ty, cexps)
     | Earray e_list ->
-        Carraylit (cexprs_of_exps out_env var_env e_list)
+        Carraylit (ctype_of_otype exp.e_ty, cexprs_of_exps out_env var_env e_list)
     | Ebang _ ->
         Misc.internal_error "C backend not yet supporting futures."
 

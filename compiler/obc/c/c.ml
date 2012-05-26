@@ -71,8 +71,8 @@ and cexpr =
   | Cbop of string * cexpr * cexpr (** Binary operator. *)
   | Cfun_call of string * cexpr list (** Function call with its parameters. *)
   | Caddrof of cexpr (** Take the address of an expression. *)
-  | Cstructlit of string * cexpr list (** Structure literal "{ f1, f2, ... }".*)
-  | Carraylit of cexpr list (** Array literal [\[e1, e2, ...\]]. *)
+  | Cstructlit of cty * cexpr list (** Structure literal "{ f1, f2, ... }".*)
+  | Carraylit of cty * cexpr list (** Array literal [\[e1, e2, ...\]]. *)
   | Cconst of cconst (** Constants. *)
   | Cvar of string (** A local variable. *)
   | Cderef of cexpr (** Pointer dereference, *ptr. *)
@@ -249,10 +249,10 @@ and pp_cexpr fmt ce = match ce with
   | Caddrof (Cderef e) -> pp_cexpr fmt e
   | Cderef (Caddrof e) -> pp_cexpr fmt e
   | Caddrof e -> fprintf fmt "&%a" pp_cexpr e
-  | Cstructlit (s, el) ->
-      fprintf fmt "(%a){@[%a@]}" pp_string s (pp_list1 pp_cexpr ",") el
-  | Carraylit el -> (* TODO master : WRONG *)
-      fprintf fmt "((int []){@[%a@]})" (pp_list1 pp_cexpr ",") el
+  | Cstructlit (t, el) ->
+      fprintf fmt "((%a){@[%a@]})" pp_cty t (pp_list1 pp_cexpr ",") el
+  | Carraylit (t, el) ->
+      fprintf fmt "((%a){@[%a@]})" pp_cty t (pp_list1 pp_cexpr ",") el
   | Cconst c -> pp_cconst fmt c
   | Cvar s -> pp_string fmt s
   | Cderef e -> fprintf fmt "*%a" pp_cexpr e
@@ -263,7 +263,7 @@ and pp_cexpr fmt ce = match ce with
 and pp_cconst_expr fmt ce = match ce with
   | Cstructlit (_, el) ->
       fprintf fmt "{@[%a@]}" (pp_list1 pp_cconst_expr ",") el
-  | Carraylit el ->
+  | Carraylit (_, el) ->
       fprintf fmt "{@[%a@]}" (pp_list1 pp_cconst_expr ",") el
   | _ -> pp_cexpr fmt ce
 

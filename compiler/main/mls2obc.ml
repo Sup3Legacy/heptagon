@@ -247,12 +247,9 @@ let rec translate map e =
         let e = translate_extvalue_to_exp map (assert_1 e_list) in
         Ebang e
     | Minils.Estruct f_e_list ->
-        let type_name = (match e.Minils.e_ty with
-                           | Tid name -> name
-                           | _ -> assert false) in
         let f_e_list = List.map
           (fun (f, e) -> (f, (translate_extvalue_to_exp map e))) f_e_list in
-          Estruct (type_name, f_e_list)
+          Estruct f_e_list
   (*Remaining array operators*)
     | Minils.Eapp ({ Minils.a_op = Minils.Earray }, e_list, _) ->
         Earray (List.map (translate_extvalue_to_exp map ) e_list)

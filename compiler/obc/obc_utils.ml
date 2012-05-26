@@ -185,9 +185,6 @@ struct
     let (edesc, deps) = Obc_mapfold.edesc funs deps edesc in
     match edesc with
       | Eop (ln, _) -> (edesc, deps_longname deps ln)
-      | Estruct (ln, fnel) ->
-        let add deps (ln, _) = deps_longname deps ln in
-        (edesc, List.fold_left add (deps_longname deps ln) fnel)
       | _ -> raise Errors.Fallback
 
   let deps_act funs deps act =

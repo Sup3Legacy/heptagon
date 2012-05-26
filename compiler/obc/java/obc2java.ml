@@ -223,10 +223,13 @@ and var_dec_list param_env vd_l = List.map (var_dec param_env) vd_l
 and exp param_env e = match e.e_desc with
   | Obc.Eextvalue p -> ext_value param_env p
   | Obc.Eop (op,e_l) -> Efun (translate_fun_name op, exp_list param_env e_l)
-  | Obc.Estruct (t, f_e_l) ->
+  | Obc.Estruct f_e_l ->
       (* One need to sort the expression according to the field order of the type*)
       (* to give it to the constructor of the class *)
-      let td = Modules.find_type t in
+			let td = match e.e_ty with
+				| Signature.Tid t -> Modules.find_type t
+				| _ -> Misc.internal_error "Wrong type"
+			in
       let e_l = match td with
         | Tstruct sf_l ->
             List.map (fun sf -> List.assoc sf.f_name f_e_l) sf_l

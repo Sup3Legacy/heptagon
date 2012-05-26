@@ -39,7 +39,7 @@ and exp_compare e1 e2 =
       | Eop(op1, el1), Eop(op2, el2) ->
           let cr = compare op1 op2 in
             if cr <> 0 then cr else list_compare exp_compare el1 el2
-      | Estruct(_, fnel1), Estruct (_, fnel2) ->
+      | Estruct fnel1, Estruct fnel2 ->
           let compare_fne (fn1, e1) (fn2, e2) =
             let cr = compare fn1 fn2 in
               if cr <> 0 then cr else exp_compare e1 e2

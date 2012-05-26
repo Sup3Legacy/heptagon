@@ -54,7 +54,7 @@ and print_exp ff e =
   match e.e_desc with
     | Eextvalue lhs -> print_ext_value ff lhs
     | Eop(op, e_list) -> print_fun ff (op,e_list)
-    | Estruct(_,f_e_list) ->
+    | Estruct f_e_list ->
         fprintf ff "@[<v 1>";
         print_list_r
           (fun ff (field, e) -> print_qualname ff field;fprintf ff " = ";
