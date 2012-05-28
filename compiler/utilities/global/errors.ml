@@ -11,11 +11,11 @@
 exception Error
 
 let errorf f p =
-	Format.eprintf (" Error : "^^f^^"@.") p;
-	raise Error
+  Format.eprintf (" Error : "^^f^^"@.") p;
+  raise Error
 
 let warningf f p =
-	Format.eprintf (" Warning : "^^f^^"@.") p;
+  Format.eprintf (" Warning : "^^f^^"@.") p;
 
 
 (** Ast iterators *)
