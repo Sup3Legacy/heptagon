@@ -226,10 +226,10 @@ and exp param_env e = match e.e_desc with
   | Obc.Estruct f_e_l ->
       (* One need to sort the expression according to the field order of the type*)
       (* to give it to the constructor of the class *)
-			let td = match e.e_ty with
-				| Signature.Tid t -> Modules.find_type t
-				| _ -> Misc.internal_error "Wrong type"
-			in
+      let td = match e.e_ty with
+        | Signature.Tid t -> Modules.find_type t
+        | _ -> Misc.internal_error "Wrong type"
+      in
       let e_l = match td with
         | Tstruct sf_l ->
             List.map (fun sf -> List.assoc sf.f_name f_e_l) sf_l

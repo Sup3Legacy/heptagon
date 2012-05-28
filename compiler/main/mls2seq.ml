@@ -74,9 +74,13 @@ let generate_target p s =
     if !Compiler_options.verbose
     then List.iter (Mls_printer.print stderr) p_list in *)
   let target = (find_target s).t_program in
-  let callgraph p = do_silent_pass "Callgraph" Callgraph.program p in
-  let mls2obc p = do_silent_pass "Translation into MiniLS" Mls2obc.program p in
-  let mls2obc_list p_l = do_silent_pass "Translation into MiniLS" (List.map Mls2obc.program) p_l in
+  let ppml p_l =
+    if !verbose
+    then Format.printf "@[<v>%a@]@." (Pp_tools.print_list Mls_printer.print_program """""") p_l
+  in
+  let callgraph p = do_pass "Callgraph" Callgraph.program p ppml in
+  let mls2obc p = do_silent_pass "Translation into Obc" Mls2obc.program p in
+  let mls2obc_list p_l = do_silent_pass "Translation into Obc" (List.map Mls2obc.program) p_l in
   match target with
     | Minils convert_fun ->
         do_silent_pass "Code generation from MiniLS" convert_fun p

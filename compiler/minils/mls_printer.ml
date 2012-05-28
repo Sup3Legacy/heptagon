@@ -224,14 +224,17 @@ let print_node ff { n_name = n; n_input = ni; n_output = no; n_base_id = base;
     print_local_vars nl
     print_eqs ne
 
-
-let print oc { p_opened = pm; p_desc = pd } =
+let print_program ff { p_modname = m; p_opened = pm; p_desc = pd } =
   let print_program_desc ff pd = match pd with
     | Pnode n -> print_node ff n
     | Ptype t -> print_type_dec ff t
     | Pconst c -> print_const_dec ff c
   in
-  let ff = formatter_of_out_channel oc in
+  Format.fprintf ff "(* Module %a in mls *)@." Global_printer.print_full_modul m;
   List.iter (print_open_module ff) pm;
   List.iter (print_program_desc ff) pd;
-  fprintf ff "@?"
+  fprintf ff "@."
+
+let print oc p =
+  let ff = formatter_of_out_channel oc in
+  print_program ff p
