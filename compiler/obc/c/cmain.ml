@@ -309,7 +309,9 @@ let mk_main name p =
       let n_names = !Compiler_options.assert_nodes in
       let find_class n =
         try List.find (fun cd -> cd.cd_name = qualify_value n) classes
-        with Not_found -> Errors.errorf "Node %s not generated.@\nNote that only Java and c++ backends generate nodes with parameters." n
+        with Not_found ->
+          Errors.errorf "Node %s not generated.@\n\
+            Note that only Java and c++ backends generate nodes with parameters." n
       in
 
       let a_classes = List.map find_class n_names in
