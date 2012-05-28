@@ -8,7 +8,7 @@ open Format
 open Pp_tools
 
 
-let rec _aux_print_modul ?(full=false) ff m = match m with
+let rec _aux_print_modul ~full ff m = match m with
   | Pervasives ->
       if !Compiler_options.full_qual_info
       then fprintf ff "_Pervasives."
@@ -23,7 +23,7 @@ let rec _aux_print_modul ?(full=false) ff m = match m with
       fprintf ff "%a%a." (_aux_print_modul ~full:full) m print_name n
 
 (** Prints a [modul] with a [.] at the end when not empty *)
-let rec _print_modul ?(full=false) ff m = match m with
+let rec _print_modul ~full ff m = match m with
   | Pervasives ->
       if !Compiler_options.full_qual_info
       then fprintf ff "_Pervasives"

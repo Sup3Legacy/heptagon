@@ -92,13 +92,7 @@ let _append_module mo =
 let _load_module modul =
   if is_loaded modul then ()
   else
-    let rec modname m = match m with
-      | Names.Pervasives -> "Pervasives"
-      | Names.Module n -> n
-      | Names.LocalModule m -> Misc.unsupported "load of localmodule"
-      | Names.QualModule _ -> Misc.unsupported "load of submodules"
-    in
-    let name = String.uncapitalize (modname modul) in
+    let name = String.uncapitalize (filename_from_modul modul) in
     try
       let filename = Compiler_utils.findfile (name ^ ".epci") in
       let ic = open_in_bin filename in

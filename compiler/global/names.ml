@@ -7,11 +7,17 @@ type module_name = name
 
 type modul =
   | Pervasives
-  | LocalModule of modul (** the static parameters of module_name *)
+  | LocalModule of modul (** the static parameters of modul *)
   | Module of module_name
   | QualModule of qualname
 
 and qualname = { qual: modul; name: name }
+
+let rec filename_from_modul m = match m with
+  | Pervasives -> "Pervasives"
+  | Module n -> n
+  | LocalModule q -> filename_from_modul q
+  | QualModule q -> filename_from_modul q.qual
 
 type type_name = qualname
 type fun_name = qualname
