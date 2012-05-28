@@ -1,0 +1,36 @@
+
+type cell_state = int
+
+
+(* Takes as input the observable world, and update the new_world at the given position *)
+node alternate_cell<<n :int>>(world :cell_state^n; current_cell : cell_state; position :int; ) = (cell : cell_state)
+let
+  cell = if world[>position<] = 0 then 1 else 0;
+tel
+
+node cell3<<n :int; rule :int>>(world : cell_state^n; current_cell : cell_state; position :int;) = (cell : cell_state)
+var nb :int;
+let
+  nb = (world[>position-1<] <<< 2) ||| (world[>position<] <<< 1) ||| (world[>position<]);
+  cell = if bool_of_int(rule &&& (1 <<< nb)) then 1 else 0; (* we need to set true at 1 otherwise the above function is wrong *)
+tel
+
+node game<<n :int; val node cell (cell_state^n;cell_state;int) = (cell_state);>>
+  (world : cell_state^n; new_world : cell_state^n at r) = (new_world_up : cell_state^n at r)
+let
+  new_world_up = mapi<<n>> cell <(world)> (new_world)
+tel
+
+unsafe node main<<n :int; start : cell_state^n>> () = (ww : cell_state^n;)
+var new_world : cell_state^n at r; world : cell_state^n at r;
+let
+  init<<r>> new_world = start fby world;
+  ww = new_world;
+world = game<<n, cell3<<n,30>> >>(ww, new_world);
+tel
+
+
+unsafe node main_0() = (w : cell_state^20)
+let
+  w = main<<20,[0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0]>>();
+tel
