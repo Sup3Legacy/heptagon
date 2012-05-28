@@ -98,9 +98,9 @@ struct
       [ln] with the static parameters [params]. *)
   and node_for_params_call m ln params =
     let ln, params = instantiate_node m ln params in
-    match params with
-    | [] -> ln
-    | _ -> M.find (ln,params) !nodes_names
+    try M.find (ln,params) !nodes_names, []
+    with Not_found -> ln, params (* if not in nodes_names, it should not be instanciated,
+    being probably parameterless or choosen to be kept with paramters. *)
 
   (** Generates a fresh name for the the instance of
       [ln] with the static parameters [params] and stores it. *)
@@ -176,25 +176,24 @@ struct
     let edesc funs m ed =
       let ed, _ = Mls_mapfold.edesc funs m ed in
       let ed =
-        try begin match ed with
+        match ed with
           | Eapp ({ a_op = Efun ln; a_params = params } as app, e_list, r) ->
-              let op = Efun (node_for_params_call m ln params) in
-              Eapp ({ app with a_op = op; a_params = [] }, e_list, r)
+              let ln, params = node_for_params_call m ln params in
+              Eapp ({ app with a_op = Efun ln; a_params = params }, e_list, r)
           | Eapp ({ a_op = Enode ln; a_params = params } as app, e_list, r) ->
-              let op = Enode (node_for_params_call m ln params) in
-              Eapp ({ app with a_op = op; a_params = [] }, e_list, r)
+              let ln, params = node_for_params_call m ln params in
+              Eapp ({ app with a_op = Enode ln; a_params = params }, e_list, r)
           | Eiterator(it, ({ a_op = Efun ln; a_params = params } as app),
                         n, pe_list, e_list, r) ->
-              let op = Efun (node_for_params_call m ln params) in
-              Eiterator(it, {app with a_op = op; a_params = [] },
+              let ln, params = node_for_params_call m ln params in
+              Eiterator(it, {app with a_op = Efun ln; a_params = params },
                        n, pe_list, e_list, r)
           | Eiterator(it, ({ a_op = Enode ln; a_params = params } as app),
                        n, pe_list, e_list, r) ->
-              let op = Enode (node_for_params_call m ln params) in
-              Eiterator(it,{app with a_op = op; a_params = [] },
+              let ln, params = node_for_params_call m ln params in
+              Eiterator(it,{app with a_op = Enode ln; a_params = params },
                        n, pe_list, e_list, r)
           | _ -> ed
-        end with Not_found -> ed (* the calls were not to be replaced *)
       in ed, m
 
     let global_funs = { Global_mapfold.defaults with static_exp = static_exp }
@@ -215,9 +214,10 @@ struct
       let node_sig = find_value n.n_name in
       let node_sig, _ = Global_mapfold.node_it global_funs m node_sig in
       let node_sig = { node_sig with node_params = [];
-                                     node_param_constraints = [] } in
+                                      node_param_constraints = [] } in
       (* Find the name that was associated to this instance *)
-      let ln = node_for_params_call m n.n_name params in
+      let ln, params = node_for_params_call m n.n_name params in
+      if params != [] then Misc.internal_error "params left";
       if not (check_value ln) then Modules.add_value ln node_sig;
       (* Clone the idents *)
       Idents.clone_node n.n_name ln;
@@ -241,64 +241,61 @@ struct
 
 end
 
-open Param_instances
-
 (* Global mutable environment used for memoiziations *)
 type info =
-  { mutable opened : program ModulEnv.t;
+  { mutable opened : program NamesEnv.t;
     mutable called_nodes : ((qualname * static_exp list) list) QualEnv.t;
     mutable need_instanciation : bool QualEnv.t; }
 
 let info =
   { (** opened programs*)
-    opened = ModulEnv.empty;
+    opened = NamesEnv.empty;
     (** Maps a node to the list of (node name, params) it calls *)
     called_nodes = QualEnv.empty;
     (** Tells whether a node needs to be instanciated *)
     need_instanciation = QualEnv.empty;
     }
 
+
 (** Loads the modname.epo file. *)
-let load_object_file modul =
-  Modules.open_module modul;
-  let modname = match modul with
-      | Names.Pervasives -> "Pervasives"
-      | Names.Module n -> n
-      | Names.LocalModule _ -> Misc.internal_error "modules"
-      | Names.QualModule _ -> Misc.unsupported "modules"
-  in
-    try
-      let filename = Compiler_utils.findfile (modname ^ ".epo") in
-      let ic = open_in_bin filename in
-        try
-          let (p : program) = input_value ic in
-            if p.p_format_version <> minils_format_version then (
-              Format.eprintf "The file %s was compiled with \
-                       an older version of the compiler.@\n\
-                       Please recompile %s.ept first.@." filename modname;
-              raise Errors.Error
-            );
+let load_object_file file =
+  Modules.open_module (Names.Module file);
+  try
+    let filename = Compiler_utils.findfile (file ^ ".epo") in
+    let ic = open_in_bin filename in
+      try
+        let (p : program) = input_value ic in
+          if p.p_format_version <> minils_format_version then (
+            Format.eprintf "The file %s was compiled with \
+                     an older version of the compiler.@\n\
+                     Please recompile %s.ept first.@." filename file;
+            raise Errors.Error
+          );
+          close_in ic;
+          info.opened <- NamesEnv.add file p info.opened
+      with
+        | End_of_file | Failure _ ->
             close_in ic;
-            info.opened <- ModulEnv.add p.p_modname p info.opened
-        with
-          | End_of_file | Failure _ ->
-              close_in ic;
-              Format.eprintf "Corrupted object file %s.@\n\
-                        Please recompile %s.ept first.@." filename modname;
-              raise Errors.Error
-    with
-      | Compiler_utils.Cannot_find_file(filename) ->
-          Format.eprintf "Cannot find the object file '%s'.@."
-            filename;
-          raise Errors.Error
+            Format.eprintf "Corrupted object file %s.@\n\
+                      Please recompile %s.ept first.@." filename file;
+            raise Errors.Error
+  with
+    | Compiler_utils.Cannot_find_file(filename) ->
+        Format.eprintf "Cannot find the object file '%s'.@."
+          filename;
+        raise Errors.Error
 
 (** @return the node with name [ln], loading the corresponding
     object file if necessary. *)
 let node_by_longname node =
-  if not (ModulEnv.mem node.qual info.opened)
-  then load_object_file node.qual;
+  match node.qual with
+    | LocalModule _ -> raise Not_found
+    | _ -> ();
+  let prog_name = filename_from_modul node.qual in
+  if not (NamesEnv.mem prog_name info.opened)
+  then load_object_file prog_name;
+  let p = NamesEnv.find prog_name info.opened in
   try
-    let p = ModulEnv.find node.qual info.opened in
     let n = List.find (function Pnode n -> n.n_name = node | _ -> false) p.p_desc in
     (match n with
       | Pnode n -> n
@@ -390,18 +387,19 @@ let rec call_node (ln, params) =
   Idents.push_node n.n_name;
   let m = if params = [] (* there is no substitution for the root nodes *)
     then QualEnv.empty
-    else build n.n_params params
+    else Param_instances.build n.n_params params
   in
   (* Recursively generate needed instances. *)
   let childs = called_nodes ln in
-  let childs = List.map (fun (ln, p) -> instantiate_node m ln p) childs in
-  List.iter (fun (n,p) -> add_node_instance n p) childs;
+  let childs = List.map (fun (ln, p) -> (Param_instances.instantiate_node m ln p)) childs in
+  let childs = List.filter (fun (ln, _) -> need_instanciation ln) childs in
+  List.iter (fun (n,p) -> Param_instances.add_node_instance n p) childs;
   List.iter call_node childs;
   let _ = Idents.pop_node () in ()
 
 let program p =
   (* Open the current module *)
-  info.opened <- ModulEnv.add p.p_modname p info.opened;
+  info.opened <- NamesEnv.add (filename_from_modul p.p_modname) p info.opened;
   (* Find the nodes which doesn't require instanciation *)
   let to_gen_nodes =
     List.fold_left
@@ -428,7 +426,7 @@ let program p =
   let p = { p with p_desc = pd } in
   (* Generate all the remaining needed instances,*)
   (* Every instance needed has invoked the opening of its module *)
-  let p_list = ModulEnv.fold   (* First filter the modules from the one of p *)
+  let p_list = NamesEnv.fold   (* First filter the modules from the one of p *)
     (fun _ o l -> if p.p_modname != o.p_modname then o::l else l)
     info.opened []
   in
