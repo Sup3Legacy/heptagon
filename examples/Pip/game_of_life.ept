@@ -9,9 +9,11 @@ let
 tel
 
 node cell3<<n :int; rule :int>>(world : cell_state^n; current_cell : cell_state; position :int;) = (cell : cell_state)
-var nb :int;
+var nb,pos_1,pos1 :int;
 let
-  nb = (world[>position-1<] <<< 2) ||| (world[>position<] <<< 1) ||| (world[>position<]);
+  pos_1 = if position-1 < 0 then n-1 else position-1;
+  pos1 = if position+1 >= n then 0 else position+1;
+  nb = (world[>pos_1<] <<< 2) ||| (world[>position<] <<< 1) ||| (world[>pos1<]);
   cell = if bool_of_int(rule &&& (1 <<< nb)) then 1 else 0; (* we need to set true at 1 otherwise the above function is wrong *)
 tel
 
@@ -20,6 +22,10 @@ node game<<n :int; val node cell (cell_state^n;cell_state;int) = (cell_state);>>
 let
   new_world_up = mapi<<n>> cell <(world)> (new_world)
 tel
+
+node split_game<<n :int; val node game (cell_state^n
+
+
 
 unsafe node main<<n :int; start : cell_state^n>> () = (ww : cell_state^n;)
 var new_world : cell_state^n at r; world : cell_state^n at r;
