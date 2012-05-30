@@ -1,4 +1,5 @@
 
+(*
 type cell_state = int
 
 
@@ -23,9 +24,6 @@ let
   new_world_up = mapi<<n>> cell <(world)> (new_world)
 tel
 
-node split_game<<n :int; val node game (cell_state^n
-
-
 
 unsafe node main<<n :int; start : cell_state^n>> () = (ww : cell_state^n;)
 var new_world : cell_state^n at r; world : cell_state^n at r;
@@ -40,3 +38,73 @@ unsafe node main_0() = (w : cell_state^20)
 let
   w = main<<20,[0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0]>>();
 tel
+*)
+
+type cs = int (* cell state, is 0 or 1. *)
+const null_cs : cs = 0
+
+fun cs_of_int(i : int) = (s : cs)
+let
+  s = if i = 0 then 0 else 1
+tel
+
+(* See 1D cellular automaton
+   http://en.wikipedia.org/wiki/Elementary_cellular_automaton *)
+fun eca<<rule :int>>(x_1, x, x1 :cs) = (y :cs)
+var nb :int;
+let
+  nb = (x_1 <<< 2) ||| (x <<< 1) ||| (x1);
+  y = cs_of_int(rule &&& (1 <<< nb));
+tel
+
+(* This is a stream version, returning a value when 3 has been already fed:
+   x0 x1 x2 x3 x4 x5
+   .  .  y1 y2 y3 y4
+   The 2 first values are false, then the result is one tick late.
+   The signature could be seen has (n+2) -> (00n),
+   but without lucyn, the signature is a -> a and
+   the caller has to take care of the wrong values and delay.*)
+node seq_cell<<rule :int>>(x1 : cs) = (y : cs)
+var x_1, x : cs;
+let
+  x_1 = null_cs fby null_cs fby x1;
+  x = null_cs fby x1;
+  y = eca<<rule>>(x_1,x,x1);
+tel
+
+
+
+
+
+node toric_shift<<n : int; first : cs^(n+2);>> (begin : bool; x : cs) = (y : cs^(n+2))
+var yc :cs^(n+2); cpt, c :int;
+let
+  y = yc when begin;
+  yc = first fby [yc with [c] = x];
+  cpt = Misc.mod_counter_r<<n+2>>(begin)-1;
+  c = if cpt = -1 then n+1 else (if cpt = n+1 then 0 else cpt);
+tel
+
+
+(* Without inlining, it is non causal *)
+node game<<n :int; rule :int; first : cs^(n+2);>> () = (x : cs^(n+2))
+var begin : bool; x_l, y_l : cs;
+let
+  begin = Misc.timer<<n+2>>();
+  x_l = Stream_arrays.a2s<<n+2>>(x, begin);
+
+  y_l = seq_cell<<rule>>(x_l);
+
+  x = inlined toric_shift<<n, first>>(begin, y_l);
+tel
+
+
+node main<<rule :int>>() = (x :cs^(32))
+let
+  x = game<<30,rule,0^32 >>();
+tel
+
+
+
+
+
