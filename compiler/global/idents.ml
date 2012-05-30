@@ -97,7 +97,7 @@ let rec fresh_string s =
     Hashtbl.add !current_counters s (num + 1);
     if Hashtbl.mem !current_counters new_name
     then fresh_string s
-    else new_name
+    else (Hashtbl.add !current_counters new_name 1; new_name)
   with
     | Not_found -> (* it is already a fresh name *)
         Hashtbl.add !current_counters s 1;

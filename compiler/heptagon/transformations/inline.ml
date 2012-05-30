@@ -94,19 +94,29 @@ let combine_cenv cenv old_l new_l =
 
 (* TODO allow this function to load the necessary .epo and update the [nenv].*)
 (* Beware that one need to inline normalized code. *)
-let node_dec_from_qualname nn loc nenv = match nn.qual with
-  | m when m = Modules.g_env.Modules.current_mod ->
-      QualEnv.find nn nenv
-  | Module _ -> (* TODO *)
-      Format.eprintf "%aWarning inlining of non local function is not supported for now.@."
-            Location.print_location loc;
-      raise Not_found
-  | LocalModule _ ->
-      Format.eprintf "%aWarning inlining of static parameter function is not supported for now.@."
-        Location.print_location loc;
-      raise Not_found
-  | Pervasives -> raise Not_found (* Ignore inlining of pervasives since they are operators *)
-  | _ -> Misc.internal_error "inlining received some unexpected qualname to inline."
+let node_dec_from_qualname nn loc nenv =
+  let nd = match nn.qual with
+    | m when m = Modules.g_env.Modules.current_mod ->
+        QualEnv.find nn nenv
+    | Module _ -> (* TODO *)
+        Format.eprintf "%aWarning inlining of non local function is not supported for now.@."
+          Location.print_location loc;
+        raise Not_found
+    | LocalModule _ ->
+        Format.eprintf "%aWarning inlining of static parameter function is not supported for now.@."
+          Location.print_location loc;
+        raise Not_found
+    | Pervasives -> raise Not_found (* Ignore inlining of pervasives since they are operators *)
+    | _ -> Misc.internal_error "inlining received some unexpected qualname to inline."
+  in
+  (* freshen the node dec *)
+  let global_funs = {Global_mapfold.defaults with Global_mapfold.var_ident = var_ident} in
+  let funs = { Hept_mapfold.defaults with Hept_mapfold.var_dec = var_dec;
+                                          Hept_mapfold.global_funs = global_funs }
+  in
+  let nd, _ = Hept_mapfold.node_dec funs (true, QualEnv.empty, QualEnv.empty, Idents.Env.empty) nd
+  in
+  nd
 
 
 let eq funs (inline, nenv, cenv, subst) eq =
@@ -126,8 +136,8 @@ let eq funs (inline, nenv, cenv, subst) eq =
         (* Compute new_cenv *)
         Idents.push_node nn; (* Enter inlined node to have correct local_qn *)
         let code_params = List.map (fun p -> (local_qn p.p_name)) code.n_params in
-        let new_cenv = combine_cenv cenv code_params op.a_params in
         let _ = Idents.pop_node () in
+        let new_cenv = combine_cenv cenv code_params op.a_params in
         (*Compute new_subst *)
         let code_inputs = List.map (fun vd -> vd.v_ident) code.n_input in
         let inputs = List.map
@@ -167,7 +177,6 @@ let program p =
   in
   let funs = { Hept_mapfold.defaults with
     Hept_mapfold.eq = eq;
-    Hept_mapfold.var_dec = var_dec;
     Hept_mapfold.global_funs = global_funs }
   in
   let p, _ = Hept_mapfold.program funs (false, nenv, QualEnv.empty, Idents.Env.empty) p in
