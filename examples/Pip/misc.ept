@@ -1,6 +1,13 @@
 
 (** Counters *)
 
+node counter(res:bool) = (cpt :int)
+let
+  reset
+    cpt = 0 fby (cpt+1);
+  every res
+tel
+
 (* count from 0 to n-1 *)
 node mod_counter<<n :int>>() = (cpt :int)
 let

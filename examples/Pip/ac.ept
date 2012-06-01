@@ -74,11 +74,14 @@ tel
 
 
 
-node toric_shift<<n : int; first : cs^(n+2);>> (begin : bool; x : cs) = (y : cs^(n+2))
-var yc :cs^(n+2); cpt, c :int;
+node circle<<n : int; first : cs^(n+2);>> (begin : bool; x : cs) = (y : cs^(n+2))
+var yc1,yc :cs^(n+2); cpt, c :int;
 let
   y = yc when begin;
-  yc = first fby [yc with [c] = x];
+  yc = first fby [yc1 with [cpt] = x];
+  yc1 = if cpt = 2 then [yc with [n+1] = x]
+        else if cpt = n+1 then [yc with [0] = x]
+	else yc;
   cpt = Misc.mod_counter_r<<n+2>>(begin)-1;
   c = if cpt = -1 then n+1 else (if cpt = n+1 then 0 else cpt);
 tel
@@ -93,7 +96,7 @@ let
 
   y_l = seq_cell<<rule>>(x_l);
 
-  y = inlined toric_shift<<n, first>>(begin, y_l);
+  y = inlined circle<<n, first>>(begin, y_l);
 tel
 
 
@@ -103,20 +106,32 @@ let
 tel
 
 
-node pgame<<n,k :int; rule :int; first : cs^(n+2*k);>> () = (y : cs^(n+2*k))
+
+node circle_k<<k :int; n :int; first : cs^(n+2)>>(begin : bool; x : cs^(n+2)) = (y : cs^((n+2)*k))
+
+let
+  begin = cpt = 0;
+  cpt = Misc.mod_counter_r<<n+2>>(begin);
+  y1 = [y with 
+  y = (first^n) fby y1;
+  
+
+
+
+node ppgame<<n,k :int; rule :int; first : cs^(n+2);>> () = (y : cs^((n+2)*k))
 var last begin = 
 let
-  automaton
-    state Begin
-    do
-      
-    until Misc.timer<<n+2>>() then Middle	
-    state Middle
-    do
-      
-    until Misc.timer<<n+2>>() then End
-    state End
-    do
-      
-    until Misc.timer<<n+2>>() then Begin
+  
+  begin_chunck = Misc.timer<<n+2>>();
+  chunk = Misc.mod_counter<<k>>() :: begin_chunk;
+  begin_game = chunk = 0;
 
+  x_l = Stream_arrays.a2s<<(n+2)*k>>(y, begin_game);
+  
+  xc = inlined Stream_arrays.s2a<<n+2>>(x_l, begin_chunck);
+  yc = burstify<<seq_cell<<rule>>,n+2>>(xc); 
+  y_l = inlined Stream_arrays.a2s<<n+2>>(yc, begin_chunk);
+  
+  y = inlined circle_k<<k, n, first>>(begin_game, y_l);
+  
+tel
