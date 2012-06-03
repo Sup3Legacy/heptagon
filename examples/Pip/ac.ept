@@ -138,33 +138,37 @@ let
 tel
 
 (* while newone is true input game then when false output the result in ngame *)
-node ppcore<<n,rule : int>>(left,right : cs; game : cs^n; newone : bool) = (ngame : cs^n)
-var last local_game : cs^n = 0^n; begin_lho : bool; x_l, y_l : cs; lho_x : cs; lho_game : cs^n;
+node ppcore<<n,rule : int>>(left,right : cs; g : cs^n; newone : bool) = (ng : cs^n)
+var last local_game : cs^n = 0^n; begin_lho : bool; x_l, y_l : cs; lho_x : cs; lho_game, last_lho_game : cs^n; local_newone : bool; last local_right : cs = 0;
+
 let
-  begin_lho = 0 = Misc.mod_counter<<n+2>>();
+  local_newone = merge begin_lho (newone) (false fby local_newone);
+  begin_lho = true fby (merge local_newone (n+1 = Misc.mod_counter<<n+2>>()) (true));
+  local_right = merge begin_lho (right) (last local_right whenot begin_lho);
   x_l = merge begin_lho (left) (lho_x);
   y_l = seq_cell<<rule>>(x_l);
   automaton
     state Begin
     do
-      lho_x = (last local_game)[0];
-      lho_game = last local_game;
+      lho_x = (last_lho_game)[0];
+      lho_game = last_lho_game;
     until true then Middle
     state Middle
     var cpt : int;
     do
       cpt = 1 fby (cpt + 1);
-      lho_x = (last local_game)[>cpt<];
-      lho_game = [last local_game with [cpt-1] = y_l];
+      lho_x = (last_lho_game)[>cpt<];
+      lho_game = [last_lho_game with [cpt-1] = y_l whenot begin_lho];
     until cpt = n - 1 then Last
     state Last
     do
-      lho_x = right;
-      lho_game = [last local_game with [n] = y_l];
+      lho_x = local_right whenot begin_lho;
+      lho_game = [last_lho_game with [n] = y_l whenot begin_lho];
     until true then Begin
   end;
-  ngame = local_game whenot newone;
-  local_game = merge newone (merge begin_lho (game) (lho_game)) (last local_game);
+  ng = local_game when begin_lho;
+  last_lho_game = last local_game whenot begin_lho;
+  local_game = merge begin_lho (g) (last_lho_game);
 tel
 
 
