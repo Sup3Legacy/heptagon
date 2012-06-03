@@ -107,31 +107,75 @@ tel
 
 
 
-node circle_k<<k :int; n :int; first : cs^(n+2)>>(begin : bool; x : cs^(n+2)) = (y : cs^((n+2)*k))
-
+node circle_k<<k :int; n :int; first : cs^(n+2);>>(begin : bool; x : cs) = (y : cs^((n+2)*k))
 let
-  begin = cpt = 0;
-  cpt = Misc.mod_counter_r<<n+2>>(begin);
-  y1 = [y with 
-  y = (first^n) fby y1;
-  
+  y = 0^((n+2)*k) when begin;
+tel  
 
 
 
 node ppgame<<n,k :int; rule :int; first : cs^(n+2);>> () = (y : cs^((n+2)*k))
-var last begin = 
+var begin_game, begin_chunk : bool; chunk : int; xc, yc : int^(n+2); x_l, y_l : int;
 let
   
-  begin_chunck = Misc.timer<<n+2>>();
-  chunk = Misc.mod_counter<<k>>() :: begin_chunk;
+  begin_chunk = Misc.timer<<n+2>>();
+  chunk = (Misc.mod_counter<<k>>() :: begin_chunk);
   begin_game = chunk = 0;
 
   x_l = Stream_arrays.a2s<<(n+2)*k>>(y, begin_game);
   
-  xc = inlined Stream_arrays.s2a<<n+2>>(x_l, begin_chunck);
-  yc = burstify<<seq_cell<<rule>>,n+2>>(xc); 
+  xc = inlined Stream_arrays.s2a<<n+2>>(x_l, begin_chunk);
+  yc = Stream_arrays.burstify<<seq_cell<<rule>>,n+2>>(xc); 
   y_l = inlined Stream_arrays.a2s<<n+2>>(yc, begin_chunk);
   
   y = inlined circle_k<<k, n, first>>(begin_game, y_l);
   
 tel
+
+node main_2()=(y:cs^8)
+let
+  y = ppgame<<2,2,30,0^4>>();
+tel
+
+(* while newone is true input game then when false output the result in ngame *)
+node ppcore<<n,rule : int>>(left,right : cs; game : cs^n; newone : bool) = (ngame : cs^n)
+var last local_game : cs^n = 0^n; begin_lho : bool; x_l, y_l : cs; lho_x : cs; lho_game : cs^n;
+let
+  begin_lho = 0 = Misc.mod_counter<<n+2>>();
+  x_l = merge begin_lho (left) (lho_x);
+  y_l = seq_cell<<rule>>(x_l);
+  automaton
+    state Begin
+    do
+      lho_x = (last local_game)[0];
+      lho_game = last local_game;
+    until true then Middle
+    state Middle
+    var cpt : int;
+    do
+      cpt = 1 fby (cpt + 1);
+      lho_x = (last local_game)[>cpt<];
+      lho_game = [last local_game with [cpt-1] = y_l];
+    until cpt = n - 1 then Last
+    state Last
+    do
+      lho_x = right;
+      lho_game = [last local_game with [n] = y_l];
+    until true then Begin
+  end;
+  ngame = local_game whenot newone;
+  local_game = merge newone (merge begin_lho (game) (lho_game)) (last local_game);
+tel
+
+
+(*
+node ppgame<<n, k, rule :int;first : cs^(n+2)>> () = (y : cs^n^k)
+var g : (future cs^n)^k; 
+let
+  g = (first^k) fby ng;
+
+
+
+
+
+*)
