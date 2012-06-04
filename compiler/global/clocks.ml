@@ -147,8 +147,8 @@ let rec reroot_ck root ck =
     end
 
 
-(** Returns [(ck_l',root)], the rerooted version of [ck] on [root],
-    with [root] the biggest common root *)
+(** Find the biggest common root of the list of clocks [ck_l].
+    Return this root and the clocks rerooted.*)
 let common_root_ck_list ck_l =
   let rec find_root root = (* tries to reroot on [root], if it fails, reduce the root *)
     try (List.map (reroot_ck root) ck_l, root)
