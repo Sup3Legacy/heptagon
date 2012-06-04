@@ -40,5 +40,5 @@ external val fun between(int;int) returns (int)
 external val fun int_of_bool(bool) returns (int)
 external val fun bool_of_int(int) returns (bool)
 
-external val fun exit(bool) returns ()
-external val fun assert(bool) returns ()
+external unsafe val fun exit(bool) returns ()
+external unsafe val fun assert(bool) returns ()
