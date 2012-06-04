@@ -17,6 +17,8 @@ syn case match
 syn match    decadesBraceErr     "}"
 syn match    decadesBrackErr     "\]"
 syn match    decadesParenErr     ")"
+syn match    decadesBrackInErr     ">\]"
+syn match    decadesParamErr     ">>"
 
 syn match    decadesCommentErr   "\*)"
 
@@ -38,6 +40,8 @@ syn cluster  decadesStateErrs contains=decadesThenErr,decadesContinueErr,decades
 syn region   decadesNone matchgroup=decadesEncl start="(" matchgroup=decadesEncl end=")" contains=ALLBUT,decadesParenErr
 syn region   decadesNone matchgroup=decadesEncl start="{" matchgroup=decadesEncl end="}"  contains=ALLBUT,decadesBraceErr
 syn region   decadesNone matchgroup=decadesEncl start="\[" matchgroup=decadesEncl end="\]" contains=ALLBUT,decadesBrackErr
+syn region   decadesNone matchgroup=decadesEncl start="\[>" matchgroup=decadesEncl end="<\]" contains=ALLBUT,decadesBrackInErr
+syn region   decadesNone matchgroup=decadesEncl start="<<" matchgroup=decadesEncl end=">>" contains=ALLBUT,decadesParamErr
 
 
 " Comments
@@ -46,7 +50,7 @@ syn keyword  decadesTodo contained TODO FIXME XXX NOTE
 
 
 " Functions (let part)
-syn region   decadesNone matchgroup=decadesType start="\<\(fun\|node\)\>" matchgroup=decadesKeyword end="\<returns\>" contains=ALLBUT,decadesReturnsErr
+syn region   decadesNone matchgroup=decadesType start="\<\(fun\|node\)\>" matchgroup=decadesKeyword end="\<\(returns\|=\)\>" contains=ALLBUT,decadesReturnsErr
 syn region   decadesNone matchgroup=decadesLet start="\<let\>" matchgroup=decadesLet end="\<tel\>" contains=ALLBUT,@decadesContained,decadesTelErr
 
 
@@ -71,7 +75,7 @@ syn keyword  decadesConditional  if then else
 syn keyword  decadesFunction     fby pre
 syn keyword  decadesFunction     map fold merge split
 syn keyword  decadesFunction     mapi foldi
-syn keyword  decadesFunction     init
+syn keyword  decadesFunction     init reinit
 syn keyword  decadesFunction     last
 
 syn keyword  decadesBoolean      true false
@@ -80,7 +84,7 @@ syn keyword  decadesType         int float bool
 
 syn keyword  decadesKeyword      const type
 
-syn keyword  decadesInclude      state
+syn keyword  decadesInclude      state with
 
 syn match    decadesFunction     '->'
 
