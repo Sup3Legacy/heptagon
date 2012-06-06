@@ -37,7 +37,11 @@ let program p =
     in
     let sig_main = find_value q_main in
     let ty_main = sig_main.node_outputs |> types_of_arg_list |> prod in
+    (* static params become main arguments *)
+    let vd_main_args, param_env = Obc2java.sig_params_to_vds sig_main.node_params in
+    (*
     let ty_main_args = sig_main.node_params |> types_of_param_list in
+    *)
     let class_name = Obc2java.fresh_classe (!Compiler_options.simulation_node ^ "_sim") in
     Idents.push_node class_name;
     let field_step_dnb, id_step_dnb =
@@ -52,7 +56,7 @@ let program p =
       let vd_args, _, exp_args =
         mk_var (Tarray (Tclass (Names.pervasives_qn "String"), [Sint 0l])) false "args" in
 
-      let get_arg i = Earray_elem(exp_args, [Sint i]) in
+      let get_arg i = Earray_elem(exp_args, [Sint (Int32.of_int i)]) in
 
       let body =
         let out = Eclass(Name_utils.qualname_of_string "java.lang.System.out") in
@@ -64,32 +68,28 @@ let program p =
         let jminus = pervasives_qn "-" in
 
         (* num args to give to the main *)
-          let rec num_args = Int32.of_int (List.length ty_main_args) in
+          let rec num_args = List.length vd_main_args in
 
         (* parse arguments to give to the main *)
-        let rec parse_args t_l i = match t_l with
-          | [] -> []
-          | (Ttype t)::t_l when t = Initial.tint ->
-              (Emethod_call(jint, "parseInt", [get_arg i]))
-                :: parse_args t_l (Int32.succ i)
-          | (Ttype t)::t_l when t = Initial.tfloat ->
-              (Emethod_call(jfloat, "parseFloat", [get_arg i]))
-                :: parse_args t_l (Int32.succ i)
-          | (Ttype t)::t_l when t = Initial.tint ->
-              (Emethod_call(jbool, "parseBool", [get_arg i]))
-                :: parse_args t_l (Int32.succ i)
-          | (Ttype t)::t_l when t = Initial.tstring ->
-              (get_arg i)
-                :: parse_args t_l (Int32.succ i)
+        let rec parse_arg i vd = match vd.vd_type with
+          | Tint ->
+              Anewvar(vd,(Emethod_call(jint, "parseInt", [get_arg i])))
+          | Tfloat ->
+              Anewvar(vd,(Emethod_call(jfloat, "parseFloat", [get_arg i])))
+          | Tbool ->
+              Anewvar(vd,(Emethod_call(jbool, "parseBool", [get_arg i])))
+          | Tclass q when q = (Name_utils.qualname_of_string "String")->
+              Anewvar(vd,(get_arg i))
           | _ -> Misc.unsupported "java main does not support parsing complexe static args"
         in
-          let main_args = parse_args ty_main_args 0l in
-        let vd_main, e_main, q_main, ty_main =
+        let act_main_args = Misc.mapi parse_arg vd_main_args in
+        let e_main_args = vds_to_exps vd_main_args in
+        let act_main, e_main, q_main, ty_main =
        (*   if Modules.is_statefull q_main
           then *)
             let q_main = Obc2java.qualname_to_package_classe q_main in
             let id = Idents.gen_var "java_main" "main" in
-            Anewvar(mk_var_dec id false (Tclass q_main), Enew (Tclass q_main, main_args)),
+            Anewvar(mk_var_dec id false (Tclass q_main), Enew (Tclass q_main, e_main_args)),
             Emethod_call(Evar id, "step", []),
             q_main,
             ty_main
@@ -103,14 +103,14 @@ let program p =
         let acts =
           let parse_max_iteration =
             (* no more arg to give to main, the last one if it exists is the iteration nb *)
-            Aifelse(Efun(Names.pervasives_qn ">", [ Efield (exp_args, "length"); Sint num_args ]),
+            Aifelse(Efun(Names.pervasives_qn ">", [ Efield (exp_args, "length"); Sint (Int32.of_int num_args) ]),
                     (* given max number of iterations *)
                     mk_block [Aassgn(pat_step,
                               Emethod_call(jint, "parseInt", [get_arg num_args]))],
                     (* default max number of iterations *)
                     mk_block [Aassgn(pat_step, Evar id_step_dnb)]);
           in
-          let ty_ret = Obc2java.ty NamesEnv.empty ty_main in
+          let ty_ret = Obc2java.ty param_env ty_main in
           let vd_ret, _, exp_ret = mk_var ty_ret false "ret" in
           let call_main = match ty_ret with
             | Tunit -> Aexp e_main
@@ -130,11 +130,12 @@ let program p =
             let id = Idents.gen_var "java_main" "t" in
             mk_var_dec id false Tlong, Evar id
           in
-          [ Aif(Efun(Names.pervasives_qn "<", [ Efield (exp_args, "length"); Sint num_args ]),
+          (Aif(Efun(Names.pervasives_qn "<", [ Efield (exp_args, "length"); Sint (Int32.of_int num_args) ]),
                  mk_block [Aexp (Emethod_call(out, "printf",
                                               [Sstring "error : not enough arguments.\n"]));
-                           Areturn Evoid]);
-            vd_main;
+                           Areturn Evoid])
+          )::act_main_args@[
+            act_main;
             parse_max_iteration;
             Anewvar(vd_t1, Emethod_call(jsys, "currentTimeMillis", []));
             Obc2java.fresh_for exp_step main_for_loop;
