@@ -44,7 +44,7 @@ public class AsyncNode<T> {
   }
 
   public AsyncNode(int queueSize, int queueNb) {
-    this(queueNb, queueSize, Thread.NORM_PRIORITY);
+    this(queueSize, queueNb, Thread.NORM_PRIORITY);
   }
 
   public AsyncNode() {
