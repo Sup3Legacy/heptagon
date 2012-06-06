@@ -145,7 +145,7 @@ tel
 
 
 (* while newone is true input game then when false output the result in ngame *)
-node ppcore<<n,rule : int>>(left,right : cs; g : cs^n; newone : bool) = (ng : cs^n)
+node pppcore<<n,rule : int>>(left,right : cs; g : cs^n; newone : bool) = (ng : cs^n)
 var 
   last local_right : cs :: . = 0; last local_game : cs^n at r :: . = 0^n;
   
@@ -203,27 +203,47 @@ tel
 
 node main_3()=(y : cs^2)
 let
-  y = ppcore<<2,30>>(0,0,0^2, true fby false);
+  y = pppcore<<2,30>>(0,0,0^2, true fby false);
 tel
 
 
-node ppgame<<n, k, rule :int;first : cs^(n+2)>> () = (y : cs^n^k)
-var g : cs^n^k; 
+node pppgame<<n, k, rule :int;first : cs^(n+2);>> () = (y : cs^n^k)
+var last g : cs^n^k = 0^n^k; last ng : cs^n^k = 0^n^k;
+  last stut_index : int = -1;
+  last stut_left_index : int = -1;
+  last stut_right_index : int = -1;
+  index, left_index, right_index : int;
+  stut_left, stut_right : cs;
+  newone, swap : bool;
+  chunk : cs^n;
 let
   
-  left_index = if index -1 < 0 then n else index -1;
-  left = g[>left_index<][n-1];
-  right_index = if index +1 > n-1 then 0 else index +1;
-  right = g[>right_index<][0];
-  chunk = ppcore<<n,rule>>(left,right,g[>index<],newone);
-  ng = (first^k) fby [ ng with [index] = chunk];
-  
-  g = merge begin (ng when begin)
+  index = Misc.mod_counter<<k>>();
 
+  left_index = if index -1 < 0 then k else index -1;
+  right_index = if index +1 > k-1 then 0 else index +1;
   
+  (* stutter on half because of computation delay *)
+  newone = true fby (not newone);
+  stut_left_index = merge newone (left_index) (last stut_left_index whenot newone);
+  stut_right_index = merge newone (right_index) (last stut_right_index whenot newone);
+  stut_index = merge newone (index) (last stut_index whenot newone);
+
+  stut_right = g[>stut_right_index<][>0<];
+  stut_left = g[>stut_left_index<][>n-1<];
+  chunk = pppcore<<n,rule>>(stut_left, stut_right, g[>stut_index<], newone);
+  
+
+  ng = merge newone (last ng when newone) ([last ng whenot newone with [stut_index whenot newone] = chunk]);
+  
+  g = merge swap (last ng when swap) (last g whenot swap);
+
+  swap = merge newone (index = 0) (false);
+  
+  y = g when swap;
 tel
 
-  
+
 
 
 
