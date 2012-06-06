@@ -7,19 +7,19 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
-import java.util.concurrent.FutureTask;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 
 public class Pervasives {
 
 	public static int between(int i, int m) {
 		if (i<0) {
 			java.lang.System.err.printf("%d ! >= 0\n",i);
+			new Exception().printStackTrace(java.lang.System.err);
 			return 0;
 		}
 		else if (i>=m) {
 			java.lang.System.err.printf("%d ! < %d\n",i,m);
+			new Exception().printStackTrace(java.lang.System.err);
 			return m-1;
 		}
 		else return i;
@@ -31,6 +31,7 @@ public class Pervasives {
 	public static boolean bool_of_int(int i) {
 		return i!=0;
 	}
+	
 
 	public static final ExecutorService executor_cached = Executors.newCachedThreadPool();
 	public static final int max_tasks = 25;
@@ -91,7 +92,7 @@ public class Pervasives {
     public static Object copyNd(Object arr) {
         if (arr.getClass().isArray()) {
             int innerArrayLength = Array.getLength(arr);
-            Class component = arr.getClass().getComponentType();
+            Class<?> component = arr.getClass().getComponentType();
             Object newInnerArray = Array.newInstance(component, innerArrayLength);
             //copy each elem of the array
             for (int i = 0; i < innerArrayLength; i++) {
@@ -103,6 +104,32 @@ public class Pervasives {
             return arr;//cant deep copy an opac object??
         }
     }
+    
+	public static Object fillNd(Object arr, Object fillValue) {
+		int size = Array.getLength(arr);
+		boolean multiDimensional = Array.get(arr, 0).getClass().isArray();
+		
+		if (multiDimensional) {
+			for (int i = 0; i < size; i++) {
+				fillNd(Array.get(arr, i), fillValue);
+			}
+		} else {
+			switch (arr.getClass().getName().charAt(1)) { //charAt(0) is '['
+			case 'B' : Arrays.fill((byte[])arr, (byte) fillValue);break;
+			case 'C' : Arrays.fill((char[])arr, (char) fillValue);break;
+			case 'D' : Arrays.fill((double[])arr, (double) fillValue);break;
+			case 'F' : Arrays.fill((float[])arr, (float) fillValue);break;
+			case 'I' : Arrays.fill((int[])arr, (int) fillValue);break;
+			case 'J' : Arrays.fill((long[])arr, (long) fillValue);break;
+			case 'S' : Arrays.fill((short[])arr, (short) fillValue);break;
+			case 'Z' : Arrays.fill((boolean[])arr, (boolean) fillValue);break;
+			case 'L' : Arrays.fill((Object[])arr, fillValue);break;
+			default ://[
+				java.lang.System.err.println("multidimensional should not happen !");
+			}
+		}
+		return arr;
+	}
 
 	public static String genToString(Object c) {
 		Class<?> cClass = c.getClass();
@@ -146,11 +173,11 @@ public class Pervasives {
 	}
 	
 	public static Tuple2 at_to_ta2 ( final Future<Tuple2> at) {
-		Future t0 = executor_cached.submit(new Callable () {
+		Future<?> t0 = executor_cached.submit(new Callable<Object> () {
 			public Object call() throws Exception {
 				return at.get().c0;
 			} });
-		Future t1 = executor_cached.submit(new Callable () {
+		Future<?> t1 = executor_cached.submit(new Callable<Object> () {
 			public Object call() throws Exception {
 				return at.get().c1;
 			} });
@@ -172,15 +199,15 @@ public class Pervasives {
 	}
 
 	public static Tuple3 at_to_ta3 ( final Future<Tuple3> at) {
-		Future t0 = executor_cached.submit(new Callable () {
+		Future<?> t0 = executor_cached.submit(new Callable<Object> () {
 			public Object call() throws Exception {
 				return at.get().c0;
 			} });
-		Future t1 = executor_cached.submit(new Callable () {
+		Future<?> t1 = executor_cached.submit(new Callable<Object> () {
 			public Object call() throws Exception {
 				return at.get().c1;
 			} });
-		Future t2 = executor_cached.submit(new Callable () {
+		Future<?> t2 = executor_cached.submit(new Callable<Object> () {
 			public Object call() throws Exception {
 				return at.get().c2;
 			} });
@@ -322,4 +349,8 @@ public class Pervasives {
 		}
 	}
 
+	public static void main(String[] args) {
+		int[][] t = (int[][]) fillNd(new int[3][2],2);
+		java.lang.System.out.println(genToString(t));
+	}
 }

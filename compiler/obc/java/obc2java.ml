@@ -129,6 +129,7 @@ let rec static_exp param_env se = match se.Signature.se_desc with
   | Signature.Sfield _ -> Misc.internal_error "Sfield in Java backend.@."
   | Signature.Stuple se_l -> tuple param_env se_l
   | Signature.Sarray_power (see,pow_list) ->
+      (* Fully static version requiring expansion :
       let pow_list = List.rev pow_list in
       let rec make_array tyl pow_list = match tyl, pow_list with
         | Tarray(t, e::e_l), pow::pow_list ->
@@ -144,6 +145,14 @@ let rec static_exp param_env se = match se.Signature.se_desc with
         | _ -> static_exp param_env see
       in
       make_array (ty param_env se.Signature.se_ty) pow_list
+      *)
+      (* new version with lib support *)
+      let tyl = ty param_env se.Signature.se_ty in
+      let fillvalue = static_exp param_env see in
+      let newarray = Enew_array(tyl,[]) in
+      if Java.default_value (ty param_env see.Signature.se_ty) = fillvalue
+      then newarray
+      else Ecast(tyl, Efun ((java_pervasive_class "fillNd"),[newarray;fillvalue]))
   | Signature.Sarray se_l ->
       Enew_array (ty param_env se.Signature.se_ty, List.map (static_exp param_env) se_l)
   | Signature.Srecord fe_l ->
