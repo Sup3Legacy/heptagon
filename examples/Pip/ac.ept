@@ -79,9 +79,17 @@ var yc1,yc :cs^(n+2); cpt :int;
 let
   y = yc when begin;
   yc = first fby [yc1 with [cpt-1] = x];
-  yc1 = if cpt = 2 then [yc with [n+1] = x]
+  switch (cpt = 2)
+  | true do yc1 = [yc with [n+1] = x];
+  | false do
+      switch (cpt = n+1)
+      | true do yc1 = [yc with [0] = x];
+      | false do yc1 = yc;
+      end;
+  end;
+  (*yc1 = if cpt = 2 then [yc with [n+1] = x]
         else if cpt = n+1 then [yc with [0] = x]
-	else yc;
+	else yc;*)
   cpt = Misc.mod_counter_r<<n+2>>(begin);
 tel
 
@@ -186,7 +194,6 @@ let
     state Begin
     do
       lho_x = (lho_last_local_game)[0];
-      () = assert(lho_index = 0);
       lho_game = lho_last_local_game; (* do not store any result for now *)
     until true then Middle
     state Middle
@@ -198,11 +205,10 @@ let
     do
       lho_x = lho_local_right;
       lho_game = [lho_last_local_game with [n-1] = lho_y_l];
-      () = assert(lho_index = n);
     until true then Begin
   end;
 
-  ng = local_game when begin_lho whenot newone;
+  ng = last local_game when begin_lho whenot newone;
 tel
 
 
@@ -248,12 +254,46 @@ let
   y = g when swap;
 tel
 
+node a_pppgame<<n, k, rule :int;first : cs^n;>> () = (y : cs^n^k)
+var last g : (future cs^n)^k = (async first)^k; last ng : (future cs^n)^k = (async first)^k;
+  last stut_index : int = -1;
+  last stut_left_index : int = -1;
+  last stut_right_index : int = -1;
+  index, left_index, right_index : int;
+  stut_left, stut_right : cs;
+  newone, swap : bool;
+  chunk : future cs^n;
+let
+  
+  index = Misc.mod_counter<<k>>();
+
+  left_index = if index -1 < 0 then k-1 else index -1;
+  right_index = if index +1 > k-1 then 0 else index +1;
+  
+  (* stutter on half because of computation delay *)
+  newone = true fby (not newone);
+  stut_left_index = merge newone (left_index) (last stut_left_index whenot newone);
+  stut_right_index = merge newone (right_index) (last stut_right_index whenot newone);
+  stut_index = merge newone (index) (last stut_index whenot newone);
+
+  stut_right = (!(g[>stut_right_index<]))[>0<];
+  stut_left = (!(g[>stut_left_index<]))[>n-1<];
+  reset chunk = async<<2,k+1>> pppcore<<n,rule>>(stut_left, stut_right, !(g[>stut_index<]), newone) every newone;
+  
+
+  ng = merge newone (last ng when newone) ([last ng whenot newone with [stut_index whenot newone] = chunk]);
+  
+  g = merge swap (last ng when swap) (last g whenot swap);
+
+  swap = merge newone (index = 0) (false);
+  
+  y = map<<k>> (!) (g when swap);
+tel
 
 node main_4<<n,k,rule :int>>() = (y : cs^n^k)
 let
-y = pppgame<<n,k,rule,0^n>>();
+  y = pppgame<<n,k,rule,0^n>>();
 tel
-
 
 
 
