@@ -848,7 +848,11 @@ and expect env lin e =
            expect_iterator env e.e_loc it expected_lin_list inputs_lins outputs_lins e_list
          with
              UnifyFailed -> message e.e_loc (Eunify_failed_one lin))
-
+    | Eiterator (it, { a_op = op }, _, [], e_list,_) ->
+      (try
+         expect_app env lin op e_list
+       with
+           UnifyFailed -> message e.e_loc (Eunify_failed_one lin))
     | _ ->
       let actual_lin, env = typing_exp env e in
         unify_lin lin actual_lin, env
