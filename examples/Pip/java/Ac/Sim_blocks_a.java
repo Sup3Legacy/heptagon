@@ -6,8 +6,8 @@ import jeptagon.AsyncFun;
 
 public class Sim_blocks_a {
     public static final int default_step_nb_2 = 30000;
-    
-    
+
+
     public static void main (String[] args_2) throws java.lang.InterruptedException,
                                               java.util.concurrent.ExecutionException {
         int step_2 = 0;
@@ -19,7 +19,7 @@ public class Sim_blocks_a {
         int RULE_2 = Integer.parseInt(args_2[2]);
         int[] init = new int[N_2];
         init[(N_2-2)/2] = 1;
-        A_pppgame main_2 = new A_pppgame(N_2, K_2, RULE_2, init);
+        Manual_A_pppgame main_2 = new Manual_A_pppgame(N_2, K_2, RULE_2, init);
         if ((args_2.length > 3)) {
             step_2 = Integer.parseInt(args_2[3]);
         } else {

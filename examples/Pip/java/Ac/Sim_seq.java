@@ -6,8 +6,8 @@ import jeptagon.AsyncFun;
 
 public class Sim_seq {
     public static final int default_step_nb_2 = 30000;
-    
-    
+
+
     public static void main (String[] args_2) throws java.lang.InterruptedException,
                                               java.util.concurrent.ExecutionException {
         int step_2 = 0;
@@ -20,7 +20,7 @@ public class Sim_seq {
         int N = N_2 * K_2;
         int[] init = new int[N+2];
         init[(N+2)/2] = 1;
-        Game main_2 = new Game(N, RULE_2, init);
+        Manual_Game main_2 = new Manual_Game(N, RULE_2, init);
         if ((args_2.length > 3)) {
             step_2 = Integer.parseInt(args_2[3]);
         } else {
