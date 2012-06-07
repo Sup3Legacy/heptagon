@@ -1,4 +1,87 @@
+(** Counters *)
 
+node counter(res:bool) = (cpt :int)
+let
+  reset
+    cpt = 0 fby (cpt+1);
+  every res
+tel
+
+(* count from 0 to n-1 *)
+node mod_counter<<n :int>>() = (cpt :int)
+let
+  reset
+    cpt = 0 fby (cpt + 1)
+  every (false fby (cpt = n-1))
+tel
+
+(* count from 0 to n-1, reset to 0 when [res] *)
+node mod_counter_r<<n :int>>(res :bool) = (cpt :int)
+let
+  reset
+    cpt = 0 fby (cpt + 1)
+  every (res or (false fby (cpt = n-1)))
+tel
+
+
+(** Timers *)
+
+node timer<<n :int>>() = (t :bool)
+let
+  t = mod_counter<<n>>() = 0;
+tel
+
+
+(** Is false until the input is true, then stays true. *)
+node watch(b : bool) = (o :bool)
+let
+  o = b or (false fby o)
+tel
+
+(** Waits [n] ticks before getting true *)
+node wait<<n :int>>() = (go :bool)
+let
+    go = watch(false -> timer<<n>>())
+tel
+
+node current_i<<ini :int>>(x : int; ck : bool) = (y :int)
+let
+  y = merge ck (x) ((ini fby y) whenot ck)
+tel
+
+node current_ai<<n :int; ini :int^n>>(x :int^n; ck :bool) = (y :int^n)
+let
+  y = merge ck (x) ((ini fby y) whenot ck)
+tel
+
+(* Array to stream
+    the boolean new_array should be declared as being true every [n] ticks (Misc.timer<<n>>())*)
+node a2s <<n :int>> (x :int^n; new_array :bool) = (y :int)
+var current_x :int^n; index :int;
+let
+  current_x = merge new_array (x) (((0^n) fby current_x) whenot new_array);
+  index = mod_counter_r<<n>>(new_array);
+  y = current_x[>index<];
+tel
+(* Stream to array
+    a new array [y] is returned each n ticks (with a delay of n-1 ticks)*)
+node s2a <<n:int>> (x :int; new_array :bool) = (y :int^n)
+var current_y :int^n; index :int;
+let
+  current_y = (0^n) fby [current_y with [index] = x];
+  index = mod_counter_r<<n>>(new_array);
+  y = current_y when new_array;
+tel
+
+(* burstify a node, note that the first array is dummy *)
+node burstify <<val node f(int)=(int); m : int;>> (x :int^m) = (y :int^m)
+var base_clock : bool; stream_x, stream_y : int;
+let
+  base_clock = timer<<m>>();
+  stream_x = a2s<<m>>(x, base_clock);
+  stream_y = stream_x;
+  y = s2a<<m>>(stream_y, base_clock);
+tel
 (*
 type cell_state = int
 
@@ -75,7 +158,7 @@ tel
 
 
 node circle<<n : int; first : cs^(n+2);>> (begin : bool; x : cs) = (y : cs^(n+2))
-var yc1,yc :cs^(n+2); cpt :int;
+var yc1,yc :cs^(n+2) at r; cpt :int;
 let
   y = yc when begin;
   yc = first fby [yc1 with [cpt-1] = x];
@@ -90,7 +173,7 @@ let
   (*yc1 = if cpt = 2 then [yc with [n+1] = x]
         else if cpt = n+1 then [yc with [0] = x]
 	else yc;*)
-  cpt = Misc.mod_counter_r<<n+2>>(begin);
+  cpt = mod_counter_r<<n+2>>(begin);
 tel
 
 
@@ -98,8 +181,8 @@ tel
 node game<<n :int; rule :int; first : cs^(n+2);>> () = (y : cs^(n+2))
 var begin : bool; x_l, y_l : cs;
 let
-  begin = Misc.timer<<n+2>>();
-  x_l = Stream_arrays.a2s<<n+2>>(y, begin);
+  begin = timer<<n+2>>();
+  x_l = a2s<<n+2>>(y, begin);
 
   y_l = seq_cell<<rule>>(x_l);
 
@@ -118,8 +201,8 @@ let
   x = game<<10, 30, 0^12 >>();
 tel
 
-
-
+(*
+(* Dummy *)
 node circle_k<<k :int; n :int; first : cs^(n+2);>>(begin : bool; x : cs) = (y : cs^((n+2)*k))
 let
   y = 0^((n+2)*k) when begin;
@@ -131,25 +214,20 @@ node ppgame<<n,k :int; rule :int; first : cs^(n+2);>> () = (y : cs^((n+2)*k))
 var begin_game, begin_chunk : bool; chunk : int; xc, yc : int^(n+2); x_l, y_l : int;
 let
   
-  begin_chunk = Misc.timer<<n+2>>();
-  chunk = (Misc.mod_counter<<k>>() :: begin_chunk);
+  begin_chunk = timer<<n+2>>();
+  chunk = (mod_counter<<k>>() :: begin_chunk);
   begin_game = chunk = 0;
 
-  x_l = Stream_arrays.a2s<<(n+2)*k>>(y, begin_game);
+  x_l = a2s<<(n+2)*k>>(y, begin_game);
   
-  xc = inlined Stream_arrays.s2a<<n+2>>(x_l, begin_chunk);
-  yc = Stream_arrays.burstify<<seq_cell<<rule>>,n+2>>(xc); 
-  y_l = inlined Stream_arrays.a2s<<n+2>>(yc, begin_chunk);
+  xc = inlined s2a<<n+2>>(x_l, begin_chunk);
+  yc = burstify<<seq_cell<<rule>>,n+2>>(xc); 
+  y_l = inlined a2s<<n+2>>(yc, begin_chunk);
   
   y = inlined circle_k<<k, n, first>>(begin_game, y_l);
   
 tel
-
-node main_2()=(y:cs^8)
-let
-  y = ppgame<<2,2,30,0^4>>();
-tel
-
+*)
 
 node current<<i : int>>(x : int; ck : bool) = (last y : int = i)
 let
@@ -174,7 +252,7 @@ var
 
 let
   begin_lho = true fby (merge begin_lho (not newone) (lho_index = n));
-  lho_index = Misc.mod_counter<<n+1>>();
+  lho_index = mod_counter<<n+1>>();
 
   (* keep needed inputs during lho *)
   local_right = merge begin_lho (right) (last local_right whenot begin_lho);
@@ -212,24 +290,20 @@ let
 tel
 
 
-node main_3()=(y : cs^2)
-let
-  y = pppcore<<2,30>>(0,0,0^2, true fby false);
-tel
-
-
 node pppgame<<n, k, rule :int;first : cs^n;>> () = (y : cs^n^k)
-var last g : cs^n^k = first^k; last ng : cs^n^k = first^k;
+var
+  last g : cs^n^k at r2 = first^k; lgw,lgwn : cs^n^k at r2;
+  last ng : cs^n^k at r = first^k; lngw, lngwn : cs^n^k at r;
   last stut_index : int = -1;
   last stut_left_index : int = -1;
   last stut_right_index : int = -1;
   index, left_index, right_index : int;
   stut_left, stut_right : cs;
   newone, swap : bool;
-  chunk : cs^n;
+  chunk, prev_chunk : cs^n;
 let
   
-  index = Misc.mod_counter<<k>>();
+  index = mod_counter<<k>>();
 
   left_index = if index -1 < 0 then k-1 else index -1;
   right_index = if index +1 > k-1 then 0 else index +1;
@@ -242,12 +316,14 @@ let
 
   stut_right = g[>stut_right_index<][>0<];
   stut_left = g[>stut_left_index<][>n-1<];
-  chunk = pppcore<<n,rule>>(stut_left, stut_right, g[>stut_index<], newone);
+  prev_chunk = g[>stut_index<];
+  chunk = pppcore<<n,rule>>(stut_left, stut_right, prev_chunk, newone);
   
-
-  ng = merge newone (last ng when newone) ([last ng whenot newone with [stut_index whenot newone] = chunk]);
+  (lngw,lngwn) = split newone (last ng);
+  ng = merge newone (lngw) ([lngwn with [stut_index whenot newone] = chunk]);
   
-  g = merge swap (last ng when swap) (last g whenot swap);
+  (lgw, lgwn) = split swap (last g);
+  g = merge swap (reinit(lgw,last ng when swap)) (lgwn);
 
   swap = merge newone (index = 0) (false);
   
@@ -255,7 +331,8 @@ let
 tel
 
 node a_pppgame<<n, k, rule :int;first : cs^n;>> () = (y : cs^n^k)
-var last g : (future cs^n)^k = (async first)^k; last ng : (future cs^n)^k = (async first)^k;
+var last g : (future cs^n)^k at r2 = (async first)^k; lgw,lgwn : (future cs^n)^k at r2;
+  last ng : (future cs^n)^k at r = (async first)^k; lngw,lngwn : (future cs^n)^k at r;
   last stut_index : int = -1;
   last stut_left_index : int = -1;
   last stut_right_index : int = -1;
@@ -263,9 +340,10 @@ var last g : (future cs^n)^k = (async first)^k; last ng : (future cs^n)^k = (asy
   stut_left, stut_right : cs;
   newone, swap : bool;
   chunk : future cs^n;
+  prev_chunk : cs^n;
 let
   
-  index = Misc.mod_counter<<k>>();
+  index = mod_counter<<k>>();
 
   left_index = if index -1 < 0 then k-1 else index -1;
   right_index = if index +1 > k-1 then 0 else index +1;
@@ -278,22 +356,61 @@ let
 
   stut_right = (!(g[>stut_right_index<]))[>0<];
   stut_left = (!(g[>stut_left_index<]))[>n-1<];
-  reset chunk = async<<2,k+1>> pppcore<<n,rule>>(stut_left, stut_right, !(g[>stut_index<]), newone) every newone;
+  prev_chunk = !(g[>stut_index<]);
+  reset chunk = async<<3,k+1>> pppcore<<n,rule>>(stut_left, stut_right, prev_chunk, newone) every newone;
   
-
-  ng = merge newone (last ng when newone) ([last ng whenot newone with [stut_index whenot newone] = chunk]);
-  
-  g = merge swap (last ng when swap) (last g whenot swap);
+  (lngw,lngwn) = split newone (last ng);
+  ng = merge newone (lngw) ([lngwn with [stut_index whenot newone] = chunk]);
+      
+  (lgw, lgwn) = split swap (last g);
+  g = merge swap (reinit(lgw,last ng when swap)) (lgwn);
 
   swap = merge newone (index = 0) (false);
   
   y = map<<k>> (!) (g when swap);
 tel
 
-node main_4<<n,k,rule :int>>() = (y : cs^n^k)
+
+node ca_pppgame<<n, k, rule :int;first : cs^n;>> () = (y : cs^n^k)
+var last g : (future cs^n)^k at r2 = (async first)^k; lgw,lgwn : (future cs^n)^k at r2;
+  last ng : (future cs^n)^k at r = (async first)^k; lngw,lngwn : (future cs^n)^k at r;
+  last stut_index : int = -1;
+  last stut_left_index : int = -1;
+  last stut_right_index : int = -1;
+  mod_index, index, left_index, right_index : int;
+  stut_left, stut_right : cs;
+  newone, swap : bool;
+  chunk : future cs^n;
+  prev_chunk : cs^n;
+  abs_index, offset : int;
 let
-  y = pppgame<<n,k,rule,0^n>>();
+  
+  offset = merge swap (mod_counter<<k>>()) ((0 fby offset) whenot swap);
+
+  abs_index = mod_counter<<k>>();
+  index = abs_index + (offset when newone);
+  mod_index = if index > k-1 then index - k else index;
+  left_index = if mod_index -1 < 0 then k-1 else mod_index -1;
+  right_index = if mod_index +1 > k-1 then 0 else mod_index +1;
+  
+  (* stutter on half because of computation delay *)
+  newone = true fby (not newone);
+  stut_left_index = merge newone (left_index) (last stut_left_index whenot newone);
+  stut_right_index = merge newone (right_index) (last stut_right_index whenot newone);
+  stut_index = merge newone (mod_index) (last stut_index whenot newone);
+
+  stut_right = (!(g[>stut_right_index<]))[>0<];
+  stut_left = (!(g[>stut_left_index<]))[>n-1<];
+  prev_chunk = !(g[>stut_index<]);
+  reset chunk = async<<3,k+1>> pppcore<<n,rule>>(stut_left, stut_right, prev_chunk, newone) every newone;
+  
+  (lngw,lngwn) = split newone (last ng);
+  ng = merge newone (lngw) ([lngwn with [stut_index whenot newone] = chunk]);
+      
+  (lgw, lgwn) = split swap (last g);
+  g = merge swap (reinit(lgw,last ng when swap)) (lgwn);
+
+  swap = merge newone (abs_index = 0) (false);
+  
+  y = map<<k>> (!) (g when swap);
 tel
-
-
-
