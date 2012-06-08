@@ -33,6 +33,7 @@ let rec ident_of_extvalue w = match w.w_desc with
   | Wwhen(w, _, _) -> ident_of_extvalue w
   | Wconst _ -> None
   | Wreinit (_, w) -> ident_of_extvalue w
+  | Wbang w -> ident_of_extvalue w
 
 (** @return the list of bounds of an array type*)
 let rec bounds_list ty =

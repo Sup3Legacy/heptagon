@@ -296,6 +296,9 @@ and extvalue is_input w class_id_list =
         let class_id_list, w1 = decompose w1 class_id_list in
         let class_id_list, w2 = decompose w2 class_id_list in
         class_id_list, Wreinit (w1, w2)
+      | Wbang w ->
+        let class_id_list, w = decompose w class_id_list in
+        class_id_list, Wbang w
     in
     class_id_list, { w with w_desc = wd; }
   in
@@ -462,6 +465,9 @@ and reconstruct_extvalues mapping w_list children =
         let w1, children = reconstruct_extvalue w1 children in
         let w2, children = reconstruct_extvalue w2 children in
         { w with w_desc = Wreinit (w1, w2); }, children
+      | Wbang w' ->
+        let w', children = reconstruct_extvalue w' children in
+        { w with w_desc = Wbang w'}, children
     in
     { w with w_ck = reconstruct_clock mapping w.w_ck }, children
   in

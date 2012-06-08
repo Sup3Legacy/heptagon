@@ -84,6 +84,7 @@ module InterfRead = struct
     | Wwhen(w, _, _) -> ivar_of_extvalue w
     | Wconst _ -> raise Const_extvalue
     | Wreinit (_, w) -> ivar_of_extvalue w
+    | Wbang w -> ivar_of_extvalue w
 
   let ivar_of_pat p = match p with
     | Evarpat x -> Ivar x

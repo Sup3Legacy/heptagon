@@ -97,6 +97,8 @@ and print_extvalue_desc ff = function
       fprintf ff "@[<2>(%a@ when %a(%a))@]" print_extvalue w print_qualname c print_ident n
   | Wreinit (w1, w2) ->
       fprintf ff "@[reinit@,(%a, %a)@]" print_extvalue w1  print_extvalue w2
+  | Wbang w ->
+      fprintf ff "@[!(%a)@]" print_extvalue w
 
 and print_exp_desc ff = function
   | Eextvalue w -> print_extvalue ff w

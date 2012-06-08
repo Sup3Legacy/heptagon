@@ -59,6 +59,7 @@ and ext_value_desc =
   | Wmem of var_ident
   | Wfield of ext_value * field_name
   | Warray of ext_value * exp
+  | Wbang of ext_value
 
 and exp = { e_desc : exp_desc; e_ty : ty; e_loc : location }
 

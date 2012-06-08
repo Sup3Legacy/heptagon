@@ -106,7 +106,7 @@ let rec lhs funs (env, mut, j) l = match l.pat_desc with
 
 let extvalue funs (env, mut, j) w = match w.w_desc with
   | Wmem _ | Wconst _ -> w, (env, mut, j)
-  | Warray _ | Wfield _ -> Obc_mapfold.extvalue funs (env, mut, j) w
+  | Warray _ | Wfield _ | Wbang _ -> Obc_mapfold.extvalue funs (env, mut, j) w
   | Wvar x ->
     (* replace with representative *)
     let lhs, _ = lhs funs (env, mut, j) (mk_pattern Signature.invalid_type (Lvar x)) in

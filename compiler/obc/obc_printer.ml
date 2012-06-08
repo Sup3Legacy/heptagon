@@ -46,6 +46,7 @@ and print_ext_value ff w = match w.w_desc with
     fprintf ff "[";
     print_exp ff idx;
     fprintf ff "]"
+  | Wbang w -> fprintf ff "(!%a)" print_ext_value w
 
 
 and print_exps ff e_list = print_list_r print_exp "" "," "" ff e_list

@@ -53,6 +53,7 @@ and extvalue_desc =
   | Wfield of extvalue * field_name
   | Wwhen of extvalue * constructor_name * var_ident (** extvalue when Constructor(ident) *)
   | Wreinit of extvalue * extvalue
+  | Wbang of extvalue
 
 and exp = {
   e_desc            : edesc;

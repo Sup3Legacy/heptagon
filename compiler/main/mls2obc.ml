@@ -227,6 +227,7 @@ let rec translate_extvalue map w = match w.Minils.w_desc with
       | Minils.Wvar _ -> assert false
       | Minils.Wfield (w1, f) -> Wfield (translate_extvalue map w1, f)
       | Minils.Wwhen (w1, _, _) | Minils.Wreinit(_, w1)  -> (translate_extvalue map w1).w_desc
+      | Minils.Wbang w -> Wbang (translate_extvalue map w)
     in
     mk_ext_value w.Minils.w_ty desc
 

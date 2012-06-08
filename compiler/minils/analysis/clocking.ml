@@ -78,6 +78,8 @@ let rec typing_extvalue h w =
       let t2 = typing_extvalue h w2 in
       unify_ck t1 t2;
       t1
+    | Wbang w ->
+      typing_extvalue h w
   in
   (try unify_ck ck w.w_ck
    with Unify ->

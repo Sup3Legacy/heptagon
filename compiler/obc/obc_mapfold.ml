@@ -117,6 +117,9 @@ and evdesc funs acc wd = match wd with
       let w, acc = extvalue_it funs acc w in
       let e, acc = exp_it funs acc e in
       Warray(w, e), acc
+  | Wbang w ->
+      let w, acc = extvalue_it funs acc w in
+      Wbang w, acc
 
 and act_it funs acc a =
   try funs.act funs acc a

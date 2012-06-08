@@ -294,6 +294,7 @@ and ext_value param_env w = match w.w_desc with
   | Obc.Wmem v -> this_field_ident v
   | Obc.Wfield (p,f) -> Efield (ext_value param_env p, translate_field_name f)
   | Obc.Warray (p,e) -> Earray_elem (ext_value param_env p, [exp param_env e])
+  | Obc.Wbang w -> Emethod_call (ext_value param_env w,"get",[])
 
 
 let obj_ref param_env o = match o with

@@ -118,7 +118,10 @@ let rec translate_extvalue e =
           mk_extvalue e (Wfield (translate_extvalue e', fn))
     | Heptagon.Eapp({ Heptagon.a_op = Heptagon.Ereinit }, e_list, _) ->
         let e1, e2 = assert_2 e_list in
-          mk_extvalue e (Wreinit (translate_extvalue e1, translate_extvalue e2))
+        mk_extvalue e (Wreinit (translate_extvalue e1, translate_extvalue e2))
+    | Heptagon.Eapp({Heptagon.a_op = Heptagon.Ebang}, e_list, _) ->
+        let e' = assert_1 e_list in
+        mk_extvalue e (Wbang (translate_extvalue e'))
     | _ -> Error.message e.Heptagon.e_loc Error.Enormalization
 
 let rec translate ({ Heptagon.e_desc = desc; Heptagon.e_ty = ty;
@@ -127,7 +130,7 @@ let rec translate ({ Heptagon.e_desc = desc; Heptagon.e_ty = ty;
   let desc = match desc with
     | Heptagon.Econst _
     | Heptagon.Evar _
-    | Heptagon.Eapp({ Heptagon.a_op = Heptagon.Efield | Heptagon.Ereinit }, _, _) ->
+    | Heptagon.Eapp({ Heptagon.a_op = Heptagon.Efield | Heptagon.Ereinit | Heptagon.Ebang }, _, _) ->
         let w = translate_extvalue e in
         Eextvalue w
     | Heptagon.Ewhen (e,c,x) -> Ewhen (translate e, c, x)

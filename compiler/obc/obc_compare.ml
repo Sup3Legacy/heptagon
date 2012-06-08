@@ -12,10 +12,12 @@ let rec extvalue_compare w1 w2 =
       | Wmem x1, Wmem x2 -> ident_compare x1 x2
       | Wfield(r1, f1), Wfield(r2, f2) ->
           let cr = compare f1 f2 in
-            if cr <> 0 then cr else extvalue_compare r1 r2
+          if cr <> 0 then cr else extvalue_compare r1 r2
       | Warray(l1, e1), Warray(l2, e2) ->
           let cr = extvalue_compare l1 l2 in
-            if cr <> 0 then cr else exp_compare e1 e2
+          if cr <> 0 then cr else exp_compare e1 e2
+      | Wbang w1, Wbang w2 ->
+          extvalue_compare w1 w2
       | Wvar _, _ -> 1
 
       | Wmem _, Wvar _ -> -1
@@ -27,7 +29,10 @@ let rec extvalue_compare w1 w2 =
       | Wconst _, (Wvar _ | Wmem _ | Wfield _) -> -1
       | Wconst _, _ -> 1
 
+      | Warray _, Wbang _ -> 1
       | Warray _, _ -> -1
+
+      | Wbang _, _ -> -1
 
 
 and exp_compare e1 e2 =

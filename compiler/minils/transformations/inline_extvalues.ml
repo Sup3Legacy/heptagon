@@ -48,6 +48,7 @@ let gather_extvalues_node nd =
       | Wwhen(w, _, _) -> var_of_extvalue w
       | Wconst _ -> None
       | Wreinit (_, w) -> var_of_extvalue w
+      | Wbang w -> var_of_extvalue w
     in
     match var_of_extvalue w with
       | Some x ->

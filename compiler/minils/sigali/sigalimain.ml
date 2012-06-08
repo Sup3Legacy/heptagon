@@ -89,7 +89,7 @@ let rec translate_ext prefix ({ Minils.w_desc = desc; Minils.w_ty = ty } as e) =
         translate_ext prefix e
     | Minils.Wfield(_) ->
         failwith("Sigali: structures not implemented")
-    | Minils.Wreinit _ -> failwith("Sigali: reinit not implemented")
+    | Minils.Wreinit _ | Minils.Wbang _ -> failwith("Sigali: reinit not implemented")
 
 (* [translate e = c] *)
 let rec translate prefix ({ Minils.e_desc = desc; Minils.e_ty = ty } as e) =

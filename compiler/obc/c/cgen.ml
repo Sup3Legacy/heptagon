@@ -389,6 +389,8 @@ and cexpr_of_ext_value out_env var_env w = match w.w_desc with
   | Warray (l, idx) ->
     Carray(cexpr_of_ext_value out_env var_env l,
            cexpr_of_exp out_env var_env idx)
+  | Wbang _ ->
+      Misc.internal_error "C backend not yet supporting futures."
 
 let rec assoc_obj instance obj_env =
   match obj_env with
