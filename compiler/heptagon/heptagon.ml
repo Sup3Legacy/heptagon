@@ -101,8 +101,7 @@ and block = {
   b_equs      : eq list;
   b_defnames  : var_dec Env.t;
   b_stateful  : bool;
-  b_loc       : location;
-  b_async     : async_t; }
+  b_loc       : location; }
 
 and state_handler = {
   s_state  : state_name;

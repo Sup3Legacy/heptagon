@@ -146,8 +146,7 @@ and eqdesc =
 and block =
   { b_local : var_dec list;
     b_equs  : eq list;
-    b_loc   : location;
-    b_async : async_t; }
+    b_loc   : location;}
 
 and state_handler =
   { s_state  : state_name;
@@ -293,7 +292,7 @@ let mk_var_dec ?(linearity=Linearity.Ltop) ty ck last loc name =
 
 let mk_block locals ?(async=None) eqs loc =
   { b_local = locals; b_equs = eqs;
-    b_loc = loc; b_async = async }
+    b_loc = loc;}
 
 let mk_const_dec id ty e loc =
   { c_name = id; c_type = ty; c_value = e; c_loc = loc }

@@ -45,9 +45,9 @@ let mk_var_dec ?(last = Var) ?(clock = fresh_clock()) name ty ~linearity =
   { v_ident = name; v_type = ty; v_linearity = linearity; v_clock = clock;
     v_last = last; v_loc = no_location }
 
-let mk_block ?(stateful = true) ?(async = None) ?(defnames = Env.empty) ?(locals = []) eqs =
+let mk_block ?(stateful = true) ?(defnames = Env.empty) ?(locals = []) eqs =
   { b_local = locals; b_equs = eqs; b_defnames = defnames;
-    b_stateful = stateful; b_loc = no_location; b_async = async }
+    b_stateful = stateful; b_loc = no_location; }
 
 let dfalse =
   mk_exp (Econst (mk_static_bool false)) (Tid Initial.pbool) ~linearity:Ltop

@@ -355,13 +355,11 @@ and translate_eq_desc loc env = function
 
 and translate_block env b =
   let env = Rename.append env b.b_local in
-  let async = Misc.optional (List.map expect_static_exp) b.b_async in
   { Heptagon.b_local = translate_vd_list env b.b_local;
     Heptagon.b_equs = List.map (translate_eq env) b.b_equs;
     Heptagon.b_defnames = Env.empty;
     Heptagon.b_stateful = false;
-    Heptagon.b_loc = b.b_loc;
-    Heptagon.b_async = async; }, env
+    Heptagon.b_loc = b.b_loc; }, env
 
 and translate_state_handler env sh =
   let b, env = translate_block env sh.s_block in
