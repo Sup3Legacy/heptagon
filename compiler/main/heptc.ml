@@ -137,6 +137,7 @@ let main () =
         "-strict_ssa", Arg.Set strict_ssa, doc_strict_ssa;
         "-memalloc", Arg.Unit do_mem_alloc_and_typing, doc_memalloc;
         "-java_queue_size", Arg.Int set_java_queue_size, doc_java_queue_size;
+        "-noasync", Arg.Set no_async, doc_noasync;
         "-only-memalloc", Arg.Set do_mem_alloc, doc_memalloc_only;
         "-only-linear", Arg.Set do_linear_typing, doc_linear_only;
         "-old-scheduler", Arg.Set use_old_scheduler, doc_interf_scheduler;

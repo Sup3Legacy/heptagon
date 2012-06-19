@@ -81,6 +81,8 @@ let java_queue_nb = ref 1l
 
 let set_java_queue_size i = java_queue_size := Int32.of_int i
 
+let no_async = ref false
+
 let full_type_info = ref false
 
 let full_qual_info = ref false
@@ -193,6 +195,7 @@ and doc_memalloc = "\t\tEnable memory allocation and linear annotations"
 and doc_memalloc_only = "\tEnable memory allocation"
 and doc_java_queue_size = "\tSet the default input queue size for async nodes, 0 means threadPool, \
 default to 1"
+and doc_noasync = "\t\tErase asynchronous calls and futures."
 and doc_java_queue_nb = "\t\tSet the default thread number for async nodes, default to 1"
 and doc_linear_only = "\t\tEnable linear annotations"
 and doc_interf_scheduler = "\tUse the old scheduler"

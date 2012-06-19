@@ -20,9 +20,11 @@ let compile_program p =
   let p = silent_pass "Unsafe check" true Unsafe.program p in
   let p = pass "Typing" true Typing.program p pp in
   let p = pass "Linear Typing" !do_linear_typing Linear_typing.program p pp in
-
-  (* Initialization check *)
   let p = silent_pass "Initialization check" !init Initialization.program p in
+
+
+  (* Remove async and futures *)
+  let p = silent_pass "Removing async calls" !no_async No_async.program p in
 
   (* Completion of partial definitions *)
   let p = pass "Completion" true Completion.program p pp in
