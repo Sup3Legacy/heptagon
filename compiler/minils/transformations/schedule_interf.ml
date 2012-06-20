@@ -172,8 +172,6 @@ let schedule eq_list inputs node_list =
   let rem_eqs = free_eqs node_list in
     List.rev (schedule_aux rem_eqs [] node_list Clocks.Cbase costs)
 
-let schedule_contract c =
-  c
 let schedule_contract contract c_inputs =
   match contract with
     None -> None, []
@@ -184,10 +182,8 @@ let schedule_contract contract c_inputs =
 
 let node _ () f =
   Interference.World.init f;
-  let contract = schedule_contract f.n_contract in
   let contract,controllables = schedule_contract f.n_contract (f.n_input@f.n_output) in
   let node_list, _ = DataFlowDep.build f.n_equs in
-  let f = { f with n_equs = schedule f.n_equs f.n_input node_list; n_contract = contract } in
   (* Controllable variables are considered as inputs *)
   let f = { f with
               n_equs = schedule f.n_equs (f.n_input@controllables) node_list;
