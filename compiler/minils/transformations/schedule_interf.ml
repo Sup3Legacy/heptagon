@@ -184,7 +184,7 @@ let schedule_contract contract c_inputs =
 
 let node _ () f =
   Interference.World.init f;
-  let contract = optional schedule_contract f.n_contract in
+  let contract = schedule_contract f.n_contract in
   let contract,controllables = schedule_contract f.n_contract (f.n_input@f.n_output) in
   let node_list, _ = DataFlowDep.build f.n_equs in
   let f = { f with n_equs = schedule f.n_equs f.n_input node_list; n_contract = contract } in
