@@ -188,3 +188,19 @@ let rec ck_to_sck ck =
     | Cbase -> Signature.Cbase
     | Con (ck,c,x) -> Signature.Con(ck_to_sck ck, c, Idents.source_name x)
     | _ -> Misc.internal_error "Signature couldn't translate ck"
+    
+let are_disjoint ck1 ck2 =
+  let rec list_of_samplers acc ck = match ck with
+    | Cbase | Cvar _ -> acc
+    | Con(ck, c, x) -> list_of_samplers ((c, x)::acc) ck
+  in
+  let rec disjoint_samplers s_ck1 s_ck2 = match s_ck1, s_ck2 with
+    | [], _ -> false
+    | _ , [] -> false
+    | (c1, x1)::s_ck1, (c2, x2)::s_ck2 ->
+        if Idents.ident_compare x1 x2 <> 0 then
+          false
+        else
+          c1 <> c2 || disjoint_samplers s_ck1 s_ck2
+  in
+  disjoint_samplers (list_of_samplers [] ck1) (list_of_samplers [] ck2)
