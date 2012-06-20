@@ -132,6 +132,13 @@ let no_clocking_error = ref false
 
 let normalize_register_outputs = ref true
 let strict_ssa = ref false
+(* if this option is on, generate code that first copies the whole array and then modifies one element.
+   Otherwise, generate two loops so that each element in the array is only assigned once. *)
+let memcpy_array_and_struct = ref true
+
+let set_strict_ssa () =
+  strict_ssa := true;
+  memcpy_array_and_struct := false
 
 let functions_are_classes = ref true
 
