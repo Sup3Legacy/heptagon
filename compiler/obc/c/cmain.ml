@@ -101,7 +101,9 @@ let main_def_of_class_def cd =
     | Signature.Tid id when id = Initial.pint -> "%d"
     | Signature.Tid id when id = Initial.pbool -> "%d"
     | Tid _ -> "%s"
-    | Tfuture _ -> assert false (* TODO async *) in
+    | Tfuture _ -> assert false (* TODO async *)
+    | Tbounded _ -> assert false
+  in
 
   (** Does reading type [ty] need a buffer? When it is the case,
       [need_buf_for_ty] also returns the type's name. *)
@@ -111,7 +113,9 @@ let main_def_of_class_def cd =
     | Signature.Tid id when id = Initial.pint -> None
     | Signature.Tid id when id = Initial.pbool -> None
     | Tid { name = n } -> Some n
-    | Tfuture _ -> assert false (* TODO async *) in
+    | Tfuture _ -> assert false (* TODO async *)
+    | Tbounded _ -> assert false
+  in
   let cprint_string s = Csexpr (Cfun_call ("printf", [Cconst (Cstrlit s)])) in
 
   (** Generates scanf statements. *)

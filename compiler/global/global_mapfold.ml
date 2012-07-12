@@ -73,6 +73,9 @@ and ty funs acc t = match t with
       Tarray (t, se), acc
   | Tinvalid -> t, acc
   | Tfuture (a, t) -> let t, acc = ty_it funs acc t in Tfuture (a, t), acc
+  | Tbounded se ->
+      let se, acc = static_exp_it funs acc se in
+      Tbounded se, acc
 
 and ct_it funs acc c = try funs.ct funs acc c with Fallback -> ct funs acc c
 and ct funs acc c = match c with

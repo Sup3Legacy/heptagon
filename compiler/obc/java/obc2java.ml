@@ -196,6 +196,7 @@ and boxed_ty param_env t = match Modules.unalias_type t with
     Tarray (t, s_l)
   | Signature.Tinvalid -> Misc.internal_error "obc2java invalid type"
   | Signature.Tfuture (_,t) -> Tgeneric (Names.pervasives_qn "Future", [boxed_ty param_env t])
+  | Signature.Tbounded _ -> Tclass (Idents.local_qn "Integer")
 
 and tuple_ty param_env ty_l =
   let ln = ty_l |> List.length |> Pervasives.string_of_int in
@@ -221,6 +222,7 @@ and ty param_env t =
       Tarray (tin, s_l)
   | Signature.Tinvalid -> Misc.internal_error "obc2java invalid type"
   | Signature.Tfuture (_,t) -> Tgeneric (Names.pervasives_qn "Future", [boxed_ty param_env t])
+  | Signature.Tbounded _ -> Tint
 
 
 and var_dec param_env vd = { vd_type = ty param_env vd.v_type;

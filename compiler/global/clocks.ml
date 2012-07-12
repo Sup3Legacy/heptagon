@@ -47,6 +47,7 @@ let rec fresh_ct ty = match ty with
   | Tarray (t, _) -> fresh_ct t
   | Tid _ | Tinvalid -> Ck (fresh_clock())
   | Tfuture (_,t) -> fresh_ct t
+  | Tbounded _ -> Ck (fresh_clock())
 
 
 (** returns the canonic (short) representant of a [ck]
@@ -116,6 +117,7 @@ let rec skeleton ck = function
         | l -> Cprod (List.map (skeleton ck) l))
   | Tarray (t, _) | Tfuture (_, t) -> skeleton ck t
   | Tid _ | Tinvalid -> Ck ck
+  | Tbounded _ -> Ck ck
 
 let unprod ct =
   let rec f acc ct = match ct with
@@ -188,7 +190,7 @@ let rec ck_to_sck ck =
     | Cbase -> Signature.Cbase
     | Con (ck,c,x) -> Signature.Con(ck_to_sck ck, c, Idents.source_name x)
     | _ -> Misc.internal_error "Signature couldn't translate ck"
-    
+
 let are_disjoint ck1 ck2 =
   let rec list_of_samplers acc ck = match ck with
     | Cbase | Cvar _ -> acc

@@ -106,6 +106,7 @@ let rec ctype_of_otype oty =
     | Tprod _ -> assert false
     | Tinvalid -> assert false
     | Tfuture _ -> assert false (* TODO async *)
+    | Tbounded _ -> Cty_int
 
 let copname = function
   | "="  -> "==" | "<>" -> "!=" | "&"  -> "&&" | "or" -> "||" | "+" -> "+"

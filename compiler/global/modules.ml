@@ -301,6 +301,7 @@ let rec unalias_type t = match t with
   | Tprod ty_list -> Tprod (List.map unalias_type ty_list)
   | Tinvalid -> Tinvalid
   | Tfuture (a, t) -> Tfuture (a, unalias_type t)
+  | Tbounded n -> Tbounded n
 
 
 (** Return the current module as a [module_object] *)

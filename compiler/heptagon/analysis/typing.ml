@@ -507,6 +507,9 @@ and check_type = function
   | Tprod l -> Tprod (List.map (check_type ) l)
   | Tinvalid -> Tinvalid
   | Tfuture (a, t) -> Tfuture (a, check_type t)
+  | Tbounded n ->
+      let typed_n = expect_static_exp (Tid Initial.pint) n in
+      Tbounded typed_n
 
 and typing_static_exp se =
   try

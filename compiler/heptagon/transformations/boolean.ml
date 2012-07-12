@@ -296,6 +296,7 @@ let translate_ty ty =
     | Tprod(ty_list) -> Tprod(List.map trans ty_list)
     | Tarray(ty,se) -> Tarray(trans ty,se)
     | Tfuture _ -> assert false
+    | Tbounded _ -> ty
     | Tinvalid -> assert false
   in
   trans ty
@@ -487,6 +488,8 @@ let rec base_value ck li ty =
         e_loc = no_location;
       }
   | Tfuture _ -> Misc.internal_error "Boolean transformation fail, a future was encountered."
+  | Tbounded _ ->
+      when_ck (Econst (Initial.mk_static_int 0)) li ty ck
   | Tinvalid -> failwith("Boolean: invalid type")
 
 let rec merge_tree ck ty li e_map btree vtree =
@@ -793,6 +796,7 @@ let buildenv_var_dec (acc_vd,acc_loc,acc_eq,env) ({v_type = ty} as v) =
       end
    | Tfuture _ -> Misc.internal_error "Boolean transformation fail, a future was encountered."
    | Tinvalid -> failwith("Boolean: invalid type")
+   | Tbounded _ -> v::acc_vd, acc_loc, acc_eq, env
 
 let buildenv_var_dec_list env vlist =
   List.fold_left buildenv_var_dec ([],[],[],env) vlist
