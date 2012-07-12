@@ -15,7 +15,6 @@
 open Names
 open Format
 open Signature
-open Signature
 open Modules
 open Location
 

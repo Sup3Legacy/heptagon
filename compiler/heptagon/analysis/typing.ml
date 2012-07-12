@@ -675,10 +675,10 @@ let rec typing h e =
           Eiterator(it, { app with a_op = op; a_params = typed_params }
                       , typed_n_list, typed_pe_list, typed_e_list, reset), ty
       | Eiterator (it, ({ a_op = Ebang; } as app), n_list, [], [e], reset) ->
-          let typed_e, ty = typing h e in
+          let _, ty = typing h e in
           let typed_n_list = List.map (expect_static_exp (Tid Initial.pint)) n_list in
           let result_ty, expect_ty = (match ty with
-            | Tarray (Tfuture (a, t), s) -> t, Tfuture(a,t)
+            | Tarray (Tfuture (a, t), _) -> t, Tfuture(a,t)
             | _ -> message e.e_loc (Eshould_be_async ty))
           in
           let ty, typed_e_l = typing_iterator h it n_list [expect_ty] [result_ty] [e] in

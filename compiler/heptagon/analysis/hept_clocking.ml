@@ -107,27 +107,27 @@ let rec typing h pat e =
               typing_app h base_ck pat op (pargs@args)
           | Imapi -> (* clocking the node with the extra i input on [ck_r] *)
               let il (* stubs i as 0 *) =
-                List.map (fun x -> mk_exp
+                List.map (fun _ -> mk_exp
                             (Econst (Initial.mk_static_int 0))
                             ~ct_annot:(Some(Ck(base_ck)))
                             Initial.tint
-          ~linearity:Linearity.Ltop
+                            ~linearity:Linearity.Ltop
                          ) nl
               in
               typing_app h base_ck pat op (pargs@args@il)
           | Ifold | Imapfold ->
-              (* clocking node with equality constaint on last input and last output *)
+              (* clocking node with equality constraint on last input and last output *)
               let ct = typing_app h base_ck pat op (pargs@args) in
               Misc.optional (unify (Ck(Clocks.last_clock ct)))
                 (Misc.last_element args).e_ct_annot;
               ct
           | Ifoldi -> (* clocking the node with the extra i and last in/out constraints *)
               let il (* stubs i as 0 *) =
-                List.map (fun x -> mk_exp
+                List.map (fun _ -> mk_exp
                             (Econst (Initial.mk_static_int 0))
                             ~ct_annot:(Some(Ck(base_ck)))
                             Initial.tint
-          ~linearity:Linearity.Ltop
+                            ~linearity:Linearity.Ltop
                          ) nl
               in
               let rec insert_i args = match args with

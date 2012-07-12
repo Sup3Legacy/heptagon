@@ -232,7 +232,7 @@ and print_app ff (app, args) =
         fprintf ff "@[<2>%a ->@ %a@]" print_exp e1  print_exp e2
     | Ebang ->
         let e = assert_1 args in
-        fprintf ff "!%a" print_exp_tuple args
+        fprintf ff "!%a" print_exp e
     | Ereinit ->
         fprintf ff "@[split@,%a@]" print_exp_tuple args
 

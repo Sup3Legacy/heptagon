@@ -47,7 +47,7 @@ and static_exp_desc =
 
 and ty =
   | Tprod of ty list (** Product type used for tuples *)
-  | Tid of type_name (** Usable type_name are alias or pervasives {bool,int,float} (see [Initial])*)
+  | Tid of type_name (** Usable type_name are defined types or pervasives {bool,int,float} (see [Initial]), with the type static parameters*)
   | Tarray of ty * static_exp (** [base_type] * [size] *) (* ty should not be prod *)
   | Tinvalid
   | Tfuture of future_t * ty
