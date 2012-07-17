@@ -32,7 +32,7 @@ let tfile = Tid pfile
 let mk_pervasives s = { qual = Pervasives; name = s }
 
 let mk_static_int_op op args =
-  mk_static_exp tint (Sop (op,args))
+  mk_static_exp tint (Sop (mk_pervasives op, args))
 
 let mk_static_int i =
   mk_static_exp tint (Sint (Int32.of_int i))

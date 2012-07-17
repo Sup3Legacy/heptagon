@@ -150,7 +150,7 @@ let rec bound_check_expr idx_list bounds =
 
 let mk_plus_one e = match e.e_desc with
   | Eextvalue ({ w_desc = Wconst idx } as w) ->
-      let idx_plus_one = mk_static_int_op (mk_pervasives "+") [idx; mk_static_int 1] in
+      let idx_plus_one = mk_static_int_op "+" [idx; mk_static_int 1] in
         { e with e_desc = Eextvalue { w with w_desc = Wconst idx_plus_one; }; }
   | _ ->
       let idx_plus_one = Eop (mk_pervasives "+", [e; mk_exp_const_int 1]) in
@@ -352,8 +352,8 @@ and translate_act map pat
         let idx = mk_exp_int (Eop (op_from_string "+",
                                   [mk_evar_int cpt; mk_exp_static_int idx1 ])) in
         (* bound = (idx2 - idx1) + 1*)
-        let bound = mk_static_int_op (op_from_string "+")
-          [ mk_static_int 1; mk_static_int_op (op_from_string "-") [idx2;idx1] ] in
+        let bound = mk_static_int_op "+"
+          [ mk_static_int 1; mk_static_int_op "-" [idx2;idx1] ] in
          [ Afor (cptd, mk_exp_const_int 0, mk_exp_static_int bound,
                 mk_block [Aassgn (mk_pattern t (Larray (x, mk_evar_int cpt)),
                                   array_elt_of_exp idx e)] ) ]

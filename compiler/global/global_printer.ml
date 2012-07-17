@@ -128,7 +128,7 @@ and print_type ff = function
   | Tarray (ty, n) ->
       fprintf ff "@[<hov2>%a^%a@]" print_type ty print_static_exp n
   | Tfuture (a, t) -> fprintf ff "(%a%a)" print_future a print_type t
-  | Tbounded n -> fprintf ff "{ < %a }" print_static_exp n
+  | Tbounded n -> fprintf ff "int{ < %a }" print_static_exp n
 
 and print_async ff async = match async with
   | None -> ()

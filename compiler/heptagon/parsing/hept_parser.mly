@@ -274,17 +274,15 @@ located_ty_ident:
 ty_ident:
   | qualname
       { Tid $1 }
+  | t=ty_ident LBRACE op=INFIX0 s=exp RBRACE
+      { Tconstrained (t, mk_op op, s) }
   | LPAREN t=ty_ident RPAREN
       { t }
   | ty_ident POWER simple_exp
       { Tarray ($1, $3) }
   | FUTURE t=ty_ident
       { Tfuture ((),t) }
-/*
-  | ASYNC t=ty_ident
-      { Tasync ((!Compiler_options.java_queue_nb, !Compiler_options.java_queue_size), t) }
-  | ASYNC DOUBLE_LESS _t DOUBLE_GREATER t */
-;
+
 
 ct_annot:
   | /*empty */        { None }

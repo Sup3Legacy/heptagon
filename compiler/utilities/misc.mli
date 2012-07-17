@@ -84,7 +84,7 @@ val option_compare : ('a -> 'a -> int) -> 'a option -> 'a option -> int
 (** [list_diff l dl] returns [l] without the elements belonging to [dl].*)
 val list_diff : 'a list -> 'a list -> 'a list
 
-(** Mapfold *)
+(** Mapfold, accumulate from left to right. *)
 val mapfold: ('acc -> 'b -> 'c * 'acc) -> 'acc -> 'b list -> 'c list * 'acc
 val mapfold2: ('acc -> 'b -> 'd -> 'c * 'acc) -> 'acc -> 'b list -> 'd list -> 'c list * 'acc
 

@@ -61,6 +61,7 @@ type iterator_type =
 type ty =
   | Tprod of ty list
   | Tid of qualname
+  | Tconstrained of ty * fun_name * exp
   | Tarray of ty * exp
   | Tfuture of future_t * ty
   | Tinvalid
@@ -261,6 +262,9 @@ let mk_app op async params inlined =
 
 let mk_call ?(async=None) ?(params=[]) ?(inlined=false) op exps =
   Eapp (mk_app op async params inlined, exps)
+
+let mk_op s =
+  Q (Names.pervasives_qn s)
 
 let mk_op_call ?(params=[]) s exps =
   mk_call ~params:params (Efun (Q (Names.pervasives_qn s))) exps

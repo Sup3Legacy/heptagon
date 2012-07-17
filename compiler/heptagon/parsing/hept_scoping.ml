@@ -51,6 +51,7 @@ struct
     | Estatic_exp_expected
     | Eredefinition of qualname
     | Elinear_type_no_memalloc
+    | Eunsupported_constraint
 
   let message loc kind =
     begin match kind with
@@ -87,6 +88,9 @@ struct
             print_qualname qualname
       | Elinear_type_no_memalloc ->
           eprintf "%aLinearity annotations cannot be used without memory allocation.@."
+            print_location loc
+      | Eunsupported_constraint ->
+          eprintf "%aThis type constraint is unsupported.@."
             print_location loc
     end;
     raise Errors.Error
@@ -217,6 +221,13 @@ let rec translate_type loc ty =
       | Tprod ty_list ->
           Signature.Tprod(List.map (translate_type loc) ty_list)
       | Tid ln -> Signature.Tid (qualify_type ln)
+      | Tconstrained (t, op, e) ->
+          let t = translate_type loc t in
+          (match (t, op) with
+            | t, Q {qual=Pervasives; name = s} when t=Initial.tint && s="<" ->
+                Signature.Tbounded(expect_static_exp e)
+            | _ -> message loc Eunsupported_constraint
+          )
       | Tarray (ty, e) ->
           let ty = translate_type loc ty in
           Signature.Tarray (ty, expect_static_exp e)

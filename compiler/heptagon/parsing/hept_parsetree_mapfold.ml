@@ -304,6 +304,10 @@ and ty funs acc t = match t with
       let e, acc = exp_it funs acc e in
       Tarray (t, e), acc
   | Tfuture (a, t) -> let t, acc = ty_it funs acc t in Tfuture (a, t), acc
+  | Tconstrained (t, op, e) ->
+      let t, acc = ty_it funs acc t in
+      let e, acc = exp_it funs acc e in
+      Tconstrained (t, op, e), acc
 
 
 and const_dec_it funs acc c = funs.const_dec funs acc c

@@ -47,9 +47,12 @@ and static_exp_desc =
 
 and ty =
   | Tprod of ty list (** Product type used for tuples *)
-  | Tid of type_name (** Usable type_name are defined types or pervasives {bool,int,float} (see [Initial]), with the type static parameters*)
-  | Tarray of ty * static_exp (** [base_type] * [size] *) (* ty should not be prod *)
-  | Tbounded of static_exp (** [size] *)
+  | Tid of type_name (** Usable type_name are defined types or pervasives {bool,int,float}
+                         (see [Initial]), with the type static parameters*)
+  | Tarray of ty * static_exp (** [base_type] * [size], ty should not be prod *)
+  | Tbounded of static_exp (** [size], beware of cycles in static exp like
+                               x = (4 : (Tbounded x)),
+                               because of this the typing should do x = (4 : Tbounded (4 : int)) *)
   | Tinvalid
   | Tfuture of future_t * ty
 
@@ -107,7 +110,6 @@ let unprod = function
   | Tprod l -> l
   | t -> [t]
 
-
 let asyncify async ty_list = match async with
   | None -> ty_list
   | Some _ -> List.map (fun ty -> Tfuture ((),ty)) ty_list
@@ -160,6 +162,3 @@ let rec field_assoc f = function
 let is_local_se se = match se.se_desc with
   | Svar {qual = LocalModule _} -> true
   | _ -> false
-
-
-

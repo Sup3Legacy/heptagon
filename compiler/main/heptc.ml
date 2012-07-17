@@ -35,12 +35,10 @@ let compile_interface modname source_f =
     let p = Hept_compiler.compile_interface p in
     (* Output the .epci *)
     output_value epci_c (Modules.get_current_module ());
-  (* TODO pourquoi faire tout ca :
     (* Translate to Obc *)
     let p = Hept2mls.interface p in
     (* Generate the sequential code *)
     Mls2seq.interface p;
-  *)
     close_all_files ()
   with
     | x -> close_all_files (); raise x
@@ -51,7 +49,6 @@ let compile_program modname source_f =
   (* output file names *)
   let output = String.uncapitalize modname in
   let epci_f = output ^ ".epci" in
-  let mls_f = output ^ ".mls" in
 
   (* input/output channels *)
   let source_c, lexbuf = lexbuf_from_file source_f in
