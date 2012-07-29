@@ -1,0 +1,11 @@
+const n:int = 3
+
+fun f(x:int{<n}) = (y:int)
+let
+  y = n - x;
+tel
+
+node main(x:int) = (y:int)
+let
+  y = f(3-x);
+tel
