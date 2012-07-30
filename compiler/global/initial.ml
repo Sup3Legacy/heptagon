@@ -17,8 +17,6 @@ let cglobal = []
 
 let pbool = { qual = Pervasives; name = "bool" }
 let tbool = Tid pbool
-let ptrue = { qual = Pervasives; name = "true" }
-let pfalse = { qual = Pervasives; name = "false" }
 let por = { qual = Pervasives; name = "or" }
 let pint = { qual = Pervasives; name = "int" }
 let tint = Tid pint

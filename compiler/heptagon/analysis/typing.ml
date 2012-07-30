@@ -280,10 +280,6 @@ let vd_of_name h x =
   with
       Not_found -> error (Eundefined(name x))
 
-let desc_of_ty = function
-  | Tid n when n = pbool  -> Tenum [ptrue; pfalse]
-  | Tid ty_name -> find_type ty_name
-  | _  -> Tabstract
 
 let build_subst names values =
   if List.length names <> List.length values

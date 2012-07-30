@@ -13,7 +13,7 @@ let verbose_mode = false
 module TyEnv =
     ListMap(struct
       type t = ty
-      let compare = Global_compare.type_compare
+      let compare = type_compare
     end)
 
 module VarEnv = struct
@@ -330,8 +330,8 @@ let compute_live_vars eqs =
 let should_interfere (ivx, ivy) =
   let tyx = World.ivar_type ivx in
   let tyy = World.ivar_type ivy in
-  if Global_compare.type_compare tyx tyy <> 0 then
-    false
+  if type_compare tyx tyy <> 0
+  then false
   else (
    let x_is_mem = World.is_memory (var_ident_of_ivar ivx) in
    let x_is_when = is_when_ivar ivx in
@@ -348,7 +348,7 @@ let should_interfere (ivx, ivy) =
    let disjoint_clocks =
      not ((x_is_mem && not x_is_when) || (y_is_mem && not y_is_when)) && Clocks.are_disjoint ckx cky
    in
-      not (disjoint_clocks or are_copies)
+   not (disjoint_clocks or are_copies)
   )
 
 let should_interfere = Misc.memoize_couple should_interfere

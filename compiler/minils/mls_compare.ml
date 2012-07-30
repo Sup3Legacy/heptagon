@@ -10,6 +10,8 @@
 (* Comparison functions for MiniLustre *)
 
 open Idents
+open Signature
+open Clocks
 open Minils
 open Misc
 
@@ -21,14 +23,14 @@ end
 module Make = functor (C : ClockCompare) ->
 struct
   let rec extvalue_compare w1 w2 =
-    let cr = Global_compare.type_compare w1.w_ty w2.w_ty in
+    let cr = type_compare w1.w_ty w2.w_ty in
     if cr <> 0 then cr
     else
       let cr = Linearity.linearity_compare w1.w_linearity w2.w_linearity in
       if cr <> 0 then cr
       else
       match w1.w_desc, w2.w_desc with
-      | Wconst se1, Wconst se2 -> Global_compare.static_exp_compare se1 se2
+      | Wconst se1, Wconst se2 -> static_exp_compare se1 se2
       | Wvar vi1, Wvar vi2 -> ident_compare vi1 vi2
       | Wwhen (e1, cn1, vi1), Wwhen (e2, cn2, vi2) ->
         let cr = Pervasives.compare cn1 cn2 in
@@ -61,7 +63,7 @@ struct
       | Wbang _, _ -> -1
 
   let rec exp_compare e1 e2 =
-    let cr = Global_compare.type_compare e1.e_ty e2.e_ty in
+    let cr = type_compare e1.e_ty e2.e_ty in
     if cr <> 0 then cr
     else
       let cr = Linearity.linearity_compare e1.e_linearity e2.e_linearity in
@@ -71,7 +73,7 @@ struct
         | Eextvalue w1, Eextvalue w2 ->
           extvalue_compare w1 w2
         | Efby (seo1, e1), Efby (seo2, e2) ->
-          let cr = option_compare Global_compare.static_exp_compare seo1 seo2 in
+          let cr = option_compare static_exp_compare seo1 seo2 in
           if cr <> 0 then cr else extvalue_compare e1 e2
         | Eapp (app1, el1, vio1), Eapp (app2, el2, vio2) ->
           let cr = app_compare app1 app2 in
@@ -98,7 +100,7 @@ struct
           Eiterator (it2, app2, sel2, pel2, el2, vio2) ->
           let cr = compare it1 it2 in
           if cr <> 0 then cr else
-            let cr = list_compare Global_compare.static_exp_compare sel1 sel2 in
+            let cr = list_compare static_exp_compare sel1 sel2 in
             if cr <> 0 then cr else
               let cr = app_compare app1 app2 in
               if cr <> 0 then cr else
@@ -188,7 +190,7 @@ struct
         | Ebang, _ -> -1
       in
       if cr <> 0 then cr
-      else list_compare Global_compare.static_exp_compare app1.a_params app2.a_params
+      else list_compare static_exp_compare app1.a_params app2.a_params
 
   let rec pat_compare pat1 pat2 = match pat1, pat2 with
     | Evarpat id1, Evarpat id2 -> ident_compare id1 id2
@@ -199,4 +201,4 @@ struct
 
 end
 
-include Make(struct let clock_compare = Global_compare.clock_compare end)
+include Make(struct let clock_compare = clock_compare end)

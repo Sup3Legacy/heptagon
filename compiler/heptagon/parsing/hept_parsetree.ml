@@ -311,6 +311,3 @@ let mk_arg name (ty,lin) ck =
 
 let mk_param param_ty loc name =
   { p_name = name; p_type = param_ty; p_loc = loc }
-
-let ptrue = Q Initial.ptrue
-let pfalse = Q Initial.pfalse

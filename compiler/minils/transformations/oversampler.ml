@@ -42,7 +42,7 @@ let gen_merge v (c, w) =
     try
       let all_c_l = Typing.type_enumerate t in
       let c_l_false =
-        List.filter (fun c' -> 0 != (Global_compare.static_exp_compare c c')) all_c_l
+        List.filter (fun c' -> 0 <> (static_exp_compare c c')) all_c_l
       in
       List.map (fun c -> (c, extvalue_false (ck_c c))) c_l_false
     with _ -> Misc.internal_error "Oversampler wrong type of constructor"

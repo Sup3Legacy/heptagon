@@ -1,6 +1,6 @@
 open Obc
 open Idents
-open Global_compare
+open Signature
 open Misc
 
 let rec extvalue_compare w1 w2 =

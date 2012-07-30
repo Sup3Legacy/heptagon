@@ -25,7 +25,7 @@ exception Not_static
 module SESet = struct
   include (Set.Make(struct
     type t = static_exp
-    let compare = Global_compare.static_exp_compare end))
+    let compare = static_exp_compare end))
   let from_list l =
     List.fold_left (fun ses s -> add s ses) empty l
   
@@ -44,7 +44,7 @@ let se_list_unicity se_l =
 module SEEnv = struct
   include (Map.Make(struct
     type t = static_exp
-    let compare = Global_compare.static_exp_compare end))
+    let compare = static_exp_compare end))
 
   (** [append env' env] appends env' to env *)
   let append env' env = fold (fun key v env -> add key v env) env' env
@@ -158,7 +158,7 @@ let apply_op partial loc op se_list =
   else ( (* symbolic evaluation *)
     match op, sed_l with
       | {qual = Pervasives; name = "=" }, [sed1;sed2]
-          when Global_compare.static_exp_desc_compare sed1 sed2 = 0 -> Sbool true
+          when static_exp_desc_compare sed1 sed2 = 0 -> Sbool true
       | _ ->
           if partial
           then Sop(op, se_list) (* partial evaluation *)

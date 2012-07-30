@@ -1,8 +1,7 @@
 
 En cours :
 utiliser les bounded pour when et merge
-Les booleens dans les merge when et companie ne doivent plus etre des constructeur avec ptrue etc, mais bien des Sbool
-
+typer les ck dans heptagon.
 
 
 

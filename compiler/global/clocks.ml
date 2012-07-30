@@ -28,6 +28,8 @@ and link =
   | Clink of ck
 
 
+let equal_sv se1 se2 = 0 = (static_exp_compare se1 se2)
+
 exception Unify
 
 let invalid_clock = Cprod []
@@ -84,7 +86,7 @@ and unify_ck ck1 ck2 =
     try match (ck1, ck2) with
      | Cbase, Cbase -> ()
      | Cvar { contents = Cindex n1 }, Cvar { contents = Cindex n2 } when n1 = n2 -> ()
-     | Con (ck1, c1, n1), Con (ck2, c2, n2) when (c1 = c2) & (n1 = n2) ->
+     | Con (ck1, c1, n1), Con (ck2, c2, n2) when (equal_sv c1 c2) & (n1 = n2) ->
          unify_ck ck1 ck2
      | Cvar ({ contents = Cindex n } as v), ck
      | ck, Cvar ({ contents = Cindex n } as v) ->
@@ -205,6 +207,30 @@ let are_disjoint ck1 ck2 =
         if Idents.ident_compare x1 x2 <> 0 then
           false
         else
-          c1 <> c2 || disjoint_samplers s_ck1 s_ck2
+          not (equal_sv c1 c2) || disjoint_samplers s_ck1 s_ck2
   in
   disjoint_samplers (list_of_samplers [] ck1) (list_of_samplers [] ck2)
+
+(** Comparison functions *)
+let rec clock_compare ck1 ck2 = match ck1, ck2 with
+  | Cvar { contents = Clink ck1; }, _ -> clock_compare ck1 ck2
+  | _, Cvar { contents = Clink ck2; } -> clock_compare ck1 ck2
+  | Cbase, Cbase -> 0
+  | Cvar lr1, Cvar lr2 -> link_compare !lr1 !lr2
+  | Con (ck1, cn1, vi1), Con (ck2, cn2, vi2) ->
+      let cr1 = static_exp_compare cn1 cn2 in
+      if cr1 <> 0 then cr1 else
+        let cr2 = ident_compare vi1 vi2 in
+        if cr2 <> 0 then cr2 else clock_compare ck1 ck2
+  | Cbase , _ -> 1
+
+  | Cvar _, Cbase -> -1
+  | Cvar _, _ -> 1
+
+  | Con _, _ -> -1
+
+and link_compare li1 li2 = match li1, li2 with
+  | Cindex _, Cindex _ -> 0
+  | Clink ck1, Clink ck2 -> clock_compare ck1 ck2
+  | Cindex _, _ -> 1
+  | Clink _, _ -> -1
