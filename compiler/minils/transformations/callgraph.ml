@@ -111,7 +111,7 @@ struct
         let param_string =
           List.fold_left
             (fun s se ->
-              s ^ (Names.print_pp_to_name Global_printer.print_static_exp se))
+              s ^ (Name_utils.print_pp_to_name Global_printer.print_static_exp se))
             "_params_" params in
         let new_ln =
           Modules.fresh_value_in "callgraph" (n^param_string^"_") q in

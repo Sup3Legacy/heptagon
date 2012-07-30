@@ -91,10 +91,12 @@ type act =
   (** Acall is the call of a method of an object *)
   | Acall of pattern list * obj_ref * method_name * exp list
   | Aasync_call of async_t * pattern list * obj_ref * method_name * exp list
-  | Acase of exp * (constructor_name * block) list
+  | Acase of exp * (case_value * block) list
   | Afor of var_dec * exp * exp * block
   | Awhile of while_order * exp * block
   | Ablock of block
+
+and case_value = static_exp
 
 and block =
     { b_locals : var_dec list;

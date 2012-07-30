@@ -16,10 +16,12 @@ type ct =
   | Ck of ck
   | Cprod of ct list
 
+and sampling_value = static_exp
+
 and ck =
   | Cbase
   | Cvar of link ref
-  | Con of ck * constructor_name * var_ident
+  | Con of ck * sampling_value * var_ident
 
 and link =
   | Cindex of int

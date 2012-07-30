@@ -22,6 +22,33 @@ open Location
 exception Not_static
 
 
+module SESet = struct
+  include (Set.Make(struct
+    type t = static_exp
+    let compare = Global_compare.static_exp_compare end))
+  let from_list l =
+    List.fold_left (fun ses s -> add s ses) empty l
+  
+  let exclusive_add se ses =
+    if mem se ses then raise Errors.Error
+    else add se ses
+end
+
+let se_list_unicity se_l =
+  try
+    ignore (List.fold_left (fun ses s -> SESet.exclusive_add s ses) SESet.empty se_l);
+    true
+  with _ -> false
+
+
+module SEEnv = struct
+  include (Map.Make(struct
+    type t = static_exp
+    let compare = Global_compare.static_exp_compare end))
+
+  (** [append env' env] appends env' to env *)
+  let append env' env = fold (fun key v env -> add key v env) env' env
+end
 
 (** Some evaluations are not possible *)
 type eval_error = Division_by_zero

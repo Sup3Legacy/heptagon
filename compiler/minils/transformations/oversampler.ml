@@ -38,12 +38,14 @@ let gen_merge v (c, w) =
     | _ -> Misc.internal_error "gen_merge wrong w clock"
   in
   let false_cases =
-    let t = Modules.find_type (Modules.find_constrs c) in
-    let c_false_list = match t with
-      | Tenum c_l -> List.filter (fun c'-> not (c = c')) c_l
-      | _ -> Misc.internal_error "Oversampler wrong type of constructor"
-    in
-    List.map (fun c -> (c, extvalue_false (ck_c c))) c_false_list
+    let t = c.se_ty in
+    try
+      let all_c_l = Typing.type_enumerate t in
+      let c_l_false =
+        List.filter (fun c' -> 0 != (Global_compare.static_exp_compare c c')) all_c_l
+      in
+      List.map (fun c -> (c, extvalue_false (ck_c c))) c_l_false
+    with _ -> Misc.internal_error "Oversampler wrong type of constructor"
   in
   mk_exp Cbase Initial.tbool
          ~linearity:Linearity.Ltop ~ct:(Ck ck) (Emerge (v, (c,w)::false_cases))

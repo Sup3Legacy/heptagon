@@ -356,21 +356,22 @@ let rec act_list param_env act_l acts =
         in
         let copies = Misc.mapi copy_return_to_var p_l in
         assgn::(copies@acts)
-    | Obc.Acase (e, c_b_l) when e.e_ty = Signature.Tid Initial.pbool ->
-        (match c_b_l with
-          | [] -> acts
-          | [(c,b)] when c = Initial.ptrue ->
-              (Aif (exp param_env e, block param_env b)):: acts
-          | [(c,b)] when c = Initial.pfalse ->
-              (Aifelse (exp param_env e, {b_locals = []; b_body = []}, block param_env b)) :: acts
-          | _ ->
-              let _, _then = List.find (fun (c,_) -> c = Initial.ptrue) c_b_l in
-              let _, _else = List.find (fun (c,_) -> c = Initial.pfalse) c_b_l in
-              (Aifelse (exp param_env e, block param_env _then, block param_env _else)) :: acts)
     | Obc.Acase (e, c_b_l) ->
-        let _c_b (c,b) = translate_constructor_name c, block param_env b in
-        let acase = Aswitch (exp param_env e, List.map _c_b c_b_l) in
-        acase::acts
+        let _c_b (c,b) = static_exp param_env c, block param_env b in
+        let c_b_l = List.map _c_b c_b_l in
+        let c = exp param_env e in
+        if e.e_ty = Initial.tbool then (* cosmetic : if instead of cases *)
+          (match c_b_l with
+           | [Sbool true, cte; Sbool false, cfe]
+           | [Sbool false, cfe; Sbool true, cte] ->
+               (Aifelse (c, cte, cfe))::acts
+           | [Sbool true, cte] ->
+               (Aif (c,cte))::acts
+           | [Sbool false, cfe] ->
+               (Aifelse (c, {b_locals=[];b_body=[]}, cfe))::acts
+           | _ -> Misc.internal_error "java strange boolean in Acase"
+          )
+        else (Aswitch (c ,c_b_l))::acts
     | Obc.Afor (v, se, se', b) ->
         let afor = Afor (var_dec param_env v,
                         exp param_env se, exp param_env se', block param_env b) in

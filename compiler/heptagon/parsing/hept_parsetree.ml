@@ -77,7 +77,7 @@ and param_ty =
 
 and ck =
   | Cbase
-  | Con of ck * constructor_name * var_name
+  | Con of ck * sampling_value * var_name
 
 and ct =
   | Ck of ck
@@ -99,9 +99,11 @@ and edesc =
   | Estruct of (qualname * exp) list
   | Eapp of app * exp list
   | Eiterator of iterator_type * app * exp list * exp list * exp list
-  | Ewhen of exp * constructor_name * var_name
-  | Emerge of var_name * (constructor_name * exp) list
+  | Ewhen of exp * sampling_value * var_name
+  | Emerge of var_name * (sampling_value * exp) list
   | Esplit of var_name * exp
+
+and sampling_value = exp
 
 and app = { a_op: op; a_params: exp list; a_async : async_t; a_inlined: bool }
 
@@ -161,7 +163,7 @@ and escape =
     e_next_state : state_name; }
 
 and switch_handler =
-  { w_name  : constructor_name;
+  { w_name  : sampling_value;
     w_block : block; }
 
 and present_handler =
@@ -277,6 +279,9 @@ let mk_static_exp desc loc =
 
 let mk_static_exp_exp desc loc =
   mk_exp (Econst { se_desc = desc; se_loc = loc }) loc
+
+let mk_bool_exp b loc =
+  mk_static_exp_exp (Sbool b) loc
 
 let mk_constructor_exp f loc =
   mk_exp (Econst (mk_static_exp (Sconstructor f) loc)) loc

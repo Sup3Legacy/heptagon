@@ -62,22 +62,24 @@ let print_shortname ff {name = n} = print_name ff n
 
 let print_ident = Idents.print_ident
 
- let rec print_ck ff = function
+let rec print_ck ff = function
   | Cbase -> fprintf ff "."
-  | Con (ck, c, n) -> fprintf ff "%a on %a(%a)" print_ck ck print_qualname c print_ident n
+  | Con (ck, c, n) ->
+      fprintf ff "%a on %a(%a)" print_ck ck print_static_exp c print_ident n
   | Cvar { contents = Cindex i } -> fprintf ff "'a%i" i
   | Cvar { contents = Clink ck } -> fprintf ff "~> %a" print_ck ck
 
-let rec print_ct ff = function
+and print_ct ff = function
   | Ck ck -> print_ck ff ck
   | Cprod ct_list ->
       fprintf ff "@[<2>(%a)@]" (print_list_r print_ct """ *""") ct_list
 
- let rec print_sck ff = function
+and print_sck ff = function
   | Signature.Cbase -> fprintf ff "."
-  | Signature.Con (ck, c, n) -> fprintf ff "%a on %a(%a)" print_sck ck print_qualname c print_name n
+  | Signature.Con (ck, c, n) ->
+      fprintf ff "%a on %a(%a)" print_sck ck print_static_exp c print_name n
 
-let rec print_params ff p_l =
+and print_params ff p_l =
   fprintf ff "@[<2>%a@]" (print_list_r print_static_exp "<<" "," ">>") p_l
 
 and print_static_exp_desc ff sed = match sed with

@@ -51,7 +51,7 @@ and extvalue_desc =
   | Wconst of static_exp (*no tuple*)
   | Wvar of var_ident
   | Wfield of extvalue * field_name
-  | Wwhen of extvalue * constructor_name * var_ident (** extvalue when Constructor(ident) *)
+  | Wwhen of extvalue * sampling_value * var_ident (** extvalue when Constructor(ident) *)
   | Wreinit of extvalue * extvalue
   | Wbang of extvalue
 
@@ -69,8 +69,8 @@ and edesc =
                        (** static_exp fby extvalue *)
   | Eapp of app * extvalue list * var_ident option
                        (** app ~args=(extvalue,extvalue...) reset ~r=ident *)
-  | Ewhen of exp * constructor_name * var_ident  (** e when C(c) *)
-  | Emerge of var_ident * (constructor_name * extvalue) list
+  | Ewhen of exp * sampling_value * var_ident  (** e when C(c) *)
+  | Emerge of var_ident * (sampling_value * extvalue) list
                        (** merge ident (Constructor -> extvalue)+ *)
   | Estruct of (field_name * extvalue) list
                        (** { field=extvalue; ... } *)

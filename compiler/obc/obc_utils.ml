@@ -76,10 +76,12 @@ let mk_block ?(locals=[]) eq_list =
     b_body = eq_list }
 
 let mk_ifthenelse cond true_act false_act =
-  Acase (cond, [ Initial.ptrue, mk_block true_act; Initial.pfalse, mk_block false_act ])
+  Acase (cond, [
+    Initial.mk_static_bool ~loc:cond.e_loc true, mk_block true_act;
+    Initial.mk_static_bool ~loc:cond.e_loc false, mk_block false_act ])
 
 let mk_if cond true_act =
-  Acase (cond, [Initial.ptrue, mk_block true_act])
+  Acase (cond, [Initial.mk_static_bool ~loc:cond.e_loc true, mk_block true_act])
 
 let rec var_name x =
   match x.pat_desc with
@@ -187,14 +189,6 @@ struct
       | Eop (ln, _) -> (edesc, deps_longname deps ln)
       | _ -> raise Errors.Fallback
 
-  let deps_act funs deps act =
-    let (act, deps) = Obc_mapfold.act funs deps act in
-    match act with
-      | Acase (_, cbl) ->
-        let add deps (ln, _) = deps_longname deps ln in
-        (act, List.fold_left add deps cbl)
-      | _ -> raise Errors.Fallback
-
   let deps_obj_dec funs deps od =
     let (od, deps) = Obc_mapfold.obj_dec funs deps od in
     (od, deps_longname deps od.o_class)
@@ -206,7 +200,6 @@ struct
                         ty = deps_ty };
       lhsdesc = deps_lhsdesc;
       edesc = deps_edesc;
-      act = deps_act;
       obj_dec = deps_obj_dec;
     } in
     let (_, deps) = Obc_mapfold.program funs ModulSet.empty p in

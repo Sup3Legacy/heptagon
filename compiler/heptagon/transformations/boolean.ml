@@ -305,7 +305,8 @@ let rec on_list ck bl vtree =
   match bl, vtree with
   | [], _ -> ck
   | b::bl', VNode(v,t0,t1) ->
-      let (c,t) = if b then (ctrue,t1) else (cfalse,t0) in
+      let t = if b then t1 else t0 in
+      let c = Initial.mk_static_bool b in
       on_list (Con(ck,c,v)) bl' t
   | _::_, Vempty -> failwith("on_list: non-coherent boolean list and tree")
 

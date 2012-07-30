@@ -18,7 +18,7 @@ let rec clock_compare ck1 ck2 = match ck1, ck2 with
   | Cbase, Cbase -> 0
   | Cvar lr1, Cvar lr2 -> link_compare !lr1 !lr2
   | Con (ck1, cn1, vi1), Con (ck2, cn2, vi2) ->
-      let cr1 = compare cn1 cn2 in
+      let cr1 = static_exp_compare cn1 cn2 in
       if cr1 <> 0 then cr1 else
         let cr2 = ident_compare vi1 vi2 in
         if cr2 <> 0 then cr2 else clock_compare ck1 ck2
@@ -36,9 +36,9 @@ and link_compare li1 li2 = match li1, li2 with
   | Clink _, _ -> -1
 
 
-let async_t_compare a1 a2 = Pervasives.compare a1 a2
+and async_t_compare a1 a2 = Pervasives.compare a1 a2
 
-let rec static_exp_compare se1 se2 =
+and static_exp_compare se1 se2 =
   let cr = type_compare se1.se_ty se2.se_ty in
   if cr <> 0 then cr else static_exp_desc_compare se1.se_desc se2.se_desc
 

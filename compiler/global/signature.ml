@@ -25,7 +25,7 @@ and async_t = (static_exp list) option
 
 and ck =
   | Cbase
-  | Con of ck * constructor_name * name
+  | Con of ck * static_exp * name
 
 and static_exp = { se_desc: static_exp_desc; se_ty: ty; se_loc: location }
 

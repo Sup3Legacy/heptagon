@@ -94,7 +94,7 @@ and print_extvalue_desc ff = function
   | Wvar x -> print_ident ff x
   | Wfield (w,f) -> fprintf ff "%a.%a" print_extvalue w print_qualname f
   | Wwhen (w, c, n) ->
-      fprintf ff "@[<2>(%a@ when %a(%a))@]" print_extvalue w print_qualname c print_ident n
+      fprintf ff "@[<2>(%a@ when %a(%a))@]" print_extvalue w print_static_exp c print_ident n
   | Wreinit (w1, w2) ->
       fprintf ff "@[reinit@,(%a, %a)@]" print_extvalue w1  print_extvalue w2
   | Wbang w ->
@@ -109,7 +109,7 @@ and print_exp_desc ff = function
   | Emerge (x, tag_w_list) ->
       fprintf ff "@[<2>merge %a@ %a@]" print_ident x print_tag_w_list tag_w_list
   | Ewhen (e,c,x) ->
-      fprintf ff "@[<2>(%a@ when %a(%a))@]" print_exp e print_qualname c print_ident x
+      fprintf ff "@[<2>(%a@ when %a(%a))@]" print_exp e print_static_exp c print_ident x
   | Estruct f_w_list ->
       print_record (print_couple print_qualname print_extvalue """ = """) ff f_w_list
   | Eiterator (it, f, params, pargs, args, reset) ->
@@ -172,7 +172,7 @@ and print_app ff (app, args) =
 
 
 and print_handler ff c =
-  fprintf ff "@[<2>%a@]" (print_couple print_qualname print_extvalue "("" -> "")") c
+  fprintf ff "@[<2>%a@]" (print_couple print_static_exp print_extvalue "("" -> "")") c
 
 and print_tag_w_list ff tag_w_list =
   fprintf ff "@[%a@]" (print_list print_handler "" " " "") tag_w_list

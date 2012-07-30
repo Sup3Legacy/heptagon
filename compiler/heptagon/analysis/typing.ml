@@ -36,7 +36,7 @@ type error =
   | Estatic_arity_clash of int * int
   | Ealready_defined of name
   | Enon_exaustive
-  | Epartial_switch of name
+  | Epartial_switch
   | Etoo_many_outputs
   | Esome_fields_are_missing
   | Esubscripted_value_not_an_array of ty
@@ -126,10 +126,9 @@ let message loc kind =
     | Enon_exaustive ->
         eprintf "%aSome constructors are missing in this pattern/matching.@."
           print_location loc
-    | Epartial_switch(s) ->
-        eprintf "%aThe case %s is missing.@."
+    | Epartial_switch ->
+        eprintf "%aCases are missing.@."
           print_location loc
-          s
     | Etoo_many_outputs ->
         eprintf "%aA function may only returns a basic value.@."
           print_location loc
@@ -285,9 +284,6 @@ let desc_of_ty = function
   | Tid n when n = pbool  -> Tenum [ptrue; pfalse]
   | Tid ty_name -> find_type ty_name
   | _  -> Tabstract
-let set_of_constr = function
-  | Tabstract | Tstruct _ | Talias _ -> Misc.internal_error "set_of_constr"
-  | Tenum tag_list -> List.fold_right QualSet.add tag_list QualSet.empty
 
 let build_subst names values =
   if List.length names <> List.length values
@@ -306,6 +302,12 @@ let add_distinct_qualset n acc =
     error (Ealready_defined (fullname n))
   else
     QualSet.add n acc
+
+let add_distinct_seset n acc =
+  if SESet.mem n acc then
+    error (Ealready_defined (Misc.print_pp_to_string print_static_exp n))
+  else
+    SESet.add n acc
 
 let add_distinct_S n acc =
   if NamesSet.mem n acc then
@@ -416,6 +418,33 @@ let rec type_cardinal t =
   | Tinvalid -> mk_static_int (-1)
   | Tfuture _ -> mk_static_int (-1)
 
+let rec type_enumerate t =
+  try (match unalias_type t with
+    | _ when t = Initial.tbool -> [mk_static_bool true; mk_static_bool false]
+    | Tid n ->
+      (match find_type n with
+      | Tenum cn_l -> List.map (fun c -> mk_static_exp t (Sconstructor c)) cn_l
+      | _ -> raise Errors.Error)
+    | Tbounded s ->
+      let rec loop i c_l = match i with
+        | 0 -> c_l
+        | _ -> loop (i-1) ((mk_static_int i)::c_l)
+      in
+      (try loop (Int32.to_int (Static.int_of_static_exp s)) []
+       with _ -> raise Errors.Error)
+    | _ -> raise Errors.Error)
+  with Errors.Error ->
+    Misc.internal_error "enumerate of this type is not supported@."
+
+
+(** returns (unicity, completness) of the enumeration [se_l] of type [t] *)
+let check_type_coverage t se_l =
+  let unicity = se_list_unicity se_l in
+  let completness =
+    let u = Int32.to_int (int_of_static_exp (type_cardinal t)) in
+    List.length se_l = u
+  in
+  (unicity, completness)
 
 
 (** @return the qualified name and list of fields of
@@ -762,41 +791,34 @@ let rec typing h e =
 
       | Ewhen (e, c, x) ->
           let typed_e, t = typing h e in
-          let tn_expected = find_constrs c in
+          let typed_c, tn_expected = typing_static_exp c in
           let tn_actual = typ_of_name h x in
           let _ = expect tn_expected tn_actual in
-          Ewhen (typed_e, c, x), t
+          Ewhen (typed_e, typed_c, x), t
 
       | Emerge (_, []) -> Misc.internal_error "Empty merge"
       | Emerge (x, c_e_list) ->
           (* verify the constructors : they should be unique,
              all of the same type and cover all the possibilities *)
           let c_l, e_l = List.split c_e_list in
-          (* check for duplicates *)
-          if not (List.length c_l = List.length (Misc.unique c_l)) (* TODO real comparison *)
-          then message e.e_loc Emerge_uniq;
-          (* check for completeness *)
-          let t_l = List.map find_constrs c_l in
-          let t = unify_l t_l in
-          let u = type_cardinal t in
-          if not(List.length c_l = Int32.to_int (int_of_static_exp u)) (*TODO can't eval everytime*)
-          then message e.e_loc Emerge_missing_constrs; (* better error ? *)
+          let typed_c_l, t_c = unify_se_l c_l in
+          let unic, comp = check_type_coverage t_c typed_c_l in
+          if not unic then message e.e_loc Emerge_uniq;
+          if not comp then message e.e_loc Emerge_missing_constrs;
           (* check x *)
-          expect t (typ_of_name h x);
+          expect t_c (typ_of_name h x);
           (* type *)
           let e_l, t = unify_e_l h e_l in
-          let c_e_list = List.combine c_l e_l in
+          let c_e_list = List.combine typed_c_l e_l in
           Emerge (x, c_e_list), t
 
       | Esplit(c, _, e2) ->
           let ty_c = typ_of_name h c in
           let typed_e2, ty = typing h e2 in
-          let cl = match ty_c with
-            | Tid tc -> (match find_type tc with | Tenum cl-> cl | _ -> [])
-            | _ -> []
+          let cl =
+            try type_enumerate ty_c
+            with _ -> message e.e_loc (Esplit_enum ty_c)
           in
-          if cl = []
-          then message e.e_loc (Esplit_enum ty_c);
           begin match ty with
             | Tprod _ -> message e.e_loc (Esplit_tuple ty)
             | _ -> ()
@@ -1204,23 +1226,23 @@ and typing_automaton_handlers h acc state_handlers =
       (add total (add partial acc))
 
 and typing_switch_handlers h acc ty switch_handlers =
-  (* checks unicity of states *)
-  let addname acc { w_name = n } = add_distinct_qualset n acc in
-  let cases = List.fold_left addname QualSet.empty switch_handlers in
-  let d = diff_const (set_of_constr (desc_of_ty ty)) cases in
-  if not (QualSet.is_empty d) then
-    error (Epartial_switch (fullname (QualSet.choose d)));
-
-  let handler ({ w_block = b } as sh) =
-    let typed_b, defined_names, _ = typing_block h b in
-    { sh with w_block = typed_b }, defined_names in
-
+  let handler sh =
+    let typed_b, defined_names, _ = typing_block h sh.w_block in
+    let typed_c = expect_se ty sh.w_name in
+    { w_name = typed_c; w_block = typed_b }, defined_names
+  in
   let typed_switch_handlers, defined_names_list =
-    List.split (List.map handler switch_handlers) in
+    List.split (List.map handler switch_handlers)
+  in
+  (* checks states coverage *)
+  let s_l = List.map (fun w -> w.w_name) typed_switch_handlers in
+  let unic, comp = check_type_coverage ty s_l in
+  if not unic then error Enon_exaustive;
+  if not comp then error Epartial_switch;
+  (* check partial def are lasts *)
   let total, partial = merge defined_names_list in
   all_last h partial;
-  (typed_switch_handlers,
-   add total (add partial acc))
+  (typed_switch_handlers, add total (add partial acc))
 
 and typing_present_handlers h acc def_names
     present_handlers =

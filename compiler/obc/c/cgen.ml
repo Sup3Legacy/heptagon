@@ -228,13 +228,24 @@ and create_affect_stm dest src ty =
           | _ -> [Caffect (dest, src)])
     | _ -> [Caffect (dest, src)]
 
+let string_of_static_exp se = Name_utils.print_pp_to_name Global_printer.print_static_exp se
+
+let cconst_of_static_exp se =
+  match (Static.simplify se).se_desc with
+    | Sint i -> Ccint i
+    | Sfloat f -> Ccfloat f
+    | Sbool b -> Ctag (if b then "true" else "false")
+    | Sstring s -> Cstrlit s
+    | Sconstructor c -> Ctag (cname_of_qn c)
+    | _ -> Error.message se.se_loc Error.Estatic_exp_compute_failed
+
+
 let rec cexpr_of_static_exp se =
-  match se.se_desc with
+  match (Static.simplify se).se_desc with
     | Sint i -> Cconst (Ccint i)
     | Sfloat f -> Cconst (Ccfloat f)
     | Sbool b -> Cconst (Ctag (if b then "true" else "false"))
     | Sstring s -> Cconst (Cstrlit s)
-    | Sfield _ -> assert false
     | Sconstructor c -> Cconst (Ctag (cname_of_qn c))
     | Sarray sl -> Carraylit (ctype_of_otype se.se_ty, List.map cexpr_of_static_exp sl)
     | Srecord fl ->
@@ -252,16 +263,11 @@ let rec cexpr_of_static_exp se =
         if !Compiler_options.unroll_loops && se.se_ty = Initial.tint
         then cexpr_of_static_exp (Static.simplify (find_const ln).c_value)
         else Cvar (cname_of_qn ln)
-    | Sfun _ -> assert false
-    | Sop _ ->
-        let se' = Static.simplify se in
-          if se = se' then
-            Error.message se.se_loc Error.Estatic_exp_compute_failed
-          else
-            cexpr_of_static_exp se'
-    | Stuple _ -> Misc.internal_error "cgen: static tuple"
-    | Sasync _ -> assert false (** TODO async *)
-
+    | Sfun _
+    | Sop _ -> Error.message se.se_loc Error.Estatic_exp_compute_failed
+    | Sfield _ -> Misc.internal_error "cgen: sfield found"
+    | Stuple _ -> Misc.internal_error "cgen: static tuple found"
+    | Sasync _ -> Misc.internal_error "cgen: async found" (** TODO async *)
 
 (** [cexpr_of_exp exp] translates the Obj action [exp] to a C expression. *)
 let rec cexpr_of_exp out_env var_env exp =
@@ -519,37 +525,30 @@ let rec create_affect_const var_env (dest : clhs) c =
     class names.  *)
 let rec cstm_of_act out_env var_env obj_env act =
   match act with
-      (** Cosmetic : cases on boolean values are converted to if statements. *)
-    | Acase (c, [({name = "true"}, te); ({ name = "false" }, fe)])
-    | Acase (c, [({name = "false"}, fe); ({ name = "true"}, te)]) ->
-        let cc = cexpr_of_exp out_env var_env c in
-        let cte = cstm_of_act_list out_env var_env obj_env te in
-        let cfe = cstm_of_act_list out_env var_env obj_env fe in
-        [Cif (cc, cte, cfe)]
-    | Acase (c, [({name = "true"}, te)]) ->
-        let cc = cexpr_of_exp out_env var_env c in
-        let cte = cstm_of_act_list out_env var_env obj_env te in
-        let cfe = [] in
-        [Cif (cc, cte, cfe)]
-    | Acase (c, [({name = "false"}, fe)]) ->
-        let cc = Cuop ("!", (cexpr_of_exp out_env var_env c)) in
-        let cte = cstm_of_act_list out_env var_env obj_env fe in
-        let cfe = [] in
-        [Cif (cc, cte, cfe)]
-
-
     (** Translation of case into a C switch statement is simple enough: we
         just recursively translate obj expressions and statements to
         corresponding C constructs, and cautiously "shortnamize"
         constructor names. *)
     | Acase (e, cl) ->
         (** [ccl_of_obccl] translates an Obc clause to a C clause. *)
+        let cc = cexpr_of_exp out_env var_env e in
         let ccl =
-          List.map
-            (fun (c,act) -> cname_of_qn c,
-               cstm_of_act_list out_env var_env obj_env act) cl in
-        [Cswitch (cexpr_of_exp out_env var_env e, ccl)]
-
+          List.map (fun (c,act) -> cconst_of_static_exp c,
+                      cstm_of_act_list out_env var_env obj_env act) cl
+        in
+        (match ccl with (** Cosmetic : convert to if statements. *)
+        | [Ctag "true", cte; Ctag "false", cfe]
+        | [Ctag "false", cfe; Ctag "true", cte] ->
+            [Cif (cc, cfe, cte)]
+        | [Ctag "true", cte] ->
+          let cfe = [] in
+            [Cif (cc, cte, cfe)]
+        | [Ctag "false", cfe] ->
+          let cc = Cuop ("!", cc) in
+          let cte = [] in
+            [Cif (cc, cte, cfe)]
+        | _ ->
+            [Cswitch (cc, ccl)])
     | Ablock b ->
         cstm_of_act_list out_env var_env obj_env b
 
@@ -814,7 +813,7 @@ let cdefs_and_cdecls_of_type_decl otd =
                     let fun_call =
                       Cfun_call ("strcpy", [Cvar "buf";
                                             Cconst (Cstrlit t)]) in
-                    (t, [Csexpr fun_call]) in
+                    (Ctag t, [Csexpr fun_call]) in
                   [Cswitch (Cvar "x", map gen_clause nl);
                    Creturn (Cvar "buf")]; }
           } in

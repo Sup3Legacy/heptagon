@@ -1,4 +1,14 @@
 
+En cours :
+utiliser les bounded pour when et merge
+Les booleens dans les merge when et companie ne doivent plus etre des constructeur avec ptrue etc, mais bien des Sbool
+
+
+
+
+
+
+
 Plus ou moins ordonné du plus urgent au moins urgent.
 
 Bugs :
@@ -12,15 +22,11 @@ Bugs :
 
 Ameliorations :
 
-*- Permettre des equations sans variables a gauche. Ou au moins ne pas donner de nom au pattern : _
-
 *- Collision entre les noms de params et les idents dans les noeuds.
 
 *- Optimisations du genre "if true then ... else ... " ou genre "x,y = if b then a,c else a2,c" qui devrait etre transformé en "x = if b then a else s2; y = c" ...
 
 *- Optimisation de la traduction des automates : pas besoin de variables de reset pour les états "continue", etc.
-
-*- Compléter la passe "static.ml" pour gérer l'ensemble des opérateurs de pervasives
 
 *- Permettre la définition de constantes locales.
 

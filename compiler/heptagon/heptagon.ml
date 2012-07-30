@@ -42,11 +42,11 @@ and desc =
   | Epre of static_exp option * exp
   | Efby of exp * exp
   | Estruct of (field_name * exp) list
-  | Ewhen of exp * constructor_name * var_ident
+  | Ewhen of exp * sampling_value * var_ident
     (** exp when Constructor(ident) *)
-  | Emerge of var_ident * (constructor_name * exp) list
+  | Emerge of var_ident * (sampling_value * exp) list
     (** merge ident (Constructor -> exp)+ *)
-  | Esplit of var_ident * constructor_name list * exp
+  | Esplit of var_ident * sampling_value list * exp
     (** [split ck e] with the constructor list associated to [ck] *)
   | Eapp of app * exp list * exp option
   | Eiterator of iterator_type * app * static_exp list
@@ -115,7 +115,7 @@ and escape = {
   e_next_state : state_name }
 
 and switch_handler = {
-  w_name  : constructor_name;
+  w_name  : sampling_value;
   w_block : block }
 
 and present_handler = {

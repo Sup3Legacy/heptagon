@@ -73,8 +73,9 @@ let compile_program p =
 
 
   (* Boolean pass *)
-  let p = pass "Clocking(Heptagon)" !boolean Hept_clocking.program p pp in
+(*  let p = pass "Clocking(Heptagon)" !boolean Hept_clocking.program p pp in (* TODO boolean passes *)
   let p = pass "Boolean" !boolean Boolean.program p pp in
+*)
   let p = pass "Normalization" !boolean Normalize.program p pp in
 
   (* Block flatten *)

@@ -96,7 +96,7 @@ and cstm =
   | Cskip (** A dummy instruction that does nothing and will not be printed. *)
   | Caffect of clhs * cexpr (** Affect the result of an expression to a lhs. *)
   | Cif of cexpr * cstm list * cstm list (** Alternative *)
-  | Cswitch of cexpr * (string * cstm list) list (** Case/switch over an enum.*)
+  | Cswitch of cexpr * (cconst * cstm list) list (** Case/switch over an enum.*)
   | Cwhile of Obc.while_order * cexpr * cstm list (** While loop. *)
   | Cfor of string * cexpr * cexpr * cstm list (** For loop. int <= string < int *)
   | Creturn of cexpr (** Ends a procedure/function by returning an expression.*)
@@ -215,9 +215,9 @@ and pp_cstm_list fmt stml = pp_list pp_cstm ";" fmt stml
 and pp_cstm fmt stm = match stm with
   | Csexpr e -> fprintf fmt "%a" pp_cexpr e
   | Cswitch (e, cl) ->
-      let pp_clause fmt (tag, stml) =
+      let pp_clause fmt (const, stml) =
         fprintf fmt "@[<v 2>case %a:%a@ break;@]"
-          pp_cexpr (Cconst (Ctag tag)) pp_cstm_list stml in
+          pp_cconst const pp_cstm_list stml in
       fprintf fmt "@[<v>@[<v 2>switch (%a) {%a@]@ }@]"
         pp_cexpr e (pp_list pp_clause "") cl
   | Caffect (lhs, e) ->

@@ -243,7 +243,7 @@ let rec translate_some_clock loc env ck = match ck with
 
 and translate_clock loc env ck = match ck with
   | Cbase -> Clocks.Cbase
-  | Con(ck,c,x) -> Clocks.Con(translate_clock loc env ck, qualify_constrs c, Rename.var loc env x)
+  | Con(ck,c,x) -> Clocks.Con(translate_clock loc env ck, expect_static_exp c, Rename.var loc env x)
 
 let rec translate_ct loc env ct = match ct with
   | Ck ck -> Clocks.Ck (translate_clock loc env ck)
@@ -296,14 +296,14 @@ and translate_desc loc env = function
   | Ewhen (e, c, x) ->
       let x = Rename.var loc env x in
       let e = translate_exp env e in
-      let c = qualify_constrs c in
+      let c = expect_static_exp c in
       Heptagon.Ewhen (e, c, x)
   | Emerge (x, c_e_list) ->
       let x = Rename.var loc env x in
       let c_e_list =
         let fun_c_e (c, e) =
           let e = translate_exp env e in
-          let c = qualify_constrs c in
+          let c = expect_static_exp c in
           (c, e) in
         List.map fun_c_e c_e_list in
       Heptagon.Emerge (x, c_e_list)
@@ -391,7 +391,7 @@ and translate_present_handler env ph =
 
 and translate_switch_handler loc env sh =
   try
-    { Heptagon.w_name = qualify_constrs sh.w_name;
+    { Heptagon.w_name = expect_static_exp sh.w_name;
       Heptagon.w_block = fst (translate_block env sh.w_block) }
   with
     | ScopingError err -> message loc err
@@ -550,7 +550,7 @@ and translate_signature s n =
     | Some ck -> translate_clock ck
   and translate_clock ck = match ck with
     | Cbase -> Signature.Cbase
-    | Con(ck,c,x) -> Signature.Con(translate_clock ck, qualify_constrs c, x)
+    | Con(ck,c,x) -> Signature.Con(translate_clock ck, expect_static_exp c, x)
   and translate_arg a =
     Signature.mk_arg ~is_memory:false (translate_type s.sig_loc a.a_type)
       a.a_linearity (translate_some_clock a.a_clock) a.a_name

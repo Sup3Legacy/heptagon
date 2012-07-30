@@ -156,7 +156,7 @@ and print_exp_desc ff = function
   | Eiterator _ -> assert false
   | Ewhen (e, c, x) ->
       fprintf ff "@[<2>(%a@ when %a(%a))@]"
-        print_exp e print_qualname c print_ident x
+        print_exp e print_static_exp c print_ident x
   | Emerge (x, tag_e_list) ->
       fprintf ff "@[<2>merge %a@ %a@]"
         print_ident x print_tag_e_list tag_e_list
@@ -165,7 +165,7 @@ and print_exp_desc ff = function
         print_ident x  print_exp e1
 
 and print_handler ff c =
-  fprintf ff "@[<2>%a@]" (print_couple print_qualname print_exp "("" -> "")") c
+  fprintf ff "@[<2>%a@]" (print_couple print_static_exp print_exp "("" -> "")") c
 
 and print_tag_e_list ff tag_e_list =
   fprintf ff "@[%a@]" (print_list print_handler "" " " "") tag_e_list
@@ -284,7 +284,7 @@ and print_switch_handler_list ff tag_act_list =
   print_list
     (fun ff sh ->
        fprintf ff "@[<v 2>| %a @ %a@]"
-         print_qualname sh.w_name
+         print_static_exp sh.w_name
          (print_block " do ") sh.w_block)
     "" "" "" ff tag_act_list
 

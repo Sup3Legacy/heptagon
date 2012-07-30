@@ -99,7 +99,3 @@ let print_name ff n =
   then "(" ^ (n ^ ")") (* printers should have a special case to print '*' infix *)
   else n
   in*) fprintf ff "%s" n
-
-(** Use a printer to generate a string compatible with a name *)
-let print_pp_to_name p x =
-  Misc.sanitize_string (Misc.print_pp_to_string p x)

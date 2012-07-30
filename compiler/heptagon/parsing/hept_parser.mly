@@ -203,12 +203,12 @@ contract:
 ;
 
 opt_assume:
-  | /* empty */ { mk_constructor_exp ptrue (Loc($startpos,$endpos)) }
+  | /* empty */ { mk_static_exp_exp (Sbool true) (Loc($startpos,$endpos)) }
   | ASSUME exp { $2 }
 ;
 
 opt_enforce:
-  | /* empty */ { mk_constructor_exp ptrue (Loc($startpos,$endpos)) }
+  | /* empty */ { mk_static_exp_exp (Sbool true) (Loc($startpos,$endpos)) }
   | ENFORCE exp { $2 }
 ;
 
@@ -301,10 +301,13 @@ ck:
 
 
 on_ck:
-  | x=IDENT                                                { Con(Cbase,Q Initial.ptrue,x) }
+  | x=IDENT
+      { Con(Cbase, mk_static_exp_exp (Sbool true) (Loc($startpos,$endpos)), x) }
   | c=constructor_or_bool LPAREN x=IDENT RPAREN            { Con(Cbase,c,x) }
-  | b=ck ON x=IDENT                                        { Con(b,Q Initial.ptrue,x) }
-  | b=ck ONOT x=IDENT                                      { Con(b,Q Initial.pfalse,x) }
+  | b=ck ON x=IDENT
+      { Con(b, mk_static_exp_exp (Sbool true) (Loc($startpos,$endpos)), x) }
+  | b=ck ONOT x=IDENT
+      { Con(b, mk_static_exp_exp (Sbool false) (Loc($startpos,$endpos)), x) }
   | b=ck ON c=constructor_or_bool LPAREN x=IDENT RPAREN    { Con(b,c,x) }
 
 
@@ -343,8 +346,8 @@ _equ:
       { Epresent(List.rev $3, b) }
   | IF exp THEN tb=sblock(IN) ELSE fb=sblock(IN) END
       { Eswitch($2,
-                   [{ w_name = ptrue; w_block = tb };
-                    { w_name = pfalse; w_block = fb }]) }
+                   [{ w_name = mk_bool_exp true (Loc($startpos,$endpos)); w_block = tb };
+                    { w_name = mk_bool_exp false (Loc($startpos,$endpos)); w_block = fb }]) }
   | RESET b=sblock(IN) EVERY e=exp
       { Ereset(b,e) }
   | DO b=sblock(IN) DONE
@@ -395,8 +398,8 @@ switch_handler:
 ;
 
 constructor_or_bool:
-  | BOOL { if $1 then Q Initial.ptrue else Q Initial.pfalse }
-  | constructor { $1 }
+  | BOOL { mk_bool_exp $1 (Loc($startpos,$endpos)) }
+  | constructor { mk_constructor_exp $1 (Loc($startpos,$endpos)) }
 
 switch_handlers:
   | switch_handler
@@ -460,7 +463,7 @@ _simple_exp:
 merge_handlers:
   | hs=nonempty_list(merge_handler) { hs }
   | e1=simple_exp e2=simple_exp
-      { [(Q Initial.ptrue, e1);(Q Initial.pfalse, e2)] }
+      { [(mk_bool_exp true (Loc($startpos,$endpos)), e1);(mk_bool_exp false (Loc($startpos,$endpos)), e2)] }
 merge_handler:
   | LPAREN c=constructor_or_bool ARROW e=exp RPAREN { (c,e) }
 
@@ -493,9 +496,9 @@ _exp:
   | e=exp WHEN c=constructor_or_bool LPAREN ce=IDENT RPAREN
       { Ewhen (e, c, ce) }
   | e=exp WHEN ce=IDENT
-      { Ewhen (e, Q Initial.ptrue, ce) }
+      { Ewhen (e, mk_bool_exp true (Loc($startpos,$endpos)), ce) }
   | e=exp WHENOT ce=IDENT
-      { Ewhen (e, Q Initial.pfalse, ce) }
+      { Ewhen (e, mk_bool_exp false (Loc($startpos,$endpos)), ce) }
   | MERGE n=IDENT hs=merge_handlers
       { Emerge (n, hs) }
   | exp INFIX1 exp

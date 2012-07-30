@@ -153,7 +153,7 @@ let translate_automaton v eq_list handlers =
     let switch_e = mk_exp_fby_state initial (statevar next_statename) in
     let switch_handlers =
       List.map (fun ({ s_state = n } as case) ->
-                  { w_name = name n; w_block = weak case })
+                  { w_name = mk_constructor (name n) tstatetype; w_block = weak case })
                handlers in
     let switch_eq = mk_switch_equation switch_e switch_handlers in
     let nr_eq =
@@ -168,13 +168,13 @@ let translate_automaton v eq_list handlers =
     let ns_switch_e = mk_exp_fby_state initial (statevar next_statename) in
     let ns_switch_handlers =
       List.map (fun ({ s_state = n } as case) ->
-                  { w_name = name n; w_block = strong case })
+                  { w_name = mk_constructor (name n) tstatetype; w_block = strong case })
                handlers in
     let ns_switch_eq = mk_switch_equation ns_switch_e ns_switch_handlers in
     let switch_e = statevar statename in
     let switch_handlers =
       List.map (fun ({ s_state = n } as case) ->
-                  { w_name = name n; w_block = weak case })
+                  { w_name = mk_constructor (name n) tstatetype; w_block = weak case })
                handlers in
     let switch_eq = mk_switch_equation switch_e switch_handlers in
     let pnr_eq =

@@ -46,7 +46,7 @@ open Hept_mapfold
 
 (** [fresh_case_var name constructor] returns a fresh var with name [name_constr] *)
 let fresh_case_var name constr =
-  let s = name^"_"^(Names.print_pp_to_name Global_printer.print_qualname constr) in
+  let s = name^"_"^(Name_utils.print_pp_to_name Global_printer.print_static_exp constr) in
   Idents.gen_var "switch" ~reset:false s
 
 let fresh_clock_id () =
@@ -132,7 +132,7 @@ let new_name v vdt =
   let rec _nn n vdt = match vdt with
     | Base _ -> n
     | Level (Con(_,constr,_),_,vdt)->
-        (_nn n vdt)^"_"^(Names.print_pp_to_name Global_printer.print_qualname constr)
+        (_nn n vdt)^"_"^(Name_utils.print_pp_to_name Global_printer.print_static_exp constr)
     | Level _ -> Misc.internal_error "Level should always have a Con"
   in
   _nn (Idents.name v) vdt
@@ -281,7 +281,6 @@ let eqdesc funs (old_used, env) eqd = match eqd with
       (* typing have proved that defined variables are the same among states *)
       (* They are updated after eqdesc is done in [eq] *)
       let defnames = (List.hd sw_h_l).w_block.b_defnames in
-
 
       let (c_env_l, equs, used) =
         (* deal with the handlers, return the list of pair of constructor, associated environment *)

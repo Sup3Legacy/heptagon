@@ -154,7 +154,7 @@ and print_tag_act_list ff tag_act_list =
   print_list
     (fun ff (tag, a) ->
        fprintf ff "@[<v 2>case %a:@ %a@]"
-         print_qualname tag
+         print_static_exp tag
          print_block a)
     "" "" "" ff tag_act_list
 

@@ -9,6 +9,7 @@
 (* initialization of the typing environment *)
 
 open Names
+open Location
 open Signature
 
 let tglobal = []
@@ -31,23 +32,29 @@ let tfile = Tid pfile
 
 let mk_pervasives s = { qual = Pervasives; name = s }
 
-let mk_static_int_op op args =
-  mk_static_exp tint (Sop (mk_pervasives op, args))
+let mk_static_int_op ?(loc = no_location) op args =
+  mk_static_exp ~loc:loc tint (Sop (mk_pervasives op, args))
 
-let mk_static_int i =
-  mk_static_exp tint (Sint (Int32.of_int i))
+let mk_static_int ?(loc = no_location) i =
+  mk_static_exp ~loc:loc tint (Sint (Int32.of_int i))
 
-let mk_static_int32 i =
-  mk_static_exp tint (Sint i)
+let mk_static_int32 ?(loc = no_location) i =
+  mk_static_exp ~loc:loc tint (Sint i)
 
-let mk_static_bool b =
-  mk_static_exp tbool (Sbool b)
+let mk_static_bool ?(loc = no_location) b =
+  mk_static_exp ~loc:loc tbool (Sbool b)
 
-let mk_static_string s =
-  mk_static_exp  tstring (Sstring s)
+let mk_static_string ?(loc = no_location) s =
+  mk_static_exp ~loc:loc tstring (Sstring s)
 
-let mk_static_float f =
-  mk_static_exp tfloat (Sfloat f)
+let mk_static_float ?(loc = no_location) f =
+  mk_static_exp ~loc:loc tfloat (Sfloat f)
+
+
+let strue = mk_static_bool true
+let sfalse = mk_static_bool false
+
+
 
 (* build the initial environment *)
 let initialize modul =
