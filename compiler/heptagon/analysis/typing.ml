@@ -689,7 +689,7 @@ and expect_se exp_ty se =
 and unify_se_l se_l =
   let aux ty se =
     let se, ty2 = typing_static_exp se in
-    try se,(unify ty ty2)
+    try se, (unify ty ty2)
     with _ -> message se.se_loc (Etype_clash(ty, ty2))
   in
   let se1, se_l = Misc.assert_1min se_l in
@@ -697,6 +697,17 @@ and unify_se_l se_l =
   let se_l, t = Misc.mapfold aux ty1 se_l in
   se1::se_l, t
 
+let rec typing_ck h ck = match ck with
+  | Clocks.Cbase | Clocks.Cvar _ -> ck
+  | Clocks.Con (ck', sv, v) ->
+      let t = typ_of_name h v in
+      let sv = expect_se t sv in
+      let ck' = typing_ck h ck' in
+      Clocks.Con (ck', sv, v)
+
+let rec typing_ct h ct = match ct with
+  | Clocks.Ck ck -> Clocks.Ck (typing_ck h ck)
+  | Clocks.Cprod ct_l -> Clocks.Cprod (List.map (typing_ct h) ct_l)
 
 let rec typing h e =
   try
@@ -821,7 +832,10 @@ let rec typing h e =
           end;
           Esplit(c, cl, typed_e2), Tprod (repeat_list ty (List.length cl))
     in
-      { e with e_desc = typed_desc; e_ty = ty; }, ty
+    let typed_elck = typing_ck h e.e_level_ck in
+    let typed_ectannot = Misc.optional (typing_ct h) e.e_ct_annot in
+    { e with e_desc = typed_desc; e_ty = ty;
+             e_ct_annot = typed_ectannot; e_level_ck = typed_elck }, ty
   with
       TypingError(kind) -> message e.e_loc kind
 
@@ -1276,7 +1290,7 @@ and typing_block h (* TODO async deal with it ! *)
     @return the typed list of var_dec, an environment mapping
     names to their types (aka defined names) and the environment
     mapping names to types and last that will be used for typing (aka h).*)
-and build h dec =
+and build h decs =
   let var_dec (acc_defined, h) vd =
     try
       let ty = check_type vd.v_type in
@@ -1295,7 +1309,17 @@ and build h dec =
     with
         TypingError(kind) -> message vd.v_loc kind
   in
-    mapfold var_dec (Env.empty, h) dec
+  let decs, (local_names, h) = mapfold var_dec (Env.empty, h) decs in
+  let check_vd h vd =
+    let v_last = match vd.v_last with
+      | Var -> Var
+      | Last s -> Last (Misc.optional (expect_se vd.v_type) s)
+    in
+    let v_clock = typing_ck h vd.v_clock in
+    { vd with v_last; v_clock }
+  in
+  let decs = List.map (check_vd h) decs in
+  decs, (local_names, h)
 
 let typing_contract h contract =
   match contract with
