@@ -50,6 +50,7 @@ type error =
   | Eempty_array
   | Efoldi_bad_args of ty
   | Emapi_bad_args of ty
+  | Emerge_bad_sampler of ty * ty
   | Emerge_missing_constrs
   | Emerge_uniq
   | Emerge_mix of qualname
@@ -123,6 +124,12 @@ let message loc kind =
           The constructor %a is unexpected.@."
           print_location loc
           print_qualname c
+    | Emerge_bad_sampler (exp_ty,ty) ->
+        eprintf "%aThe first argument of merge is of type %a@\n\
+                 but is expected to be of type %a@."
+          print_location loc
+          Global_printer.print_type ty
+          Global_printer.print_type exp_ty
     | Enon_exaustive ->
         eprintf "%aSome constructors are missing in this pattern/matching.@."
           print_location loc
@@ -631,7 +638,11 @@ and typing_static_exp se =
     | Sop (op, se_list) ->
         let ty_desc = find_value op in
         let typed_se_list =
-          List.map2 expect_se (types_of_arg_list ty_desc.node_inputs) se_list
+          try
+            List.map2 expect_se (types_of_arg_list ty_desc.node_inputs) se_list
+          with Invalid_argument _ ->
+            message se.se_loc (Earity_clash (List.length se_list,
+                                             List.length ty_desc.node_inputs))
         in
         Sop (op, typed_se_list),
         prod (types_of_arg_list ty_desc.node_outputs)
@@ -813,7 +824,8 @@ let rec typing h e =
           if not unic then message e.e_loc Emerge_uniq;
           if not comp then message e.e_loc Emerge_missing_constrs;
           (* check x *)
-          expect t_c (typ_of_name h x);
+          (try expect t_c (typ_of_name h x)
+           with _ -> message e.e_loc (Emerge_bad_sampler (t_c, typ_of_name h x)));
           (* type *)
           let e_l, t = unify_e_l h e_l in
           let c_e_list = List.combine typed_c_l e_l in

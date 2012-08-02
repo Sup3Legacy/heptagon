@@ -303,12 +303,12 @@ ck:
 on_ck:
   | x=IDENT
       { Con(Cbase, mk_static_exp_exp (Sbool true) (Loc($startpos,$endpos)), x) }
-  | c=constructor_or_bool LPAREN x=IDENT RPAREN            { Con(Cbase,c,x) }
+  | c=sampling_value LPAREN x=IDENT RPAREN            { Con(Cbase,c,x) }
   | b=ck ON x=IDENT
       { Con(b, mk_static_exp_exp (Sbool true) (Loc($startpos,$endpos)), x) }
   | b=ck ONOT x=IDENT
       { Con(b, mk_static_exp_exp (Sbool false) (Loc($startpos,$endpos)), x) }
-  | b=ck ON c=constructor_or_bool LPAREN x=IDENT RPAREN    { Con(b,c,x) }
+  | b=ck ON c=sampling_value LPAREN x=IDENT RPAREN    { Con(b,c,x) }
 
 
 equs:
@@ -393,13 +393,12 @@ escapes:
 ;
 
 switch_handler:
-  | constructor_or_bool b=block(DO)
+  | sampling_value b=block(DO)
       { { w_name = $1; w_block = b } }
 ;
 
-constructor_or_bool:
-  | BOOL { mk_bool_exp $1 (Loc($startpos,$endpos)) }
-  | constructor { mk_constructor_exp $1 (Loc($startpos,$endpos)) }
+sampling_value:
+  | c=const { c }
 
 switch_handlers:
   | switch_handler
@@ -440,11 +439,11 @@ exps:
 ;
 
 simple_exp:
+  | c=const { c }
   | e=_simple_exp { mk_exp e (Loc($startpos,$endpos)) }
   | LPAREN e=exp ct=ct_annot RPAREN { { e with e_ct_annot = ct} }
 _simple_exp:
   | IDENT                            { Evar $1 }
-  | const                            { Econst $1 }
   | ASYNC c=simple_exp               { Easync c }
   | LBRACE field_exp_list RBRACE     { Estruct $2 }
   | LBRACKET array_exp_list RBRACKET { mk_call Earray $2 }
@@ -463,9 +462,9 @@ _simple_exp:
 merge_handlers:
   | hs=nonempty_list(merge_handler) { hs }
   | e1=simple_exp e2=simple_exp
-      { [(mk_bool_exp true (Loc($startpos,$endpos)), e1);(mk_bool_exp false (Loc($startpos,$endpos)), e2)] }
+      { [(mk_bool_exp true (Loc($startpos,$endpos)), e1); (mk_bool_exp false (Loc($startpos,$endpos)), e2)] }
 merge_handler:
-  | LPAREN c=constructor_or_bool ARROW e=exp RPAREN { (c,e) }
+  | LPAREN c=sampling_value ARROW e=exp RPAREN { (c,e) }
 
 exp:
   | e=simple_exp { e }
@@ -493,7 +492,7 @@ _exp:
       { mk_op_call $2 [$1; $3] }
   | exp INFIX2 exp
       { mk_op_call $2 [$1; $3] }
-  | e=exp WHEN c=constructor_or_bool LPAREN ce=IDENT RPAREN
+  | e=exp WHEN c=sampling_value LPAREN ce=IDENT RPAREN
       { Ewhen (e, c, ce) }
   | e=exp WHEN ce=IDENT
       { Ewhen (e, mk_bool_exp true (Loc($startpos,$endpos)), ce) }
@@ -611,7 +610,7 @@ qualname:
 
 
 const:
-  | c=_const { mk_static_exp c (Loc($startpos,$endpos)) }
+  | c=_const { mk_static_exp_exp c (Loc($startpos,$endpos)) }
 _const:
   | INT                { Sint $1 }
   | FLOAT              { Sfloat $1 }

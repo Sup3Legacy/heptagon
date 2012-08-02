@@ -284,7 +284,7 @@ let mk_bool_exp b loc =
   mk_static_exp_exp (Sbool b) loc
 
 let mk_constructor_exp f loc =
-  mk_exp (Econst (mk_static_exp (Sconstructor f) loc)) loc
+  mk_static_exp_exp (Sconstructor f) loc
 
 let mk_field_exp f loc =
   mk_exp (Econst (mk_static_exp (Sfield f) loc)) loc
