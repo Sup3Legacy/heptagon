@@ -615,7 +615,7 @@ and field_type f fields t1 loc =
 and typing_static_exp se =
   try
   let desc, ty = match se.se_desc with
-    | Sint v -> Sint v, Tbounded (Initial.mk_static_int32 v)
+    | Sint v -> Sint v, Tbounded (Initial.mk_static_int32 (Int32.succ v))
     | Sbool v-> Sbool v, Tid Initial.pbool
     | Sfloat v -> Sfloat v, Tid Initial.pfloat
     | Sstring v -> Sstring v, Tid Initial.pstring
