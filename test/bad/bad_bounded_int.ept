@@ -1,0 +1,4 @@
+node main(x:int{<0}) = (y:bool)
+let
+  y = merge x (0 -> true) (1 -> false);
+tel
