@@ -608,6 +608,8 @@ and check_type = function
   | Tfuture (a, t) -> Tfuture (a, check_type t)
   | Tbounded n ->
       let typed_n = expect_se (Tid Initial.pint) n in
+      (* make sure it is strictly positive *)
+      add_constraint_leq (mk_static_int 1) typed_n;
       Tbounded typed_n
 
 (** @return the type of the field with name [f] in the list
@@ -622,7 +624,10 @@ and field_type f fields t1 loc =
 and typing_static_exp se =
   try
   let desc, ty = match se.se_desc with
-    | Sint v -> Sint v, Tbounded (Initial.mk_static_int32 (Int32.succ v))
+    | Sint v ->
+      if Misc.int32_leq Int32.zero v
+      then Sint v, Tbounded (Initial.mk_static_int32 (Int32.succ v))
+      else Sint v, Tid Initial.pint
     | Sbool v-> Sbool v, Tid Initial.pbool
     | Sfloat v -> Sfloat v, Tid Initial.pfloat
     | Sstring v -> Sstring v, Tid Initial.pstring
@@ -1282,7 +1287,7 @@ and typing_present_handlers h acc def_names
   (typed_present_handlers,
    (add total (add partial acc)))
 
-and typing_block h (* TODO async deal with it ! *)
+and typing_block h
     ({ b_local = l; b_equs = eq_list; b_loc = loc } as b) =
   try
     let typed_l, (local_names, h0) = build h l in

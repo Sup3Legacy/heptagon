@@ -344,3 +344,6 @@ let index p l =
     | v::l -> if p v then i else aux (i+1) l
   in
     aux 0 l
+
+
+let int32_leq x y =  (Int32.compare x y) <= 0

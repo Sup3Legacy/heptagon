@@ -158,3 +158,5 @@ val memoize : ('a -> 'b) -> ('a -> 'b)
 (** Memoize the result of the function [f], taht should expect a
    tuple as input and be reflexive (f (x,y) = f (y,x)) *)
 val memoize_couple : (('a * 'a) -> 'b) -> (('a * 'a) -> 'b)
+
+val int32_leq : Int32.t -> Int32.t -> bool
