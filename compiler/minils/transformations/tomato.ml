@@ -147,7 +147,7 @@ struct
     | Cbase, Cbase -> 0
     | Cvar lr1, Cvar lr2 -> link_compare_modulo !lr1 !lr2
     | Con (ck1, cn1, vi1), Con (ck2, cn2, vi2) ->
-      let cr1 = compare cn1 cn2 in
+      let cr1 = compare_sv cn1 cn2 in
       if cr1 <> 0 then cr1 else
         let cr2 = ident_compare_modulo vi1 vi2 in
         if cr2 <> 0 then cr2 else clock_compare ck1 ck2

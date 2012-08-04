@@ -91,17 +91,8 @@ let fuse_blocks b1 b2 =
 let rec find c = function
   | []    -> raise Not_found
   | (c1, s1) :: h  ->
-      if c = c1 then s1, h else let s, h = find c h in s, (c1, s1) :: h
+      if Clocks.equal_sv c c1 then s1, h else let s, h = find c h in s, (c1, s1) :: h
 
-let is_deadcode = function
-    | Aassgn (lhs, e) ->
-        (match e.e_desc with
-           | Eextvalue w -> Obc_compare.compare_lhs_extvalue lhs w = 0
-           | _ -> false
-        )
-    | Acase (_, []) -> true
-    | Afor(_, _, _, { b_body = [] }) -> true
-    | _ -> false
 
 let rec joinlist j l =
   let rec join_next l =
@@ -128,7 +119,7 @@ let rec joinlist j l =
             join_next ((Acase(e1, h1))::l)
       | _ -> join_next l
   in
-    join_first l
+  join_first l
 
 
 and join_block j b =

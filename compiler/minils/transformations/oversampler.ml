@@ -33,7 +33,7 @@ open Minils
 (** From [v] [(c,w)] returns the expression for [merge v (c -> w) (c'-> false)...(c''->false)] *)
 let gen_merge v (c, w) =
   let ck, ck_c = match ck_repr w.w_ck with
-    | Con (ck, wc, wv) when wc=c & wv = v ->
+    | Con (ck, wc, wv) when wv = v & equal_sv wc c->
         ck, (fun c' -> Con(ck, c', v))
     | _ -> Misc.internal_error "gen_merge wrong w clock"
   in

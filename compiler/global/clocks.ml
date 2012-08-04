@@ -28,7 +28,8 @@ and link =
   | Clink of ck
 
 
-let equal_sv se1 se2 = 0 = (static_exp_compare se1 se2)
+let compare_sv se1 se2 = static_exp_compare se1 se2
+let equal_sv se1 se2 = 0 = (compare_sv se1 se2)
 
 exception Unify
 
