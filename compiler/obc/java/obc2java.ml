@@ -783,11 +783,10 @@ let fun_dec_list fd_l = match fd_l with
                 | vd_l -> Enew (return_ty, List.map (fun vd -> Evar vd.vd_ident) vd_l))
       in
       let body = block param_env ~locals:vd_output ~end_acts:[return_act] ostep.Obc.m_body in
+      let vd_input = var_dec_list param_env ostep.Obc.m_inputs in
       let _ = Idents.pop_node () in
-      mk_methode ~args:(vds_params @(var_dec_list param_env ostep.Obc.m_inputs))
-               ~returns:return_ty
-               ~static:true
-               body (Names.shortname fd.cd_name)
+      mk_methode ~args:(vds_params @ vd_input) ~returns:return_ty ~static:true
+        body (Names.shortname fd.cd_name)
     in
     let funs = List.map mk_fun_method fd_l in
     let classe_name = "FUNS" |> name_to_classe_name in
