@@ -33,11 +33,19 @@ let mk_pervasives s = { qual = Pervasives; name = s }
 let mk_static_int_op ?(loc = no_location) op args =
   mk_static_exp ~loc:loc tint (Sop (mk_pervasives op, args))
 
-let mk_static_int ?(loc = no_location) i =
-  mk_static_exp ~loc:loc tint (Sint (Int32.of_int i))
+let rec typing_sint v =
+  if Misc.int32_leq Int32.zero v
+  then Tbounded (mk_static_int32 ~inside_type:true (Int32.succ v))
+  else Tid pint
 
-let mk_static_int32 ?(loc = no_location) i =
-  mk_static_exp ~loc:loc tint (Sint i)
+and mk_static_int ?(loc = no_location) ?(inside_type = false) i =
+  let i = Int32.of_int i in
+  let t = if inside_type then tint else typing_sint i in
+  mk_static_exp ~loc:loc t (Sint i)
+
+and mk_static_int32 ?(loc = no_location) ?(inside_type = false) i =
+  let t = if inside_type then tint else typing_sint i in
+  mk_static_exp ~loc:loc t (Sint i)
 
 let mk_static_bool ?(loc = no_location) b =
   mk_static_exp ~loc:loc tbool (Sbool b)

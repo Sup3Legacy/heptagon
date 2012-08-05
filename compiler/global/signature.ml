@@ -251,7 +251,7 @@ and type_compare ty1 ty2 = match ty1, ty2 with
   | Tfuture (a1, t1), Tfuture (a2, t2) ->
       let cr = type_compare t1 t2 in
       if cr <> 0 then cr else async_t_compare a1 a2
-  | Tbounded n1, Tbounded n2 -> Pervasives.compare n1 n2
+  | Tbounded n1, Tbounded n2 -> static_exp_compare n1 n2
 
   | Tprod _, _ -> 1
 

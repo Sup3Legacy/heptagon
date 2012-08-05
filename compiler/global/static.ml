@@ -13,6 +13,7 @@
     x[n - 1], x[1 + 3],... *)
 
 open Names
+open Initial
 open Format
 open Signature
 open Modules
@@ -194,7 +195,15 @@ let rec eval_core partial se =
         apply_op partial loc op se_l, loc
     | _ -> raise Errors.Fallback
   in
-  let static_exp funs _ se = Global_mapfold.static_exp funs se.se_loc se in
+  let static_exp funs _ se =
+    let se, acc = Global_mapfold.static_exp funs se.se_loc se in
+    let t = match se.se_desc with
+      | Sint n -> (* The type may have changed *)
+          typing_sint n
+      | _ -> se.se_ty
+    in
+    {se with se_ty = t}, acc
+  in
   let funs = { Global_mapfold.defaults with
                Global_mapfold.static_exp_desc = stexp_desc;
                Global_mapfold.static_exp = static_exp }
