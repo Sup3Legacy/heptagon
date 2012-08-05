@@ -18,7 +18,7 @@ let class_name = Global_printer.print_qualname
 let bare_class_name = Global_printer.print_shortname
 let obj_ident = Global_printer.print_ident
 let constructor_name = Global_printer.print_qualname
-let bare_constructor_name = Global_printer.print_shortname
+let constructor_name_bare = Global_printer.print_shortname
 let method_name = pp_print_string
 let field_name = pp_print_string
 let field_ident = Global_printer.print_ident
@@ -105,6 +105,10 @@ and exp ff = function
   | Eclass c -> class_name ff c
   | Earray_elem (p,e_l) -> fprintf ff "%a@[%a@]" exp p (print_list exp "[""][""]") e_l
 
+and exp_bare ff = function
+  | Sconstructor c -> constructor_name_bare ff c
+  | x -> exp ff x
+
 and op ff (f, e_l) =
   let javaop = function
     | "="  -> "=="
@@ -173,7 +177,7 @@ and act ff = function
   | Aexp e -> fprintf ff "@[%a@];" exp e
   | Aswitch (e, c_b_l) ->
       let pcb ff (c,b) =
-        fprintf ff "@[<v4>case %a:@ %a@ break;@]" exp c block b in
+        fprintf ff "@[<v4>case %a:@ %a@ break;@]" exp_bare c block b in
     (*  let switch_hack ff c_b_l = (* TODO java : better thing to do ? *)
         fprintf ff "@[<2>default ://Dead code. Hack to prevent \
                     \"may not be initialized\"
@@ -232,7 +236,7 @@ and classe ff c = match c.c_kind with
         protection c.c_protection
         static c.c_static
         bare_class_name c.c_name
-        (print_list_r bare_constructor_name """,""") c_l
+        (print_list_r constructor_name_bare """,""") c_l
   | Cgeneric cd ->
       fprintf ff "@\n@[<4>%a%aclass %a @[<h>%a@]{@\n%a@]@\n}"
         protection c.c_protection
