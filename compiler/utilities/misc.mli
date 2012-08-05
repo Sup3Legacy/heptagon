@@ -159,4 +159,9 @@ val memoize : ('a -> 'b) -> ('a -> 'b)
    tuple as input and be reflexive (f (x,y) = f (y,x)) *)
 val memoize_couple : (('a * 'a) -> 'b) -> (('a * 'a) -> 'b)
 
+(** Int32 Less Or Equal *)
 val int32_leq : Int32.t -> Int32.t -> bool
+
+(** Apply one of the mapfold function on an option value *)
+val optional_mapfold :
+  ('a -> 'b -> 'c -> 'd * 'b) -> 'a -> 'b -> 'c option -> 'd option * 'b

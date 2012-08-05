@@ -17,6 +17,8 @@ type 'a hept_it_funs = {
   ty              : 'a hept_it_funs -> 'a -> ty -> ty * 'a;
   static_exp      : 'a hept_it_funs -> 'a -> static_exp -> static_exp * 'a;
   static_exp_desc : 'a hept_it_funs -> 'a -> static_exp_desc -> static_exp_desc * 'a;
+  ck              : 'a hept_it_funs -> 'a -> ck -> ck * 'a;
+  ct              : 'a hept_it_funs -> 'a -> ct -> ct * 'a;
   app             : 'a hept_it_funs -> 'a -> app -> app * 'a;
   block           : 'a hept_it_funs -> 'a -> block -> block * 'a;
   edesc           : 'a hept_it_funs -> 'a -> edesc -> edesc * 'a;
@@ -70,19 +72,44 @@ and static_exp_desc funs acc sd = match sd with
       let se_l, acc = mapfold (static_exp_it funs) acc se_l in
       Sarray_power(se1, se_l), acc
   | Srecord f_se_l ->
-      let aux acc (f,se) = let se,acc = static_exp_it funs acc se in
-        (f, se), acc in
+      let aux acc (f,se) =
+        let se,acc = static_exp_it funs acc se in
+        (f, se), acc
+      in
       let f_se_l, acc = mapfold aux acc f_se_l in
       Srecord f_se_l, acc
   | Sasync se ->
       let se, acc = static_exp_it funs acc se in
       Sasync se, acc
 
+and ck_it funs acc c =
+  try funs.ck funs acc c
+  with Fallback -> ck funs acc c
+and ck funs acc c = match c with
+  | Cbase -> Cbase, acc
+  | Con (c, se, v) ->
+      let c, acc = ck_it funs acc c in
+      let se, acc = exp_it funs acc se in
+      Con (c, se, v), acc
+
+and ct_it funs acc c =
+  try funs.ct funs acc c
+  with Fallback -> ct funs acc c
+and ct funs acc c = match c with
+  | Ck c ->
+      let c, acc = ck_it funs acc c in
+      Ck c, acc
+  | Cprod c_l ->
+      let c_l, acc = mapfold (ct funs) acc c_l in
+      Cprod c_l, acc
 
 and exp_it funs acc e = funs.exp funs acc e
 and exp funs acc e =
   let e_desc, acc = edesc_it funs acc e.e_desc in
-  { e with e_desc = e_desc }, acc
+  let e_ct_annot, acc =
+    optional_mapfold ct_it funs acc e.e_ct_annot
+  in
+  {e with e_desc; e_ct_annot }, acc
 
 and edesc_it funs acc ed =
   try funs.edesc funs acc ed
@@ -113,17 +140,20 @@ and edesc funs acc ed = match ed with
       let n_e_list, acc = mapfold aux acc n_e_list in
       Estruct n_e_list, acc
   | Emerge (x, c_e_list) ->
-    let aux acc (c,e) =
-      let e, acc = exp_it funs acc e in
-        (c,e), acc in
-    let c_e_list, acc = mapfold aux acc c_e_list in
+      let aux acc (c,e) =
+        let c, acc = exp_it funs acc c in
+        let e, acc = exp_it funs acc e in
+        (c,e), acc
+      in
+      let c_e_list, acc = mapfold aux acc c_e_list in
       Emerge(x, c_e_list), acc
   | Ewhen (e, c, x) ->
-    let e, acc = exp_it funs acc e in
+      let c, acc = exp_it funs acc c in
+      let e, acc = exp_it funs acc e in
       Ewhen (e, c, x), acc
   | Esplit (x, e2) ->
       let e2, acc = exp_it funs acc e2 in
-        Esplit(x, e2), acc
+      Esplit(x, e2), acc
   | Eapp (app, args) ->
       let app, acc = app_it funs acc app in
       let args, acc = mapfold (exp_it funs) acc args in
@@ -220,8 +250,9 @@ and escape funs acc esc =
 
 and switch_handler_it funs acc sw = funs.switch_handler funs acc sw
 and switch_handler funs acc sw =
+  let w_name, acc = exp_it funs acc sw.w_name in
   let w_block, acc = block_it funs acc sw.w_block in
-  { sw with w_block = w_block }, acc
+  { w_block; w_name }, acc
 
 
 and present_handler_it funs acc ph = funs.present_handler funs acc ph
@@ -233,8 +264,9 @@ and present_handler funs acc ph =
 and var_dec_it funs acc vd = funs.var_dec funs acc vd
 and var_dec funs acc vd =
   let v_type, acc = ty_it funs acc vd.v_type in
+  let v_clock, acc = optional_mapfold ck_it funs acc vd.v_clock in
   let v_last, acc = last_it funs acc vd.v_last in
-  { vd with v_last = v_last; v_type = v_type }, acc
+  { vd with v_last; v_type; v_clock }, acc
 
 and arg_it funs acc a = funs.arg funs acc a
 and arg funs acc a =
@@ -380,6 +412,8 @@ let defaults = {
   ty = ty;
   static_exp = static_exp;
   static_exp_desc = static_exp_desc;
+  ck = ck;
+  ct = ct;
   app = app;
   block = block;
   edesc = edesc;
@@ -414,6 +448,8 @@ let defaults_stop = {
   ty = Global_mapfold.stop;
   static_exp = Global_mapfold.stop;
   static_exp_desc = Global_mapfold.stop;
+  ck = Global_mapfold.stop;
+  ct = Global_mapfold.stop;
   app = Global_mapfold.stop;
   block = Global_mapfold.stop;
   edesc = Global_mapfold.stop;

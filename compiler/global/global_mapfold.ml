@@ -92,7 +92,7 @@ and ck funs acc c = match c with
   | Con(ck, sampling_value, v) ->
       let ck, acc = ck_it funs acc ck in
       let v, acc = var_ident_it funs acc v in
-      let samplig_value, acc = static_exp_it funs acc sampling_value in
+      let sampling_value, acc = static_exp_it funs acc sampling_value in
       Con (ck, sampling_value, v), acc
 
 and link_it funs acc c =

@@ -347,3 +347,10 @@ let index p l =
 
 
 let int32_leq x y =  (Int32.compare x y) <= 0
+
+
+let optional_mapfold f funs acc x = match x with
+  | None -> None, acc
+  | Some e ->
+      let e, acc = f funs acc e in
+      Some e, acc
