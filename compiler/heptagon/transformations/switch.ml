@@ -306,10 +306,10 @@ let eqdesc funs (old_used, env) eqd = match eqd with
             let new_n, _, n = Env.rename n env in
             (* rename should not change the env since we deal with defnames *)
             assert (not new_n);
-            constr, mk_exp (Evar n) vd.v_type ~linearity:vd.v_linearity
+            constr, mk_exp (Evar n) vd.v_type vd.v_linearity
           in
           let c_e_l = List.map c_env_to_c_e c_env_l in
-          let merge = mk_exp (Emerge (ck, c_e_l)) vd.v_type ~linearity:vd.v_linearity in
+          let merge = mk_exp (Emerge (ck, c_e_l)) vd.v_type vd.v_linearity in
           let new_n, _, n = Env.rename n env in
           (* rename should not change the env since we deal with defnames *)
           assert (not new_n);
@@ -335,10 +335,10 @@ let eqdesc funs (old_used, env) eqd = match eqd with
           let (pat, c_l, c_env_l) = List.fold_left c_env_to_pat ([],[],[]) c_env_l in
           let vd = Env.get_vd n env in
           let n, (used,env) = rename n (used,env) in
-          let v = mk_exp (Evar n) vd.v_type ~linearity:vd.v_linearity in
+          let v = mk_exp (Evar n) vd.v_type vd.v_linearity in
           let v_t = Signature.prod (repeat_list vd.v_type (List.length c_l)) in
           let v_lt = Linearity.prod (repeat_list vd.v_linearity (List.length c_l)) in
-          let split = mk_exp (Esplit (ck, c_l, v)) v_t ~linearity:v_lt in
+          let split = mk_exp (Esplit (ck, c_l, v)) v_t v_lt in
           ((used,env), c_env_l, (mk_equation (Eeq (Etuplepat pat, split)))::equs)
         in
         (* update the environment, but deal with [used] from the handlers *)

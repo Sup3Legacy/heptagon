@@ -49,7 +49,7 @@ let rec _ty is_new is_init ff t = match t with
   | Tarray (t,s_l) ->
       let me = _ty is_new is_init in
       (* print size expressions only for new without init *)
-      let print_size = if is_new && not is_init then exp else (fun ff e -> ()) in
+      let print_size = if is_new && not is_init then exp else (fun _ _ -> ()) in
       fprintf ff "%a@[%a@]" me t (print_list print_size "[""][""]") s_l
   | Tunit -> pp_print_string ff "void"
 

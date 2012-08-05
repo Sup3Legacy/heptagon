@@ -37,7 +37,7 @@ end
 
 let exp_list_of_static_exp_list se_list =
   let mk_one_const se =
-    mk_exp (Econst se) se.se_ty ~linearity:Ltop
+    mk_exp (Econst se) se.se_ty Ltop
   in
     List.map mk_one_const se_list
 
@@ -166,7 +166,7 @@ let rec translate kind context e =
                                              flatten_e_list e_list, reset) }
     | Esplit (x, cl, e1) ->
         let context, e1 = translate ExtValue context e1 in
-        let mk_when c = mk_exp ~linearity:e1.e_linearity (Ewhen (e1, c, x)) e1.e_ty in
+        let mk_when c = mk_exp (Ewhen (e1, c, x)) e1.e_ty e1.e_linearity in
         let el = List.map mk_when cl in
         context, { e with e_desc = Eapp(mk_app Etuple, el, None) }
     | Elast _ | Efby _ ->
@@ -183,9 +183,9 @@ and translate_list kind context e_list =
 
 and fby kind context e v e1 =
   let mk_fby c e =
-    mk_exp ~loc:e.e_loc (Epre(Some c, e)) e.e_ty ~linearity:Ltop in
+    mk_exp ~loc:e.e_loc (Epre(Some c, e)) e.e_ty Ltop in
   let mk_pre e =
-    mk_exp ~loc:e.e_loc (Epre(None, e)) e.e_ty ~linearity:Ltop in
+    mk_exp ~loc:e.e_loc (Epre(None, e)) e.e_ty Ltop in
   let context, e1 = translate ExtValue context e1 in
   match e1.e_desc, v with
     | Eapp({ a_op = Etuple } as app, e_list, r),
@@ -218,7 +218,7 @@ and ifthenelse context e e1 e2 e3 =
   let mk_ite_list e2_list e3_list =
     let mk_ite e'2 e'3 =
       mk_exp ~loc:e.e_loc
-        (Eapp (mk_app Eifthenelse, [e1; e'2; e'3], None)) e'2.e_ty ~linearity:e'2.e_linearity
+        (Eapp (mk_app Eifthenelse, [e1; e'2; e'3], None)) e'2.e_ty e'2.e_linearity
     in
     let e_list = List.map2 mk_ite e2_list e3_list in
       { e with e_desc = Eapp(mk_app Etuple, e_list, None) }
@@ -253,7 +253,7 @@ and merge context e x c_e_list =
         | []::_ -> []
         | _ ::_ ->
             let c_e_list, e_lists = build_c_e_list c_list e_lists in
-            let e_merge = mk_exp ~loc:e.e_loc (Emerge(x, c_e_list)) ty ~linearity:lin in
+            let e_merge = mk_exp ~loc:e.e_loc (Emerge(x, c_e_list)) ty lin in
             let e_merge_list = build_merge_list c_list e_lists in
             e_merge::e_merge_list in
       build_merge_list c_list e_lists

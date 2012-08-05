@@ -28,7 +28,7 @@ let fresh () = Idents.gen_var "reset" ~reset:true "reset"
 let reset_var_from_exp e =
   let r = fresh() in
   { e with e_desc = Evar r },
-  mk_var_dec r (Tid Initial.pbool) ~linearity:Linearity.Ltop,
+  mk_var_dec r (Tid Initial.pbool) Linearity.Ltop,
   mk_equation (Eeq(Evarpat r, e))
 
 (** Merge two reset conditions *)
@@ -44,7 +44,7 @@ let merge_resets res1 res2 =
 let ifres res e2 e3 =
   let init loc =
     mk_exp (Epre (Some (mk_static_bool true), dfalse))
-      ~loc:loc (Tid Initial.pbool) ~linearity:Linearity.Ltop
+      ~loc:loc (Tid Initial.pbool) Linearity.Ltop
   in
   match res with
     | None -> mk_op_app Eifthenelse [init e3.e_loc; e2; e3]
@@ -97,7 +97,7 @@ let block funs (res,_) b =
 (* Transform reset blocks in blocks with reseted exps,
    create a var to store the reset condition evaluation if not already a var. *)
 let eqdesc funs (res,stateful) = function
-  | Ereset(b, ({ e_desc = Evar x } as e)) ->
+  | Ereset(b, ({ e_desc = Evar _ } as e)) ->
         let r = if stateful then merge_resets res (Some e) else res in
         let b, _ = Hept_mapfold.block_it funs (r,stateful) b in
         Eblock(b), (res,stateful)

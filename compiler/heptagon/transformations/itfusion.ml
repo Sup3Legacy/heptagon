@@ -59,13 +59,13 @@ let linearity_of_vd_list l =
   Linearity.prod (List.map (fun vd -> vd.v_linearity) l)
 
 let exp_of_vd vd =
-  mk_exp (Evar vd.v_ident) vd.v_type ~linearity:vd.v_linearity
+  mk_exp (Evar vd.v_ident) vd.v_type vd.v_linearity
 
 let tuple_of_vd_list l =
   let el = List.map exp_of_vd l in
   let ty = type_of_vd_list l in
   let lin = linearity_of_vd_list l in
-    mk_exp (Eapp (mk_app Etuple, el, None)) ty ~linearity:lin
+  mk_exp (Eapp (mk_app Etuple, el, None)) ty lin
 
 let vd_of_arg ad =
     mk_var_dec (fresh_vd_of_arg ad) ad.a_type ad.a_linearity
@@ -94,7 +94,7 @@ let mk_call app acc_eq_list =
   let args = List.map exp_of_vd new_inp in
   let out_ty = type_of_vd_list new_outp in
   let out_lin = linearity_of_vd_list new_outp in
-  let e = mk_exp (Eapp (app, args, None)) out_ty ~linearity:out_lin in
+  let e = mk_exp (Eapp (app, args, None)) out_ty out_lin in
   match List.length new_outp with
     | 1 -> new_inp, e, acc_eq_list
     | _ ->

@@ -39,9 +39,7 @@ let comment s =
 
 let do_pass d f p pp =
   comment (d ^ " ...");
-  let start = Unix.gettimeofday () in
   let r = Compiler_timings.time_pass d f p in
-  let stop = Unix.gettimeofday () in
   pp r;
   comment (d ^ " done.");
   r
