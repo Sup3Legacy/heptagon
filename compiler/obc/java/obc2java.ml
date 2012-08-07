@@ -104,9 +104,6 @@ let translate_constructor_name q =
 
 let translate_field_name f = f |> Names.shortname |> String.lowercase
 
-(** a [name] becomes a [package.Name] *)
-let name_to_classe_name n = n |> Modules.current_qual |> qualname_to_package_classe
-
 (** translate an ostatic_exp into an jexp *)
 let rec static_exp param_env se = match se.Signature.se_desc with
   | Signature.Svar c ->
@@ -749,7 +746,11 @@ let type_dec_list classes td_l =
 let const_dec_list cd_l = match cd_l with
   | [] -> []
   | _ ->
-      let classe_name = "CONSTANTES" |> name_to_classe_name in
+      let classe_name =
+        let cd_l = List.map (fun fd -> Names.modul fd.Obc.c_name) cd_l in
+        assert (not (List.exists (fun m -> m != List.hd cd_l) cd_l));
+        qualname_to_package_classe {qual=List.hd cd_l; name="CONSTANTES"}
+      in
       Idents.push_node classe_name;
       let param_env = NamesEnv.empty in
       let mk_const_field { Obc.c_name = oname ; Obc.c_value = ovalue; Obc.c_type = otype } =
@@ -788,8 +789,12 @@ let fun_dec_list fd_l = match fd_l with
       mk_methode ~args:(vds_params @ vd_input) ~returns:return_ty ~static:true
         body (Names.shortname fd.cd_name)
     in
+    let classe_name =
+      let m_l = List.map (fun fd -> Names.modul fd.cd_name) fd_l in
+      assert (not (List.exists (fun m -> m != List.hd m_l) m_l));
+      qualname_to_package_classe {qual=List.hd m_l; name="FUNS"}
+    in
     let funs = List.map mk_fun_method fd_l in
-    let classe_name = "FUNS" |> name_to_classe_name in
     [mk_classe ~methodes:funs classe_name]
 
 let program p =

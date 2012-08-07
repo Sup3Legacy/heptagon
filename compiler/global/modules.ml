@@ -230,7 +230,7 @@ let qualify_const name = _qualify g_env.consts name
 
 
 (** @return the name as qualified with the current module
-  (should not be used..)*)
+  (should not be used after scoping, may be incorrect during callgraph)*)
 let current_qual n = { qual = g_env.current_mod; name = n }
 
 (** { 3 Fresh functions return a fresh qualname for the current module } *)
