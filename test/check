@@ -9,7 +9,7 @@ shopt -s nullglob
 
 # script de test
 
-compilo=../../heptc
+compilo=../../weptc
 coption="-O -lho -c"
 
 # compilateurs utilises pour les tests de gen. de code
@@ -53,7 +53,7 @@ compile () {
 
   if [ $verbose != 0 ]; then
     logfile=`basename $1`.log
-    echo "Compile -i $coption $args_comp $1"
+    echo "$compilo $coption -I good $args_comp $1"
     $compilo $coption -I good $args_comp $1 >$logfile 2>&1
   else
     if [ $2 == 1 ]; then
@@ -109,33 +109,6 @@ launch_check () {
       echec=0
     else
       echec=1
-    fi
-    # Compil. minils ?
-    if [[ ($echec == 0) && ($minils == 1) ]]; then
-      if $MLC ${base_f}.mls > /dev/null 2>&1; then
-        echec=0
-      else
-        echec=2
-      fi
-    fi
-    # Compil. java ?
-    if [[ ($echec == 0) && ($java == 1) ]]; then
-     pushd "java/$(echo ${base_f} | sed 's/^./\u&/')" > /dev/null
-        if $JAVAC -cp ../../../../lib/java:../ *.java > /dev/null
-        then
-          echec=0
-        else
-          echec=3
-        fi
-      popd > /dev/null
-    fi
-    # Compil. caml ?
-    if [[ ($echec == 0) && ($caml == 1) ]]; then
-      if $CAMLC -c ${base_f}.ml > /dev/null; then
-        echec=0
-      else
-        echec=4
-      fi
     fi
     # Compil. c ?
     if [[ ($echec == 0) && ($c == 1) ]]; then
@@ -220,22 +193,13 @@ activate_clean () {
   clean=1
 }
 
-activate_minils () {
-  minils=1
-}
-
 activate_java_gen () {
   coption="$coption -target java"
 }
 
 activate_java () {
   java=1
-  coption="$coption -target java"
-}
-
-activate_caml () {
-    caml=1
-    coption="$coption -target caml"
+  coption="java $coption"
 }
 
 activate_vhdl () {
@@ -248,16 +212,6 @@ activate_c () {
   coption="$coption -target c"
 }
 
-activate_tomato () {
-  tomato=1
-  coption="$coption -tomato"
-}
-
-activate_memalloc () {
-  memalloc=1
-  caption="$coption -memalloc"
-}
-
 activate_all () {
   activate_tomato
   activate_memalloc
@@ -267,10 +221,6 @@ activate_all () {
 
 activate_boolean () {
     coption="$coption -bool"
-}
-
-activate_deadcode () {
-    coption="$coption -deadcode"
 }
 
 while [ $# -gt 0 ]; do

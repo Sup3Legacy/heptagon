@@ -24,13 +24,14 @@ case $1 in
 		shift;
 		COMPILER=heptc.byte
 		;;
-	*)
+        *)
 		if [ -x $COMPILER_DIR/heptc.byte ]; then COMPILER=heptc.byte
 		elif [ -x $COMPILER_DIR/heptc.d.byte ]; then COMPILER=heptc.d.byte
 		elif [ -x $COMPILER_DIR/heptc.native ]; then COMPILER=heptc.native
 		else COMPILER=heptc.byte
 	        fi
-esac
+		;;
+	esac
 
 
 
@@ -54,11 +55,10 @@ fi
 if [ ! -e "$LIB_DIR/pervasives.epci" ] || [ "$HEPTC" -nt "$LIB_DIR/pervasives.epci" ]
 then
   pushd "$LIB_DIR" > /dev/null
-  echo "Recompile pervasives.epci"
   "$HEPTC" -nopervasives pervasives.epi
   for i in *.epi; do
 	  if [[ $i != "pervasives.epi" ]]
-	  then "$HEPTC" $i
+	  then "$HEPTC" "$i"
 	  fi
   done
   "$HEPTC" -c -target java -target c *.ept
@@ -74,46 +74,51 @@ function compile
   popd > /dev/null
 }
 
+function java_compile
+{
+  for lastarg in "$@";
+  do
+    base_f=`basename ${!lastarg} .ept`
+    pushd "java/$(echo ${base_f} | python -c 'print raw_input().capitalize()')" > /dev/null
+    ${JAVAC}:.. *.java
+    STATUS=$?
+    if [[ $STATUS != 0 ]]
+    then
+	    break
+    fi
+    popd > /dev/null
+  done
+}
+
+
+
 case $1 in
+"-h" | "--help" | "-help" )
+  echo "Calling <weptc [<type>] [java]>"
+  echo "  calls the <type> (debug, native or byte) compiler"
+  echo "  if <type> is not provided, it uses any existing one."
+  echo "  If the one needed isn't present it will be generated"
+  echo "  Adding java will generate java code and compile it."
+  echo "  Any further options are given to the compiler."
+  echo "The compiler usage follows:"
+  $HEPTC --help
+;;
 java )
   shift
   compile -target java "$@"
-  if [[ $STATUS = 0 ]]
+  if [[ $STATUS == 0 ]]
   then
-    #call javac to compile the file given as last argument
-    last_arg=$#
-    base_f=`basename ${!last_arg} .ept`
-    pushd "java/$(echo ${base_f} | python -c 'print raw_input().capitalize()')" > /dev/null
-    ${JAVAC}:.. *.java
-    popd > /dev/null
+    if [[ ${#@} == 1 ]]
+    then
+      java_compile "$@"
+    else
+      while [[ ($1 != "--") && (${#@} -gt 1) ]]
+      do
+        shift
+      done
+      java_compile "$@"
+    fi
   fi
-;;
-java_m )
-  shift
-  compile -target java -s main "$@"
-  if [[ $STATUS = 0 ]]
-  then
-    #call javac to compile the file given as last argument
-    last_arg=$#
-    base_f=`basename ${!last_arg} .ept`
-    pushd "java/$(echo ${base_f} | python -c 'print raw_input().capitalize()')" > /dev/null
-    ${JAVAC}:.. *.java
-    popd > /dev/null
-  fi
-;;
-c99 )
-  shift
-  set -e
-  compile -target c "$@"
-  base_f=`basename ${!#} .ept`
-  cd ${base_f}_c && cc -std=c99 -I`$HEPTC -where`/c *.c -o ../${base_f}
-;;
-c )
-  shift
-  set -e
-  compile -target c "$@"
-  base_f=`basename ${!#} .ept`
-  cd ${base_f}_c && cc -I`$HEPTC -where`/c *.c -o ../${base_f}
 ;;
 -- | * )
   compile "$@"

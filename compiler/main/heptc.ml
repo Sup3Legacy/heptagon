@@ -140,7 +140,8 @@ let main () =
     "-no-clocking-error", Arg.Set no_clocking_error, doc_interf_scheduler;
     "-O", Arg.Unit do_optim, doc_optim;
     "-mall", Arg.Set interf_all, doc_interf_all;
-    "-time", Arg.Set time_passes, doc_time_passes; ]
+    "-time", Arg.Set time_passes, doc_time_passes;
+    "--", Arg.Rest compile, doc_compile; ]
   in
   try
     Arg.parse options compile errmsg;

@@ -113,5 +113,5 @@ let print_header_info ff cbeg cend =
     Sys.argv
     cend
 
-let errmsg = "Options are:"
+let errmsg = "Usage is heptc <options> file[.ept,.epi]\n      or heptc <options> -- files\n<options> are:"
 
