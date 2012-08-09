@@ -3,7 +3,7 @@ const n:int = 15
 
 fun f(i:int) returns (r:int)
 let
-  r = do_stuff(i);
+  r = Do.stuffi(i);
 tel
 
 fun main () returns ()

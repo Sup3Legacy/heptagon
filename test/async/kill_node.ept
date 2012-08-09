@@ -1,7 +1,7 @@
 
 node lent<<n:int>>() returns (y:int)
 let
-  y = 0 fby do_stuff(n*20);
+  y = 0 fby Do.stuffi(n*20);
 tel
 
 node main () returns ()

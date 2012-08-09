@@ -1,7 +1,7 @@
 
 node lent() returns (r : int)
 let
-  r = 1 fby (do_stuff(10) + r + 1)
+  r = 1 fby (Do.stuffi(10) + r + 1)
 tel
 
 node main() returns (r : int; half : bool)

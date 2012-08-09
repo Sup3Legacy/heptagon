@@ -1,1 +1,2 @@
 external unsafe val fun stuff(int) returns ()
+external unsafe val fun stuffi(int) returns (int)

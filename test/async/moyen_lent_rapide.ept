@@ -1,8 +1,8 @@
 
 node lent_rapide<<k,n :int>>(lent :bool) returns (r : int)
 let
-  r = 1 fby merge lent (true -> do_stuff(n*k))
-                       (false -> do_stuff(0));
+  r = 1 fby merge lent (true -> Do.stuffi(n*k))
+                       (false -> Do.stuffi(0));
 tel
 
 node moyenne<<n :int>>() returns (r : int; big_step : bool)
@@ -12,7 +12,7 @@ let
   reset
     cpt = 3 fby cpt - 1; (*timer*)
   every big_step;
-  r = 0 fby 0 fby 0 fby lent_rapide<<3,n>>(big_step) + do_stuff(n);
+  r = 0 fby 0 fby 0 fby lent_rapide<<3,n>>(big_step) + Do.stuffi(n);
 tel
 
 node main() returns (r :int; big_step :bool)

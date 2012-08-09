@@ -10,4 +10,8 @@ public class FUNS {
                 }
                 return;
         }
+	public static int stuffi(int coeff) {
+		stuff(coeff);
+		return coeff;
+	}
 }
