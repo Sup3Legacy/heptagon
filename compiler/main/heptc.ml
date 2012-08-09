@@ -99,55 +99,52 @@ let compile source_f =
 (** [main] function to be launched *)
 let main () =
   let read_qualname f = Arg.String (fun s -> f (Name_utils.qualname_of_string s)) in
+  let options = Arg.align [
+    "-v",Arg.Set verbose, doc_verbose;
+    "-version", Arg.Unit show_version, doc_version;
+    "-i", Arg.Set print_types, doc_print_types;
+    "-I", Arg.String add_include, doc_include;
+    "-where", Arg.Unit locate_stdlib, doc_locate_stdlib;
+    "-stdlib", Arg.String set_stdlib, doc_stdlib;
+    "-c", Arg.Set create_object_file, doc_object_file;
+    "-s", Arg.String set_simulation_node, doc_sim;
+    "-hepts", Arg.Set hepts_simulation, doc_hepts;
+    "-bool", Arg.Set boolean, doc_boolean;
+    "-deadcode", Arg.Set deadcode, doc_deadcode;
+    "-tomato", Arg.Set tomato, doc_tomato;
+    "-tomanode", read_qualname add_tomato_node, doc_tomato;
+    "-tomacheck", read_qualname add_tomato_check, "";
+    "-lho", Arg.Set do_lho, doc_lho;
+    "-inline", read_qualname add_inlined_node, doc_inline;
+    "-notemplate", Arg.Set enforce_callgraph, doc_enforce_callgraph;
+    "-flatten", Arg.Set flatten, doc_flatten;
+    "-assert", Arg.String add_assert, doc_assert;
+    "-nopervasives", Arg.Unit set_no_pervasives, doc_no_pervasives;
+    "-target", Arg.String add_target_language, doc_target;
+    "-targetpath", Arg.String set_target_path, doc_target_path;
+    "-nocaus", Arg.Clear causality, doc_nocaus;
+    "-noinit", Arg.Clear init, doc_noinit;
+    "-fti", Arg.Set full_type_info, doc_full_type_info;
+    "-fqi", Arg.Set full_qual_info, doc_full_qual_info;
+    "-statefuli", Arg.Set stateful_info, doc_stateful_info;
+    "-fname", Arg.Set full_name, doc_full_name;
+    "-itfusion", Arg.Set do_iterator_fusion, doc_itfusion;
+    "-strict_ssa", Arg.Unit set_strict_ssa, doc_strict_ssa;
+    "-memalloc", Arg.Unit do_mem_alloc_and_typing, doc_memalloc;
+    "-java_queue_size", Arg.Int set_java_queue_size, doc_java_queue_size;
+    "-noasync", Arg.Set no_async, doc_noasync;
+    "-only-memalloc", Arg.Set do_mem_alloc, doc_memalloc_only;
+    "-only-linear", Arg.Set do_linear_typing, doc_linear_only;
+    "-old-scheduler", Arg.Set use_old_scheduler, doc_interf_scheduler;
+    "-unroll", Arg.Set unroll_loops, doc_unroll;
+    "-no-clocking-error", Arg.Set no_clocking_error, doc_interf_scheduler;
+    "-O", Arg.Unit do_optim, doc_optim;
+    "-mall", Arg.Set interf_all, doc_interf_all;
+    "-time", Arg.Set time_passes, doc_time_passes; ]
+  in
   try
-    Arg.parse
-      [
-        "-v",Arg.Set verbose, doc_verbose;
-        "-version", Arg.Unit show_version, doc_version;
-        "-i", Arg.Set print_types, doc_print_types;
-        "-I", Arg.String add_include, doc_include;
-        "-where", Arg.Unit locate_stdlib, doc_locate_stdlib;
-        "-stdlib", Arg.String set_stdlib, doc_stdlib;
-        "-c", Arg.Set create_object_file, doc_object_file;
-        "-s", Arg.String set_simulation_node, doc_sim;
-        "-hepts", Arg.Set hepts_simulation, doc_hepts;
-        "-bool", Arg.Set boolean, doc_boolean;
-        "-deadcode", Arg.Set deadcode, doc_deadcode;
-        "-tomato", Arg.Set tomato, doc_tomato;
-        "-tomanode", read_qualname add_tomato_node, doc_tomato;
-        "-tomacheck", read_qualname add_tomato_check, "";
-        "-lho", Arg.Set do_lho, doc_lho;
-        "-inline", read_qualname add_inlined_node, doc_inline;
-        "-notemplate", Arg.Set enforce_callgraph, doc_enforce_callgraph;
-        "-flatten", Arg.Set flatten, doc_flatten;
-        "-assert", Arg.String add_assert, doc_assert;
-        "-nopervasives", Arg.Unit set_no_pervasives, doc_no_pervasives;
-        "-target", Arg.String add_target_language, doc_target;
-        "-targetpath", Arg.String set_target_path, doc_target_path;
-        "-nocaus", Arg.Clear causality, doc_nocaus;
-        "-noinit", Arg.Clear init, doc_noinit;
-        "-fti", Arg.Set full_type_info, doc_full_type_info;
-        "-fqi", Arg.Set full_qual_info, doc_full_qual_info;
-        "-statefuli", Arg.Set stateful_info, doc_stateful_info;
-        "-fname", Arg.Set full_name, doc_full_name;
-        "-itfusion", Arg.Set do_iterator_fusion, doc_itfusion;
-        "-strict_ssa", Arg.Unit set_strict_ssa, doc_strict_ssa;
-        "-memalloc", Arg.Unit do_mem_alloc_and_typing, doc_memalloc;
-        "-java_queue_size", Arg.Int set_java_queue_size, doc_java_queue_size;
-        "-noasync", Arg.Set no_async, doc_noasync;
-        "-only-memalloc", Arg.Set do_mem_alloc, doc_memalloc_only;
-        "-only-linear", Arg.Set do_linear_typing, doc_linear_only;
-        "-old-scheduler", Arg.Set use_old_scheduler, doc_interf_scheduler;
-        "-unroll", Arg.Set unroll_loops, doc_unroll;
-        "-no-clocking-error", Arg.Set no_clocking_error, doc_interf_scheduler;
-        "-O", Arg.Unit do_optim, doc_optim;
-        "-mall", Arg.Set interf_all, doc_interf_all;
-        "-time", Arg.Set time_passes, doc_time_passes;
-      ]
-        compile errmsg;
-  with
-    | Errors.Error -> exit 2;;
-
+    Arg.parse options compile errmsg;
+  with Errors.Error -> exit 2;;
 
 (** Launch the [main] *)
 main ()
