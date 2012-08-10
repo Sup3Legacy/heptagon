@@ -38,7 +38,7 @@ case $1 in
 LIB_DIR="$SCRIPT_DIR/lib"
 
 JAVA_LIB_DIR="$LIB_DIR/java"
-JAVAC="javac -Xlint:unchecked -cp $JAVA_LIB_DIR"
+JAVAC="javac -Xlint:unchecked -cp $JAVA_LIB_DIR:.."
 
 #the symlink
 HEPTC="$COMPILER_DIR/$COMPILER"
@@ -78,9 +78,9 @@ function java_compile
 {
   for lastarg in "$@";
   do
-    base_f=`basename ${!lastarg} .ept`
+    base_f=`basename ${lastarg} .ept`
     pushd "java/$(echo ${base_f} | python -c 'print raw_input().capitalize()')" > /dev/null
-    ${JAVAC}:.. *.java
+    ${JAVAC} *.java
     STATUS=$?
     if [[ $STATUS != 0 ]]
     then
