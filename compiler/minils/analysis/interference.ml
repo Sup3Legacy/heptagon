@@ -51,7 +51,7 @@ let print_debug_var_env name env =
 let is_record_type ty = match Modules.unalias_type ty with
   | Tid n ->
       (match Modules.find_type n with
-        | Tstruct _ -> true
+        | Type_struct _ -> true
         | _ -> false)
   | _ -> false
 
@@ -60,14 +60,14 @@ let is_array_or_struct ty =
     | Tarray _ -> true
     | Tid n ->
         (match Modules.find_type n with
-          | Signature.Tstruct _ -> true
+          | Signature.Type_struct _ -> true
           | _ -> false)
     | _ -> false
 
 let is_enum ty = match Modules.unalias_type ty with
   | Tid n ->
       (match Modules.find_type n with
-        | Tenum _ -> true
+        | Type_enum _ -> true
         | _ -> false)
   | _ -> false
 

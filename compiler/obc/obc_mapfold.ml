@@ -28,8 +28,6 @@ type 'a obc_it_funs = {
   method_def:   'a obc_it_funs -> 'a -> Obc.method_def -> Obc.method_def * 'a;
   class_def:    'a obc_it_funs -> 'a -> Obc.class_def -> Obc.class_def * 'a;
   const_dec:    'a obc_it_funs -> 'a -> Obc.const_dec -> Obc.const_dec * 'a;
-  type_dec:     'a obc_it_funs -> 'a -> Obc.type_dec -> Obc.type_dec * 'a;
-  tdesc:        'a obc_it_funs -> 'a -> Obc.tdesc -> Obc.tdesc * 'a;
   program:      'a obc_it_funs -> 'a -> Obc.program -> Obc.program * 'a;
   program_desc: 'a obc_it_funs -> 'a -> Obc.program_desc -> Obc.program_desc * 'a;
   interface:    'a obc_it_funs -> 'a -> Obc.interface -> Obc.interface * 'a;
@@ -222,25 +220,6 @@ and const_dec funs acc c =
   { c with c_type = ty; c_value = se }, acc
 
 
-and type_dec_it funs acc t = funs.type_dec funs acc t
-and type_dec funs acc t =
-  let tdesc, acc = tdesc_it funs acc t.t_desc in
-    { t with t_desc = tdesc }, acc
-
-
-and tdesc_it funs acc td =
-  try funs.tdesc funs acc td
-  with Fallback -> tdesc funs acc td
-and tdesc funs acc td = match td with
-  | Type_struct s ->
-      let s, acc = structure_it funs.global_funs acc s in
-        Type_struct s, acc
-  | Type_alias ty ->
-    let ty, acc = ty_it funs.global_funs acc ty in
-    Type_alias ty, acc
-  | _ -> td, acc
-
-
 and program_it funs acc p = funs.program funs acc p
 and program funs acc p =
   let p_desc, acc = mapfold (program_desc_it funs) acc p.p_desc in
@@ -251,7 +230,7 @@ and program_desc_it funs acc pd =
   with Fallback -> program_desc funs acc pd
 and program_desc funs acc pd = match pd with
   | Pconst cd -> let cd, acc = const_dec_it funs acc cd in Pconst cd, acc
-  | Ptype td -> let td, acc = type_dec_it funs acc td in Ptype td, acc
+  | Ptype td -> let td, acc = type_dec_it funs.global_funs acc td in Ptype td, acc
   | Pclass n -> let n, acc = class_def_it funs acc n in Pclass n, acc
 
 
@@ -265,7 +244,7 @@ and interface_desc_it funs acc pd =
   try funs.interface_desc funs acc pd
   with Fallback -> interface_desc funs acc pd
 and interface_desc funs acc pd = match pd with
-  | Itypedef td -> let td, acc = type_dec_it funs acc td in Itypedef td, acc
+  | Itypedef td -> let td, acc = type_dec_it funs.global_funs acc td in Itypedef td, acc
   | Iconstdef cd -> let cd, acc = const_dec_it funs acc cd in Iconstdef cd, acc
   | Isignature s -> let s, acc = signature_it funs acc s in Isignature s, acc
 
@@ -292,8 +271,6 @@ let defaults = {
   method_def = method_def;
   class_def = class_def;
   const_dec = const_dec;
-  type_dec = type_dec;
-  tdesc = tdesc;
   program = program;
   program_desc = program_desc;
   interface = interface;

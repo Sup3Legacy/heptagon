@@ -750,15 +750,7 @@ let translate_node
       cd_objs = j; cd_methods = [stepm]; cd_loc = loc; cd_mem_alloc = mem_alloc }
   )
 
-let translate_ty_def { Minils.t_name = name; Minils.t_desc = tdesc;
-                       Minils.t_loc = loc } =
-  let tdesc = match tdesc with
-    | Minils.Type_abs -> Type_abs
-    | Minils.Type_alias ln -> Type_alias ln
-    | Minils.Type_enum tag_name_list -> Type_enum tag_name_list
-    | Minils.Type_struct field_ty_list -> Type_struct field_ty_list
-  in
-  { t_name = name; t_desc = tdesc; t_loc = loc }
+let translate_ty_def td = td
 
 let translate_const_def { Minils.c_name = name; Minils.c_value = se;
                           Minils.c_type = ty; Minils.c_loc = loc } =

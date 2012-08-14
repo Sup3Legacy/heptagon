@@ -282,9 +282,9 @@ and param_ty_it funs acc pt =
   try funs.param_ty funs acc pt
   with Fallback -> param_ty funs acc pt
 and param_ty funs acc pt = match pt with
-  | Ttype t ->
+  | Tconst t ->
       let t, acc = ty_it funs acc t in
-      Ttype t, acc
+      Tconst t, acc
   | Tsig s ->
       let s, acc = signature_it funs acc s in
       Tsig s, acc

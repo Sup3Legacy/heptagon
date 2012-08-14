@@ -29,17 +29,6 @@ type iterator_type =
   | Ifoldi
   | Imapfold
 
-type type_dec = {
-  t_name: qualname;
-  t_desc: tdesc;
-  t_loc: location }
-
-and tdesc =
-  | Type_abs
-  | Type_alias of ty
-  | Type_enum of constructor_name list
-  | Type_struct of structure
-
 and extvalue = {
   w_desc      : extvalue_desc;
   mutable w_ck: ck;
@@ -237,8 +226,6 @@ let mk_node
     n_base_ck = Cbase;
     n_base_id = None }
 
-let mk_type_dec type_desc name loc =
-  { t_name = name; t_desc = type_desc; t_loc = loc }
 
 let mk_const_dec id ty e loc =
   { c_name = id; c_type = ty; c_value = e; c_loc = loc }

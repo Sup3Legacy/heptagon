@@ -191,17 +191,6 @@ and print_eqs ff = function
 
 let print_open_module ff name = fprintf ff "open %s@." (modul_to_string name)
 
-let rec print_type_dec ff { t_name = name; t_desc = tdesc } =
-  let print_type_desc ff = function
-    | Type_abs -> ()
-    | Type_alias ty -> fprintf ff  " =@ %a" print_type ty
-    | Type_enum tag_name_list ->
-        fprintf ff " =@ %a" (print_list print_qualname """|""") tag_name_list
-    | Type_struct f_ty_list ->
-        fprintf ff " =@ %a" (print_record print_field) f_ty_list in
-  fprintf ff "@[<2>type %a%a@]@." print_qualname name print_type_desc tdesc
-
-
 let print_contract ff { c_local = l; c_eq = eqs;
                         c_assume = e_a; c_enforce = e_g;
       c_controllables = c;} =

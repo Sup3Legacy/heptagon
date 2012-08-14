@@ -254,7 +254,7 @@ constraints:
 
 node_param:
   | idl=snlist(COMMA,IDENT) COLON t=ty_ident
-      { List.map (mk_param (Ttype t) (Loc($startpos,$endpos))) idl }
+      { List.map (mk_param (Tconst t) (Loc($startpos,$endpos))) idl }
   | n=node_sig
       { [mk_param (Tsig n) n.sig_loc n.sig_name] }
 ;

@@ -151,14 +151,18 @@ let print_constraints ff c_l =
 
 let print_interface_type ff (name,tdesc) =
   match tdesc with
-    | Tabstract -> fprintf ff "@[type %s@]" name
-    | Tenum tag_name_list ->
+    | Type_abstract -> fprintf ff "@[type %s@]" name
+    | Type_enum tag_name_list ->
         fprintf ff "@[<2>type %s =@ %a@]"
           name
           (print_list_r print_qualname "" " |" "") tag_name_list;
-    | Tstruct f_ty_list ->
+    | Type_struct f_ty_list ->
         fprintf ff "@[<2>type %s =@ %a@]" name print_struct f_ty_list
-    | Talias t -> fprintf ff "@[<2>type %s = %a@]" name print_type t
+    | Type_alias t -> fprintf ff "@[<2>type %s = %a@]" name print_type t
+
+let print_type_dec ff t =
+  let name = Misc.print_pp_to_string print_qualname t.t_name in
+  print_interface_type ff (name, t.t_desc)
 
 let print_interface_const ff (name,c) =
   fprintf ff "@[<2>const %a : %a = %a@]"
@@ -176,8 +180,10 @@ let print_sarg ff arg = match arg.a_name with
           print_sck arg.a_clock
 
 let rec print_sig_params ff p_l =
-  let print_param ff p =
-    fprintf ff "%a:%a"  Names.print_name p.p_name  print_ptype p.p_type
+  let print_param ff p = match p.p_type with
+    | Tconst ty -> fprintf ff "%a:%a" Names.print_name p.p_name print_type ty
+(*    | Tabstype t -> print_interface_type ff (p.p_name, t) *)
+    | Tsig node -> print_interface_value ff (p.p_name, node)
   in
   fprintf ff "@[<2>%a@]" (print_list_r print_param "<<" "," ">>") p_l
 
@@ -193,10 +199,6 @@ and print_interface_value ff (name,node) =
     print_constraints node.node_param_constraints
     (print_list_r print_sarg "(" ";" ")") node.node_inputs
     (print_list_r print_sarg "(" ";" ")") node.node_outputs
-
-and print_ptype ff = function
-  | Ttype ty -> print_type ff ty
-  | Tsig node -> print_interface_value ff ("",node)
 
 let print_interface ff =
   let m = Modules.get_current_module () in

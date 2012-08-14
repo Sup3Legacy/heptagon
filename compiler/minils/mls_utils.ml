@@ -59,7 +59,7 @@ let rec vd_mem n = function
 let is_record_type ty = match ty with
   | Tid n ->
       (match Modules.find_type n with
-        | Tstruct _ -> true
+        | Type_struct _ -> true
         | _ -> false)
   | _ -> false
 

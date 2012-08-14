@@ -72,7 +72,8 @@ and param =
     p_loc  : location }
 
 and param_ty =
-  | Ttype of ty
+  | Tconst of ty
+  (* | Tabstype *)
   | Tsig of signature
 
 and ck =

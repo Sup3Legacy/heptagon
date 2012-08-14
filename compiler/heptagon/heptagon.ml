@@ -132,17 +132,6 @@ and var_dec = {
 
 and last = Var | Last of static_exp option
 
-type type_dec = {
-  t_name : qualname;
-  t_desc : type_dec_desc;
-  t_loc  : location }
-
-and type_dec_desc =
-  | Type_abs
-  | Type_alias of ty
-  | Type_enum of constructor_name list
-  | Type_struct of structure
-
 type contract = {
   c_assume  : exp;
   c_enforce : exp;

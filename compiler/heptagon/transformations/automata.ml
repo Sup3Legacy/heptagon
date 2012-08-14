@@ -70,7 +70,7 @@ let intro_state_constr type_name state state_env =
 let intro_type type_name state_env =
   let state_constrs = NamesEnv.fold (fun _ c c_l -> c::c_l) state_env [] in
   (* Add the new type to the env *)
-  Modules.add_type type_name (Signature.Tenum state_constrs);
+  Modules.add_type type_name (Signature.Type_enum state_constrs);
   (* Add the new type to the types to add to the Ast *)
   state_type_dec_list :=
     Ptype (mk_type_dec type_name (Type_enum state_constrs)) :: !state_type_dec_list

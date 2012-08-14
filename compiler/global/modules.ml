@@ -178,7 +178,7 @@ let find_const x = QualEnv.find x g_env.consts
 (** @return the fields of a record type. *)
 let find_struct n =
   match find_type n with
-    | Tstruct fields -> fields
+    | Type_struct fields -> fields
     | _ -> raise Not_found
 
 
@@ -294,7 +294,7 @@ let rec unalias_type t = match t with
     _load_module q;
       (try
         match find_type ty_name with
-          | Talias ty -> unalias_type ty
+          | Type_alias ty -> unalias_type ty
           | _ -> t
       with Not_found -> raise (Undefined_type ty_name))
   | Tarray (ty, n) -> Tarray(unalias_type ty, n)

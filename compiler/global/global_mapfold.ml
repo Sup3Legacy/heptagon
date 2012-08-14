@@ -17,6 +17,8 @@ type 'a global_it_funs = {
   param              : 'a global_it_funs -> 'a -> param -> param * 'a;
   arg                : 'a global_it_funs -> 'a -> arg -> arg * 'a;
   param_ty           : 'a global_it_funs -> 'a -> param_ty -> param_ty * 'a;
+  type_dec           : 'a global_it_funs -> 'a -> type_dec -> type_dec * 'a;
+  type_def           : 'a global_it_funs -> 'a -> type_def -> type_def * 'a;
   node               : 'a global_it_funs -> 'a -> node -> node * 'a;
   structure          : 'a global_it_funs -> 'a -> structure -> structure * 'a;
   field              : 'a global_it_funs -> 'a -> field -> field * 'a; }
@@ -124,12 +126,32 @@ and param funs acc p =
 and param_ty_it funs acc p =
   try funs.param_ty funs acc p with Fallback -> param_ty funs acc p
 and param_ty funs acc p = match p with
-  | Ttype t ->
+  | Tconst t ->
       let t, acc = ty_it funs acc t in
-      Ttype t, acc
+      Tconst t, acc
+  (* | Tabstype t ->                            *)
+  (*     let t, acc = type_def_it funs acc t in *)
+  (*     Tabstype t, acc                        *)
   | Tsig node ->
       let node, acc = node_it funs acc node in
       Tsig node, acc
+
+and type_dec_it funs acc t = funs.type_dec funs acc t
+and type_dec funs acc t =
+  let tdesc, acc = type_def_it funs acc t.t_desc in
+    { t with t_desc = tdesc }, acc
+
+and type_def_it funs acc td =
+  try funs.type_def funs acc td
+  with Fallback -> type_def funs acc td
+and type_def funs acc td = match td with
+  | Type_struct s ->
+      let s, acc = structure_it funs acc s in
+        Type_struct s, acc
+  | Type_alias ty ->
+      let ty, acc = ty_it funs acc ty in
+        Type_alias ty, acc
+  | Type_abstract | Type_enum _ -> td, acc
 
 
 and arg_it funs acc a = funs.arg funs acc a
@@ -154,6 +176,8 @@ let defaults = {
   async = async;
   ty = ty;
   param_ty = param_ty;
+  type_def = type_def;
+  type_dec = type_dec;
   ct = ct;
   ck = ck;
   link = link;
@@ -175,6 +199,8 @@ let defaults_stop = {
   async = stop;
   ty = stop;
   param_ty = stop;
+  type_dec = stop;
+  type_def = stop;
   ct = stop;
   ck = stop;
   link = stop;

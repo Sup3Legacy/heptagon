@@ -161,7 +161,7 @@ let rec static_exp param_env se = match se.Signature.se_desc with
       in
       let td = Modules.find_type ty_name in
       let e_l = match td with
-        | Tstruct sf_l ->
+        | Type_struct sf_l ->
             List.map (fun sf -> List.assoc sf.f_name fe_l) sf_l
         | _ -> Misc.internal_error "obc2java get Estruct with wrong type.@."
       in
@@ -239,7 +239,7 @@ and exp param_env e = match e.e_desc with
         | _ -> Misc.internal_error "Wrong type"
       in
       let e_l = match td with
-        | Tstruct sf_l ->
+        | Type_struct sf_l ->
             List.map (fun sf -> List.assoc sf.f_name f_e_l) sf_l
         | _ -> Misc.internal_error "obc2java get Estruct with wrong type"
       in
@@ -402,7 +402,7 @@ let sig_params_to_vds p_l =
   let param_to_arg param_env p =
     let p_ident = Idents.gen_var "obc2java" (String.uppercase p.Signature.p_name) in
     let p_ty = match p.Signature.p_type with
-      | Ttype t -> ty param_env t
+      | Tconst t -> ty param_env t
       | Tsig _ -> Tclass (Name_utils.qualname_of_string "java.lang.Class")
     in
     let p_vd = mk_var_dec p_ident false p_ty in
@@ -508,8 +508,8 @@ let create_async_classe async base_classe =
       else
         let acts_params = copy_to_this vds_params in
         let act_inst = Aassgn (Pthis id_inst, Enew (ty_inst, exps_params)) in
-        let async_sig_params = [{ p_name="nb_threads"; p_type = Ttype Initial.tint };
-                                { p_name="queue_size"; p_type = Ttype Initial.tint }]
+        let async_sig_params = [{ p_name="nb_threads"; p_type = Tconst Initial.tint };
+                                { p_name="queue_size"; p_type = Tconst Initial.tint }]
         in
         let async_vds_params,_ = sig_params_to_vds async_sig_params in
         let async_node_args = vds_to_exps async_vds_params in
@@ -713,7 +713,7 @@ let type_dec_list classes td_l =
     let classe_name = qualname_to_package_classe td.t_name in
     Idents.push_node classe_name;
     let classes = match td.t_desc with
-      | Type_abs -> Misc.unsupported "obc2java, abstract type."
+      | Type_abstract -> Misc.unsupported "obc2java, abstract type."
       | Type_alias t -> (*verify that it is possible to unalias and skip it*)
           let _ = Modules.unalias_type t in
           classes

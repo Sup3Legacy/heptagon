@@ -316,17 +316,6 @@ and print_sblock sep ff { b_local = v_list; b_equs = eqs } =
     | _ ->
       fprintf ff "@[<v>%a@,%a@]" (print_local_vars sep) v_list print_eq_list eqs
 
-
-let rec print_type_def ff { t_name = name; t_desc = tdesc } =
-  let print_type_desc ff = function
-    | Type_abs -> ()
-    | Type_alias ty -> fprintf ff  " =@ %a" print_type ty
-    | Type_enum tag_name_list ->
-        fprintf ff " =@ %a" (print_list print_qualname """|""") tag_name_list
-    | Type_struct f_ty_list ->
-        fprintf ff " =@ %a" (print_record print_field) f_ty_list in
-  fprintf ff "@[<2>type %a%a@]@." print_qualname name print_type_desc tdesc
-
 let print_contract ff { c_block = b;
                         c_assume = e_a; c_enforce = e_g;
       c_controllables = c} =
@@ -352,13 +341,13 @@ let print_node ff
 let print_pdesc ff pd = match pd with
   | Pnode n -> print_node ff n
   | Pconst c -> print_const_dec ff c
-  | Ptype t -> print_type_def ff t
+  | Ptype t -> print_type_dec ff t
 
 let print_node_sig ff s =
   fprintf ff "@[%a@]@." print_interface_value (s.sig_name.name, s.sig_sig)
 
 let print_interface_desc ff id = match id with
-  | Itypedef td -> print_type_def ff td
+  | Itypedef td -> print_type_dec ff td
   | Iconstdef cd -> print_const_dec ff cd
   | Isignature s -> print_node_sig ff s
 

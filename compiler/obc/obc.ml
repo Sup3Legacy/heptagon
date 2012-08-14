@@ -26,17 +26,6 @@ type op_name = fun_name
 type obj_ident = var_ident
 
 
-type type_dec =
-    { t_name : type_name;
-      t_desc : tdesc;
-      t_loc : location }
-
-and tdesc =
-  | Type_abs
-  | Type_alias of ty
-  | Type_enum of constructor_name list
-  | Type_struct of structure
-
 type const_dec = {
   c_name : qualname;
   c_value : static_exp;

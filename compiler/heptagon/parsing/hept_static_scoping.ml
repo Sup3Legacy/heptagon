@@ -104,7 +104,7 @@ let node_dec funs _ n =
       then Hept_scoping.Error.message loc
              (Hept_scoping.Error.Econst_variable_already_defined p.p_name)
       else match p.p_type with
-        | Ttype _ -> NamesEnv.add p.p_name false local_const
+        | Tconst _ -> NamesEnv.add p.p_name false local_const
         | Tsig _ -> NamesEnv.add p.p_name true local_const
     in
     List.fold_left _add_const NamesEnv.empty p_list

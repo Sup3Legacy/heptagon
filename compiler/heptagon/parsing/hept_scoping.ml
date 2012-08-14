@@ -430,15 +430,20 @@ let rec translate_params env p_l =
   let translate_param env p =
     let name = local_qn p.p_name in
     let pty = match p.p_type with
-      | Ttype t ->
+      | Tconst t ->
           let t = translate_type p.p_loc t in
           (* this add the const to the global env, with localqn name and dummy value *)
           safe_add p.p_loc add_const name (Signature.mk_const_def t (Signature.dummy_static_exp t));
-          Signature.Ttype t
+          Signature.Tconst t
       | Tsig s ->
           (* this add the signature to the global env, with localqn name. *)
           let s = translate_signature s name in
           Signature.Tsig s.Heptagon.sig_sig
+      (* | Tabstype ->                                                             *)
+      (*     let stubtype = mk_type_dec p.p_name Type_abs p.p_loc in               *)
+      (*     (* this add an abstract type to the global env, with localqn name. *) *)
+      (*     let t = translate_typedec stubtype in                                 *)
+      (*     Signature.Tabstype t                                                  *)
     in
     let env = Rename.add_used_name env p.p_name in
     Signature.mk_param pty p.p_name, env
@@ -495,29 +500,28 @@ and translate_typedec ty =
     let n = current_qual ty.t_name in
     let tydesc = match ty.t_desc with
       | Type_abs ->
-          safe_add ty.t_loc add_type n Signature.Tabstract;
-          Heptagon.Type_abs
+          Signature.Type_abstract
       | Type_alias t ->
           let t = translate_type ty.t_loc t in
-          safe_add ty.t_loc add_type n (Signature.Talias t);
-          Heptagon.Type_alias t
+          Signature.Type_alias t
       | Type_enum(tag_list) ->
           let tag_list = List.map current_qual tag_list in
           List.iter (fun tag -> add_constrs tag n) tag_list;
-          safe_add ty.t_loc add_type n (Signature.Tenum tag_list);
-          Heptagon.Type_enum tag_list
+          Signature.Type_enum tag_list
       | Type_struct(field_ty_list) ->
           let translate_field_type (f,t) =
             let f = current_qual f in
             let t = translate_type ty.t_loc t in
             add_field f n;
-            Signature.mk_field t f in
+            Signature.mk_field t f
+          in
           let field_list = List.map translate_field_type field_ty_list in
-          safe_add ty.t_loc add_type n (Signature.Tstruct field_list);
-          Heptagon.Type_struct field_list in
-    { Heptagon.t_name = n;
-      Heptagon.t_desc = tydesc;
-      Heptagon.t_loc = ty.t_loc }
+          Signature.Type_struct field_list
+    in
+    safe_add ty.t_loc add_type n tydesc;
+    { Signature.t_name = n;
+      Signature.t_desc = tydesc;
+      Signature.t_loc = ty.t_loc }
 
 
 and translate_const_dec cd =

@@ -220,15 +220,7 @@ let node n =
   n
 
 
-let typedec
-    {Heptagon.t_name = n; Heptagon.t_desc = tdesc; Heptagon.t_loc = loc} =
-  let onetype = function
-    | Heptagon.Type_abs -> Type_abs
-    | Heptagon.Type_alias ln -> Type_alias ln
-    | Heptagon.Type_enum tag_list -> Type_enum tag_list
-    | Heptagon.Type_struct field_ty_list -> Type_struct field_ty_list
-  in
-  { t_name = n; t_desc = onetype tdesc; t_loc = loc }
+let typedec td = td
 
 let const_dec cd =
   { Minils.c_name = cd.Heptagon.c_name;

@@ -30,8 +30,6 @@ type 'a mls_it_funs = {
   contract:      'a mls_it_funs -> 'a -> Minils.contract -> Minils.contract * 'a;
   node_dec:      'a mls_it_funs -> 'a -> Minils.node_dec -> Minils.node_dec * 'a;
   const_dec:     'a mls_it_funs -> 'a -> Minils.const_dec -> Minils.const_dec * 'a;
-  type_dec:      'a mls_it_funs -> 'a -> Minils.type_dec -> Minils.type_dec * 'a;
-  tdesc:         'a mls_it_funs -> 'a -> Minils.tdesc -> Minils.tdesc * 'a;
   program:       'a mls_it_funs -> 'a -> Minils.program -> Minils.program * 'a;
   program_desc:  'a mls_it_funs -> 'a -> Minils.program_desc -> Minils.program_desc * 'a;
   global_funs:   'a Global_mapfold.global_it_funs }
@@ -200,25 +198,6 @@ and const_dec funs acc c =
   { c with c_type = ty; c_value = se }, acc
 
 
-and type_dec_it funs acc t = funs.type_dec funs acc t
-and type_dec funs acc t =
-  let tdesc, acc = tdesc_it funs acc t.t_desc in
-    { t with t_desc = tdesc }, acc
-
-
-and tdesc_it funs acc td =
-  try funs.tdesc funs acc td
-  with Fallback -> tdesc funs acc td
-and tdesc funs acc td = match td with
-  | Type_struct s ->
-      let s, acc = structure_it funs.global_funs acc s in
-        Type_struct s, acc
-  | Type_alias ty ->
-      let ty, acc = ty_it funs.global_funs acc ty in
-        Type_alias ty, acc
-  | Type_abs | Type_enum _ -> td, acc
-
-
 and program_it funs acc p = funs.program funs acc p
 and program funs acc p =
   let p_desc, acc = mapfold (program_desc_it funs) acc p.p_desc in
@@ -229,7 +208,9 @@ and program_desc_it funs acc pd =
   with Fallback -> program_desc funs acc pd
 and program_desc funs acc pd = match pd with
   | Pconst cd -> let cd, acc = const_dec_it funs acc cd in Pconst cd, acc
-  | Ptype td -> let td, acc = type_dec_it funs acc td in Ptype td, acc
+  | Ptype td ->
+      let td, acc = type_dec_it funs.global_funs acc td in
+      Ptype td, acc
   | Pnode n -> let n, acc = node_dec_it funs acc n in Pnode n, acc
 
 
@@ -247,8 +228,6 @@ let defaults = {
   contract = contract;
   node_dec = node_dec;
   const_dec = const_dec;
-  type_dec = type_dec;
-  tdesc = tdesc;
   program = program;
   program_desc = program_desc;
   global_funs = Global_mapfold.defaults }

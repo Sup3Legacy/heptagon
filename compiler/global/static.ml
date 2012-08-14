@@ -29,7 +29,7 @@ module SESet = struct
     let compare = static_exp_compare end))
   let from_list l =
     List.fold_left (fun ses s -> add s ses) empty l
-  
+
   let exclusive_add se ses =
     if mem se ses then raise Errors.Error
     else add se ses

@@ -20,6 +20,7 @@ let interface_format_version = "5"
 (***************************************************************************)
 (* Types *)
 
+
 type future_t = unit
 and async_t = (static_exp list) option
 
@@ -56,10 +57,29 @@ and ty =
   | Tinvalid
   | Tfuture of future_t * ty
 
+and type_dec = {
+  t_name : qualname;
+  t_desc : type_def;
+  t_loc  : location }
+
+and type_def =
+  | Type_abstract
+  | Type_alias of ty
+  | Type_enum of constructor_name list
+  | Type_struct of structure
+
+and field = { f_name : field_name; f_type : ty }
+and structure = field list
+
+and const_def = { c_type : ty; c_value : static_exp }
+
 and param = { p_name : name; p_type : param_ty }
 
 and param_ty =
-  | Ttype of ty
+  | Tconst of ty (* TODO should be a const def for homogeneity,
+      but then global env should deal with "abstract" consts:
+      consts without values *)
+(*  | Tabstype of type_def *)
   | Tsig of node
 
 (** Node argument : inputs and outputs *)
@@ -85,17 +105,6 @@ and node = {
   node_param_constraints  : constrnt list;
   node_external           : bool;
   node_loc                : location}
-
-type field = { f_name : field_name; f_type : ty }
-type structure = field list
-
-type type_def =
-  | Tabstract
-  | Talias of ty
-  | Tenum of constructor_name list
-  | Tstruct of structure
-
-type const_def = { c_type : ty; c_value : static_exp }
 
 
 (** { 3 Helper functions } *)

@@ -158,7 +158,7 @@ let inputlist_of_ovarlist vl =
 let rec unalias_ctype cty = match cty with
   | Cty_id ty_name ->
     (try match find_type ty_name with
-    | Talias ty -> unalias_ctype (ctype_of_otype ty)
+    | Type_alias ty -> unalias_ctype (ctype_of_otype ty)
     | _ -> Cty_id ty_name
      with Not_found -> Cty_id ty_name)
   | Cty_arr (n, cty) -> Cty_arr (n, unalias_ctype cty)
@@ -782,7 +782,7 @@ let cdefs_and_cdecls_of_class_def cd =
 let cdefs_and_cdecls_of_type_decl otd =
   let name = cname_of_qn otd.t_name in
   match otd.t_desc with
-    | Type_abs -> [], [] (*assert false*)
+    | Type_abstract -> [], [] (*assert false*)
     | Type_alias ty ->
       [], [Cdecl_typedef (ctype_of_otype ty, name)]
     | Type_enum nl ->

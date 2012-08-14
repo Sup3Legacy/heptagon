@@ -407,12 +407,12 @@ let rec type_cardinal t =
   | _ when t = Initial.tbool -> mk_static_int 2
   | _ when t = Initial.tint -> mk_static_int (-1)
   | _ when t = Initial.tfloat -> mk_static_int (-1)
-  | Tid n -> 
+  | Tid n ->
     (match find_type n with
-    | Tabstract -> mk_static_int (-1)
-    | Talias _ -> Misc.internal_error "should be unaliased"
-    | Tenum cn_l -> mk_static_int (List.length cn_l)
-    | Tstruct f_l ->
+    | Type_abstract -> mk_static_int (-1)
+    | Type_alias _ -> Misc.internal_error "should be unaliased"
+    | Type_enum cn_l -> mk_static_int (List.length cn_l)
+    | Type_struct f_l ->
         let ft_l = List.map (fun f -> f.f_type) f_l in
         product ft_l
     )
@@ -426,7 +426,7 @@ let rec type_enumerate t =
     | _ when t = Initial.tbool -> [mk_static_bool true; mk_static_bool false]
     | Tid n ->
       (match find_type n with
-      | Tenum cn_l -> List.map (fun c -> mk_static_exp t (Sconstructor c)) cn_l
+      | Type_enum cn_l -> List.map (fun c -> mk_static_exp t (Sconstructor c)) cn_l
       | _ -> raise Errors.Error)
     | Tbounded s ->
       let rec loop i c_l = match i with
@@ -576,9 +576,9 @@ and expect t1 t2 =
   let ut2 = unalias_type t2 in
   try _expect ut1 ut2 with Unify -> error (Etype_clash(t1,t2))
 
-(** Unify_pty same as unify but on parameter type. *)
 and expect_pty pt1 pt2 = match pt1, pt2 with
-  | Ttype t1, Ttype t2 -> expect t1 t2
+  | Tconst t1, Tconst t2 -> expect t1 t2
+(*  | Tabstype td1, Tabstype td2 -> expect_type t1 t2 *)
   | Tsig n1, Tsig n2 -> expect_sig n1 n2
   | _ -> raise Unify
 
@@ -594,7 +594,6 @@ and expect_sig n1 n2 =
   if n1.node_unsafe != n2.node_unsafe then raise Unify; (* TODO better errors *)
   List.iter2 (fun p1 p2 -> expect_pty p1.p_type p2.p_type) n1.node_params n2.node_params
   (* TODO do something with the constraints ! bug #14589 *)
-
 
 (** [check_type t] checks that t exists *)
 and check_type = function
@@ -1137,7 +1136,7 @@ and typing_args h expected_ty_list e_list =
     | [], [] -> ()
     | _, _ ->
       (try
-        expect (prod expected_ty_list)(prod args_ty_list) 
+        expect (prod expected_ty_list)(prod args_ty_list)
       with _ ->
         raise (TypingError (Eargs_clash (prod expected_ty_list, prod args_ty_list)))
       )
@@ -1146,12 +1145,13 @@ and typing_args h expected_ty_list e_list =
 
 and typing_node_params params_sig params =
   let aux p_sig p = match p_sig.p_type, p.se_desc with
-    | Ttype _, Sfun _ -> Misc.internal_error "better typing error" (* TODO add real typing error *)
-    | Ttype t, _ -> expect_se t p
+    | Tconst _, Sfun _ -> Misc.internal_error "better typing error" (* TODO add real typing error *)
+    | Tconst t, _ -> expect_se t p
     | Tsig n, Sfun (f, se_l) ->
         let n' = find_value f in
         let typed_se_l = typing_node_params n'.node_params se_l in
-        expect_sig n {n' with node_params = []}; (* for now prevent partial application *)
+        assert (n'.node_params = []); (* for now prevent partial application *)
+        expect_sig n n';
         {p with se_desc = Sfun (f, typed_se_l)}
     | Tsig _, _ -> Misc.internal_error "better typing error" (* TODO add real typing error *)
   in
@@ -1363,11 +1363,11 @@ let rec check_params_type ps =
   let check_param p =
     let name = local_qn p.p_name in
     let ty = match p.p_type with
-      | Ttype t ->
+      | Tconst t ->
           let t = check_type t in
           let cd = find_const name in
           replace_const name { cd with Signature.c_type = t };
-          Ttype t
+          Tconst t
       | Tsig n -> Tsig (typing_signature n name)
     in
     let p = { p with p_type = ty } in
@@ -1440,18 +1440,18 @@ let typing_const_dec cd =
 
 let typing_typedec td =
   let tydesc = match td.t_desc with
-    | Type_abs -> Type_abs
+    | Type_abstract -> Type_abstract
     | Type_enum(tag_list) -> Type_enum tag_list
     | Type_alias t ->
         let t = check_type t in
-          replace_type td.t_name (Talias t);
+          replace_type td.t_name (Type_alias t);
           Type_alias t
     | Type_struct(field_ty_list) ->
         let typing_field { f_name = f; f_type = ty } =
           { f_name = f; f_type = check_type ty }
         in
         let field_ty_list = List.map typing_field field_ty_list in
-          replace_type td.t_name (Tstruct field_ty_list);
+          replace_type td.t_name (Type_struct field_ty_list);
           Type_struct field_ty_list
   in
     { td with t_desc = tydesc }

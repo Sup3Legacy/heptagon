@@ -189,26 +189,6 @@ let print_class_def ff
   print_list_r print_method "" "\n" "" ff m_list;
   fprintf ff "@]"
 
-
-let print_type_def ff { t_name = name; t_desc = tdesc } =
-  match tdesc with
-    | Type_abs -> fprintf ff "@[type %a@\n@]" print_qualname name
-    | Type_alias ty ->
-        fprintf ff  "@[type %a@ = %a@\n@]" print_qualname name  print_type ty
-    | Type_enum(tag_name_list) ->
-        fprintf ff "@[type %a = " print_qualname name;
-        print_list_r print_qualname "" "|" "" ff tag_name_list;
-        fprintf ff "@\n@]"
-    | Type_struct(f_ty_list) ->
-        fprintf ff "@[type %a = " print_qualname name;
-        fprintf ff "@[<v 1>";
-        print_list
-          (fun ff { Signature.f_name = field; Signature.f_type = ty } ->
-             print_qualname ff field;
-             fprintf ff ": ";
-             print_type ff ty) "{" ";" "}" ff f_ty_list;
-        fprintf ff "@]@.@]"
-
 let print_open_module ff name =
   fprintf ff "open %s@." (modul_to_string name)
 
@@ -219,7 +199,7 @@ let print_const_dec ff c =
 let print_prog_desc ff pd = match pd with
   | Pclass cd -> print_class_def ff cd; fprintf ff "@\n@\n"
   | Pconst cd -> print_const_dec ff cd
-  | Ptype td -> print_type_def ff td
+  | Ptype td -> print_type_dec ff td
 
 let print_prog ff { p_opened = modules; p_desc = descs } =
   List.iter (print_open_module ff) modules;
