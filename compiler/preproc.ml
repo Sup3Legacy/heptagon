@@ -48,8 +48,8 @@ let env = [("DATE", date); ("STDLIB", stdlib)]
     environment defined above. *)
 let filter =
 object
-  inherit Ast.map as super
-  method expr e = match e with
+  inherit Ast.map
+  method! expr e = match e with
     | <:expr< $str:s$ >> when List.mem_assoc s env ->
       let repl = try Sys.getenv s with Not_found -> List.assoc s env in
       <:expr@here< $str:repl$ >>

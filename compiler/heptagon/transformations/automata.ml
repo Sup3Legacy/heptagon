@@ -10,7 +10,6 @@
 
 (* TODO deal correctly with [stateful] and [unsafe] *)
 
-open Misc
 open Signature
 open Names
 open Idents
@@ -18,7 +17,6 @@ open Heptagon
 open Hept_utils
 open Hept_mapfold
 open Initial
-open Modules
 
 type var = S | NS | R | NR | PNR
 let fresh t =
@@ -182,7 +180,7 @@ let translate_automaton v eq_list handlers =
                          (mk_exp_fby_false (boolvar (next_resetname))) in
     v, ns_switch_eq :: switch_eq :: pnr_eq :: eq_list
 
-let rec eq funs (v, eq_list) eq =
+let eq funs (v, eq_list) eq =
   let eq, (v, eq_list) = Hept_mapfold.eq funs (v, eq_list) eq in
     match eq.eq_desc with
       | Eautomaton state_handlers ->

@@ -8,19 +8,12 @@
 (**************************************************************************)
 (* The Heptagon printer *)
 
-open Location
 open Misc
 open Names
-open Name_utils
-open Idents
-open Modules
-open Static
 open Format
 open Global_printer
 open Pp_tools
-open Signature
 open Linearity
-open Signature
 open Heptagon
 
 let iterator_to_string i =

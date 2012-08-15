@@ -79,7 +79,7 @@ let rec split_last = function
 
 (** [split_nlasts l] returns l without its last n elements and
     the last n elements of l. *)
-let rec split_nlast n l =
+let split_nlast n l =
   let rec aux l = match l with
     | [] -> [], [], 0
     | a::l ->

@@ -3,7 +3,6 @@
 open Idents
 open Minils
 open Mls_utils
-open Misc
 open Sgraph
 
 (** In order to put together equations with the same control structure, we have to take into

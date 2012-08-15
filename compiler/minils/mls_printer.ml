@@ -1,12 +1,6 @@
 open Misc
 open Names
-open Name_utils
-open Signature
-open Idents
-open Signature
 open Linearity
-open Clocks
-open Static
 open Format
 open Global_printer
 open Pp_tools

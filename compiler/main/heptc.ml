@@ -9,8 +9,6 @@
 
 
 open Misc
-open Modules
-open Location
 open Compiler_utils
 open Compiler_options
 

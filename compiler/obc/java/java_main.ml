@@ -1,6 +1,5 @@
 open Misc
 open Names
-open Name_utils
 open Modules
 open Signature
 open Java
@@ -63,15 +62,14 @@ let program p =
         let jint = Eclass(Name_utils.qualname_of_string "Integer") in
         let jfloat = Eclass(Name_utils.qualname_of_string "Float") in
         let jbool = Eclass(Name_utils.qualname_of_string "Boolean") in
-        let jstring = Eclass(Name_utils.qualname_of_string "String") in
         let jsys = Eclass(Name_utils.qualname_of_string "java.lang.System") in
         let jminus = pervasives_qn "-" in
 
         (* num args to give to the main *)
-          let rec num_args = List.length vd_main_args in
+          let num_args = List.length vd_main_args in
 
         (* parse arguments to give to the main *)
-        let rec parse_arg i vd = match vd.vd_type with
+        let parse_arg i vd = match vd.vd_type with
           | Tint ->
               Anewvar(vd,(Emethod_call(jint, "parseInt", [get_arg i])))
           | Tfloat ->

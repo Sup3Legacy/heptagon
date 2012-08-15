@@ -174,7 +174,7 @@ let apply_op partial loc op se_list =
       @raise Partial_evaluation when a static var cannot be evaluated,
       a local static parameter for example.
     Otherwise evaluate in a best effort manner. *)
-let rec eval_core partial se =
+let eval_core partial se =
   let stexp_desc funs loc = function
     | Svar ({qual = LocalModule _} as ln) ->
         if partial

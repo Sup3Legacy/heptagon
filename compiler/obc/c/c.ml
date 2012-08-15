@@ -9,7 +9,6 @@
 
 open Format
 open List
-open Modules
 open Names
 
 let print_list ff print sep l = Pp_tools.print_list_r print "" sep "" ff l
@@ -18,7 +17,7 @@ let print_list ff print sep l = Pp_tools.print_list_r print "" sep "" ff l
     Copied verbatim from the old C backend. *)
 let cname_of_name name =
   let buf = Buffer.create (String.length name) in
-  let rec convert c =
+  let convert c =
     match c with
       | 'A'..'Z' | 'a'..'z' | '0'..'9' | '_' ->
           Buffer.add_char buf c

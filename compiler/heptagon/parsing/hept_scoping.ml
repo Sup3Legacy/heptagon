@@ -35,7 +35,6 @@ open Hept_parsetree
 open Names
 open Idents
 open Format
-open Static
 open Global_printer
 open Modules
 

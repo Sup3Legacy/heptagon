@@ -7,7 +7,6 @@
 (*                                                                        *)
 (**************************************************************************)
 
-open Format
 open List
 open Misc
 open Names
@@ -61,7 +60,7 @@ struct
     raise Errors.Error
 end
 
-let rec struct_name ty =
+let struct_name ty =
   match ty with
   | Cty_id n -> n
   | _ -> assert false

@@ -8,9 +8,7 @@
 (**************************************************************************)
 (* complete partial definitions with [x = last(x)] *)
 
-open Misc
 open Heptagon
-open Global_mapfold
 open Hept_utils
 open Hept_mapfold
 open Idents

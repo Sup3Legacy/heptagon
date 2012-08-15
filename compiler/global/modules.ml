@@ -10,12 +10,9 @@
 (* Module objects and global environment management *)
 
 
-open Misc
 open Compiler_options
-open Signature
 open Names
 open Signature
-open Idents
 
 exception Already_defined
 

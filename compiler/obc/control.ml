@@ -11,11 +11,8 @@
 
 (* TODO could optimize for loops ? *)
 
-open Idents
-open Misc
 open Obc
 open Obc_utils
-open Clocks
 open Signature
 open Obc_mapfold
 
@@ -38,7 +35,7 @@ let appears_in_exp, appears_in_lhs =
 
 let used_vars e =
   let add x acc = if List.mem x acc then acc else x::acc in
-  let lhsdesc funs acc ld = match ld with
+  let lhsdesc _ acc ld = match ld with
     | Lvar y -> ld, add y acc
     | Lmem y -> ld, add y acc
     | _ -> raise Errors.Fallback

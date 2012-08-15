@@ -5,7 +5,6 @@ open Minils
 open Linearity
 open Interference_graph
 open Containers
-open Printf
 
 let print_interference_graphs = false
 let verbose_mode = false
@@ -104,7 +103,7 @@ module InterfRead = struct
     in
       List.fold_left tr_one [] wl
 
-  let read_extvalue funs acc w =
+  let read_extvalue _ acc w =
     (* recursive call *)
     (*let _, acc = Mls_mapfold.extvalue funs acc w in*)
     let acc =
@@ -359,7 +358,7 @@ let should_interfere = Misc.memoize_couple should_interfere
     and one node per declaration. *)
 let init_interference_graph () =
   (** Adds a node for the variable and all fields of a variable. *)
-  let rec add_ivar env iv ty =
+  let add_ivar env iv ty =
     let ivars = all_ivars [] iv None ty in
       List.fold_left (fun env iv -> TyEnv.add_element (World.ivar_type iv) (mk_node iv) env) env ivars
   in
@@ -372,7 +371,7 @@ let init_interference_graph () =
     the list. If force is true, then interference is added
     whatever the variables are, without checking if interference
     is real. *)
-let rec add_interferences_from_list force vars =
+let add_interferences_from_list force vars =
   let add_interference ivx ivy =
     if force or should_interfere (ivx, ivy) then
       add_interference_link_from_ivar ivx ivy

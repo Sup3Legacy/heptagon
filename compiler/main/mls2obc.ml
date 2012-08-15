@@ -10,14 +10,12 @@
 (* Translation from Minils to Obc. *)
 open Misc
 open Names
-open Name_utils
 open Idents
 open Signature
 open Obc
 open Obc_utils
 open Obc_mapfold
 open Clocks
-open Static
 open Initial
 
 
@@ -63,7 +61,7 @@ let fresh_for = fresh_for "mls2obc"
 
 let op_from_string op = { qual = Pervasives; name = op; }
 
-let rec pattern_of_idx_list p l =
+let pattern_of_idx_list p l =
   let rec aux p l = match Modules.unalias_type p.pat_ty, l with
     | _, [] -> p
     | Tarray (ty',_), idx :: l -> aux (mk_pattern ty' (Larray (p, idx))) l
@@ -83,7 +81,7 @@ let rec extvalue_of_idx_list w l = match Modules.unalias_type w.w_ty, l with
     extvalue_of_idx_list (mk_ext_value ty' (Warray (w, idx))) l
   | _ -> internal_error "mls2obc extvalue_of_idx_list"
 
-let rec ext_value_of_trunc_idx_list p l =
+let ext_value_of_trunc_idx_list p l =
   let mk_between idx se =
     mk_exp_int (Eop (mk_pervasives "between", [idx; mk_ext_value_exp se.se_ty (Wconst se)]))
   in
@@ -113,7 +111,7 @@ let array_elt_of_exp idx e =
       mk_ext_value_exp ty (Warray(ext_value_of_exp e, idx))
   | _ -> internal_error "mls2obc array_elt_of_exp"
 
-let rec array_elt_of_exp_list idx_list e =
+let array_elt_of_exp_list idx_list e =
   match e.e_desc, Modules.unalias_type e.e_ty with
     | Eextvalue { w_desc = Wconst { se_desc = Sarray_power (c, params) } }, Tarray (ty,n) ->
       let new_params, _ = Misc.split_at (List.length params - List.length idx_list) params in

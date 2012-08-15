@@ -1,4 +1,3 @@
-open Signature
 
 exception Bad_format
 

@@ -4,7 +4,6 @@ open Idents
 open Names
 open Location
 open Misc
-open Modules
 open Heptagon
 
 type error =
@@ -179,7 +178,7 @@ let check_fresh_lin_var (env, used_vars, init_vars) loc lin =
 
 (** Substitutes linearity variables (Lvar r) with their value
     given by the map. *)
-let rec subst_lin m lin_list =
+let subst_lin m lin_list =
   let subst_one = function
     | Lvar r ->
       (try
@@ -229,7 +228,7 @@ let subst_from_lin (s,m) expect_lin lin =
       )
     | _, _ -> s,m
 
-let rec not_linear_for_exp e =
+let not_linear_for_exp e =
   lin_skeleton Ltop e.e_ty
 
 let check_init env loc init lin =
@@ -375,7 +374,7 @@ let rec fuse_args_lin args_lin collect_lins =
 
 (** [extract_not_lin_var_exp args_lin e_list] returns the linearities
     and expressions from e_list that are not yet set to Lvar r.*)
-let rec extract_not_lin_var_exp args_lin e_list =
+let extract_not_lin_var_exp args_lin e_list =
   match args_lin, e_list with
     | [], [] -> [], []
     | arg_lin::args_lin, e::e_list ->
@@ -848,7 +847,7 @@ and expect env lin e =
            expect_iterator env e.e_loc it expected_lin_list inputs_lins outputs_lins e_list
          with
              UnifyFailed -> message e.e_loc (Eunify_failed_one lin))
-    | Eiterator (it, { a_op = op }, _, [], e_list,_) ->
+    | Eiterator (_, { a_op = op }, _, [], e_list,_) ->
       (try
          expect_app env lin op e_list
        with

@@ -1,6 +1,4 @@
 open Names
-open Name_utils
-open Idents
 open Signature
 open Clocks
 open Modules
@@ -23,7 +21,7 @@ let rec _aux_print_modul ~full ff m = match m with
       fprintf ff "%a%a." (_aux_print_modul ~full:full) m print_name n
 
 (** Prints a [modul] with a [.] at the end when not empty *)
-let rec _print_modul ~full ff m = match m with
+let _print_modul ~full ff m = match m with
   | Pervasives ->
       if !Compiler_options.full_qual_info
       then fprintf ff "_Pervasives"
@@ -40,7 +38,7 @@ let rec _print_modul ~full ff m = match m with
 let print_full_modul ff m = _print_modul ~full:true ff m
 let print_modul ff m = _print_modul ~full:false ff m
 
-let rec _print_qualname ?(full=false) ff { qual = q; name = n} = match q with
+let _print_qualname ?(full=false) ff { qual = q; name = n} = match q with
   | Pervasives -> print_name ff n
   | _ when q = g_env.current_mod && not full -> print_name ff n
   | LocalModule m ->

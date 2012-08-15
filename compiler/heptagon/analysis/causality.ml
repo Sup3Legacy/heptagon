@@ -10,11 +10,8 @@
 (* causality check *)
 
 open Misc
-open Names
 open Idents
 open Heptagon
-open Location
-open Sgraph
 open Linearity
 open Causal
 
@@ -208,7 +205,7 @@ and typing_automaton state_handlers =
     cseq t2 (cseq tb t1) in
   corlist (List.map handler state_handlers)
 
-and typing_block { b_local = dec; b_equs = eq_list; b_loc = loc } =
+and typing_block { b_equs = eq_list; } =
   (*let teq = typing_eqs eq_list in
     Causal.check loc teq;
     clear (build dec) teq *)

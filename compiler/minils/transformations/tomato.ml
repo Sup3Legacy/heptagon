@@ -8,12 +8,9 @@
 (**************************************************************************)
 
 open Misc
-open Names
 open Idents
-open Signature
 open Minils
 open Mls_utils
-open Mls_printer
 open Global_printer
 open Signature
 open Clocks
@@ -308,8 +305,8 @@ and extvalue is_input w class_id_list =
 (* Regroup classes from a minimization environment                 *)
 (*******************************************************************)
 
-let rec compute_classes tenv =
-  let rec add_eq_repr _ repr cenv =
+let compute_classes tenv =
+  let add_eq_repr _ repr cenv =
     let repr_list = try IntMap.find repr.er_class cenv with Not_found -> [] in
     IntMap.add repr.er_class (repr :: repr_list) cenv in
   PatMap.fold add_eq_repr tenv IntMap.empty
@@ -371,7 +368,7 @@ let construct_mapping (_, cenv) =
 
   IntMap.fold construct_mapping_eq_repr cenv Env.empty
 
-let rec reconstruct ((tenv, cenv) as env) mapping =
+let rec reconstruct (_, cenv) mapping =
 
   let reconstruct_class id eq_repr_list eq_list =
     assert (List.length eq_repr_list > 0);
@@ -429,7 +426,7 @@ and reconstruct_exp_desc mapping headd children =
 
   | Ewhen _ -> assert false (* no Ewhen in exprs *)
 
-  | Emerge (x_ref, clause_list) ->
+  | Emerge (_, clause_list) ->
     let x_ref, children = List.hd children, List.tl children in
     Emerge (reconstruct_class_ref mapping x_ref,
             reconstruct_clauses clause_list children)
@@ -538,7 +535,7 @@ module Key =
 
 module EqClasses = Map.Make(Key)
 
-let rec path_environment tenv =
+let path_environment tenv =
   let enrich_env pat { er_class = id } env =
     let rec enrich pat path env = match pat with
       | Evarpat x -> Env.add x (id, path) env
@@ -574,7 +571,7 @@ let compute_new_class (tenv : tom_env) =
 
   let fresh_id, get_id = let id = ref 0 in ((fun () -> incr id; !id), (fun () -> !id)) in
 
-  let add_eq_repr pat eqr classes =
+  let add_eq_repr _ eqr classes =
     let key = compute_key eqr in
     let id = try EqClasses.find key classes with Not_found -> fresh_id () in
 
@@ -587,7 +584,7 @@ let compute_new_class (tenv : tom_env) =
 
   get_id ()
 
-let rec separate_classes tenv =
+let separate_classes tenv =
   let rec fix class_count =
     let class_list = class_list_of_tenv tenv in
     let new_class_count = compute_new_class tenv in

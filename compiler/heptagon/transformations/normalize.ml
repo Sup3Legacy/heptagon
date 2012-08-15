@@ -7,14 +7,11 @@
 (*                                                                        *)
 (**************************************************************************)
 open Misc
-open Names
-open Idents
 open Location
 open Heptagon
 open Hept_utils
 open Hept_mapfold
 open Signature
-open Clocks
 open Linearity
 open Format
 
@@ -89,7 +86,7 @@ let equation (d_list, eq_list) e =
             (d_list, eq_list), Evar n
 
 (* [(e1,...,ek) when C(n) = (e1 when C(n),...,ek when C(n))] *)
-let rec whenc context e c n e_orig =
+let whenc context e c n e_orig =
   let when_on_c c n context e =
     (* If memalloc is activated, there cannot be a stateful exp inside a when. Indeed,
        the expression inside the when will be called on a fast rhythm and write its result
@@ -237,7 +234,7 @@ and merge context e x c_e_list =
       let context, e = translate ExtValue context e in
         (tag, e), context
     in
-    let rec mk_merge x c_list e_lists =
+    let mk_merge x c_list e_lists =
       let ty = (List.hd (List.hd e_lists)).e_ty in
       let lin = (List.hd (List.hd e_lists)).e_linearity in
       let rec build_c_e_list c_list e_lists =
@@ -316,7 +313,7 @@ and translate_eq_list d_list eq_list =
     (fun context eq -> translate_eq context eq)
     (d_list, []) eq_list
 
-let eq funs context eq =
+let eq _ context eq =
   let context = translate_eq context eq in
     eq, context
 

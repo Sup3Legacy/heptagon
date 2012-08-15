@@ -11,10 +11,8 @@
 (** See the manual for the semantics of the language *)
 
 
-open Misc
 open Names
 open Idents
-open Signature
 open Linearity
 open Signature
 open Location

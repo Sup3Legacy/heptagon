@@ -89,7 +89,6 @@ module Env = struct
 
 
 open Idents
-open Names
 open Clocks
 
 type vd_clock_tree =

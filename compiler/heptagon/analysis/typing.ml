@@ -10,7 +10,6 @@
 
 open Misc
 open Names
-open Name_utils
 open Idents
 open Location
 open Modules
@@ -19,8 +18,6 @@ open Static
 open Signature
 open Global_printer
 open Heptagon
-open Hept_mapfold
-open Pp_tools
 open Format
 
 type value = { vd: var_dec; mutable last: bool }
@@ -421,7 +418,7 @@ let rec type_cardinal t =
   | Tinvalid -> mk_static_int (-1)
   | Tfuture _ -> mk_static_int (-1)
 
-let rec type_enumerate t =
+let type_enumerate t =
   try (match unalias_type t with
     | _ when t = Initial.tbool -> [mk_static_bool true; mk_static_bool false]
     | Tid n ->

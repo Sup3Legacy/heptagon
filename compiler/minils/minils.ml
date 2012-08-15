@@ -13,8 +13,6 @@ open Location
 open Names
 open Idents
 open Signature
-open Static
-open Signature
 open Linearity
 open Clocks
 

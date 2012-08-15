@@ -7,7 +7,7 @@
 (*                                                                        *)
 (**************************************************************************)
 (* Checks that a node declared stateless is stateless, and set possible nodes as stateless. *)
-open Names
+
 open Location
 open Signature
 open Modules

@@ -18,10 +18,8 @@
 (** Requires scalarized Obc :
   [p = e] when [e] is an array is understand as a copy of the reference, not a copy of the array.*)
 
-open Format
 open Misc
 open Names
-open Modules
 open Signature
 open Obc
 open Obc_utils
@@ -67,7 +65,7 @@ let fresh_nfor s_l body =
   in
   aux s_l []
 
-let rec translate_modul m = m
+let translate_modul m = m
 
 (** a [Module.const] becomes a [module.CONSTANTES.CONST] *)
 let translate_const_name { qual = m; name = n } =

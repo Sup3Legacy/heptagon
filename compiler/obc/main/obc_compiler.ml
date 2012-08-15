@@ -6,8 +6,7 @@
 (*  Organization : Demons, LRI, University of Paris-Sud, Orsay            *)
 (*                                                                        *)
 (**************************************************************************)
-open Misc
-open Location
+
 open Compiler_utils
 open Compiler_options
 

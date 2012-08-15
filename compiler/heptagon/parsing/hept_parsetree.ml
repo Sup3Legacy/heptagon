@@ -9,7 +9,6 @@
 
 
 open Location
-open Signature
 
 (** var_names will be converted to idents *)
 type var_name = Names.name

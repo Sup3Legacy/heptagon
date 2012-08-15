@@ -12,7 +12,6 @@
 open Java
 open Pp_tools
 open Format
-open Misc
 
 let class_name = Global_printer.print_qualname
 let bare_class_name = Global_printer.print_shortname

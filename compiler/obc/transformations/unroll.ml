@@ -9,7 +9,6 @@
 
 (** Temporary hack to unroll for loops *)
 
-open Misc
 open Obc
 open Signature
 open Obc_utils

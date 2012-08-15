@@ -10,7 +10,7 @@
 
 open Format
 
-let rec print_list print lp sep rp ff = function
+let print_list print lp sep rp ff = function
   | [] -> ()
   | x::l ->
       fprintf ff "%s%a" lp print x;
@@ -18,7 +18,7 @@ let rec print_list print lp sep rp ff = function
       fprintf ff "%s" rp
 
 
-let rec print_list_r print lp sep rp ff = function
+let print_list_r print lp sep rp ff = function
   | [] -> ()
   | x :: l ->
       fprintf ff "%s%a" lp print x;
@@ -26,7 +26,7 @@ let rec print_list_r print lp sep rp ff = function
       fprintf ff "%s" rp
 
 
-let rec print_list_l print lp sep rp ff = function
+let print_list_l print lp sep rp ff = function
   | [] -> ()
   | x :: l ->
       fprintf ff "%s%a" lp print x;

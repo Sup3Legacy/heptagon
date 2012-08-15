@@ -1,4 +1,4 @@
-open Signature
+
 open Idents
 open Signature
 open Linearity

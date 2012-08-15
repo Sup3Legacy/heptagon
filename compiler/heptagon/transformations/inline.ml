@@ -17,7 +17,6 @@
 
    Create some reseted blocks : reset should be done afterward. *)
 
-open Misc
 open Idents
 open Signature
 open Names

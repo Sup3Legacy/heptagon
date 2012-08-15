@@ -19,12 +19,10 @@
 (* Requis : typage *)
 
 open Misc
-open Names
 open Idents
 open Heptagon
 open Signature
 open Location
-open Format
 
 type typ =
   | Iproduct of typ list

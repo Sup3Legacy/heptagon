@@ -7,20 +7,15 @@
 (*                                                                        *)
 (**************************************************************************)
 
-open Format
 open List
-open Misc
 open Names
 open Idents
 open Obc
 open Obc_utils
-open Signature
 open Modules
 open Signature
 open C
 open Cgen
-open Location
-open Format
 open Compiler_utils
 
 (** {1 Main C function generation} *)

@@ -59,3 +59,12 @@ val print_record :
   (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a list -> unit
 
 val print_type_params : Format.formatter -> string list -> unit
+
+val print_set :
+  (('a -> unit) -> 'b -> 'c) ->
+  (Format.formatter -> 'a -> unit) -> Format.formatter -> 'b -> unit
+
+val print_map :
+  (('a -> 'b -> unit) -> 'c -> 'd) ->
+  (Format.formatter -> 'a -> unit) ->
+  (Format.formatter -> 'b -> unit) -> Format.formatter -> 'c -> unit

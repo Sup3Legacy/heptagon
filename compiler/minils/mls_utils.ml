@@ -2,13 +2,9 @@ open Minils
 open Mls_mapfold
 open Mls_printer
 open Location
-open Names
 open Idents
 open Signature
-open Static
-open Signature
 open Clocks
-open Misc
 
 (** Error Kind *)
 type err_kind = | Enot_static_exp
@@ -20,7 +16,7 @@ let err_message exp ?(loc=exp.e_loc) = function
         print_exp exp;
       raise Errors.Error
 
-let rec static_exp_of_exp e =
+let static_exp_of_exp e =
   match e.e_desc with
     | Eextvalue w -> (match w.w_desc with
       | Wconst se -> se

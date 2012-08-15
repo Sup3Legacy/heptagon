@@ -7,7 +7,7 @@
 (*                                                                        *)
 (**************************************************************************)
 (* Checks that a node not declared unsafe is safe, and set app unsafe flag. *)
-open Names
+
 open Location
 open Signature
 open Modules

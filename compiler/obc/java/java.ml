@@ -108,7 +108,7 @@ and pattern = Pfield of pattern * field_name
 type program = classe list
 
 
-let rec default_value ty = match ty with
+let default_value ty = match ty with
   | Tclass _ -> Snull
   | Tgeneric _ -> Snull
   | Tbool -> Sbool true

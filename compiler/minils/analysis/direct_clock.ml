@@ -8,7 +8,6 @@
 (**************************************************************************)
 
 open Clocks
-open Minils
 
 (* Remove links from clocks. *)
 

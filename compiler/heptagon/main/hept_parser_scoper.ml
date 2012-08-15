@@ -10,7 +10,6 @@
 open Compiler_options
 open Compiler_utils
 open Location
-open Global_printer
 
 let parse parsing_fun lexbuf =
   try

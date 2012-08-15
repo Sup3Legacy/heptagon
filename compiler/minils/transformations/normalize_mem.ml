@@ -1,5 +1,4 @@
 open Idents
-open Signature
 open Minils
 open Mls_mapfold
 open Mls_utils

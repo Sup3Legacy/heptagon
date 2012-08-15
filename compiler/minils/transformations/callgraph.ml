@@ -1,6 +1,4 @@
 open Names
-open Name_utils
-open Signature
 open Misc
 open Location
 open Signature

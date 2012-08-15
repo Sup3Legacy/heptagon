@@ -8,14 +8,11 @@
 (**************************************************************************)
 (* the internal representation *)
 open Location
-open Misc
 open Names
 open Idents
-open Static
 open Signature
 open Linearity
 open Clocks
-open Initial
 
 type state_name = name
 

@@ -1,5 +1,4 @@
 open Names
-open Modules
 
 let rec modul_of_string_list = function
   | [] -> Idents.local_qn

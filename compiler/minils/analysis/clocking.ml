@@ -18,13 +18,12 @@
  *)
 
 open Misc
+open Signature
 open Idents
 open Names
 open Minils
 open Global_printer
 open Mls_printer
-open Signature
-open Signature
 open Clocks
 open Location
 open Format

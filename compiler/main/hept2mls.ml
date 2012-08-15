@@ -12,15 +12,10 @@
 open Location
 open Misc
 open Names
-open Name_utils
-open Idents
-open Static
-open Signature
 open Clocks
 open Format
 
 open Minils
-open Mls_utils
 open Signature
 
 module Error =
@@ -70,7 +65,7 @@ let translate_iterator_type = function
   | Heptagon.Ifoldi -> Ifoldi
   | Heptagon.Imapfold -> Imapfold
 
-let rec translate_op = function
+let translate_op = function
   | Heptagon.Eifthenelse -> Eifthenelse
   | Heptagon.Efun f -> Efun f
   | Heptagon.Enode f -> Enode f
@@ -170,7 +165,7 @@ let rec translate_pat = function
   | Heptagon.Evarpat(n) -> Evarpat n
   | Heptagon.Etuplepat(l) -> Etuplepat (List.map translate_pat l)
 
-let rec translate_eq { Heptagon.eq_desc = desc; Heptagon.eq_loc = loc } =
+let translate_eq { Heptagon.eq_desc = desc; Heptagon.eq_loc = loc } =
   match desc with
     | Heptagon.Eeq(p, e) ->
         begin match e.Heptagon.e_desc with

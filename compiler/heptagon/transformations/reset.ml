@@ -11,7 +11,6 @@
 (* REQUIRES automaton stateful present *)
 
 open Misc
-open Idents
 open Heptagon
 open Hept_utils
 open Signature

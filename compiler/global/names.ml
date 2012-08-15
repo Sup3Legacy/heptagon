@@ -87,7 +87,7 @@ let is_infix q = match q with
 
 
 let is_op q = match q with
-  | { qual = Pervasives; name = s } -> true
+  | { qual = Pervasives } -> true
   | _ -> false
 
 

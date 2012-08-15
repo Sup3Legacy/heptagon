@@ -14,7 +14,6 @@
 
 
 
-open Names
 open Signature
 open Static
 open Obc
