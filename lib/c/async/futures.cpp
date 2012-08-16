@@ -1,7 +1,7 @@
 #include <atomic>
 #include <thread>
 
-#include "misc.h"
+#include "utils.h"
 
 using namespace std;
 
@@ -9,12 +9,12 @@ template <typename T>
 class Future {
 	private :
 	T o;
-	atomic_bool not_ready;
+	atomic<bool> not_ready;
 
 	public :
 	T get() const {
 		/* active wait on the read condition of the future */
-		while (not_ready.load(memory_order_acquire)) {}
+		while (not_ready.load(memory_order_acquire)) {std::this_thread::yield();}
 		return o;
 	}
 	

@@ -2,10 +2,9 @@
 #include <condition_variable>
 #include <iostream>
 
-#include "misc.h"
+#include "utils.h"
 
 using namespace std;
-
 
 /*
  * Buggy for know, since the reader may check the queue, see it is empty, then the producer add a value and notify it, then the consumer go to sleep.
@@ -13,82 +12,103 @@ using namespace std;
  * It seems not to happen ( maybe something is missing in my analyse or my tests ).
  */
 
-template<typename T, int size>
+template<typename T>
 class Queue {
-	T* data_array[size+1];
+
+  T* *data_array;
+    const int size;
 	
-	struct productor {
-		atomic<int> current;
-		int max;
-	} CACHE_ALIGNED p = {{0},size};
+  struct productor {
+    atomic<int> current;
+    int max; //private local to the productor
+    atomic<bool> present;
+  } CACHE_ALIGNED p = {{0},size,{false}};
 
-	struct consumer{
-		atomic<int> current;
-		int max;
-		int next;
-	} CACHE_ALIGNED c = {{size},0,0};
+  struct consumer{
+    atomic<int> current;
+    int max; //private local to the consumer
+    int next; //private local to the consumer
+  } CACHE_ALIGNED c = {{size},0,0};
 
-	condition_variable wake_up;
-	mutex m;
-	public:
-	void push(T * t) {
-		int current = p.current.load()/*(memory_order_relaxed)*/;
-		int next = (current >= size) ? 0 : current + 1;
-		if (next == p.max) {
-			// need to synchro and wait for max to grow
-			p.max = c.current.load()/*(memory_order_acquire)*/;
-			while ( next == p.max ) {
-				// active wait because the producer can be sure that a c.is there
-				wake_up.notify_one();
-				p.max = c.current.load()/*(memory_order_acquire)*/;
-			}
-		}
-		// effectively push
-		data_array[current] = t;
-		p.current.store(next, memory_order_release);
-		// if some thread was waiting on a producer, wake it up
-		wake_up.notify_one();
+  condition_variable wake_up;
+  mutex m;
+public:
+    Queue(int s):size(s+1),wake_up(),m() {
+        data_array = new T*[size];
+    }
+    ~Queue() {
+        delete[] data_array;
+    }
+  void push(T * t) {
+    int current = p.current.load(memory_order_relaxed);
+    int next = (current >= size) ? 0 : current + 1;
+    if (next == p.max) {
+      // need to synchro and wait for max to grow
+      p.max = c.current.load(memory_order_acquire);
+      while ( next == p.max ) {
+	//TODO stall for better busy wait
+	p.max = c.current.load(memory_order_acquire);
+      }
+    }
+    // effectively push
+    data_array[current] = t;
+    p.current.store(next, memory_order_release);
+  }
+	
+  void attach_productor () {
+    unique_lock<mutex> lock(m);
+      DPRINT("attach\n");
+      // no memory order since the mutex is here to force it
+    p.present.store(true,memory_order_relaxed);
+    wake_up.notify_all();
+  }
+
+  void detach_productor () {
+    unique_lock<mutex> lock(m);
+    // no memory order since the mutex is here to force it
+    p.present.store(false, memory_order_relaxed);
+  }
+
+  T * get() {
+    bool prod_present;
+    int current = c.current.load(memory_order_relaxed);
+    int next = (current >= size) ? 0 : current + 1;
+    if (next == c.max) {
+      // need to synchro and wait for max to grow
+      while (true) {
+	prod_present = p.present.load(memory_order_acquire);
+	c.max = p.current.load(memory_order_acquire);
+	//since [present] is retrieved before [current],
+	//if not present then [current] is the last current place,
+	//the consumer may then sleep until a new prod is attached
+	if (next != c.max) break; // finish busy wait
+	else if (!prod_present) {
+	  unique_lock<mutex> lock(m);
+	  //be sure
+	  prod_present = p.present.load(memory_order_acquire);
+	  c.max = p.current.load(memory_order_acquire);
+	  if (next != c.max) break;
+	  else if (!prod_present) {
+	    //we are sure no prod and max too small
+	    wake_up.wait(lock);
+	  }	  
 	}
+      }
+    }
+    c.next = next;
+    // Do not change the current for now, until remove is called
+    return data_array[next];
+  }
 
-	T * get() {
-		int current = c.current.load()/*(memory_order_relaxed)*/;
-		int next = (current >= size) ? 0 : current + 1;
-		if (next == c.max) {
-			// need to synchro and wait for max to grow
-			//c.max = p.current.load()/*(memory_order_acquire)*/;
-			p.current.compare_exchange_weak(c.max,c.max); //TODO memory_order ?
+  void remove() {
+    // release the current one. relaxed on c.next since only the consumer should get and remove.
+    c.current.store(c.next, memory_order_release);
+  }
 
-			for (int i = 0; next == c.max && i < 1000; i++ ) { // busy wait
-				c.max = p.current.load(memory_order_acquire);
-			}
-			while ( next == c.max ) {
-				// passive wait, we never know if a producer is here.
-				// TODO do some active wait before waiting.
-				printf("C sleep waiting for %d\n",next);
-				fflush(stdout);
-				unique_lock<mutex> lock(m);
-				wake_up.wait(lock);
-				printf("C woke up\n");
-				fflush(stdout);
-				// synchronize and verify that we woke up on the right purpose
-				p.current.compare_exchange_weak(c.max,c.max); //TODO memory_order ?
-			}
-		}
-		// relaxed on c.next since only the consumer should get and remove
-		c.next = next;
-		// Do not change the current for now, until remove is called
-		return data_array[next];
-	}
-
-	void remove() {
-		// release the current one. relaxed on c.next since only the consumer should get and remove.
-		c.current.store(c.next, memory_order_release);
-	}
-
-	void pop(T * in) {
-		*in = *get();
-		remove();
-	}
+  void pop(T * in) {
+    *in = *get();
+    remove();
+  }
 
 };
 
