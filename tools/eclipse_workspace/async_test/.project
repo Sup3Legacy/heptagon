@@ -18,7 +18,7 @@
 		<link>
 			<name>java</name>
 			<type>2</type>
-			<location>/Users/lgerard/W/heptagon/test/async/java</location>
+			<locationURI>PARENT-3-PROJECT_LOC/test/async/java</locationURI>
 		</link>
 	</linkedResources>
 </projectDescription>
