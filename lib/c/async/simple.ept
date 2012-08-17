@@ -1,0 +1,11 @@
+
+node f(x :int; y :int) = (z :int)
+let
+  z = 0 fby x + y;
+tel
+
+
+node main() = (z :int)
+let
+  z = f(3,4);
+tel
