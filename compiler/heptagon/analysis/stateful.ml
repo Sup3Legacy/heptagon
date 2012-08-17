@@ -6,7 +6,8 @@
 (*  Organization : Demons, LRI, University of Paris-Sud, Orsay            *)
 (*                                                                        *)
 (**************************************************************************)
-(* Checks that a node declared stateless is stateless, and set possible nodes as stateless. *)
+(* Checks that a node declared stateless is stateless *)
+(* Checks also the AST, application should reflect the statefulness *)
 
 open Location
 open Signature
@@ -34,8 +35,13 @@ let last _ stateful l = match l with
   | Var -> l, stateful
   | Last _ -> l, true
 
+let is_app_async { a_async = a } = match a with
+  | None -> false
+  | Some _ -> true
+
 (* Returns whether the exp is stateful.
-   Replaces node calls with the correct Efun or Enode depending on the node signature. *)
+   Replaces node calls with the correct Efun or Enode
+   depending on the node signature. *)
 let edesc funs stateful ed =
   let ed, stateful = Hept_mapfold.edesc funs stateful ed in
     match ed with
@@ -43,13 +49,18 @@ let edesc funs stateful ed =
       | Eapp({ a_op = Earrow }, _, _) -> ed, true
       | Eapp({ a_op = (Enode f | Efun f) } as app, e_list, r) ->
           let ty_desc = find_value f in
-          let op = if ty_desc.node_stateful then Enode f else Efun f in
-          Eapp({ app with a_op = op }, e_list, r), ty_desc.node_stateful or stateful
-      | Eiterator(it, ({ a_op = (Enode f | Efun f) } as app), n, pe_list, e_list, r) ->
+          let is_async = is_app_async app in
+          let is_app_stateful = is_async or ty_desc.node_stateful in
+          let op = if is_app_stateful then Enode f else Efun f in
+          Eapp({ app with a_op = op }, e_list, r), is_app_stateful or stateful
+      | Eiterator(it, ({ a_op = (Enode f | Efun f) } as app)
+                 , n, pe_list, e_list, r) ->
           let ty_desc = find_value f in
-          let op = if ty_desc.node_stateful then Enode f else Efun f in
-          Eiterator(it, { app with a_op = op }, n, pe_list, e_list, r),
-          ty_desc.node_stateful or stateful
+          let is_async = is_app_async app in
+          let is_app_stateful = is_async or ty_desc.node_stateful in
+          let op = if is_app_stateful then Enode f else Efun f in
+          Eiterator(it, { app with a_op = op }, n, pe_list, e_list, r)
+          , is_app_stateful or stateful
       | _ -> ed, stateful
 
 (* Automatons have an hidden state whatever *)
@@ -68,7 +79,7 @@ let block funs acc b =
   let b, stateful = Hept_mapfold.block funs false b in
     { b with b_stateful = stateful }, acc or stateful
 
-(* Strong preemption should be decided with stateles expressions *)
+(* Strong preemption should be decided with stateless expressions *)
 let escape_unless funs acc esc =
   let esc, stateful = Hept_mapfold.escape funs false esc in
     if stateful then
@@ -83,27 +94,9 @@ let present_handler funs acc ph =
   let p_block, acc = Hept_mapfold.block_it funs acc ph.p_block in
     { p_cond = p_cond; p_block = p_block }, acc
 
-(*
-(* Funs with states are rejected, nodes without state are set as funs *)
-let node_dec funs _ n =
-  Idents.enter_node n.n_name;
-  let n, stateful = Hept_mapfold.node_dec funs false n in
-  if stateful & (not n.n_stateful) then message n.n_loc Eshould_be_a_node;
-  if not stateful & n.n_stateful (* update the global env if stateful is not necessary *)
-  then Modules.replace_value n.n_name
-         { (Modules.find_value n.n_name) with Signature.node_stateful = false };
-  { n with n_stateful = stateful }, false (* set stateful only if needed *)
-*)
-
-let param stateful p = match p.p_type with
-  | Tsig { node_stateful = true } -> true
-  | _ -> stateful
-
-
 let node_dec funs _ n =
   Idents.push_node n.n_name;
   let n, stateful = Hept_mapfold.node_dec funs false n in
-  let stateful = List.fold_left param stateful n.n_params in
   if stateful & (not n.n_stateful) then message n.n_loc Eshould_be_a_node;
   let _ = Idents.pop_node () in
   n, n.n_stateful (* keep stateful even if unecessary *)

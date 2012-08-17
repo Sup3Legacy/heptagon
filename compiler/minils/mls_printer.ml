@@ -195,11 +195,13 @@ let print_contract ff { c_local = l; c_eq = eqs;
     print_extvalue e_g
     print_vd_tuple c
 
+let print_node_state ff s = fprintf ff (if s then "node" else "fun")
 
 let print_node ff { n_name = n; n_input = ni; n_output = no; n_base_id = base;
                     n_contract = contract; n_local = nl;
-                    n_equs = ne; n_params = params } =
-  fprintf ff "@[node %a%a%a@ %areturns %a@]@\n%a%a%a@]@\n@."
+                    n_equs = ne; n_params = params; n_stateful } =
+  fprintf ff "@[%a %a%a%a@ %areturns %a@]@\n%a%a%a@]@\n@."
+    print_node_state n_stateful
     print_qualname n
     print_node_params params
     print_full_vd_tuple ni

@@ -50,10 +50,10 @@ and desc =
                   * exp list * exp list * exp option
 
 and app = {
-  a_op     : op;
-  a_params : static_exp list;
-  a_async  : async_t;
-  a_unsafe : bool;
+  a_op      : op;
+  a_params  : static_exp list;
+  a_async   : async_t;
+  a_unsafe  : bool;
   a_inlined : bool }
 
 and op =
