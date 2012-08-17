@@ -1,0 +1,6 @@
+open Simple
+
+node main() = (z :int)
+let
+  z = !(async 0 fby async f(3,4));
+tel

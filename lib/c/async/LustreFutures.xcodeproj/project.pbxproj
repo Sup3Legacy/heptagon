@@ -11,6 +11,8 @@
 		B1B7025315DD66EA00F2DCB4 /* main.cpp in Sources */ = {isa = PBXBuildFile; fileRef = B1B7024F15DD66EA00F2DCB4 /* main.cpp */; };
 		B1B7025615DD87B400F2DCB4 /* wasync.cpp in Sources */ = {isa = PBXBuildFile; fileRef = B1B7025515DD87B400F2DCB4 /* wasync.cpp */; };
 		B1B7025E15DDA51300F2DCB4 /* spsc_bounded_fifo.cpp in Sources */ = {isa = PBXBuildFile; fileRef = B1B7025015DD66EA00F2DCB4 /* spsc_bounded_fifo.cpp */; };
+		B1B7026515DE819900F2DCB4 /* AsyncNode.java in Sources */ = {isa = PBXBuildFile; fileRef = B1B7026415DE819900F2DCB4 /* AsyncNode.java */; };
+		B1B7026815DE828D00F2DCB4 /* simple_a.c in Sources */ = {isa = PBXBuildFile; fileRef = B1B7026715DE828D00F2DCB4 /* simple_a.c */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -33,6 +35,13 @@
 		B1B7025115DD66EA00F2DCB4 /* utils.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = utils.h; sourceTree = "<group>"; };
 		B1B7025515DD87B400F2DCB4 /* wasync.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = wasync.cpp; sourceTree = "<group>"; };
 		B1B7025D15DD899100F2DCB4 /* simple_c */ = {isa = PBXFileReference; lastKnownFileType = folder; path = simple_c; sourceTree = "<group>"; };
+		B1B7025F15DE7C5100F2DCB4 /* java */ = {isa = PBXFileReference; lastKnownFileType = folder; path = java; sourceTree = "<group>"; };
+		B1B7026015DE7C5100F2DCB4 /* simple_A_c */ = {isa = PBXFileReference; lastKnownFileType = folder; path = simple_A_c; sourceTree = "<group>"; };
+		B1B7026115DE7C5100F2DCB4 /* simple_a.ept */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = simple_a.ept; sourceTree = "<group>"; };
+		B1B7026315DE7C5100F2DCB4 /* simple.ept */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = simple.ept; sourceTree = "<group>"; };
+		B1B7026415DE819900F2DCB4 /* AsyncNode.java */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.java; name = AsyncNode.java; path = ../../java/jeptagon/AsyncNode.java; sourceTree = "<group>"; };
+		B1B7026715DE828D00F2DCB4 /* simple_a.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = simple_a.c; path = simple_c/simple_a.c; sourceTree = "<group>"; };
+		B1B7026915DE831F00F2DCB4 /* simple_a.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = simple_a.h; path = simple_c/simple_a.h; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -49,6 +58,13 @@
 		B1B7023115DD65C800F2DCB4 = {
 			isa = PBXGroup;
 			children = (
+				B1B7026415DE819900F2DCB4 /* AsyncNode.java */,
+				B1B7025F15DE7C5100F2DCB4 /* java */,
+				B1B7026015DE7C5100F2DCB4 /* simple_A_c */,
+				B1B7026115DE7C5100F2DCB4 /* simple_a.ept */,
+				B1B7026315DE7C5100F2DCB4 /* simple.ept */,
+				B1B7026715DE828D00F2DCB4 /* simple_a.c */,
+				B1B7026915DE831F00F2DCB4 /* simple_a.h */,
 				B1B7025D15DD899100F2DCB4 /* simple_c */,
 				B1B7025515DD87B400F2DCB4 /* wasync.cpp */,
 				B1B7024E15DD66EA00F2DCB4 /* futures.cpp */,
@@ -122,6 +138,8 @@
 				B1B7025215DD66EA00F2DCB4 /* futures.cpp in Sources */,
 				B1B7025315DD66EA00F2DCB4 /* main.cpp in Sources */,
 				B1B7025615DD87B400F2DCB4 /* wasync.cpp in Sources */,
+				B1B7026515DE819900F2DCB4 /* AsyncNode.java in Sources */,
+				B1B7026815DE828D00F2DCB4 /* simple_a.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
