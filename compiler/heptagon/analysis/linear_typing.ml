@@ -221,7 +221,7 @@ let subst_from_lin (s,m) expect_lin lin =
     | Ltop, Ltop -> s,m
     | Lvar r1, Lat r2 ->
       if NamesSet.mem r2 s then
-        message no_location (Elocation_already_used r2)
+        message (no_location ()) (Elocation_already_used r2)
       else (
         (* Format.printf "Found mapping from _%s to %s\n" r1 r2;  *)
         NamesSet.add r2 s, NamesEnv.add r1 r2 m

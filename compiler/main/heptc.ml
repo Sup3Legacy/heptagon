@@ -14,21 +14,17 @@ open Compiler_options
 
 
 let compile_interface modname source_f =
-
   (* output file names *)
   let output = String.uncapitalize modname in
   let epci_f = output ^ ".epci" in
-
   (* input/output channels *)
   let source_c, lexbuf = lexbuf_from_file source_f in
   let epci_c = open_out_bin epci_f in
   let close_all_files () = close_in source_c; close_out epci_c in
-
   try
   (* Process the [lexbuf] to an Heptagon AST *)
     let p = Hept_parser_scoper.parse_interface modname lexbuf in
     if !print_types then Global_printer.print_interface Format.std_formatter;
-
     (* Process the interface *)
     let p = Hept_compiler.compile_interface p in
     (* Output the .epci *)
@@ -43,17 +39,15 @@ let compile_interface modname source_f =
 
 (* [modname] is the module name, [source_f] is the source file *)
 let compile_program modname source_f =
-
   (* output file names *)
   let output = String.uncapitalize modname in
   let epci_f = output ^ ".epci" in
-
   (* input/output channels *)
   let source_c, lexbuf = lexbuf_from_file source_f in
   let epci_c = open_out_bin epci_f in
   (*let mls_c = open_out mls_f in *)
-  let close_all_files () = close_in source_c ;close_out epci_c; (*close_out mls_c*) in
-
+  let close_all_files () = close_in source_c ;close_out epci_c;
+  (*close_out mls_c*) in
   try
   (* Activates passes according to the backend used *)
     Mls2seq.load_conf ();
@@ -82,10 +76,12 @@ let compile_program modname source_f =
 
 
 let compile source_f =
-  let modname = source_f |> Filename.basename |> Filename.chop_extension |> String.capitalize in
+  let open Filename in
+  Location.input_name := source_f;
+  let modname = source_f |> basename |> chop_extension |> String.capitalize in
   let modul = Name_utils.modul_of_string modname in
   Initial.initialize modul;
-  source_f |> Filename.dirname |> add_include;
+  source_f |> dirname |> add_include;
   check_options ();
   match Misc.file_extension source_f with
     | "ept" -> compile_program modname source_f

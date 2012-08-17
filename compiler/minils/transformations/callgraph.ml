@@ -299,7 +299,7 @@ let node_by_longname node =
       | Pnode n -> n
       | _ -> Misc.internal_error "callgraph")
   with
-    Not_found -> Error.message no_location (Error.Enode_unbound node)
+    Not_found -> Error.message (no_location ()) (Error.Enode_unbound node)
 
 let is_local ln = match ln.qual with
   | LocalModule _ -> true

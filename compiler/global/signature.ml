@@ -123,7 +123,7 @@ let asyncify async ty_list = match async with
   | None -> ty_list
   | Some _ -> List.map (fun ty -> Tfuture ((),ty)) ty_list
 
-let mk_static_exp ?(loc = no_location) ty desc = (*note ~ty: replace as first arg*)
+let mk_static_exp ?(loc = (no_location ())) ty desc = (*note ~ty: replace as first arg*)
   { se_desc = desc; se_ty = ty; se_loc = loc }
 
 let dummy_static_exp ty = mk_static_exp ty (Svar Names.dummy_qualname)
@@ -158,8 +158,8 @@ let mk_node constraints loc ~extern ins outs stateful unsafe params =
     node_external = extern;
     node_loc = loc}
 
-let dummy_node =
-  mk_node [] ~extern:true no_location [] [] false false []
+let dummy_node () =
+  mk_node [] ~extern:true (no_location ()) [] [] false false []
 
 let rec field_assoc f = function
   | [] -> raise Not_found

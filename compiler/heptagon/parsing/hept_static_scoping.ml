@@ -114,7 +114,7 @@ let node_dec funs _ n =
   let n_name = current_qual nd.n_name in
   (* /!\ we need to add the node to detect all the nodes,*)
   (* /!\ but we can't give their correct signature, scoping will correct this *)
-  Hept_scoping.safe_add nd.n_loc add_value n_name Signature.dummy_node;
+  Hept_scoping.safe_add nd.n_loc add_value n_name (Signature.dummy_node());
   let _ = Idents.pop_node () in
   nd, local_const
 

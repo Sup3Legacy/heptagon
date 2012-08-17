@@ -17,7 +17,7 @@ open Heptagon
 
 (* Helper functions to create AST. *)
 (* TODO : After switch, all mk_exp should take care of level_ck *)
-let mk_exp desc ?(level_ck = Cbase) ?(ct_annot = None) ?(loc = no_location) ty linearity =
+let mk_exp desc ?(level_ck = Cbase) ?(ct_annot = None) ?(loc = (no_location ())) ty linearity =
   { e_desc = desc; e_ty = ty; e_ct_annot = ct_annot; e_linearity = linearity;
     e_level_ck = level_ck; e_loc = loc; }
 
@@ -28,9 +28,9 @@ let mk_op_app ?(params=[]) ?(unsafe=false) ?(reset=None) op args =
   Eapp(mk_app ~params:params ~unsafe:unsafe op, args, reset)
 
 let mk_type_dec name desc =
-  { t_name = name; t_desc = desc; t_loc = no_location; }
+  { t_name = name; t_desc = desc; t_loc = (no_location ()); }
 
-let mk_equation ?(loc=no_location) desc =
+let mk_equation ?(loc=(no_location ())) desc =
   let _, s = Stateful.eqdesc Stateful.funs false desc in
   { eq_desc = desc;
     eq_stateful = s;
@@ -39,11 +39,11 @@ let mk_equation ?(loc=no_location) desc =
 
 let mk_var_dec ?(last = Var) ?(clock = fresh_clock()) name ty linearity =
   { v_ident = name; v_type = ty; v_linearity = linearity; v_clock = clock;
-    v_last = last; v_loc = no_location }
+    v_last = last; v_loc = (no_location ()) }
 
 let mk_block ?(stateful = true) ?(defnames = Env.empty) ?(locals = []) eqs =
   { b_local = locals; b_equs = eqs; b_defnames = defnames;
-    b_stateful = stateful; b_loc = no_location; }
+    b_stateful = stateful; b_loc = (no_location ()); }
 
 let dfalse =
   mk_exp (Econst (mk_static_bool false)) (Tid Initial.pbool) Ltop
@@ -61,7 +61,7 @@ let mk_switch_equation e l =
 
 let mk_node
     ?(input = []) ?(output = []) ?(contract = None)
-    ?(stateful = true) ?(unsafe = false) ?(loc = no_location) ?(param = []) ?(constraints = [])
+    ?(stateful = true) ?(unsafe = false) ?(loc = (no_location ())) ?(param = []) ?(constraints = [])
     name block =
   { n_name = name;
     n_stateful = stateful;

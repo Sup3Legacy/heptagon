@@ -413,7 +413,7 @@ let rec when_ck desc li ty ck =
         e_ct_annot = Some(Ck(ck));
         e_linearity = li;
         e_ty = ty;
-        e_loc = no_location }
+        e_loc = (no_location ()) }
   | Con(ck',c,v) ->
       let e = when_ck desc li ty ck' in
       (* let e_v = mk_exp (Evar v) ~ct_annot:(Some(Ck(ck'))) ty_bool in *)
@@ -422,7 +422,7 @@ let rec when_ck desc li ty ck =
         e_ct_annot = Some(Ck(ck));
         e_linearity = li;
         e_ty = ty;
-        e_loc = no_location }
+        e_loc = (no_location ()) }
 
 let rec base_value ck li ty =
   match ty with
@@ -465,7 +465,7 @@ let rec base_value ck li ty =
                   e_level_ck = Cbase;
                   e_ct_annot = Some(Ck(ck));
                   e_linearity = li;
-                  e_loc = no_location }
+                  e_loc = (no_location ()) }
           end
         with Not_found ->
           Printf.printf "Name : %s\n" sname.name; assert false
@@ -477,7 +477,7 @@ let rec base_value ck li ty =
         e_level_ck = Cbase;
         e_ct_annot = Some(Ck(ck));
         e_linearity = li;
-        e_loc = no_location;
+        e_loc = (no_location ());
       }
   | Tarray(ty,se) ->
       let e = base_value ck li ty in
@@ -486,7 +486,7 @@ let rec base_value ck li ty =
         e_level_ck = Cbase;
         e_ct_annot = Some(Ck(ck));
         e_linearity = li;
-        e_loc = no_location;
+        e_loc = (no_location ());
       }
   | Tfuture _ -> Misc.internal_error "Boolean transformation fail, a future was encountered."
   | Tbounded _ ->
@@ -509,7 +509,7 @@ let rec merge_tree ck ty li e_map btree vtree =
         e_level_ck = Cbase;
         e_ct_annot = Some(Ck(ck));
         e_linearity = li;
-        e_loc = no_location }
+        e_loc = (no_location ()) }
   | Tree (_,_), Vempty -> failwith("merge_tree: non-coherent trees")
 
 
@@ -657,7 +657,7 @@ let var_dec_list (acc_vd,acc_loc,acc_eq) var_from n =
           e_ct_annot = Some(Ck(ck));
           e_ty = ty_bool;
           e_linearity = var_from.v_linearity;
-          e_loc = no_location }
+          e_loc = (no_location ()) }
     | _ckvar::l, Con(ck',c,v) ->
         (* assert v = _ckvar *)
         let e = when_ck l ck' var in
@@ -667,7 +667,7 @@ let var_dec_list (acc_vd,acc_loc,acc_eq) var_from n =
           e_ct_annot = Some(Ck(ck));
           e_ty = ty_bool;
           e_linearity = var_from.v_linearity;
-          e_loc = no_location }
+          e_loc = (no_location ()) }
     | _ -> failwith("when_ck: non coherent clock and var list")
   in
 
@@ -730,7 +730,7 @@ let var_dec_list (acc_vd,acc_loc,acc_eq) var_from n =
                         v_linearity = var_from.v_linearity;
                         v_clock = ck;
                         v_last = Var;
-                        v_loc = no_location } :: acc_loc in
+                        v_loc = (no_location ()) } :: acc_loc in
         (* vi_... = vi when ... when (True|False)(v1) *)
         let acc_eq =
           (mk_equation (Eeq(Evarpat(id),(when_ck acc_var ck vi))))

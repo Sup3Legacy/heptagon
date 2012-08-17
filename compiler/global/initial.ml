@@ -30,7 +30,7 @@ let tfile = Tid pfile
 
 let mk_pervasives s = { qual = Pervasives; name = s }
 
-let mk_static_int_op ?(loc = no_location) op args =
+let mk_static_int_op ?(loc = (no_location ())) op args =
   mk_static_exp ~loc:loc tint (Sop (mk_pervasives op, args))
 
 let rec typing_sint v =
@@ -38,22 +38,22 @@ let rec typing_sint v =
   then Tbounded (mk_static_int32 ~inside_type:true (Int32.succ v))
   else Tid pint
 
-and mk_static_int ?(loc = no_location) ?(inside_type = false) i =
+and mk_static_int ?(loc = (no_location ())) ?(inside_type = false) i =
   let i = Int32.of_int i in
   let t = if inside_type then tint else typing_sint i in
   mk_static_exp ~loc:loc t (Sint i)
 
-and mk_static_int32 ?(loc = no_location) ?(inside_type = false) i =
+and mk_static_int32 ?(loc = (no_location ())) ?(inside_type = false) i =
   let t = if inside_type then tint else typing_sint i in
   mk_static_exp ~loc:loc t (Sint i)
 
-let mk_static_bool ?(loc = no_location) b =
+let mk_static_bool ?(loc = (no_location ())) b =
   mk_static_exp ~loc:loc tbool (Sbool b)
 
-let mk_static_string ?(loc = no_location) s =
+let mk_static_string ?(loc = (no_location ())) s =
   mk_static_exp ~loc:loc tstring (Sstring s)
 
-let mk_static_float ?(loc = no_location) f =
+let mk_static_float ?(loc = (no_location ())) f =
   mk_static_exp ~loc:loc tfloat (Sfloat f)
 
 

@@ -71,7 +71,7 @@ let int_of_static_exp se = Static.int_of_static_exp se
 let output_names_list sig_info =
   let remove_option ad = match ad.a_name with
     | Some n -> n
-    | None -> Error.message no_location Error.Eno_unnamed_output
+    | None -> Error.message (no_location ()) Error.Eno_unnamed_output
   in
   let outputs = List.filter
     (fun ad -> not (Linearity.is_linear ad.a_linearity)) sig_info.node_outputs in
@@ -82,7 +82,7 @@ let is_stateful n =
     let sig_info = find_value n in
       sig_info.node_stateful
   with
-      Not_found -> Error.message no_location (Error.Enode (fullname n))
+      Not_found -> Error.message (no_location ()) (Error.Enode (fullname n))
 
 (******************************)
 
@@ -169,7 +169,7 @@ let rec unalias_ctype cty = match cty with
     mapping strings to cty). *)
 and assoc_type n var_env =
   try unalias_ctype (List.assoc n var_env)
-  with Not_found -> Error.message no_location (Error.Evar n)
+  with Not_found -> Error.message (no_location ()) (Error.Evar n)
 
 (** Returns the type associated with the lhs [lhs]
     in the environnement [var_env] (which is an association list
@@ -182,7 +182,7 @@ let rec assoc_type_lhs lhs var_env = match lhs with
   | CLderef lhs ->
     (match assoc_type_lhs lhs var_env with
     | Cty_ptr ty -> ty
-    | _ -> Error.message no_location Error.Ederef_not_pointer)
+    | _ -> Error.message (no_location ()) Error.Ederef_not_pointer)
   | CLfield(CLderef (CLvar "self"), { name = x }) -> assoc_type x var_env
   | CLfield(CLderef (CLvar "_out"), { name = x }) -> assoc_type x var_env
   | CLfield(x, f) ->

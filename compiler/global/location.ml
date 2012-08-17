@@ -4,22 +4,18 @@
 open Lexing
 open Format
 
-(* two important global variables: [input_name] and [input_chan] *)
 type location =
     Loc of position  (* Position of the first character *)
          * position  (* Position of the next character following the last one *)
 
+let input_name = ref ""
 
-let input_name = ref ""                 (* Input file name. *)
+let no_location () =
+  let d = { dummy_pos with pos_fname = !input_name } in
+  Loc (d, d)
 
-let input_chan = ref stdin              (* The channel opened on the input. *)
-
-let initialize iname ic =
-  input_name := iname;
-  input_chan := ic
-
-
-let no_location =  Loc (dummy_pos, dummy_pos)
+let is_no_location (Loc(d1,d2)) =
+  (d1 = d2) && ({d1 with pos_fname = ""} = dummy_pos)
 
 let error_prompt = ">"
 
@@ -74,7 +70,7 @@ let skip_lines n ic =
 
 
 
-let print_location ff (Loc(p1,p2)) =
+let print_location ff (Loc(p1,p2) as l) =
   let n1 = p1.pos_cnum - p1.pos_bol in (* character number *)
   let n2 = p2.pos_cnum - p2.pos_bol in
   let np1 = p1.pos_cnum in (* character position *)
@@ -94,36 +90,38 @@ let print_location ff (Loc(p1,p2)) =
   else begin (* Same file *)
     if l2 > l1 then
       fprintf ff
-        "File \"%s\", line %d-%d, characters %d-%d:@\n" f1 l1 l2 n1 n2
+        "File \"%s\", line %d-%d, characters %d-%d:" f1 l1 l2 n1 n2
     else
-      fprintf ff "File \"%s\", line %d, characters %d-%d:@\n" f1 l1 n1 n2;
-    (* Output source code *)
-    try
-      let ic = open_in f1 in
-
-      if l1 == l2 then (
-        (* Only one line : copy full line and underline *)
-        seek_in ic lp1;
-        copy_lines 1 ic ff ">";
-        underline_line ic ff '^' lp1 n1 n2 )
-      else (
-        underline_line ic ff '.' lp1 0 n1; (* dots until n1 *)
-        seek_in ic np1;
-        (* copy the end of the line l1 after the dots *)
-        copy_lines 1 ic ff "";
-        if l2 - l1 <= 8 then
-          (* copy the 6 or less middle lines *)
-          copy_lines (l2-l1-1) ic ff ">"
+      fprintf ff "File \"%s\", line %d, characters %d-%d:" f1 l1 n1 n2;
+    if is_no_location l then ()
+    else ( (* Output source code *)
+      fprintf ff "@\n";
+      try
+        let ic = open_in f1 in
+        if l1 == l2 then (
+          (* Only one line : copy full line and underline *)
+          seek_in ic lp1;
+          copy_lines 1 ic ff ">";
+          underline_line ic ff '^' lp1 n1 n2 )
         else (
-          (* sum up the middle lines to 6 *)
-          copy_lines 3 ic ff ">";
-          fprintf ff "..........@\n";
-          skip_lines (l2-l1-7) ic; (* skip middle lines *)
-          copy_lines 3 ic ff ">"
-        );
-        fprintf ff ">";
-        copy_chunk lp2 np2 ic ff; (* copy interesting begining of l2 *)
-      )
-    with Sys_error _ -> ();
+          underline_line ic ff '.' lp1 0 n1; (* dots until n1 *)
+          seek_in ic np1;
+          (* copy the end of the line l1 after the dots *)
+          copy_lines 1 ic ff "";
+          if l2 - l1 <= 8 then
+            (* copy the 6 or less middle lines *)
+            copy_lines (l2-l1-1) ic ff ">"
+          else (
+            (* sum up the middle lines to 6 *)
+            copy_lines 3 ic ff ">";
+            fprintf ff "..........@\n";
+            skip_lines (l2-l1-7) ic; (* skip middle lines *)
+            copy_lines 3 ic ff ">"
+          );
+          fprintf ff ">";
+          copy_chunk lp2 np2 ic ff; (* copy interesting begining of l2 *)
+        )
+      with Sys_error _ -> ();
+    )
   end;
   fprintf ff "@."

@@ -16,38 +16,38 @@ open Obc
 open Obc_mapfold
 open Global_mapfold
 
-let mk_var_dec ?(loc=no_location) ?(linearity = Ltop) ?(mut=false) ?(alias=false) ident ty =
+let mk_var_dec ?(loc=(no_location ())) ?(linearity = Ltop) ?(mut=false) ?(alias=false) ident ty =
   { v_ident = ident; v_type = ty; v_linearity = linearity;
     v_alias = alias; v_mutable = mut; v_loc = loc }
 
-let mk_ext_value ?(loc=no_location) ty desc =
+let mk_ext_value ?(loc=(no_location ())) ty desc =
   { w_desc = desc; w_ty = ty; w_loc = loc; }
 
-let mk_ext_value_int ?(loc=no_location) desc =
+let mk_ext_value_int ?(loc=(no_location ())) desc =
   mk_ext_value ~loc:loc Initial.tint desc
 
-let mk_ext_value_bool ?(loc=no_location) desc =
+let mk_ext_value_bool ?(loc=(no_location ())) desc =
   mk_ext_value ~loc:loc Initial.tbool desc
 
-let mk_exp ?(loc=no_location) ty desc =
+let mk_exp ?(loc=(no_location ())) ty desc =
   { e_desc = desc; e_ty = ty; e_loc = loc }
 
-let mk_exp_int ?(loc=no_location) desc =
+let mk_exp_int ?(loc=(no_location ())) desc =
   mk_exp ~loc:loc Initial.tint desc
 
-let mk_exp_static_int ?(loc=no_location) se =
+let mk_exp_static_int ?(loc=(no_location ())) se =
   mk_exp_int ~loc:loc (Eextvalue (mk_ext_value_int (Wconst se)))
 
-let mk_exp_const_int ?(loc=no_location) i =
+let mk_exp_const_int ?(loc=(no_location ())) i =
   mk_exp_static_int ~loc:loc (Initial.mk_static_int i)
 
-let mk_exp_bool ?(loc=no_location) desc =
+let mk_exp_bool ?(loc=(no_location ())) desc =
   { e_desc = desc; e_ty = Initial.tbool; e_loc = loc }
 
-let mk_pattern ?(loc=no_location) ty desc =
+let mk_pattern ?(loc=(no_location ())) ty desc =
   { pat_desc = desc; pat_ty = ty; pat_loc = loc }
 
-let mk_pattern_int ?(loc=no_location) desc =
+let mk_pattern_int ?(loc=(no_location ())) desc =
   { pat_desc = desc; pat_ty = Initial.tint; pat_loc = loc }
 
 let mk_ext_value_exp ty desc =
