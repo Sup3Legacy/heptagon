@@ -86,11 +86,11 @@ let compile source_f =
   match Misc.file_extension source_f with
   | "ept" ->
     (try compile_program modname source_f
-     with _ -> Format.eprintf "%s failed to compile.@.@." source_f)
+     with _ -> Format.eprintf "%s failed to compile.@." source_f; exit(2))
   | "epi" ->
     (try compile_interface modname source_f
-     with _ -> Format.eprintf "%s failed to compile.@.@." source_f)
-  | ext -> Format.eprintf "Unknow file type: %s for file: %s@.@." ext source_f
+     with _ -> Format.eprintf "%s failed to compile.@." source_f; exit(2))
+  | ext -> Format.eprintf "Unknow file type: %s for file: %s@." ext source_f
 
 
 
