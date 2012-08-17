@@ -52,8 +52,10 @@ let write_obc_file p =
     comment "Generation of Obc code"
 
 let targets =
-  [ mk_target ~load_conf:(Cgen.load_conf) ~interface:(IObc Cmain.interface) "c" (Obc_no_params Cmain.program);
-    mk_target ~load_conf:(Java_main.load_conf) "java" (Obc_no_params Java_main.program);
+  [ mk_target ~load_conf:(Cgen.load_conf) ~interface:(IObc Cmain.interface)
+      "c" (Obc_no_params Cmain.program);
+    mk_target ~load_conf:(Java_main.load_conf)
+      "java" (Obc_no_params Java_main.program);
 (*    mk_target "z3z" (Minils_no_params Sigalimain.program); *)
     mk_target "obc" (Obc write_obc_file);
     mk_target "obc_np" (Obc_no_params write_obc_file);
@@ -63,7 +65,7 @@ let find_target s =
   try
     List.find (fun t -> t.t_name = s) targets
   with
-      Not_found -> language_error s; raise Errors.Error
+    Not_found -> language_error s; raise Errors.Error
 
 let generate_target p s =
 (*  let print_unfolded p_list =
@@ -87,12 +89,14 @@ let generate_target p s =
         do_silent_pass "Code generation from Obc" convert_fun o
     | Minils_no_params convert_fun ->
         let p_list = callgraph p in
-        do_silent_pass "Code generation from Obc (w/o params)" (List.iter convert_fun) p_list
+        do_silent_pass "Code generation from Obc (w/o params)"
+          (List.iter convert_fun) p_list
     | Obc_no_params convert_fun ->
         let p_list = callgraph p in
         let o_list = mls2obc_list p_list in
         let o_list = List.map Obc_compiler.compile_program o_list in
-        do_silent_pass "Code generation from Obc (w/o params)"         List.iter convert_fun o_list
+        do_silent_pass "Code generation from Obc (w/o params)"
+          (List.iter convert_fun) o_list
 
 let generate_interface i s =
   let target = (find_target s).t_interface  in

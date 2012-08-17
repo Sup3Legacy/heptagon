@@ -84,9 +84,13 @@ let compile source_f =
   source_f |> dirname |> add_include;
   check_options ();
   match Misc.file_extension source_f with
-    | "ept" -> compile_program modname source_f
-    | "epi" -> compile_interface modname source_f
-    | ext -> raise (Arg.Bad ("Unknow file type: " ^ ext ^ " for file: " ^ source_f))
+  | "ept" ->
+    (try compile_program modname source_f
+     with _ -> Format.eprintf "%s failed to compile.@.@." source_f)
+  | "epi" ->
+    (try compile_interface modname source_f
+     with _ -> Format.eprintf "%s failed to compile.@.@." source_f)
+  | ext -> Format.eprintf "Unknow file type: %s for file: %s@.@." ext source_f
 
 
 
@@ -137,9 +141,7 @@ let main () =
     "-time", Arg.Set time_passes, doc_time_passes;
     "--", Arg.Rest compile, doc_compile; ]
   in
-  try
-    Arg.parse options compile errmsg;
-  with Errors.Error -> exit 2;;
-
+  Arg.parse options compile errmsg
+;;
 (** Launch the [main] *)
 main ()

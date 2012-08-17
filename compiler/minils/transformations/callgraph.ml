@@ -109,7 +109,7 @@ struct
         let param_string =
           List.fold_left
             (fun s se ->
-              s ^ (Name_utils.print_pp_to_name Global_printer.print_static_exp se))
+              s ^ (Name_utils.print_pp_to_name print_static_exp se))
             "_params_" params in
         let new_ln =
           Modules.fresh_value_in "callgraph" (n^param_string^"_") q in
@@ -136,7 +136,8 @@ struct
 
   (** Build an environment by instantiating the passed params *)
   let build params_names params_values =
-    List.fold_left2 (fun m { p_name = n } v -> QualEnv.add (Idents.local_qn n) v m)
+    List.fold_left2
+      (fun m { p_name = n } v -> QualEnv.add (Idents.local_qn n) v m)
       QualEnv.empty params_names (List.map eval params_values)
 
 
@@ -155,7 +156,7 @@ struct
                   QualEnv.find q m
                  with Not_found ->
                    se) (* Allow partial application, especially with [update_node] *)
-     (* Format.eprintf "rr %a@." (Global_printer.print_qualenv Global_printer.print_static_exp) m*)
+     (* Format.eprintf "rr %a@." (print_qualenv print_static_exp) m*)
               | _ -> se)
         | Sfun (q,se_l) ->
             (match q.qual with
@@ -172,7 +173,7 @@ struct
 
     (** Replaces nodes call with the call to the correct instance. *)
     let edesc funs m ed =
-      let ed, _ = Mls_mapfold.edesc funs m ed in
+      let ed, _ = edesc funs m ed in
       let ed =
         match ed with
           | Eapp ({ a_op = Efun ln; a_params = params } as app, e_list, r) ->
@@ -198,8 +199,9 @@ struct
 
     let instanciate_node_body n m =
       Idents.push_node n.n_name;
-      let funs = { Mls_mapfold.defaults with edesc = edesc; global_funs = global_funs } in
-      let n, _ = Mls_mapfold.node_dec_it funs m n in
+      let funs = { defaults with edesc = edesc;
+                                             global_funs = global_funs } in
+      let n, _ = node_dec_it funs m n in
       let _ = Idents.pop_node () in
       n
 
@@ -294,7 +296,9 @@ let node_by_longname node =
   then load_object_file prog_name;
   let p = NamesEnv.find prog_name info.opened in
   try
-    let n = List.find (function Pnode n -> n.n_name = node | _ -> false) p.p_desc in
+    let n =
+      List.find (function Pnode n -> n.n_name = node | _ -> false) p.p_desc
+    in
     (match n with
       | Pnode n -> n
       | _ -> Misc.internal_error "callgraph")
@@ -329,14 +333,15 @@ let rec _need_instanciation ln =
       in
       let childs = called_nodes ln in
       (*
-Format.eprintf "%a has childs : @." Global_printer.print_qualname ln;
-List.iter (fun (n,_) -> Format.eprintf "%a@." Global_printer.print_qualname n) childs;
+Format.eprintf "%a has childs : @." print_qualname ln;
+List.iter (fun (n,_) -> Format.eprintf "%a@." print_qualname n) childs;
   Format.eprintf "%a has child high_order ? %b@."
-  Global_printer.print_qualname ln (List.exists is_high_order childs);
+  print_qualname ln (List.exists is_high_order childs);
   Format.eprintf "%a has child needing inst ? %b@."
-  Global_printer.print_qualname ln (List.exists child_require_instanciation childs);
+  print_qualname ln (List.exists child_require_instanciation childs);
   *)
-      (List.exists is_high_order childs) or (List.exists child_require_instanciation childs)
+      (List.exists is_high_order childs)
+      or (List.exists child_require_instanciation childs)
   end
 
 (** Is responsible to decide whether a node may be generated,
@@ -353,17 +358,18 @@ and need_instanciation ln =
 and _called_nodes ln =
   let edesc _ acc ed = match ed with
     | Eapp ({ a_op = (Enode ln | Efun ln); a_params = params }, _, _)
-    | Eiterator(_, { a_op = (Enode ln | Efun ln); a_params = params }, _, _, _, _) ->
+    | Eiterator(_, {a_op = (Enode ln | Efun ln); a_params = params},_,_,_,_) ->
         let acc = if need_instanciation ln then (ln,params)::acc else acc in
         ed, acc
     | _ -> raise Errors.Fallback
   in
-  let funs = { Mls_mapfold.defaults with edesc = edesc } in
+  let funs = { defaults with edesc = edesc } in
   let n = node_by_longname ln in
-  let _, acc = Mls_mapfold.node_dec funs [] n in
+  let _, acc = node_dec funs [] n in
   acc
 
-(** @return the list of nodes, called by the node named [ln], needing instanciation, with the
+(** @return the list of nodes, called by the node named [ln],
+    needing instanciation, with the
     corresponding params (static parameters appear as free variables). *)
 and called_nodes ln =
   (* external nodes don't call others *)
@@ -389,7 +395,9 @@ let rec call_node (ln, params) =
   in
   (* Recursively generate needed instances. *)
   let childs = called_nodes ln in
-  let childs = List.map (fun (ln, p) -> (Param_instances.instantiate_node m ln p)) childs in
+  let childs =
+    List.map (fun (ln, p) -> (Param_instances.instantiate_node m ln p)) childs
+  in
   let childs = List.filter (fun (ln, _) -> need_instanciation ln) childs in
   List.iter (fun (n,p) -> Param_instances.add_node_instance n p) childs;
   List.iter call_node childs;
