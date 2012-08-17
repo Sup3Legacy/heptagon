@@ -397,7 +397,8 @@ let rec call_node (ln, params) =
 
 let program p =
   (* Open the current module *)
-  info.opened <- NamesEnv.add (filename_from_modul p.p_modname) p info.opened;
+  info.opened <-
+    NamesEnv.add (filename_from_modul p.p_modname) p NamesEnv.empty;
   (* Find the nodes which doesn't require instanciation *)
   let to_gen_nodes =
     List.fold_left
