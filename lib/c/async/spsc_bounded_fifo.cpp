@@ -18,22 +18,28 @@ class Queue {
   T* *data_array;
     const int size;
 	
-  struct productor {
-    atomic<int> current;
+  typedef struct productor {
+    atomic_int current;
     int max; //private local to the productor
     atomic<bool> present;
-  } CACHE_ALIGNED p = {{0},size,{false}};
+    productor(int size) : current(0), max(size), present(false) {}
+  } CACHE_ALIGNED productor;
 
-  struct consumer{
-    atomic<int> current;
+    productor p;
+
+  typedef struct consumer{
+    atomic_int current;
     int max; //private local to the consumer
     int next; //private local to the consumer
-  } CACHE_ALIGNED c = {{size},0,0};
+      consumer(int size) : current(size), max(0), next(0) {}
+  } CACHE_ALIGNED consumer;
+
+    consumer c;
 
   condition_variable wake_up;
   mutex m;
 public:
-    Queue(int s):size(s+1),wake_up(),m() {
+    Queue(int s):size(s+1),wake_up(),m(),p(size),c(size){
         data_array = new T*[size];
     }
     ~Queue() {

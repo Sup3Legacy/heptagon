@@ -27,27 +27,6 @@ float do_stuff(int k) {
 
 
 
-
-/*int main() {
- for (int i = 0; i<10; i++){
- ft[i].future_float_activate();
- thread t(compute, i);
- }
- for (int i = 0; i<100000; i++)
- printf("valeur du future : %f\n",ft[i].future_float_get());
- printf("bonjour\n");
- return 0;
- }*/
-
-
-/*void produce(int k) {
- for (int i = 0; i < k; i ++) {
- //		this_thread::sleep_for(chrono::nanoseconds(rand()%1));
- q.push(&i);
- }
- //	q.wait_empty();
- }*/
-
 void consume(Queue<Future<int> > * q, int k) {
 	Future<int> *f;
 	int i = 0;
@@ -77,7 +56,7 @@ int main (int argc, const char * argv[]) {
     if (argc<4) marge = 0;
     else marge = atoi(argv[3]);
     
-    Future<int> tf[burst];
+    Future<int> *tf = new Future<int>[burst];
     Queue<Future<int> > q(burst+marge);
 	
     
