@@ -1,0 +1,48 @@
+
+#ifndef FUTURES_H_
+#define FUTURES_H_
+
+
+#include <atomic>
+#include <thread>
+
+#include "utils.h"
+
+using namespace std;
+
+template <typename T>
+class future {
+private :
+  T o;
+  atomic<bool> not_ready = {true};
+
+public :
+
+  void release() {
+    not_ready.store(false, memory_order_release);
+  }
+
+  void reset() {
+    not_ready.store(true, memory_order_release);
+  }
+
+  bool is_not_ready() const {
+    return (not_ready.load(memory_order_acquire));
+  }
+
+  T get() const {
+    /* active wait on the read condition of the future */
+    while (is_not_ready()) {
+      std::this_thread::yield();
+    }
+    return o;
+  }
+
+  void set(T o) {
+    this->o = o;
+    release();
+  }
+
+} CACHE_ALIGNED ;
+
+#endif
