@@ -7,7 +7,7 @@
 ///Users/lgerard/Desktop/FutureLustre/FutureLustre.xcodeproj
 
 #include "futures.h"
-#include "spsc_bounded_fifo.h"
+#include "spsc_bounded_p_fifo.h"
 
 #include "utils.h"
 

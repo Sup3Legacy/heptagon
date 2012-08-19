@@ -7,28 +7,19 @@
 #include <stdlib.h>
 #include "simple_a.h"
 
-void ASimple__f_reset(ASimple__f_mem* self) {
-  self->o = 0;
-  Simple__f_reset(&self->s); //TODO cannot reset freely
-}
-
-void ASimple__f_step(int x, int y, ASimple__f_mem* self) {
-  
-}
 
 void ASimple__main_reset(ASimple__main_mem* self) {
   ASimple__f_reset(&self->f);
-  self->mem_z = 0;
+  self->mem_z = self->future_0;
 }
 
 void Simple__main_collect();
 
 
-void ASimple__main_step(ASimple__main_out* _out, ASimple__main_mem* self) {
-  Future<int> *v;
-  _out->z = self->mem_z->get();
-  ASimple__f_step(3, 4, &self->f);
-  v = self->f.o;
+void ASimple__main_step(int* _out, ASimple__main_mem* self) {
+  future<int> *v;
+  *_out = self->mem_z->get();
+  ASimple__f_step(3, 4, v, &self->f);
   self->mem_z = v;;
 }
 

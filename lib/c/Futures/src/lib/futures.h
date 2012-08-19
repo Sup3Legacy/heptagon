@@ -27,6 +27,7 @@ public :
   //Prevent copy constructor, since it should never happen
   future(const future&) = delete;
 
+
   void release() {
     not_ready.store(false, memory_order_release);
   }
@@ -53,5 +54,6 @@ public :
   }
 
 } CACHE_ALIGNED ;
+
 
 #endif

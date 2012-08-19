@@ -10,27 +10,30 @@
 
 #include "simple.h"
 
+typedef async_node<int,Simple__f_mem,int, int> ASimple__f_mem;
 
-typedef Wrap<int,Simple__f_mem> ASimple__f_mem;
+void ASimple__f_reset(ASimple__f_mem* self) {
+  self->reset();
+}
 
-
-void ASimple__f_reset(ASimple__f_mem* self);
-
-void ASimple__f_step(int x, int y, ASimple__f_mem* self);
+void ASimple__f_step(int x, int y, future<int>* _out, ASimple__f_mem* self) {
+  self->step(x,y,_out);
+}
 
 
 
 typedef struct ASimple__main_mem {
+  static future<int>* future_0;
   future<int>* mem_z;
   ASimple__f_mem f;
 } ASimple__main_mem;
 
-typedef struct ASimple__main_out {
-  int z;
-} ASimple__main_out;
+
+future<int>* ASimple__main_mem::future_0 = new future<int>(0);
+
 
 void ASimple__main_reset(ASimple__main_mem* self);
 
-void ASimple__main_step(ASimple__main_out* _out, ASimple__main_mem* self);
+void ASimple__main_step(int* _out, ASimple__main_mem* self);
 
 #endif // ASIMPLE_H

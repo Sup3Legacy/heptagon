@@ -1,6 +1,6 @@
-/* --- Generated the 17/8/2012 at 15:53 --- */
-/* --- heptagon compiler, version 0.4 (compiled wed. aug. 15 18:40:15 CET 2012) --- */
-/* --- Command line: /Users/lgerard/W/heptagon/compiler/heptc.byte -stdlib /Users/lgerard/W/heptagon/lib -O -s main -target c simple.ept --- */
+/* --- Generated the 19/8/2012 at 9:24 --- */
+/* --- heptagon compiler, version 0.4 (compiled sat. aug. 18 23:21:33 CET 2012) --- */
+/* --- Command line: /Users/lgerard/W/heptagon/compiler/heptc.byte -stdlib /Users/lgerard/W/heptagon/lib -target c -O -s main simple.ept --- */
 
 #include <stdio.h>
 #include <string.h>
@@ -11,11 +11,10 @@ void Simple__f_reset(Simple__f_mem* self) {
   self->mem_z = 0;
 }
 
-void Simple__f_step(int x, int y, Simple__f_out* _out, Simple__f_mem* self) {
-  
+void Simple__f_step(int x, int y, int* z, Simple__f_mem* self) {
   int v;
   v = (x+y);
-  _out->z = self->mem_z;
+  *z = self->mem_z;
   self->mem_z = v;;
 }
 
@@ -24,13 +23,11 @@ void Simple__main_reset(Simple__main_mem* self) {
   self->mem_z = 0;
 }
 
-void Simple__main_step(Simple__main_out* _out, Simple__main_mem* self) {
-  Simple__f_out Simple__f_out_st;
+void Simple__main_step(int* z, Simple__main_mem* self) {
   
   int v;
-  _out->z = self->mem_z;
-  Simple__f_step(3, 4, &Simple__f_out_st, &self->f);
-  v = Simple__f_out_st.z;
+  *z = self->mem_z;
+  Simple__f_step(3, 4, &v, &self->f);
   self->mem_z = v;;
 }
 

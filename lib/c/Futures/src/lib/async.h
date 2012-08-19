@@ -21,7 +21,7 @@ class async_node {
 
   typedef void(*t_f_step)(Inputs..., Output*, Mem*);
   typedef void(*t_f_reset)(Mem*);
-  typedef tuple<bool,future<Output>*, tuple<Inputs...> > work_closure;
+  typedef tuple<bool, future<Output>*, Inputs...> work_closure;
   typedef queue<work_closure> work_queue;
 
   t_f_step f_step;
@@ -63,7 +63,8 @@ public:
   /** Push in the current queue and reset the [need_reset] flag.
    */
   void step(Inputs... i, future<Output>* o) {
-    queues[current_queue].push(tie(need_reset, o, tie(i...)));
+    //queues[current_queue].push(forward_as_tuple(need_reset, o, i...));
+    (*queues[current_queue].to_fill()) = tie(need_reset, o, i...);
     need_reset = false;
   }
 
