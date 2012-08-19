@@ -133,10 +133,10 @@ let cvar_of_vd vd =
 
 (** Returns the type of a pointer to a type, except for
     types which are already pointers. *)
-let pointer_type ty cty =
+let pointer_type ty =
   match Modules.unalias_type ty with
-    | Tarray _ -> cty
-    | _ -> Cty_ptr cty
+    | Tarray _ -> ctype_of_otype ty
+    | _ -> Cty_ptr (ctype_of_otype ty)
 
 (** Returns the expression to use e as an argument of
     a function expecting a pointer as argument. *)
@@ -145,10 +145,11 @@ let address_of ty e =
     | Tarray _ -> e
     | _ -> Caddrof e
 
+
 let inputlist_of_ovarlist vl =
   let cvar_of_ovar vd =
     let ty = ctype_of_otype vd.v_type in
-    let ty = if vd.v_mutable then pointer_type vd.v_type ty else ty in
+    let ty = if vd.v_mutable then pointer_type vd.v_type else ty in
     name vd.v_ident, ty
   in
   List.map cvar_of_ovar vl
@@ -431,21 +432,25 @@ let step_fun_call out_env var_env sig_info objn out args =
     | _, _ -> assert false
   in
   let args = (add_targeting args sig_info.node_inputs) in
-  if sig_info.node_stateful then (
-    let mem =
-      (match objn with
-         | Oobj o -> Cfield (Cderef (Cvar "self"), local_qn (name o))
-         | Oarray (o, l) ->
-             let f = Cfield (Cderef (Cvar "self"), local_qn (name o)) in
-             let rec mk_idx pl = match pl with
-              | [] -> f
-              | p::pl -> Carray (mk_idx pl, cexpr_of_pattern out_env var_env p)
-             in
-             mk_idx l
-      ) in
-      args@[Caddrof out; Caddrof mem]
-  ) else
-    args@[Caddrof out]
+  let amem =
+    if sig_info.node_stateful
+    then (
+      let mem = match objn with
+      | Oobj o -> Cfield (Cderef (Cvar "self"), local_qn (name o))
+      | Oarray (o, l) ->
+         let f = Cfield (Cderef (Cvar "self"), local_qn (name o)) in
+         let rec mk_idx pl = match pl with
+         | [] -> f
+         | p::pl -> Carray (mk_idx pl, cexpr_of_pattern out_env var_env p)
+         in
+         mk_idx l
+      in
+      [Caddrof mem] )
+    else []
+  in
+  match out with
+  | None -> args@amem
+  | Some out -> args@(out::amem)
 
 (** Generate the statement to call [objn].
     [outvl] is a list of lhs where to put the results.
@@ -456,9 +461,8 @@ let generate_function_call out_env var_env obj_env outvl objn args =
   let classln = assoc_cn objn obj_env in
   let classn = cname_of_qn classln in
   let sig_info = find_value classln in
-  let out = Cvar (out_var_name_of_objn classn) in
 
-  let fun_call =
+  let fun_call out =
     if is_op classln then
       cop_of_op_aux classln args
     else
@@ -473,18 +477,27 @@ let generate_function_call out_env var_env obj_env outvl objn args =
       multiple return values will return a structure, and we care of
       assigning each field to the corresponding local variable. *)
   match outvl with
-    | [] -> [Csexpr fun_call]
+    | [] -> [Csexpr (fun_call None)]
     | [outv] when is_op classln ->
         let ty = assoc_type_lhs outv var_env in
-          create_affect_stm outv fun_call ty
+        create_affect_stm outv (fun_call None) ty
+    | [outv] ->
+        let ty = assoc_type_lhs outv var_env in
+        let e = match ty with
+        | Cty_arr _ -> Clhs outv
+        | _ -> Caddrof (Clhs outv)
+        in
+        [Csexpr (fun_call (Some e))]
     | _ ->
         (* Remove options *)
+        let out = Cvar (out_var_name_of_objn classn) in
         let out_sig = output_names_list sig_info in
         let create_affect outv out_name =
           let ty = assoc_type_lhs outv var_env in
-            create_affect_stm outv (Cfield (out, local_qn out_name)) ty
+          create_affect_stm outv (Cfield (out, local_qn out_name)) ty
         in
-          (Csexpr fun_call)::(List.flatten (map2 create_affect outvl out_sig))
+        (Csexpr (fun_call (Some (Caddrof out))))
+        ::(List.flatten (map2 create_affect outvl out_sig))
 
 (** Create the statement dest = c where c = v^n^m... *)
 let rec create_affect_const var_env (dest : clhs) c =
@@ -642,7 +655,14 @@ let qn_append q suffix =
 (** Builds the argument list of step function*)
 let step_fun_args n md =
   let args = inputlist_of_ovarlist md.m_inputs in
-  let out_arg = [("_out", Cty_ptr (Cty_id (qn_append n "_out")))] in
+  let out_arg = match md.m_outputs with
+  | [] -> []
+  | [od] ->
+    let n = name od.v_ident in
+    let t = pointer_type od.v_type in
+    [(n, t)]
+  | _ -> [("_out", Cty_ptr (Cty_id (qn_append n "_out")))]
+  in
   let context_arg =
     if is_stateful n then
       [("self", Cty_ptr (Cty_id (qn_append n "_mem")))]
@@ -666,19 +686,35 @@ let fun_def_of_step_fun n obj_env mem objs md =
 
   (** Out vars for function calls *)
   let out_vars =
-    unique
-      (List.map (fun obj -> out_var_name_of_objn (cname_of_qn obj.o_class),
-                   Cty_id (qn_append obj.o_class "_out"))
-         (List.filter (fun obj -> not (is_op obj.o_class)) objs)) in
-
+    let add_out_var out_vars obj =
+      if is_op obj.o_class
+      then out_vars (* no need for output var *)
+      else
+        let s = Modules.find_value obj.o_class in
+        match s.node_outputs with
+        | [] -> out_vars
+        | _::[] -> out_vars (*
+          let t = ctype_of_otype a.a_type in
+          let n = out_var_name_of_objn (cname_of_qn obj.o_class) in
+          (n,t)::out_vars *)
+        | _ ->
+          let t = Cty_id (qn_append obj.o_class "_out") in
+          let n = out_var_name_of_objn (cname_of_qn obj.o_class) in
+          (n,t)::out_vars
+    in
+    unique (List.fold_left add_out_var [] objs)
+  in
   (** The body *)
   let mems = List.map cvar_of_vd (mem@md.m_outputs) in
   let var_env = args @ mems @ out_vars in
   let out_env =
-    List.fold_left
-      (fun out_env vd -> IdentSet.add vd.v_ident out_env)
-      IdentSet.empty
-      md.m_outputs
+    if List.length md.m_outputs > 1
+    then
+      List.fold_left
+        (fun out_env vd -> IdentSet.add vd.v_ident out_env)
+        IdentSet.empty
+        md.m_outputs
+   else IdentSet.empty
   in
   let body = cstm_of_act_list out_env var_env obj_env md.m_body in
 
@@ -725,8 +761,12 @@ let mem_decl_of_class_def cd =
 let out_decl_of_class_def cd =
   (** Fields corresponding to output variables. *)
   let step_m = find_step_method cd in
-  let out_fields = List.map cvar_of_vd step_m.m_outputs in
+  if (List.length step_m.m_outputs > 1)
+  then
+    let out_fields = List.map cvar_of_vd step_m.m_outputs in
     [Cdecl_struct ((cname_of_qn cd.cd_name) ^ "_out", out_fields)]
+  else
+    []
 
 (** [reset_fun_def_of_class_def cd] returns the defintion of the C function
     tasked to reset the class [cd]. *)

@@ -25,6 +25,7 @@ let unroll id start stop body =
       | Cderef e -> Cderef (exp e)
       | Cfield (e, qn) -> Cfield (exp e, qn)
       | Carray (e1, e2) -> Carray (exp e1, exp e2)
+      | Clhs l -> Clhs (lhs l)
 
     and lhs l = match l with
       | CLvar s -> CLvar s

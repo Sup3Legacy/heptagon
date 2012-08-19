@@ -77,6 +77,7 @@ and cexpr =
   | Cderef of cexpr (** Pointer dereference, *ptr. *)
   | Cfield of cexpr * qualname (** Field access to left-hand-side. *)
   | Carray of cexpr * cexpr (** Array access cexpr[cexpr] *)
+  | Clhs of clhs
 and cconst =
   | Ccint of Int32.t (** Integer constant. *)
   | Ccfloat of float (** Floating-point number constant. *)
@@ -258,6 +259,7 @@ and pp_cexpr fmt ce = match ce with
   | Cfield (Cderef e, f) -> fprintf fmt "%a->%a" pp_cexpr e pp_shortname f
   | Cfield (e, f) -> fprintf fmt "%a.%a" pp_cexpr e pp_shortname f
   | Carray (e1, e2) -> fprintf fmt "%a[%a]" pp_cexpr e1 pp_cexpr e2
+  | Clhs lhs -> pp_clhs fmt lhs
 
 and pp_cconst_expr fmt ce = match ce with
   | Cstructlit (_, el) ->
