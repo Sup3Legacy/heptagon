@@ -13,12 +13,12 @@ void ASimple__main_reset(ASimple__main_mem* self) {
   self->mem_z = self->future_0;
 }
 
-void Simple__main_collect();
-
 
 void ASimple__main_step(int* _out, ASimple__main_mem* self) {
   future<int> *v;
   *_out = self->mem_z->get();
+
+
   ASimple__f_step(3, 4, v, &self->f);
   self->mem_z = v;;
 }

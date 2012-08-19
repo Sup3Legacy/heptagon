@@ -19,7 +19,10 @@
 #define DPRINT(...)
 #endif
 
-#define INCR_MOD(X,M) { X = (X+1>=M)?0:X+1; }
+
+
+#define INCR_MOD(X,M) (X+1>=M)?0:X+1
+#define DECR_MOD(X,M) (X-1>=0)?X-1:M-1
 
 
 #endif
