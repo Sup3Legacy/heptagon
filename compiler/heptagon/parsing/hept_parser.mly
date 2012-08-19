@@ -1,9 +1,7 @@
 %{
 
-open Signature
 open Location
 open Names
-open Signature
 open Linearity
 open Hept_parsetree
 
