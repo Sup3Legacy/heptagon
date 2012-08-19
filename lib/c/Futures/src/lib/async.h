@@ -46,6 +46,20 @@ public:
       workers[i] = new thread (worker,&queues[i]);
   }
 
+  //Prevent copy constructor, since it should never happen
+  async_node(const async_node&) = delete;
+
+  ~async_node() {
+    delete[](queues);
+    for(int i = 0; i++; i<queue_nb)
+      pthread_kill(workers[i]->native_handle(),SIGTERM);
+    for(int i = 0; i++; i<queue_nb) {
+      workers[i]->join();
+      delete(workers[i]);
+    }
+    delete[](workers);
+  }
+
   /** Push in the current queue and reset the [need_reset] flag.
    */
   void step(Inputs... i, future<Output>* o) {

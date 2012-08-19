@@ -39,6 +39,8 @@ public:
   queue(int s):size(s+1),wake_up(),m(),p(size),c(size){
     data_array = new T*[size];
   }
+  //Prevent copy constructor, since it should never happen
+  queue(const queue&) = delete;
   ~queue() {
     delete[] data_array;
   }

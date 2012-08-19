@@ -18,6 +18,15 @@ private :
 
 public :
 
+  future() : not_ready(true) {}
+
+  /** Create a future with a given already present value.
+   */
+  future(T v) : o(v), not_ready(false) {}
+
+  //Prevent copy constructor, since it should never happen
+  future(const future&) = delete;
+
   void release() {
     not_ready.store(false, memory_order_release);
   }
