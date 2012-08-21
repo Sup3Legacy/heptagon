@@ -53,6 +53,10 @@ public :
     release();
   }
 
+  T* get_to_set() {
+    return &(this->o);
+  }
+
 } CACHE_ALIGNED ;
 
 

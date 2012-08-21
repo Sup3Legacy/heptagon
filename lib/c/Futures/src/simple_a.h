@@ -7,10 +7,13 @@
 
 #include "lib/futures.h"
 #include "lib/async.h"
+#include "lib/stock.h"
 
 #include "simple.h"
 
-typedef async_node<int,Simple__f_mem,int, int> ASimple__f_mem;
+
+typedef wrapper<int,Simple__f_mem,int, int>
+        ::async_node<Simple__f_step, Simple__f_reset,6,2> ASimple__f_mem;
 
 void ASimple__f_reset(ASimple__f_mem* self) {
   self->reset();
@@ -23,13 +26,11 @@ void ASimple__f_step(int x, int y, future<int>* _out, ASimple__f_mem* self) {
 
 
 typedef struct ASimple__main_mem {
-  static future<int>* future_0;
+  stock<int,6> __stock;
   future<int>* mem_z;
   ASimple__f_mem f;
 } ASimple__main_mem;
 
-
-future<int>* ASimple__main_mem::future_0 = new future<int>(0);
 
 
 void ASimple__main_reset(ASimple__main_mem* self);

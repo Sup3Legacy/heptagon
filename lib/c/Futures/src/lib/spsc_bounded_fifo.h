@@ -11,7 +11,7 @@
 
 using namespace std;
 
-template<typename T>
+template<typename T, int size>
 class queue {
 
   typedef struct productor {
@@ -19,17 +19,17 @@ class queue {
     int max; //private local to the productor
     int next; //private local to the productor
     atomic<bool> present;
-    productor(int size) : current(0), max(size), present(false) {}
+    productor(int _size) : current(0), max(_size), present(false) {}
   } CACHE_ALIGNED productor;
 
   typedef struct consumer{
     atomic_int current;
     int max; //private local to the consumer
     int next; //private local to the consumer
-    consumer(int size) : current(size), max(0), next(0) {}
+    consumer(int _size) : current(_size), max(0), next(0) {}
   } CACHE_ALIGNED consumer;
 
-  const int size;
+  const int _size; //internal size is external size + 1
   T *data_array;
   condition_variable wake_up;
   mutex m;
@@ -37,8 +37,8 @@ class queue {
   consumer c;
 
 public:
-  queue(int s):size(s+1),wake_up(),m(),p(size),c(size){
-    data_array = new T[size];
+  queue():_size(size+1),wake_up(),m(),p(_size),c(_size){
+    data_array = new T[_size];
   }
   //Prevent copy constructor, since it should never happen
   queue(const queue&) = delete;
@@ -48,7 +48,7 @@ public:
 
   T* to_fill() {
     int current = p.current.load(memory_order_relaxed);
-        p.next = (current >= size) ? 0 : current + 1;
+        p.next = (current >= _size) ? 0 : current + 1;
         if (p.next == p.max) {
           // need to synchro and wait for max to grow
           p.max = c.current.load(memory_order_acquire);
@@ -86,7 +86,7 @@ public:
   T * get() {
     bool prod_present;
     int current = c.current.load(memory_order_relaxed);
-    int next = (current >= size) ? 0 : current + 1;
+    int next = (current >= _size) ? 0 : current + 1; //TODO mauvais modulo ?
     if (next == c.max) {
       // need to synchro and wait for max to grow
       while (true) {
@@ -111,7 +111,7 @@ public:
     }
     c.next = next;
     // Do not change the current for now, until remove is called
-    return data_array[next];
+    return &data_array[next];
   }
 
   void remove() {

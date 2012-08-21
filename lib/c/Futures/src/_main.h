@@ -5,5 +5,5 @@
 #ifndef _MAIN_H
 #define _MAIN_H
 
-#include "simple.h"
+#include "simple_a.h"
 #endif // _MAIN_H

@@ -28,7 +28,7 @@ class queue {
     consumer(int size) : current(size), max(0), next(0) {}
   } CACHE_ALIGNED consumer;
 
-  const int size;
+  const int _size;
   T* *data_array;
   condition_variable wake_up;
   mutex m;
@@ -36,8 +36,8 @@ class queue {
   consumer c;
 
 public:
-  queue(int s):size(s+1),wake_up(),m(),p(size),c(size){
-    data_array = new T*[size];
+  queue(int s):_size(s+1),wake_up(),m(),p(_size),c(_size){
+    data_array = new T*[_size];
   }
   //Prevent copy constructor, since it should never happen
   queue(const queue&) = delete;
@@ -46,7 +46,7 @@ public:
   }
   void push(T * t) {
     int current = p.current.load(memory_order_relaxed);
-    int next = (current >= size) ? 0 : current + 1;
+    int next = (current >= _size) ? 0 : current + 1;
     if (next == p.max) {
       // need to synchro and wait for max to grow
       p.max = c.current.load(memory_order_acquire);
@@ -77,7 +77,7 @@ public:
   T * get() {
     bool prod_present;
     int current = c.current.load(memory_order_relaxed);
-    int next = (current >= size) ? 0 : current + 1;
+    int next = (current >= _size) ? 0 : current + 1;
     if (next == c.max) {
       // need to synchro and wait for max to grow
       while (true) {

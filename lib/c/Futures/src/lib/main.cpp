@@ -17,6 +17,27 @@
 
 using namespace std;
 
+#include "stock.h"
+
+int main(int argc, const char * argv[]) {
+  stock<int,6> s;
+  future<int>* mem1,mem2,mem3;
+  future<int>* local1,local2;
+
+  s.tick();
+
+  s.get_free()->set(0);
+  local1 = s.get_free();
+  s.get_free()->set(1);
+
+  mem1 = local1;
+  s.store_in(mem1,local1);
+
+}
+
+
+
+/*
 float do_stuff(int k) {
   float r = 0;
   for (int i = 0; i < k; k++ ) {
@@ -86,3 +107,4 @@ int main (int argc, const char * argv[]) {
   c.join();
   return 0;
 }
+*/

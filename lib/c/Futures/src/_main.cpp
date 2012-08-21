@@ -7,8 +7,22 @@
 #include <stdlib.h>
 #include "_main.h"
 
-Simple__main_mem mem;
+#include <tuple>
+using namespace std;
+
+int f(int x,int y,int z) {
+  return (x+y+z);
+}
+
+ASimple__main_mem mem;
 int main(int argc, char** argv) {
+
+  tuple<int,int,int> t = {0,1,2};
+  int i = f(t);
+
+
+
+
   int step_c;
   int step_max;
   int _res;
@@ -17,10 +31,10 @@ int main(int argc, char** argv) {
   if ((argc==2)) {
     step_max = atoi(argv[1]);
   };
-  Simple__main_reset(&mem);
+  ASimple__main_reset(&mem);
   while ((!(step_max)||(step_c<step_max))) {
     step_c = (step_c+1);
-    Simple__main_step(&_res, &mem);
+    ASimple__main_step(&_res, &mem);
     printf("=> ");
     printf("%d ", _res);
     puts("");
@@ -28,4 +42,5 @@ int main(int argc, char** argv) {
   };
   return 0;
 }
+
 
