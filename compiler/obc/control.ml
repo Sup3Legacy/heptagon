@@ -64,7 +64,7 @@ let is_modified_handlers j x handlers =
           let sig_info = Modules.find_value f in
             a, acc or (is_modified_by_call x sig_info.node_inputs e_list)
         )
-    | Acall (name_list, o, Mstep, e_list) ->
+    | Acall (_, name_list, o, Mstep, e_list) ->
         (* first, check if e is one of the output of the function*)
         if List.exists (appears_in_lhs x) name_list then
           a, true

@@ -202,7 +202,7 @@ let rec control map ck s = match ck with
     control map ck (Acase(x, [(c, mk_block [s])]))
 
 let reinit o =
-  Acall ([], o, Mreset, [])
+  Acall (None, [], o, Mreset, [])
 
 let rec translate_pat map ty pat = match pat, ty with
   | Minils.Evarpat x, _ -> [ var_from_name map x ]
@@ -567,10 +567,7 @@ and mk_node_call map call_context app loc (name_list : Obc.pattern list) args ty
           | Minils.Enode _ -> [reinit o]
           | _ -> assert false
         in
-        let s = match app.Minils.a_async with
-                  | None -> [Acall (name_list, o, Mstep, args)]
-                  | Some a -> [Aasync_call (Some a, name_list, o, Mstep, args)]
-        in
+        let s = [Acall (app.Minils.a_async, name_list, o, Mstep, args)] in
         [], si, [obj], s
     | _ -> assert false
 

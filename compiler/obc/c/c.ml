@@ -48,6 +48,9 @@ type cty =
   | Cty_ptr of cty (** C points-to-other-type type. *)
   | Cty_arr of Int32.t * cty (** A static array of the specified size. *)
   | Cty_void (** Well, [void] is not really a C type. *)
+  | Cty_future of cty
+  | Cty_stock of cty * Int32.t
+  | Cty_macro of string
 
 (** A C block: declarations and statements. In source code form, it begins with
     variable declarations before a list of semicolon-separated statements, the
@@ -76,6 +79,7 @@ and cexpr =
   | Cvar of string (** A local variable. *)
   | Cderef of cexpr (** Pointer dereference, *ptr. *)
   | Cfield of cexpr * qualname (** Field access to left-hand-side. *)
+  | Cmethod of cexpr * string * cexpr list (** call of method *)
   | Carray of cexpr * cexpr (** Array access cexpr[cexpr] *)
   | Clhs of clhs
 and cconst =
@@ -104,6 +108,7 @@ and cstm =
 (** C type declarations ; will {b always} correspond to a typedef in emitted
     source code. *)
 type cdecl =
+  | Cdecl_macro of string
   (** C typedef declaration (alias, name)*)
   | Cdecl_typedef of cty * string
     (** C enum declaration, with associated value tags. *)
@@ -125,8 +130,13 @@ type cfundef = {
 
 (** C top-level definitions. *)
 type cdef =
+  | Cdef_macro of string
   | Cfundef of cfundef (** Function definition, see [cfundef]. *)
-  | Cvardef of string * cty (** A variable definition, with its name and type.*)
+  | Cvardef of string * cty  (** A variable definition, with its name and type.*)
+  | Cvardef_init of string * cty * init
+and init =
+  | Cinit_default
+  | Cinit_exp of cexpr
 
 (** [cdecl_of_cfundef cfd] returns a declaration for the function def. [cfd]. *)
 let cdecl_of_cfundef cfd = match cfd with
@@ -183,6 +193,9 @@ let rec pp_cty fmt cty = match cty with
   | Cty_ptr cty' -> fprintf fmt "%a*" pp_cty cty'
   | Cty_arr (n, cty') -> fprintf fmt "%a[%ld]" pp_cty cty' n
   | Cty_void -> fprintf fmt "void"
+  | Cty_future cty' -> fprintf fmt "future<%a>*" pp_cty cty'
+  | Cty_stock (cty', s) -> fprintf fmt "stock<%a,%ld>" pp_cty cty' s
+  | Cty_macro s -> fprintf fmt "%s" s
 
 (** [pp_array_decl cty] returns the base type of a (multidimensionnal) array
     and the string of indices. *)
@@ -258,6 +271,12 @@ and pp_cexpr fmt ce = match ce with
   | Cderef e -> fprintf fmt "*%a" pp_cexpr e
   | Cfield (Cderef e, f) -> fprintf fmt "%a->%a" pp_cexpr e pp_shortname f
   | Cfield (e, f) -> fprintf fmt "%a.%a" pp_cexpr e pp_shortname f
+  | Cmethod (Cderef e, m, e_l) ->
+      fprintf fmt "%a->%a(@[%a@])"
+        pp_cexpr e pp_string m (pp_list1 pp_cexpr ",") e_l
+  | Cmethod (e,m, e_l) ->
+    fprintf fmt "%a.%a(@[%a@])"
+        pp_cexpr e pp_string m (pp_list1 pp_cexpr ",") e_l
   | Carray (e1, e2) -> fprintf fmt "%a[%a]" pp_cexpr e1 pp_cexpr e2
   | Clhs lhs -> pp_clhs fmt lhs
 
@@ -285,6 +304,7 @@ and pp_cconst fmt cconst = match cconst with
   | Cstrlit t -> fprintf fmt "\"%s\"" (String.escaped t)
 
 let pp_cdecl fmt cdecl = match cdecl with
+  | Cdecl_macro s -> fprintf fmt "%s@\n" s
   | Cdecl_enum (s, sl) ->
       fprintf fmt "@[<v>@[<v 2>typedef enum {@ %a@]@ } %a;@ @]@\n"
         (pp_list1 pp_string ",") sl  pp_string s
@@ -304,13 +324,20 @@ let pp_cdecl fmt cdecl = match cdecl with
       fprintf fmt "@[<v>static const %a = %a;@ @]@\n"
         pp_vardecl (n, cty)  pp_cconst_expr ce
 
-let pp_cdef fmt cdef = match cdef with
+let rec pp_cdef fmt cdef = match cdef with
+  | Cdef_macro s -> fprintf fmt "%s@\n" s
   | Cfundef cfd ->
       fprintf fmt
         "@[<v>@[<v 2>%a %a(@[<hov>%a@]) {%a@]@ }@ @]@\n"
         pp_cty cfd.f_retty  pp_string cfd.f_name  pp_param_list cfd.f_args
         pp_cblock cfd.f_body
   | Cvardef (s, cty) -> fprintf fmt "%a %a;@\n" pp_cty cty  pp_string s
+  | Cvardef_init (s, cty, init) ->
+      fprintf fmt "%a %a = %a;@\n" pp_cty cty  pp_string s pp_init init
+
+and pp_init fmt init = match init with
+| Cinit_default -> fprintf fmt "{}"
+| Cinit_exp e -> pp_cexpr fmt e
 
 let pp_cfile_desc fmt filen cfile =
   (** [filen_wo_ext] is the file's name without the extension. *)

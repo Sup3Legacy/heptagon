@@ -94,7 +94,12 @@ let findfile filename =
     find !load_path
 
 let lexbuf_from_file file_name =
-  let ic = open_in file_name in
+  let ic =
+    try open_in file_name
+    with _ ->
+      Format.eprintf "Error, can't open file %s" file_name;
+      raise Errors.Error
+  in
   let lexbuf = Lexing.from_channel ic in
   lexbuf.Lexing.lex_curr_p <-
       { lexbuf.Lexing.lex_curr_p with Lexing.pos_fname = file_name };

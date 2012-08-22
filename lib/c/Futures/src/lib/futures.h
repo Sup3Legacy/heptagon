@@ -8,13 +8,12 @@
 
 #include "utils.h"
 
-using namespace std;
 
 template <typename T>
 class future {
 private :
   T o;
-  atomic<bool> not_ready = {true};
+  std::atomic<bool> not_ready = {true};
 
 public :
 
@@ -29,15 +28,15 @@ public :
 
 
   void release() {
-    not_ready.store(false, memory_order_release);
+    not_ready.store(false, std::memory_order_release);
   }
 
   void reset() {
-    not_ready.store(true, memory_order_release);
+    not_ready.store(true, std::memory_order_release);
   }
 
   bool is_not_ready() const {
-    return (not_ready.load(memory_order_acquire));
+    return (not_ready.load(std::memory_order_acquire));
   }
 
   T get() const {
@@ -53,7 +52,12 @@ public :
     release();
   }
 
-  T* get_to_set() {
+  T* set2(T o) {
+    set(o);
+    return this;
+  }
+
+  T* to_set() {
     return &(this->o);
   }
 

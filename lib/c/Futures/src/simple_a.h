@@ -6,29 +6,26 @@
 #define ASIMPLE_H
 
 #include "lib/futures.h"
-#include "lib/async.h"
+#include "lib/async_node.h"
+#include "lib/async_macros.h"
 #include "lib/stock.h"
 
 #include "simple.h"
 
+WRAPPER_MEM_DEC(Simple__f,int,(int,int))
 
-typedef wrapper<int,Simple__f_mem,int, int>
-        ::async_node<Simple__f_step, Simple__f_reset,6,2> ASimple__f_mem;
-
-void ASimple__f_reset(ASimple__f_mem* self) {
-  self->reset();
-}
-
-void ASimple__f_step(int x, int y, future<int>* _out, ASimple__f_mem* self) {
-  self->step(x,y,_out);
-}
-
-
+/*
+template<int queue_size, int queue_nb>
+using ASimple__f_mem =
+    wrap<int,Simple__f_mem,int, int>
+    ::async_node<Simple__f_step, Simple__f_reset, queue_size, queue_nb>
+  ;
+*/
 
 typedef struct ASimple__main_mem {
-  stock<int,6> __stock;
+  stock<int,3> __stock; //queue_size+1+mem_nb+nb_async_statics
   future<int>* mem_z;
-  ASimple__f_mem f;
+  Simple__f_Amem<1,1> f;
 } ASimple__main_mem;
 
 

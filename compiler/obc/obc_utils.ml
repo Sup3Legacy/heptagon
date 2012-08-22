@@ -142,7 +142,7 @@ let remove_resets b =
   let block funs () b =
     let b, () = Obc_mapfold.block funs () b in
     let is_not_reset a = match a with
-      | Acall( _,_,Mreset,_) -> false
+      | Acall(_,_,_,Mreset,_) -> false
       | _ -> true
     in
     let b = { b with b_body = List.filter is_not_reset b.b_body } in

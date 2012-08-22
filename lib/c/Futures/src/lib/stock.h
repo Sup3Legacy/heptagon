@@ -9,7 +9,9 @@
 #define STOCK_H_
 
 #include "utils.h"
-#include "assert.h"
+#include <assert.h>
+
+#include "futures.h"
 
 /*TODO Si l'on est certain que white ne sera jamais vide,
        il y a des tests que l'on peu enlever. */
@@ -42,7 +44,7 @@ class stock {
   n grays;
   n blacks;
 
-  void inline move_to_tail(n &from, n x, n &dest) {
+  inline void move_to_tail(n &from, n x, n &dest) {
     //remove x from its list
     if (x == x->next)
       from = 0;
@@ -67,26 +69,26 @@ class stock {
     }
   }
 
-  void inline move_to_black(n &from, n x) {
+  inline void move_to_black(n &from, n x) {
     move_to_tail(from,x,blacks);
     x->flag = Flag::fresh;
   }
 
-  void inline move_black_to_white(n x) {
+  inline void move_black_to_white(n x) {
     move_to_tail(blacks,x,whites);
     x->flag = Flag::unset;
   }
 
-  void inline move_gray_to_white(n x) {
+  inline void move_gray_to_white(n x) {
     move_to_tail(grays,x,whites);
   }
 
-  void inline move_white_to_gray(n x) {
+  inline void move_white_to_gray(n x) {
     move_to_tail(whites,x,grays);
   }
 
 
-  void inline move_all(n &q1, n &q2) {
+  inline void move_all(n &q1, n &q2) {
     if (!q1) return;
     if (q2) {
       n end = q1->prev;
@@ -101,21 +103,7 @@ class stock {
     q1 = 0;
   }
 
-
-public :
-  stock() {
-    for (int i = 0; i<size; i++) {
-      all[i].prev = &all[DECR_MOD(i,size)];
-      all[i].next = &all[INCR_MOD(i,size)];
-      all[i].flag = Flag::unset;
-    }
-    whites = &all[0];
-    grays = 0;
-    blacks = 0;
-  }
-  stock(const stock& ) = delete;
-
-  future<T>* get_free() {
+  inline n find_free() {
     assert(whites); //The white queue should never be empty
     n current = whites;
     int i = 0;
@@ -126,8 +114,48 @@ public :
         std::this_thread::yield();
       }
     }
-    move_white_to_gray(current);
-    return (reinterpret_cast<ext_n>(current));
+    return current;
+  }
+
+
+public :
+  stock() {
+    for (int i = 0; i<size; i++) {
+      all[i].prev = &all[DECR_MOD(i,size)];
+      all[i].next = &all[INCR_MOD(i,size)];
+      all[i].flag = Flag::unset;
+      all[i].v.release(); //set all futures as ready
+    }
+    whites = &all[0];
+    grays = 0;
+    blacks = 0;
+  }
+  stock(const stock& ) = delete;
+
+  ext_n get_free() {
+    n x = find_free();
+    move_white_to_gray(x);
+    x->v.reset();
+    return (reinterpret_cast<ext_n>(reinterpret_cast<future<T>*>(x)));
+  }
+
+
+  /**
+   * If the given black is null,
+   * it returns a fresh black,
+   * otherwise
+   */
+  void reset_store(ext_n &ext_x, T o) {
+    if (!ext_x) {
+      ext_x = get_free_and_store();
+    }
+    ext_x->set(o);
+  }
+  inline ext_n get_free_and_store() {
+    n x = find_free();
+    move_to_black(whites,x);
+    x->v.reset();
+    return (reinterpret_cast<ext_n>(x));
   }
 
   /**
@@ -137,32 +165,42 @@ public :
    *   it must be alive: either black or gray.
    * The freshness is reset by the tick function.
    */
-  void store_in(ext_n ext_newx, ext_n ext_oldx) {
+  void store_in(ext_n ext_newx, ext_n &ext_oldx) {
+    store(ext_newx);
+    unstore(ext_oldx); //unstore after store to deal with store_in(x,x)
+    ext_oldx = ext_newx;
+  }
+  inline void store(ext_n ext_newx) {
     n newx = reinterpret_cast<n>(ext_newx);
-    n oldx = reinterpret_cast<n>(ext_oldx);
     if (newx->flag == Flag::unset) // It is gray
       move_to_black(grays, newx);
     else
-      {} // It is already black
+    {newx->flag = Flag::fresh;} // It is already black refresh_it
+  }
+  inline void unstore(ext_n ext_oldx) {
+    n oldx = reinterpret_cast<n>(ext_oldx);
     if (oldx->flag == Flag::fresh)
-      {} //It should stay black
+    {} //It should stay black
     else
       move_black_to_white(oldx);
   }
 
   /**
    * Remove the freshness of black nodes
-   * and move gray to white.
+   * and move grays to white.
    */
   void tick() {
     //move gray to white
     move_all(grays,whites);
     //remove flags of the blacks
-    n current = blacks;
-    do current->flag = Flag::old;
-    while((current = current->next) != blacks);
+    if (blacks) {
+      n current = blacks;
+      do current->flag = Flag::old;
+      while((current = current->next) != blacks);
+    }
   }
 
+  /*
   void print_all() {
     printf("white : ");
     print_list(whites);
@@ -204,6 +242,7 @@ public :
     move_all(blacks,whites);
     print_all();
   }
+   */
 
 
 

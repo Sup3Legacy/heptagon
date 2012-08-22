@@ -76,8 +76,7 @@ type act =
   (** Acall_fun is a call without associate object *)
   | Acall_fun of pattern list * fun_name * exp list
   (** Acall is the call of a method of an object *)
-  | Acall of pattern list * obj_ref * method_name * exp list
-  | Aasync_call of async_t * pattern list * obj_ref * method_name * exp list
+  | Acall of async_t * pattern list * obj_ref * method_name * exp list
   | Acase of exp * (case_value * block) list
   | Afor of var_dec * exp * exp * block
   | Awhile of while_order * exp * block

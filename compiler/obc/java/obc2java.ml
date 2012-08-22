@@ -307,31 +307,29 @@ let rec act_list param_env act_l acts =
   let only_call_exp act = match act with
     | Acall_fun(_, f, e_l) ->
         Efun (translate_fun_name f, exp_list param_env e_l)
-    | Acall (_, obj, Mstep, e_l)
-    | Aasync_call (_, _, obj, Mstep, e_l) ->
+    | Acall (_, _, obj, Mstep, e_l) ->
         Emethod_call (obj_ref param_env obj, "step", exp_list param_env e_l)
-    | Acall (_, obj, Mreset, e_l)
-    | Aasync_call (_, _, obj, Mreset, e_l) ->
+    | Acall (_, _, obj, Mreset, e_l) ->
         Emethod_call (obj_ref param_env obj, "reset", exp_list param_env e_l)
     | _ -> Misc.internal_error "only_call_exp fail on non call act."
   in
   let _act act acts = match act with
     | Obc.Aassgn (p,e) ->
         Aassgn (pattern param_env p, exp param_env e) :: acts
-    | Obc.Aasync_call (_,[],_,_,_)
-    | Obc.Acall_fun ([],_,_) | Obc.Acall ([],_,_,_) ->
+    | Obc.Acall (_,[],_,_,_)
+    | Obc.Acall_fun ([],_,_) ->
         Aexp (only_call_exp act)::acts
-    | Obc.Aasync_call (_,[p],_,_,_)
-    | Obc.Acall_fun ([p],_,_) | Obc.Acall ([p],_,_,_) ->
+    | Obc.Acall (_,[p],_,_,_)
+    | Obc.Acall_fun ([p],_,_) ->
         Aassgn (pattern param_env p, only_call_exp act) :: acts
-    | Obc.Aasync_call (_,p_l,_,_,_)
-    | Obc.Acall_fun (p_l,_,_) | Obc.Acall (p_l,_,_,_) ->
+    | Obc.Acall (_,p_l,_,_,_)
+    | Obc.Acall_fun (p_l,_,_) ->
         let return_ty = p_l |> pattern_list_to_type |> (ty param_env) in
         let return_id = Idents.gen_var "obc2java" "out" in
         let return_vd = mk_var_dec return_id false return_ty in
         let ecall = only_call_exp act in
         let unasync act ecall = match act with
-          | Obc.Aasync_call (Some _, p_l, _,_,_) ->
+          | Obc.Acall (Some _, p_l, _,_,_) ->
             let ln = p_l |> List.length |> Pervasives.string_of_int in
             Efun ((java_pervasive_class ("at_to_ta"^ln)),[ecall])
           | _ -> ecall

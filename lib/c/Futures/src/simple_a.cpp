@@ -8,18 +8,32 @@
 #include "simple_a.h"
 
 
+WRAPPER_FUN_DEFS(Simple__f,int,(int x, int y),(x, y))
+/*
+template<int queue_size, int queue_nb>
+void Simple__f_Areset(Simple__f_Amem<queue_size,queue_nb>* self) {
+  self->reset();
+}
+
+template<int queue_size, int queue_nb>
+void Simple__f_Astep(int x, int y, future<int>* _out,
+    Simple__f_Amem<queue_size,queue_nb>* self) {
+  self->step(x,y,_out);
+}
+*/
+
 void ASimple__main_reset(ASimple__main_mem* self) {
-  ASimple__f_reset(&self->f);
-  self->mem_z = self->__stock.get_free();
-  self->mem_z->set(0);
+  Simple__f_Areset(&self->f);
+  self->__stock.reset_store(self->mem_z,0);
 }
 
 
 void ASimple__main_step(int* _out, ASimple__main_mem* self) {
+  future<int>* v;
   self->__stock.tick();
-  future<int> *v = self->__stock.get_free();
   *_out = self->mem_z->get();
-  ASimple__f_step(3, 4, v, &self->f);
-  self->mem_z = v;;
+  Simple__f_Astep(3, 4, v = self->__stock.get_free(), &self->f);
+
+  self->__stock.store_in(v,self->mem_z);
 }
 

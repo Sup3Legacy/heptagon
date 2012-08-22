@@ -24,6 +24,7 @@ let unroll id start stop body =
       | Cvar s -> if s = id then Cconst (Ccint i) else Cvar s
       | Cderef e -> Cderef (exp e)
       | Cfield (e, qn) -> Cfield (exp e, qn)
+      | Cmethod (e, m, e_l) -> Cmethod (exp e, m, List.map exp e_l)
       | Carray (e1, e2) -> Carray (exp e1, exp e2)
       | Clhs l -> Clhs (lhs l)
 

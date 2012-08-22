@@ -131,15 +131,12 @@ and act funs acc a = match a with
       let lhs_list, acc = mapfold (lhs_it funs) acc lhs_list in
       let args, acc = mapfold (exp_it funs) acc args in
         Acall_fun(lhs_list, fun_name, args), acc
-  | Acall(lhs_list, obj, n, args) ->
-      let lhs_list, acc = mapfold (lhs_it funs) acc lhs_list in
-      let args, acc = mapfold (exp_it funs) acc args in
-        Acall(lhs_list, obj, n, args), acc (*TODO should go into obj for pattern ? *)
-  | Aasync_call(a, lhs_list, obj, n, args) ->
+  | Acall(a, lhs_list, obj, n, args) ->
       let lhs_list, acc = mapfold (lhs_it funs) acc lhs_list in
       let args, acc = mapfold (exp_it funs) acc args in
       let a, acc = Global_mapfold.async_it funs.global_funs acc a in
-      Aasync_call(a, lhs_list, obj, n, args), acc
+      Acall(a, lhs_list, obj, n, args), acc
+      (*TODO should go into obj for pattern ? *)
   | Acase(e, c_b_list) ->
       let aux acc (c,b) =
         let b, acc = block_it funs acc b in

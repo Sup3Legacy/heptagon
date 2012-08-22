@@ -120,13 +120,7 @@ let rec print_act ff a =
         fprintf ff "@[<2>%a%a@]"
           print_lhs_tuple var_list
           print_fun (f, es)
-    | Acall (var_list, o, meth, es) ->
-        fprintf ff "@[<2>%a%a.%a(%a)@]"
-          print_lhs_tuple var_list
-          print_obj_call o
-          print_method_name meth
-          print_exps es
-    | Aasync_call (a, var_list, o, meth, es) ->
+    | Acall (a, var_list, o, meth, es) ->
         fprintf ff "@[<2>%a%a%a.%a(%a)@]"
           print_lhs_tuple var_list
           print_async a

@@ -84,6 +84,13 @@ let is_stateful n =
   with
       Not_found -> Error.message (no_location ()) (Error.Enode (fullname n))
 
+let rec is_lhs_mem l = match l with
+  | CLvar "self" -> true
+  | CLvar _ -> false
+  | CLderef l -> is_lhs_mem l
+  | CLfield (l,_) -> is_lhs_mem l
+  | CLarray (l,_) -> is_lhs_mem l
+
 (******************************)
 
 (** {2 Translation from Obc to C using our AST.} *)
@@ -104,7 +111,7 @@ let rec ctype_of_otype oty =
     | Tarray(ty, n) -> Cty_arr(int_of_static_exp n, ctype_of_otype ty)
     | Tprod _ -> assert false
     | Tinvalid -> assert false
-    | Tfuture _ -> assert false (* TODO async *)
+    | Tfuture ((),ty) -> Cty_future (ctype_of_otype ty)
     | Tbounded _ -> Cty_int
 
 let copname = function
@@ -136,6 +143,7 @@ let cvar_of_vd vd =
 let pointer_type ty =
   match Modules.unalias_type ty with
     | Tarray _ -> ctype_of_otype ty
+    | Tfuture _ -> ctype_of_otype ty
     | _ -> Cty_ptr (ctype_of_otype ty)
 
 (** Returns the expression to use e as an argument of
@@ -143,6 +151,7 @@ let pointer_type ty =
 let address_of ty e =
   match Modules.unalias_type ty with
     | Tarray _ -> e
+    | Tfuture _ -> e
     | _ -> Caddrof e
 
 
@@ -171,6 +180,50 @@ let rec unalias_ctype cty = match cty with
 and assoc_type n var_env =
   try unalias_ctype (List.assoc n var_env)
   with Not_found -> Error.message (no_location ()) (Error.Evar n)
+
+
+module Stock = struct
+  include (Map.Make(struct type t = cty let compare = compare end))
+  let add_stock cty x stock =
+    let cty = unalias_ctype cty in
+    let old_x =
+      try find cty stock
+      with Not_found -> Int32.zero
+    in
+    add cty (Int32.add old_x x) stock
+  let name_stock =
+    Misc.memoize
+      (fun cty ->
+        let t = sanitize_string (print_pp_to_string pp_cty cty) in
+        Idents.local_qn ("__stock_"^t)
+      )
+  let stock_of cty =
+    Cfield(Cderef (Cvar "self"), name_stock cty)
+  let stock_method_call cty m args =
+    Cmethod (stock_of cty, m, args)
+end
+
+let current_stock = ref Stock.empty
+let init_stock () = current_stock := Stock.empty
+let add_stock cty x =
+  current_stock := Stock.add_stock cty x !current_stock
+let get_free_future cty =
+  Stock.stock_method_call cty "get_free" []
+let reset_store cty mem v =
+  Stock.stock_method_call cty "reset_store" [Clhs mem; v]
+let store_in cty v mem =
+  Stock.stock_method_call cty "store_in" [v; Clhs mem]
+let add_stores_tick acc =
+  Stock.fold
+    (fun cty _ acc -> (Csexpr (Stock.stock_method_call cty "tick" []))::acc)
+    !current_stock
+    acc
+let stores_def acc =
+  Stock.fold
+    (fun cty n acc ->
+      ((cname_of_qn (Stock.name_stock cty), Cty_stock (cty,n)))::acc)
+    !current_stock
+    acc
 
 (** Returns the type associated with the lhs [lhs]
     in the environnement [var_env] (which is an association list
@@ -226,9 +279,13 @@ and create_affect_stm dest src ty =
                 create_affect_stm (CLfield (dest, f_name)) e cty @ stm_list in
               List.fold_right2 create_affect (find_struct ln) ce_list []
           | _ -> [Caffect (dest, src)])
-    | _ -> [Caffect (dest, src)]
+    | Cty_future t when is_lhs_mem dest ->
+        [Csexpr (store_in t src dest)]
+    | _ ->
+        [Caffect (dest, src)]
 
-let string_of_static_exp se = Name_utils.print_pp_to_name Global_printer.print_static_exp se
+let string_of_static_exp se =
+  Name_utils.print_pp_to_name Global_printer.print_static_exp se
 
 let cconst_of_static_exp se =
   match (Static.simplify se).se_desc with
@@ -267,7 +324,12 @@ let rec cexpr_of_static_exp se =
     | Sop _ -> Error.message se.se_loc Error.Estatic_exp_compute_failed
     | Sfield _ -> Misc.internal_error "cgen: sfield found"
     | Stuple _ -> Misc.internal_error "cgen: static tuple found"
-    | Sasync _ -> Misc.internal_error "cgen: async found" (** TODO async *)
+    | Sasync s ->
+        let cs = cexpr_of_static_exp s in
+        let cty = ctype_of_otype s.se_ty in
+        add_stock cty Int32.one;
+        let future = get_free_future cty in
+        Cmethod(Cderef future, "set2", [cs])
 
 (** [cexpr_of_exp exp] translates the Obj action [exp] to a C expression. *)
 let rec cexpr_of_exp out_env var_env exp =
@@ -281,8 +343,8 @@ let rec cexpr_of_exp out_env var_env exp =
         Cstructlit (ctype_of_otype exp.e_ty, cexps)
     | Earray e_list ->
         Carraylit (ctype_of_otype exp.e_ty, cexprs_of_exps out_env var_env e_list)
-    | Ebang _ ->
-        Misc.internal_error "C backend not yet supporting futures."
+    | Ebang e ->
+        Cmethod(Cderef (cexpr_of_exp out_env var_env e), "get", [])
 
 and cexprs_of_exps out_env var_env exps =
   List.map (cexpr_of_exp out_env var_env) exps
@@ -396,8 +458,8 @@ and cexpr_of_ext_value out_env var_env w = match w.w_desc with
   | Warray (l, idx) ->
     Carray(cexpr_of_ext_value out_env var_env l,
            cexpr_of_exp out_env var_env idx)
-  | Wbang _ ->
-      Misc.internal_error "C backend not yet supporting futures."
+  | Wbang l ->
+      Cmethod(Cderef (cexpr_of_ext_value out_env var_env l), "get", [])
 
 let rec assoc_obj instance obj_env =
   match obj_env with
@@ -427,8 +489,12 @@ let step_fun_call out_env var_env sig_info objn out args =
     | [], [] -> []
     | e::l, ad::ads ->
         (*this arg is targeted, use a pointer*)
-        let e = if Linearity.is_linear ad.a_linearity then address_of ad.a_type e else e in
-          e::(add_targeting l ads)
+        let e =
+          if Linearity.is_linear ad.a_linearity
+          then address_of ad.a_type e
+          else e
+        in
+        e::(add_targeting l ads)
     | _, _ -> assert false
   in
   let args = (add_targeting args sig_info.node_inputs) in
@@ -456,11 +522,12 @@ let step_fun_call out_env var_env sig_info objn out args =
     [outvl] is a list of lhs where to put the results.
     [args] is the list of expressions to use as arguments.
     [mem] is the lhs where is stored the node's context.*)
-let generate_function_call out_env var_env obj_env outvl objn args =
+let generate_function_call async out_env var_env obj_env outvl objn args =
   (** Class name for the object to step. *)
   let classln = assoc_cn objn obj_env in
   let classn = cname_of_qn classln in
   let sig_info = find_value classln in
+  let is_async = not (async = None) in
 
   let fun_call out =
     if is_op classln then
@@ -469,8 +536,8 @@ let generate_function_call out_env var_env obj_env outvl objn args =
       (** The step function takes scalar arguments and its own internal memory
           holding structure. *)
       let args = step_fun_call out_env var_env sig_info objn out args in
-      (** Our C expression for the function call. *)
-      Cfun_call (classn ^ "_step", args)
+      let step = if is_async then "_Astep" else "_step" in
+      Cfun_call (classn ^ step, args)
   in
 
   (** Act according to the length of our list. Step functions with
@@ -483,12 +550,23 @@ let generate_function_call out_env var_env obj_env outvl objn args =
         create_affect_stm outv (fun_call None) ty
     | [outv] ->
         let ty = assoc_type_lhs outv var_env in
-        let e = match ty with
-        | Cty_arr _ -> Clhs outv
-        | _ -> Caddrof (Clhs outv)
+        let (e,t) = match ty with
+        | Cty_arr _ -> Clhs outv, None
+        | Cty_future t -> Clhs outv, Some t
+        | _ -> Caddrof (Clhs outv), None
         in
-        [Csexpr (fun_call (Some e))]
+        let step_call = Csexpr (fun_call (Some e)) in
+        if is_async
+        then
+          match t with
+          | Some t -> [Caffect (outv, get_free_future t);step_call]
+          | _ -> Misc.internal_error "Async call should have future return type"
+        else
+          [step_call]
     | _ ->
+        if is_async then
+          Misc.unsupported "C backend allows only async of node \
+            returning one value";
         (* Remove options *)
         let out = Cvar (out_var_name_of_objn classn) in
         let out_sig = output_names_list sig_info in
@@ -507,14 +585,16 @@ let rec create_affect_const var_env (dest : clhs) c =
         create_affect_const var_env dest se
     | Sarray_power(c, n_list) ->
         let rec make_loop power_list replace = match power_list with
-          | [] -> dest, replace
-          | p :: power_list ->
-            let x = gen_symbol () in
-            let e, replace =
-              make_loop power_list
-                        (fun y -> [Cfor(x, Cconst (Ccint 0l), cexpr_of_static_exp p, replace y)]) in
-            let e =  (CLarray (e, Cvar x)) in
-            e, replace
+        | [] -> dest, replace
+        | p :: power_list ->
+          let x = gen_symbol () in
+          let e, replace =
+            make_loop power_list
+              (fun y ->
+                [Cfor(x, Cconst (Ccint 0l), cexpr_of_static_exp p, replace y)])
+          in
+          let e =  (CLarray (e, Cvar x)) in
+          e, replace
         in
         let e, b = make_loop n_list (fun y -> y) in
         b (create_affect_const var_env e c)
@@ -530,7 +610,12 @@ let rec create_affect_const var_env (dest : clhs) c =
             (create_affect_const var_env dest_f se) @ affl
         in
           List.fold_left affect_field [] f_se_list
-    | _ -> [Caffect (dest, cexpr_of_static_exp c)]
+    | Sasync s when is_lhs_mem dest ->
+        let cs = cexpr_of_static_exp s in
+        let cty = ctype_of_otype s.se_ty in
+        [Csexpr (reset_store cty dest cs)]
+    | _ ->
+        [Caffect (dest, cexpr_of_static_exp c)]
 
 (** [cstm_of_act obj_env mods act] translates the Obj action [act] to a list of
     C statements, using the association list [obj_env] to map object names to
@@ -602,35 +687,33 @@ let rec cstm_of_act out_env var_env obj_env act =
 
     (** Reinitialization of an object variable, extracting the reset
         function's name from our environment [obj_env]. *)
-    | Acall (name_list, o, Mreset, args) ->
+    | Acall (async, name_list, o, Mreset, args) ->
         assert_empty name_list;
         assert_empty args;
         let on = obj_ref_name o in
         let obj = assoc_obj on obj_env in
         let classn = cname_of_qn obj.o_class in
         let field = Cfield (Cderef (Cvar "self"), local_qn (name on)) in
+        let reset = if async = None then "_reset" else "_Areset" in
         (match o with
           | Oobj _ ->
-              [Csexpr (Cfun_call (classn ^ "_reset", [Caddrof field]))]
+              [Csexpr (Cfun_call (classn ^ reset, [Caddrof field]))]
           | Oarray (_, pl) ->
               let rec mk_loop pl field = match pl with
-                | [] ->
-                    [Csexpr (Cfun_call (classn ^ "_reset", [Caddrof field]))]
-                | p::pl ->
-                    mk_loop pl (Carray(field, cexpr_of_pattern out_env var_env p))
+              | [] ->
+                  [Csexpr (Cfun_call (classn ^ reset, [Caddrof field]))]
+              | p::pl ->
+                  mk_loop pl (Carray(field, cexpr_of_pattern out_env var_env p))
               in
-                 mk_loop pl field
+              mk_loop pl field
         )
-
-    | Aasync_call _ -> assert false (* TODO async *)
-
     (** Step functions applications can return multiple values, so we use a
         local structure to hold the results, before allocating to our
         variables. *)
-    | Acall (outvl, objn, Mstep, el) ->
+    | Acall (async, outvl, objn, Mstep, el) ->
         let args = cexprs_of_exps out_env var_env el in
         let outvl = clhs_list_of_pattern_list out_env var_env outvl in
-        generate_function_call out_env var_env obj_env outvl objn args
+        generate_function_call async out_env var_env obj_env outvl objn args
 
 
 and cstm_of_act_list out_env var_env obj_env b =
@@ -717,7 +800,7 @@ let fun_def_of_step_fun n obj_env mem objs md =
    else IdentSet.empty
   in
   let body = cstm_of_act_list out_env var_env obj_env md.m_body in
-
+  let body = add_stores_tick body in
   Cfundef {
     f_name = fun_name;
     f_retty = Cty_void;
@@ -730,33 +813,115 @@ let fun_def_of_step_fun n obj_env mem objs md =
 
 (** [mem_decl_of_class_def cd] returns a declaration for a C structure holding
     internal variables and objects of the Obc class definition [cd]. *)
-let mem_decl_of_class_def cd =
-  (** This one just translates the class name to a struct name following the
+let mem_decls_defs_of_class_def cd =
+  if not (is_stateful cd.cd_name)
+  then ([],[]),None
+  else (
+    (** Translate the class name to a struct name following the
       convention we described above. *)
-  let struct_field_of_obj_dec l od =
-    if is_stateful od.o_class then
-      let ty = Cty_id (qn_append od.o_class "_mem") in
-      let ty = match od.o_size with
-        | Some nl ->
-          let rec mk_idx nl = match nl with
-            | [] -> ty
-            | n::nl -> Cty_arr (int_of_static_exp n, mk_idx nl)
+    (* naw stands for needed async wrapper, maps to list of params *)
+    let struct_field_of_obj_dec (naw,l) od =
+      if not (is_stateful od.o_class)
+      then naw, l
+      else (
+        let naw,ty = match od.o_async with
+        | None -> naw, Cty_id (qn_append od.o_class "_mem")
+        | Some(params) ->
+            let naw =
+              let old_param_l =
+                try QualEnv.find od.o_class naw
+                with Not_found -> []
+              in
+              QualEnv.add od.o_class (params::old_param_l) naw
+            in
+            let string_params =
+              let open Format in
+              fprintf str_formatter "<@[%a@]>_Amem"
+                (Pp_tools.print_list_r Global_printer.print_static_exp """,""")
+                params;
+              flush_str_formatter ()
+            in
+            naw, Cty_macro (cname_of_qn(qn_append od.o_class string_params))
+        in
+        let ty = match od.o_size with
+          | Some nl ->
+            let rec mk_idx nl = match nl with
+              | [] -> ty
+              | n::nl -> Cty_arr (int_of_static_exp n, mk_idx nl)
+            in
+              mk_idx nl
+          | None -> ty
+        in
+        naw, ((name od.o_ident, ty)::l)
+      )
+    in
+    (** Fields corresponding to normal memory variables. *)
+    let mem_fields = List.map cvar_of_vd cd.cd_mems in
+    begin (* Add mems of type future to the stock *)
+      let rec cty_walk cty n = match unalias_ctype cty with
+      | Cty_arr (size, acty) -> cty_walk acty (Int32.mul size n)
+      | Cty_future t -> add_stock t n
+      | _ -> () (*TODO futures inside structures are not handeled !*)
+      in
+      let add_mem_to_stock (_,cty) = cty_walk cty Int32.one in
+      List.iter add_mem_to_stock mem_fields
+    end;
+    (** Fields corresponding to object variables. *)
+    let naw, obj_fields =
+      List.fold_left struct_field_of_obj_dec (QualEnv.empty,[]) cd.cd_objs
+    in
+    let thisdecl = Cdecl_struct ((cname_of_qn cd.cd_name) ^ "_mem",
+                     mem_fields @ obj_fields)
+    in
+    let decl_def_of_naw q params_l (decls,defs) =
+      let sis_q = Modules.find_value q in
+      let out = Misc.assert_1 sis_q.node_outputs in
+      let out_ty = ctype_of_otype out.a_type in
+      begin (* Add queues to stock *)
+        let add_param params =
+          let queue_size,_ = Misc.assert_1min params in
+          let queue_size = int_of_static_exp queue_size in
+          add_stock out_ty (Int32.succ queue_size)
+        in
+        List.iter add_param params_l
+      end;
+      let inputs =
+        let arg_to_cvar a =
+          let ty = ctype_of_otype a.a_type in
+          let n = match a.a_name with
+          | None -> Idents.name (Idents.gen_var "Cgen" "__unnamed_arg__")
+          | Some(n) -> n
           in
-            mk_idx nl
-        | None -> ty in
-        (name od.o_ident, ty)::l
-    else
-      l
-  in
-    if is_stateful cd.cd_name then (
-      (** Fields corresponding to normal memory variables. *)
-      let mem_fields = List.map cvar_of_vd cd.cd_mems in
-      (** Fields corresponding to object variables. *)
-      let obj_fields = List.fold_left struct_field_of_obj_dec [] cd.cd_objs in
-        [Cdecl_struct ((cname_of_qn cd.cd_name) ^ "_mem",
-                       mem_fields @ obj_fields)]
-    ) else
-      []
+          n, ty
+        in
+        List.map arg_to_cvar sis_q.node_inputs
+      in
+      let (ins_name, ins_ty) = List.split inputs in
+      let open Format in
+      (*WRAPPER_MEM_DEC(Simple__f,int,(int,int))*)
+      let macro_dec =
+        fprintf str_formatter "WRAPPER_MEM_DEC(%a,%a,@[%a@])"
+          pp_qualname q
+          C.pp_cty out_ty
+          (Pp_tools.print_list_r C.pp_cty "("","")") ins_ty
+        ;
+        flush_str_formatter ()
+      in
+      (*WRAPPER_FUN_DEFS(Simple__f,int,(int x, int y),(x, y))*)
+      let macro_def =
+        fprintf str_formatter "WRAPPER_FUN_DEFS(%a,%a,@[%a@],@[%a@])"
+          pp_qualname q
+          C.pp_cty out_ty
+          (Pp_tools.print_list_r C.pp_vardecl "("","")") inputs
+          (Pp_tools.print_list_r C.pp_string "("","")") ins_name
+        ;
+        flush_str_formatter ()
+      in
+      (Cdecl_macro macro_dec)::decls, (Cdef_macro macro_def)::defs
+    in
+    let (decls,defs) = QualEnv.fold decl_def_of_naw naw ([],[]) in
+    (decls,defs), Some thisdecl
+  )
 
 let out_decl_of_class_def cd =
   (** Fields corresponding to output variables. *)
@@ -798,7 +963,8 @@ let cdefs_and_cdecls_of_class_def cd =
       structure will be called ["cname_mem"]. *)
   let step_m = find_step_method cd in
   Idents.push_node cd.cd_name;
-  let memory_struct_decl = mem_decl_of_class_def cd in
+  init_stock ();
+  let (memdecls, memdefs), thisdecl = mem_decls_defs_of_class_def cd in
   let out_struct_decl = out_decl_of_class_def cd in
   let step_fun_def = fun_def_of_step_fun cd.cd_name
     cd.cd_objs cd.cd_mems cd.cd_objs step_m in
@@ -811,9 +977,15 @@ let cdefs_and_cdecls_of_class_def cd =
       ([res_fun_decl; step_fun_decl], [reset_fun_def; step_fun_def])
     else
       ([step_fun_decl], [step_fun_def]) in
+  let thisdecl = match thisdecl with
+  | Some (Cdecl_struct(name,vars)) ->
+    [Cdecl_struct (name, stores_def vars)]
+  | _ -> []
+  in
   let _ = Idents.pop_node () in
-  memory_struct_decl @ out_struct_decl @ decls,
-  defs
+  memdecls @ thisdecl @ out_struct_decl @ decls,
+  memdefs @ defs
+
 
 (** {2 Type translation} *)
 

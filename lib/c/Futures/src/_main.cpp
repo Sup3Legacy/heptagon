@@ -5,24 +5,12 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+
 #include "_main.h"
 
-#include <tuple>
-using namespace std;
 
-int f(int x,int y,int z) {
-  return (x+y+z);
-}
-
-ASimple__main_mem mem;
+ASimple__main_mem mem = {};
 int main(int argc, char** argv) {
-
-  tuple<int,int,int> t = {0,1,2};
-  int i = f(t);
-
-
-
-
   int step_c;
   int step_max;
   int _res;

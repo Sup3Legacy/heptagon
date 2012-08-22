@@ -17,6 +17,8 @@
 
 using namespace std;
 
+
+/*
 #include "stock.h"
 
 int main(int argc, const char * argv[]) {
@@ -35,7 +37,7 @@ int main(int argc, const char * argv[]) {
 
 }
 
-
+*/
 
 /*
 float do_stuff(int k) {

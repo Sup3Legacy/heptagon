@@ -224,7 +224,7 @@ let main_def_of_class_def cd =
 
   let mem_decl =
     if cd.cd_stateful
-    then Some (Cvardef ("mem", Cty_id (qn_append cd.cd_name "_mem")))
+    then Some (Cvardef_init ("mem", Cty_id (qn_append cd.cd_name "_mem"), Cinit_default))
     else None
   in
 

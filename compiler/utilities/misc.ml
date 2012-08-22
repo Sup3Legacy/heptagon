@@ -22,8 +22,9 @@ let optunit f = function
 
 
 (** Print to a string *)
+let _ = Format.flush_str_formatter ()
+
 let print_pp_to_string print_fun element =
-  let _ = Format.flush_str_formatter () in (* Ensure that the buffer is empty *)
   print_fun Format.str_formatter element;
   Format.flush_str_formatter ()
 
