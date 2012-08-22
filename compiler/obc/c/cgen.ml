@@ -687,14 +687,14 @@ let rec cstm_of_act out_env var_env obj_env act =
 
     (** Reinitialization of an object variable, extracting the reset
         function's name from our environment [obj_env]. *)
-    | Acall (async, name_list, o, Mreset, args) ->
+    | Acall (_, name_list, o, Mreset, args) ->
         assert_empty name_list;
         assert_empty args;
         let on = obj_ref_name o in
         let obj = assoc_obj on obj_env in
         let classn = cname_of_qn obj.o_class in
         let field = Cfield (Cderef (Cvar "self"), local_qn (name on)) in
-        let reset = if async = None then "_reset" else "_Areset" in
+        let reset = if obj.o_async = None then "_reset" else "_Areset" in
         (match o with
           | Oobj _ ->
               [Csexpr (Cfun_call (classn ^ reset, [Caddrof field]))]
@@ -836,7 +836,7 @@ let mem_decls_defs_of_class_def cd =
             in
             let string_params =
               let open Format in
-              fprintf str_formatter "<@[%a@]>_Amem"
+              fprintf str_formatter "_Amem<@[%a@]>"
                 (Pp_tools.print_list_r Global_printer.print_static_exp """,""")
                 params;
               flush_str_formatter ()
