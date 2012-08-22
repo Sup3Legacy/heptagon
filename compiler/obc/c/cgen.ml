@@ -900,20 +900,20 @@ let mem_decls_defs_of_class_def cd =
       let open Format in
       (*WRAPPER_MEM_DEC(Simple__f,int,(int,int))*)
       let macro_dec =
-        fprintf str_formatter "WRAPPER_MEM_DEC(%a,%a,@[%a@])"
+        fprintf str_formatter "WRAPPER_MEM_DEC(%a,%a,(@[%a@]))"
           pp_qualname q
           C.pp_cty out_ty
-          (Pp_tools.print_list_r C.pp_cty "("","")") ins_ty
+          (Pp_tools.print_list_r C.pp_cty ","",""") ins_ty
         ;
         flush_str_formatter ()
       in
       (*WRAPPER_FUN_DEFS(Simple__f,int,(int x, int y),(x, y))*)
       let macro_def =
-        fprintf str_formatter "WRAPPER_FUN_DEFS(%a,%a,@[%a@],@[%a@])"
+        fprintf str_formatter "WRAPPER_FUN_DEFS(%a,%a,(@[%a@]),(@[%a@]))"
           pp_qualname q
           C.pp_cty out_ty
-          (Pp_tools.print_list_r C.pp_vardecl "("","")") inputs
-          (Pp_tools.print_list_r C.pp_string "("","")") ins_name
+          (Pp_tools.print_list_r C.pp_vardecl ""","",") inputs
+          (Pp_tools.print_list_r C.pp_string ""","",") ins_name
         ;
         flush_str_formatter ()
       in
