@@ -323,7 +323,7 @@ let mk_main name p =
       (nvar_l @ var_l, res @ res_l, nstep_l @ step_l)
     in
     let _ = Idents.pop_node () in
-    [("_main.c", Csource (defs @ [main_skel var_l res_l step_l]));
+    [("_main.cpp", Csource (defs @ [main_skel var_l res_l step_l]));
     ("_main.h", Cheader ([name], []))];
   ) else
     []

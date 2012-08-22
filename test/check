@@ -17,7 +17,7 @@ coption="-O -lho -c"
 CAMLC=ocamlc
 JAVAC=javac
 LUSTREC=lustre
-CC="gcc -std=c99 -I../../../lib/c -I../t1_c"
+CC="g++-mp-4.7 -std=c++11 -I../../../lib/c -I../t1_c"
 
 # par defaut : pas de test de generation de code
 
@@ -113,8 +113,9 @@ launch_check () {
     # Compil. c ?
     if [[ ($echec == 0) && ($c == 1) ]]; then
         pushd ${base_f}_c >/dev/null
-        for cf in *.c; do
-            $CC -c $cf >/dev/null 2>&1
+        for cf in *.cpp; do
+            echo "$CC -c $cf >/dev/null 2>&1"
+	    $CC -c $cf >/dev/null 2>&1
             if [ $? = 0 -a $echec != 5 ]; then
                 echec=0
             else

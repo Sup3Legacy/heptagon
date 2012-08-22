@@ -1072,15 +1072,17 @@ let global_file_header name prog =
   let cdefs_and_cdecls = List.map cdefs_and_cdecls_of_program_decl prog.p_desc in
 
   let (cty_defs, cty_decls) = List.split cdefs_and_cdecls in
-  let types_h = (filename_types ^ ".h",
-                 Cheader ("stdbool"::"assert"::"pervasives"::dependencies,
-                          List.concat cty_decls)) in
-  let types_c = (filename_types ^ ".c", Csource (concat cty_defs)) in
+  let types_h =
+    (filename_types ^ ".h",
+      Cheader ("stdbool"::"assert"::"pervasives"::"async"::dependencies
+              , List.concat cty_decls))
+  in
+  let types_c = (filename_types ^ ".cpp", Csource (concat cty_defs)) in
 
   let header =
     (name ^ ".h", Cheader (filename_types :: dependencies, decls))
   and source =
-    (name ^ ".c", Csource defs) in
+    (name ^ ".cpp", Csource defs) in
   [header; source; types_h; types_c]
 
 
@@ -1094,6 +1096,6 @@ let interface_header name i =
   let types_h = (name ^ ".h",
                  Cheader ("stdbool"::"assert"::"pervasives"::dependencies,
                           List.concat cty_decls)) in
-  let types_c = (name ^ ".c", Csource (concat cty_defs)) in
+  let types_c = (name ^ ".cpp", Csource (concat cty_defs)) in
 
   [types_h; types_c]
