@@ -302,13 +302,13 @@ let mk_main name p =
     let classes = program_classes p in
     let n_names = !Compiler_options.assert_nodes in
     let find_class n =
-      try List.find (fun cd -> cd.cd_name = qualify_value n) classes
-      with Not_found ->
-          Errors.errorf "Node %s not generated.@\n\
-            Note that only Java and c ++ backends \
-            generate nodes with parameters." n
+     List.find (fun cd -> cd.cd_name = qualify_value n) classes
     in
-    let a_classes = List.map find_class n_names in
+    (* Assert nodes *)
+    let a_classes =
+      try List.map find_class n_names
+      with Not_found -> Format.eprintf "Warning assert nodes not found@."; []
+    in
     let (var_l, res_l, step_l) =
       let add cd (var_l, res_l, step_l) =
         let (var, res, step) = assert_node_res cd in
@@ -316,8 +316,15 @@ let mk_main name p =
       in
       List.fold_right add a_classes ([], [], [])
     in
+    (* Main node *)
     let n = !Compiler_options.simulation_node in
-    let (mem, nvar_l, res, nstep_l) = main_def_of_class_def (find_class n) in
+    let (mem, nvar_l, res, nstep_l) =
+      try main_def_of_class_def (find_class n)
+      with Not_found -> Format.eprintf "Warning main node not found@.";
+        (* TODO the main node may not be in this module,
+           so this warning is erroneous *)
+        (None, [], [], [])
+    in
     let defs = match mem with None -> [] | Some m -> [m] in
     let (var_l, res_l, step_l) =
       (nvar_l @ var_l, res @ res_l, nstep_l @ step_l)
