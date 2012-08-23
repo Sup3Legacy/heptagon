@@ -21,6 +21,12 @@ open Location
 open Format
 
 
+(* TODO Callgraph passe sur les static_exp de async ? Il le doit. *)
+
+(* TODO Pas d'annotation pour les noeud appelle async *)
+
+(* TODO Ne pas partager les futures pour savoir quand allouer *)
+
 
 let load_conf () =
   Compiler_options.enforce_callgraph := true
