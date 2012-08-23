@@ -52,7 +52,7 @@ public :
     release();
   }
 
-  T* set2(T o) {
+  future<T>* set2(T o) {
     set(o);
     return this;
   }
