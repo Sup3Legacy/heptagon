@@ -19,19 +19,33 @@
 #define STRIP(...) __VA_ARGS__
 
 
-#define WRAPPER_MEM_DEC(WRAPPED,OUT,IN)\
+#define WRAPPER_NODE_MEM_DEC(WRAPPED,OUT,IN)\
   template<int queue_size, int queue_nb>\
 using WRAPPED##_Amem =\
-    wrap<OUT,WRAPPED##_mem STRIP IN>\
-    ::async_node<WRAPPED##_step, WRAPPED##_reset, queue_size, queue_nb>;
+    wrapnode<OUT,WRAPPED##_mem STRIP IN>\
+    ::async<WRAPPED##_step, WRAPPED##_reset, queue_size, queue_nb>;
 
-#define WRAPPER_FUN_DEFS(WRAPPED,OUT,IN,ARGS)\
+#define WRAPPER_NODE_DEFS(WRAPPED,OUT,IN,ARGS)\
 template<int queue_size, int queue_nb>\
 void WRAPPED##_Areset(WRAPPED##_Amem<queue_size,queue_nb>* self) {\
   self->reset();\
 }\
 template<int queue_size, int queue_nb>\
-void WRAPPED##_Astep(STRIP IN future<int>* _out,\
+void WRAPPED##_Astep(STRIP IN future<OUT>* _out,\
+    WRAPPED##_Amem<queue_size,queue_nb>* self) {\
+  self->step(STRIP ARGS _out);\
+}
+
+
+#define WRAPPER_FUN_MEM_DEC(WRAPPED,OUT,IN)\
+  template<int queue_size, int queue_nb>\
+using WRAPPED##_Amem =\
+    wrapfun<OUT STRIP IN>\
+    ::async<WRAPPED##_step, queue_size, queue_nb>;
+
+#define WRAPPER_FUN_DEFS(WRAPPED,OUT,IN,ARGS)\
+template<int queue_size, int queue_nb>\
+void WRAPPED##_Astep(STRIP IN future<OUT>* _out,\
     WRAPPED##_Amem<queue_size,queue_nb>* self) {\
   self->step(STRIP ARGS _out);\
 }

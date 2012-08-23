@@ -490,7 +490,7 @@ let out_var_name_of_objn o =
 (** Creates the list of arguments to call a node. [targeting] is the targeting
     of the called node, [mem] represents the node context and [args] the
     argument list.*)
-let step_fun_call out_env var_env sig_info objn out args =
+let step_fun_call is_async out_env var_env sig_info objn out args =
   let rec add_targeting l ads = match l, ads with
     | [], [] -> []
     | e::l, ad::ads ->
@@ -505,7 +505,7 @@ let step_fun_call out_env var_env sig_info objn out args =
   in
   let args = (add_targeting args sig_info.node_inputs) in
   let amem =
-    if sig_info.node_stateful
+    if sig_info.node_stateful or is_async
     then (
       let mem = match objn with
       | Oobj o -> Cfield (Cderef (Cvar "self"), local_qn (name o))
@@ -533,7 +533,7 @@ let generate_function_call async out_env var_env obj_env outvl objn args =
   let classln = assoc_cn objn obj_env in
   let classn = cname_of_qn classln in
   let sig_info = find_value classln in
-  let is_async = not (async = None) in
+  let isasync = not (async = None) in
 
   let fun_call out =
     if is_op classln then
@@ -541,8 +541,8 @@ let generate_function_call async out_env var_env obj_env outvl objn args =
     else
       (** The step function takes scalar arguments and its own internal memory
           holding structure. *)
-      let args = step_fun_call out_env var_env sig_info objn out args in
-      let step = if is_async then "_Astep" else "_step" in
+      let args = step_fun_call isasync out_env var_env sig_info objn out args in
+      let step = if isasync then "_Astep" else "_step" in
       Cfun_call (classn ^ step, args)
   in
 
@@ -562,7 +562,7 @@ let generate_function_call async out_env var_env obj_env outvl objn args =
         | _ -> Caddrof (Clhs outv), None
         in
         let step_call = Csexpr (fun_call (Some e)) in
-        if is_async
+        if isasync
         then
           match t with
           | Some t -> [Caffect (outv, get_free_future t);step_call]
@@ -570,7 +570,7 @@ let generate_function_call async out_env var_env obj_env outvl objn args =
         else
           [step_call]
     | _ ->
-        if is_async then
+        if isasync then
           Misc.unsupported "C backend allows only async of node \
             returning one value";
         (* Remove options *)
@@ -679,8 +679,8 @@ let rec cstm_of_act out_env var_env obj_env act =
         let ce = cexpr_of_exp out_env var_env e in
         create_affect_stm vn ce ty
 
-    (** Our Aop marks an operator invocation that will perform side effects. Just
-        translate to a simple C statement. *)
+    (** Our Aop marks an operator invocation that will perform side effects.
+        Translate to a simple C statement. *)
     | Acall_fun (p, op_name, args) ->
         let call = cop_of_op out_env var_env op_name args in
         begin match p with
@@ -827,27 +827,27 @@ let mem_decls_defs_of_class_def cd =
       convention we described above. *)
     (* naw stands for needed async wrapper, maps to list of params *)
     let struct_field_of_obj_dec (naw,l) od =
-      if not (is_stateful od.o_class)
+      if (not (is_stateful od.o_class)) && (od.o_async = None)
       then naw, l
-      else (
-        let naw,ty = match od.o_async with
-        | None -> naw, Cty_id (qn_append od.o_class "_mem")
-        | Some(params) ->
-            let naw =
-              let old_param_l =
-                try QualEnv.find od.o_class naw
-                with Not_found -> []
+      else ( (* object is stateful or async *)
+        let naw, ty = match od.o_async with
+          | None -> naw, Cty_id (qn_append od.o_class "_mem")
+          | Some(params) ->
+              let naw =
+                let old_param_l =
+                  try QualEnv.find od.o_class naw
+                  with Not_found -> []
+                in
+                QualEnv.add od.o_class (params::old_param_l) naw
               in
-              QualEnv.add od.o_class (params::old_param_l) naw
-            in
-            let string_params =
-              let open Format in
-              fprintf str_formatter "_Amem<@[%a@]>"
-                (Pp_tools.print_list_r Global_printer.print_static_exp """,""")
-                params;
-              flush_str_formatter ()
-            in
-            naw, Cty_macro (cname_of_qn(qn_append od.o_class string_params))
+              let string_params =
+                let open Format in
+                fprintf str_formatter "_Amem<@[%a@]>"
+                  (Pp_tools.print_list_r Global_printer.print_static_exp """,""")
+                  params;
+                flush_str_formatter ()
+              in
+              naw, Cty_macro (cname_of_qn(qn_append od.o_class string_params))
         in
         let ty = match od.o_size with
           | Some nl ->
@@ -881,6 +881,7 @@ let mem_decls_defs_of_class_def cd =
     in
     let decl_def_of_naw q params_l (decls,defs) =
       let sis_q = Modules.find_value q in
+      let node_or_fun = if sis_q.node_stateful then "NODE" else "FUN" in
       let out = Misc.assert_1 sis_q.node_outputs in
       let out_ty = ctype_of_otype out.a_type in
       begin (* Add queues to stock *)
@@ -906,7 +907,8 @@ let mem_decls_defs_of_class_def cd =
       let open Format in
       (*WRAPPER_MEM_DEC(Simple__f,int,(int,int))*)
       let macro_dec =
-        fprintf str_formatter "WRAPPER_MEM_DEC(%a,%a,(@[%a@]))"
+        fprintf str_formatter "WRAPPER_%s_MEM_DEC(%a,%a,(@[%a@]))"
+          node_or_fun
           pp_qualname q
           C.pp_cty out_ty
           (Pp_tools.print_list_r C.pp_cty ","",""") ins_ty
@@ -915,7 +917,8 @@ let mem_decls_defs_of_class_def cd =
       in
       (*WRAPPER_FUN_DEFS(Simple__f,int,(int x, int y),(x, y))*)
       let macro_def =
-        fprintf str_formatter "WRAPPER_FUN_DEFS(%a,%a,(@[%a@]),(@[%a@]))"
+        fprintf str_formatter "WRAPPER_%s_DEFS(%a,%a,(@[%a@]),(@[%a@]))"
+          node_or_fun
           pp_qualname q
           C.pp_cty out_ty
           (Pp_tools.print_list_r C.pp_vardecl ""","",") inputs

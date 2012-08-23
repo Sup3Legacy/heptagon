@@ -5,6 +5,7 @@
 #include "utils.h"
 #include "futures.h"
 #include "async_node.h"
+#include "async_fun.h"
 #include "async_macros.h"
 #include "stock.h"
 
