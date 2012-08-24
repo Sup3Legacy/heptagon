@@ -16,10 +16,10 @@ tel
 node down_line<<w, ratio :int>> (x :pixel^w) = (y :pixel^(w/ratio))
 var x_stream, y_stream :pixel; x_line, y_line, down :bool; y_y :pixel^(w/ratio);
 let
-  x_line = Misc.timer<<w>>(); (* needs to be removed by LHO *)
+  x_line = Std.timer<<w>>(); (* needs to be removed by LHO *)
   x_stream = Stream_arrays.a2s_pixel<<w>>(x, x_line);
   
-  down = Misc.timer<<ratio>>();
+  down = Std.timer<<ratio>>();
   y_stream = (average_pixel (x_stream)) when down;
   y_line = x_line when down;
   y_y = Stream_arrays.s2a_pixel<<w/ratio>>(y_stream, y_line);

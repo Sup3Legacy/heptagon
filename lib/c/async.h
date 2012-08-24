@@ -1,12 +1,12 @@
 
-#ifndef DECADES_ASYNC_H
-#define DECADES_ASYNC_H
+#ifndef __DECADES_ASYNC_H
+#define __DECADES_ASYNC_H
 
-#include "utils.h"
-#include "futures.h"
-#include "async_node.h"
-#include "async_fun.h"
-#include "async_macros.h"
-#include "stock.h"
+#include "async/utils.h"
+#include "async/futures.h"
+#include "async/async_node.h"
+#include "async/async_fun.h"
+#include "async/async_macros.h"
+#include "async/stock.h"
 
 #endif

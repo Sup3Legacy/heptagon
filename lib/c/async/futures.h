@@ -1,6 +1,6 @@
 
-#ifndef FUTURES_H_
-#define FUTURES_H_
+#ifndef DECADES_FUTURES_H_
+#define DECADES_FUTURES_H_
 
 
 #include <atomic>

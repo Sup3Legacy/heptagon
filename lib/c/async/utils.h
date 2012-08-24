@@ -6,8 +6,8 @@
 //  Copyright (c) 2012 Leonard Gerard. All rights reserved.
 //
 
-#ifndef FutureLustre_utils_h
-#define FutureLustre_utils_h
+#ifndef __DECADES_UTILS_H
+#define __DECADES_UTILS_H
 
 
 #define CACHE_LINE_SIZE 64

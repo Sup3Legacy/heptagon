@@ -1,6 +1,6 @@
 
-#ifndef DECADES_DO_H
-#define DECADES_DO_H
+#ifndef __DECADES_DO_H
+#define __DECADES_DO_H
 
 void Do__stuff_step(int coeff);
 

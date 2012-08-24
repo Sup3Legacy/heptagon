@@ -36,6 +36,7 @@ case $1 in
 
 
 LIB_DIR="$SCRIPT_DIR/lib"
+INCLUDE_DIR="$SCRIPT_DIR/include"
 
 JAVA_LIB_DIR="$LIB_DIR/java"
 JAVAC="javac -Xlint:unchecked -cp $JAVA_LIB_DIR:.."
@@ -69,7 +70,7 @@ function compile
 {
   #call the compiler with the passed arguments.
   pushd "$RUN_DIR" > /dev/null
-  "$HEPTC" -stdlib "$LIB_DIR" "$@"
+  "$HEPTC" -stdlib "$LIB_DIR" -I "$INCLUDE_DIR" "$@"
   STATUS=$?
   popd > /dev/null
 }

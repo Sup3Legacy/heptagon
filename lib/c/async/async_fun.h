@@ -5,8 +5,8 @@
  *      Author: lgerard
  */
 
-#ifndef ASYNCNODE_H_
-#define ASYNCNODE_H_
+#ifndef __DECADES_ASYNCFUN_H_
+#define __DECADES_ASYNCFUN_H_
 
 #include <Thread>
 #include <functional>
@@ -16,16 +16,14 @@
 #include "spsc_bounded_fifo.h"
 
 
-template <typename Output, typename Mem, typename ... Inputs>
-struct wrapnode {
-  template<void(*f_step)(Inputs..., Output*, Mem*),
-      void(*f_reset)(Mem*),
+template <typename Output, typename ... Inputs>
+struct wrapfun {
+  template<void(*f_step)(Inputs..., Output*),
       int queue_size, int queue_nb>
   class async {
 
     typedef struct work_closure {
-      function<void(Output*, Mem*)> ff;
-      bool nreset;
+      function<void(Output*)> ff;
       future<Output>* fo;
     } work_closure;
     typedef queue<work_closure,queue_size> work_queue;
@@ -33,23 +31,20 @@ struct wrapnode {
     work_queue queues[queue_nb];
     thread **workers;
     int current_queue;
-    bool need_reset;
 
   public:
 
-    async():current_queue(0),need_reset(true) {
+    async():current_queue(0) {
       workers = new thread*[queue_nb];
       for(int i = 0; i<queue_nb; i++) {
+    	queues[i].attach_productor(); //Proactif !!
         workers[i] = new std::thread (
           [](work_queue *q) {
             signal(SIGINT,[](int i){pthread_exit(0);});
             signal(SIGTERM,[](int i){pthread_exit(0);});
-            Mem m;
-            f_reset(&m);
             while (true) {
               work_closure* r = q->get();
-              if (r->nreset) f_reset(&m);
-              r->ff(r->fo->to_set(), &m);
+              r->ff(r->fo->to_set());
               r->fo->release();
               q->remove();
             }
@@ -62,10 +57,20 @@ struct wrapnode {
     async(const async&) = delete;
 
     ~async() {
-      for(int i = 0; i<queue_nb; i++)
-        pthread_kill(workers[i]->native_handle(),SIGTERM);
+      for(int i = 0; i<queue_nb; i++) {
+    	int r = pthread_kill(workers[i]->native_handle(),SIGTERM);
+    	if (r==0) {
+    		printf("killed %d\n",i);
+    		fflush(stdout);
+    	} else {
+    		printf("killed failed %d\n",i);
+    		fflush(stdout);
+    	}
+      }
       for(int i = 0; i<queue_nb; i++) {
         workers[i]->join();
+        printf("joined %d\n",i);
+        fflush(stdout);
         delete(workers[i]);
       }
       delete[](workers);
@@ -76,26 +81,20 @@ struct wrapnode {
     void step(Inputs... i, future<Output>* o) {
       //create closure
       *queues[current_queue].to_fill() =
-      {std::bind(f_step,i...,placeholders::_1,placeholders::_2),
-          need_reset, o};
+      {std::bind(f_step,i...,placeholders::_1),o};
       //push it in the current queue
       queues[current_queue].commit();
-      //reset the [reset] flag
-      need_reset = false;
     }
 
     /** Round Robin choice of the queue and set the [need_reset] flag,
      * so that next time [step] is called, the flag will be true.
      */
     void reset() {
-      queues[current_queue].detach_productor();
       current_queue = INCR_MOD(current_queue, queue_nb);
-      queues[current_queue].attach_productor();
-      need_reset = true;
     }
 
   };
 };
 
 
-#endif /* ASYNCNODE_H_ */
+#endif /* ASYNCFUN_H_ */

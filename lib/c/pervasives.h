@@ -1,7 +1,7 @@
 /* Pervasives module for the Decades compiler */
 
-#ifndef DECADES_PERVASIVES_H
-#define DECADES_PERVASIVES_H
+#ifndef __DECADES_PERVASIVES_H
+#define __DECADES_PERVASIVES_H
 
 /* between(i, n) returns idx between 0 and n-1. */
 static inline int between(int idx, int n)

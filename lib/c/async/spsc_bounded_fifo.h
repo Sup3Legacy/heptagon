@@ -1,6 +1,6 @@
 
-#ifndef SPSC_BOUNDED_H_
-#define SPSC_BOUNDED_H_
+#ifndef DECADES_SPSC_BOUNDED_H_
+#define DECADES_SPSC_BOUNDED_H_
 
 
 #include <atomic>

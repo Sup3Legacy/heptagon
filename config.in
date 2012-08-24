@@ -8,9 +8,14 @@ libdir      = @libdir@
 INSTALL= @INSTALL@
 MAKE= @MAKE@
 
+CXX=g++-mp-4.7
+CXXFLAGS="-std=c++11"
+
 BUILD= _build
 COMPILER=heptc
 SIMULATOR=hepts
+
+STDLIB_NAME=libdecades
 
 INSTALL_BINDIR=$(bindir)
 INSTALL_LIBDIR=$(libdir)/heptagon

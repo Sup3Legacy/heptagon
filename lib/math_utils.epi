@@ -3,8 +3,6 @@
 (*absolute value*)
 external val fun abs_f(float) returns (float)
 
-
-
 (* **Integer Math ** *)
 
 (*absolute value*)

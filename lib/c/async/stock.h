@@ -5,8 +5,8 @@
  *      Author: lgerard
  */
 
-#ifndef STOCK_H_
-#define STOCK_H_
+#ifndef __DECADES_STOCK_H_
+#define __DECADES_STOCK_H_
 
 #include "utils.h"
 #include <assert.h>

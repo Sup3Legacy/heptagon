@@ -5,8 +5,8 @@
  *      Author: lgerard
  */
 
-#ifndef ASYNC_MACROS_H_
-#define ASYNC_MACROS_H_
+#ifndef __DECADES_ASYNC_MACROS_H_
+#define __DECADES_ASYNC_MACROS_H_
 
 //Stock is the stock name, Mem the memory name, Value is the value to be stored
 #define STORE_STATIC_FUTURE(Stock,Mem,Value) {\
