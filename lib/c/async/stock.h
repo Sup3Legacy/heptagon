@@ -19,13 +19,12 @@ template <typename T, int size>
 class stock {
   /** Internal handling with doubly linked lists */
   typedef future<T>* ext_n;
-  enum class Flag { unset, old, fresh };
   struct node {
     future<T> v;
 
     node * prev;
     node * next;
-    Flag flag;
+    int ref_count;
   };
   typedef node* n;
 
@@ -44,7 +43,7 @@ class stock {
   n grays;
   n blacks;
 
-  inline void move_to_tail(n &from, n x, n &dest) {
+  inline void move(n &from, n x, n &dest) {
     //remove x from its list
     if (x == x->next)
       from = 0;
@@ -68,25 +67,6 @@ class stock {
       dest = x;
     }
   }
-
-  inline void move_to_black(n &from, n x) {
-    move_to_tail(from,x,blacks);
-    x->flag = Flag::fresh;
-  }
-
-  inline void move_black_to_white(n x) {
-    move_to_tail(blacks,x,whites);
-    x->flag = Flag::unset;
-  }
-
-  inline void move_gray_to_white(n x) {
-    move_to_tail(grays,x,whites);
-  }
-
-  inline void move_white_to_gray(n x) {
-    move_to_tail(whites,x,grays);
-  }
-
 
   inline void move_all(n &q1, n &q2) {
     if (!q1) return;
@@ -123,7 +103,7 @@ public :
     for (int i = 0; i<size; i++) {
       all[i].prev = &all[DECR_MOD(i,size)];
       all[i].next = &all[INCR_MOD(i,size)];
-      all[i].flag = Flag::unset;
+      all[i].ref_count = 0;
       all[i].v.release(); //set all futures as ready
     }
     whites = &all[0];
@@ -132,9 +112,10 @@ public :
   }
   stock(const stock& ) = delete;
 
+
   ext_n get_free() {
     n x = find_free();
-    move_white_to_gray(x);
+    move(whites,x,grays);
     x->v.reset();
     return (reinterpret_cast<ext_n>(reinterpret_cast<future<T>*>(x)));
   }
@@ -153,7 +134,8 @@ public :
   }
   inline ext_n get_free_and_store() {
     n x = find_free();
-    move_to_black(whites,x);
+    move(whites,x,blacks);
+    x->ref_count = 1;
     x->v.reset();
     return (reinterpret_cast<ext_n>(x));
   }
@@ -166,23 +148,28 @@ public :
    * The freshness is reset by the tick function.
    */
   void store_in(ext_n ext_newx, ext_n &ext_oldx) {
-    store(ext_newx);
-    unstore(ext_oldx); //unstore after store to deal with store_in(x,x)
-    ext_oldx = ext_newx;
+    if (ext_newx == ext_oldx)
+    {} //no_op
+    else {
+      store(ext_newx);
+      unstore(ext_oldx); //unstore after store to deal with store_in(x,x)
+      ext_oldx = ext_newx;
+    }
   }
   inline void store(ext_n ext_newx) {
     n newx = reinterpret_cast<n>(ext_newx);
-    if (newx->flag == Flag::unset) // It is gray
-      move_to_black(grays, newx);
-    else
-    {newx->flag = Flag::fresh;} // It is already black refresh_it
+    if (newx->ref_count == 0) {// It is gray
+      move(grays, newx, blacks);
+      newx->ref_count = 1;
+    }
+    else // It is black
+      newx->ref_count++;
   }
   inline void unstore(ext_n ext_oldx) {
     n oldx = reinterpret_cast<n>(ext_oldx);
-    if (oldx->flag == Flag::fresh)
-    {} //It should stay black
-    else
-      move_black_to_white(oldx);
+    oldx->ref_count--;
+    if (oldx->ref_count == 0)
+      move(blacks, oldx, grays);
   }
 
   /**
@@ -192,12 +179,6 @@ public :
   void tick() {
     //move gray to white
     move_all(grays,whites);
-    //remove flags of the blacks
-    if (blacks) {
-      n current = blacks;
-      do current->flag = Flag::old;
-      while((current = current->next) != blacks);
-    }
   }
 
   /*
