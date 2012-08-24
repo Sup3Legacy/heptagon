@@ -1,5 +1,5 @@
 include ../../config
-
+ASYNC_HEADERS= async/async_fun.h async/async_macros.h async/async_node.h async/futures.h async/spsc_bounded_fifo.h async/stock.h async/utils.h
 HEADERS=pervasives.h async.h do.h
 SRC=do.cpp
 
@@ -9,10 +9,9 @@ OBJS=$(SRC:.cpp=.o)
 
 C_STDLIB_STATIC=$(STDLIB_NAME).a
 
-.SUFFIXES: .gch
+%.h.gch: %.h
+	$(CXX) $(CXXFLAGS) $<
 
-%.gch: %
-	$(CXX) $(CXXFLAGS) $< 
 
 .PHONY: all
 
@@ -25,6 +24,8 @@ static_lib: $(C_STDLIB_STATIC)
 $(C_STDLIB_STATIC): $(OBJS)
 	ar -r $(C_STDLIB_STATIC) $(OBJS)
 
+async.h.gch: $(ASYNC_HEADERS)
+	$(CXX) $(CXXFLAGS) async.h
 
 install: all
 	$(INSTALL) -d $(INSTALL_LIBDIR)
