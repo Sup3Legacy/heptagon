@@ -1,7 +1,7 @@
 #!/bin/bash
 includes=""
+objs=`ls ../*_c/*.o 2> /dev/null`
 for i in ../*_c ; do
 	includes="$includes -I $i"
 done
-echo $includes
-g++-mp-4.7 -std=c++11 -I ~/W/heptagon/lib/c ~/W/heptagon/lib/c/libdecades.a $includes ../*_c/*.o $@
+g++-mp-4.7 -std=c++11 -I ~/W/heptagon/lib/c ~/W/heptagon/lib/c/libdecades.a $includes $objs $@
