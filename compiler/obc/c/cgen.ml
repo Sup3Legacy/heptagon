@@ -148,23 +148,36 @@ let cvar_of_vd vd =
     types which are already pointers. *)
 let pointer_type ty =
   match Modules.unalias_type ty with
-    | Tarray _ -> ctype_of_otype ty
     | Tfuture _ -> ctype_of_otype ty
     | _ -> Cty_ptr (ctype_of_otype ty)
 
+(** Returns the type of a const reference to a type, except for
+    primitive types. *)
+let const_reference_type ty =
+  let t = ctype_of_otype (Modules.unalias_type ty) in
+  match t with
+  | Cty_int | Cty_float | Cty_char | Cty_ptr _
+  | Cty_void | Cty_future _ -> t
+  | _ -> Cty_constref t
+
 (** Returns the expression to use e as an argument of
     a function expecting a pointer as argument. *)
-let address_of ty e =
+let address_of_ty ty e =
   match Modules.unalias_type ty with
-    | Tarray _ -> e
-    | Tfuture _ -> e
-    | _ -> Caddrof e
-
+  | Tfuture _ -> e
+  | _ -> Caddrof e
+let address_of_cty cty e =
+  match cty with
+  | Cty_future t -> e
+  | _ -> Caddrof e
 
 let inputlist_of_ovarlist vl =
   let cvar_of_ovar vd =
-    let ty = ctype_of_otype vd.v_type in
-    let ty = if vd.v_mutable then pointer_type vd.v_type else ty in
+    let ty =
+      if vd.v_mutable
+      then pointer_type vd.v_type
+      else const_reference_type vd.v_type
+    in
     name vd.v_ident, ty
   in
   List.map cvar_of_ovar vl
@@ -176,8 +189,11 @@ let rec unalias_ctype cty = match cty with
     | Type_alias ty -> unalias_ctype (ctype_of_otype ty)
     | _ -> Cty_id ty_name
      with Not_found -> Cty_id ty_name)
-  | Cty_arr (n, cty) -> Cty_arr (n, unalias_ctype cty)
   | Cty_ptr cty -> Cty_ptr (unalias_ctype cty)
+  | Cty_constref cty -> Cty_constref (unalias_ctype cty)
+  | Cty_arr (n, cty) -> Cty_arr (n, unalias_ctype cty)
+  | Cty_future cty -> Cty_future (unalias_ctype cty)
+  | Cty_stock (cty,n) -> Cty_stock (unalias_ctype cty,n)
   | cty -> cty
 
 (** Returns the type associated with the name [n]
@@ -497,7 +513,7 @@ let step_fun_call is_async out_env var_env sig_info objn out args =
         (*this arg is targeted, use a pointer*)
         let e =
           if Linearity.is_linear ad.a_linearity
-          then address_of ad.a_type e
+          then address_of_ty ad.a_type e
           else e
         in
         e::(add_targeting l ads)
@@ -556,19 +572,15 @@ let generate_function_call async out_env var_env obj_env outvl objn args =
         create_affect_stm outv (fun_call None) ty
     | [outv] ->
         let ty = assoc_type_lhs outv var_env in
-        let (e,t) = match ty with
-        | Cty_arr _ -> Clhs outv, None
-        | Cty_future t -> Clhs outv, Some t
-        | _ -> Caddrof (Clhs outv), None
-        in
+        let e = address_of_cty ty (Clhs outv) in
         let step_call = Csexpr (fun_call (Some e)) in
-        if isasync
-        then
-          match t with
-          | Some t -> [Caffect (outv, get_free_future t);step_call]
-          | _ -> Misc.internal_error "Async call should have future return type"
-        else
-          [step_call]
+        (match ty with
+          | Cty_future t ->
+              if not isasync
+              then Misc.unsupported "C backend giving future to non async call!"
+              else [Caffect (outv, get_free_future t);step_call]
+          | _ -> [step_call]
+        )
     | _ ->
         if isasync then
           Misc.unsupported "C backend allows only async of node \
@@ -1088,10 +1100,8 @@ let global_file_header name prog =
   in
   let types_c = (filename_types ^ ".cpp", Csource (concat cty_defs)) in
 
-  let header =
-    (name ^ ".h", Cheader (filename_types :: dependencies, decls))
-  and source =
-    (name ^ ".cpp", Csource defs) in
+  let header = (name ^ ".h", Cheader (filename_types :: dependencies, decls)) in
+  let source = (name ^ ".cpp", Csource defs) in
   [header; source; types_h; types_c]
 
 
@@ -1102,9 +1112,11 @@ let interface_header name i =
   let cdefs_and_cdecls = List.map cdefs_and_cdecls_of_interface_decl i.i_desc in
 
   let (cty_defs, cty_decls) = List.split cdefs_and_cdecls in
-  let types_h = (name ^ ".h",
-                 Cheader ("stdbool"::"assert"::"pervasives"::dependencies,
-                          List.concat cty_decls)) in
+  let types_h =
+    (name ^ ".h"
+    , Cheader ("stdbool"::"assert"::"pervasives"::"async"::dependencies
+    , List.concat cty_decls))
+  in
   let types_c = (name ^ ".cpp", Csource (concat cty_defs)) in
 
   [types_h; types_c]

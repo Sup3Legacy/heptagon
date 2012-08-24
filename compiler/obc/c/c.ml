@@ -46,6 +46,7 @@ type cty =
   | Cty_id of qualname
   (** Previously defined C type, such as an enum or struct.*)
   | Cty_ptr of cty (** C points-to-other-type type. *)
+  | Cty_constref of cty (** C const ref to other type *)
   | Cty_arr of Int32.t * cty (** A static array of the specified size. *)
   | Cty_void (** Well, [void] is not really a C type. *)
   | Cty_future of cty
@@ -191,33 +192,15 @@ let rec pp_cty fmt cty = match cty with
   | Cty_char -> fprintf fmt "char"
   | Cty_id s -> pp_qualname fmt s
   | Cty_ptr cty' -> fprintf fmt "%a*" pp_cty cty'
-  | Cty_arr (n, cty') -> fprintf fmt "%a[%ld]" pp_cty cty' n
+  | Cty_constref cty' -> fprintf fmt "const %a&" pp_cty cty'
+  | Cty_arr (n, cty') -> fprintf fmt "array<%a,%ld>" pp_cty cty' n
   | Cty_void -> fprintf fmt "void"
   | Cty_future cty' -> fprintf fmt "future<%a>*" pp_cty cty'
   | Cty_stock (cty', s) -> fprintf fmt "stock<%a,%ld>" pp_cty cty' s
   | Cty_macro s -> fprintf fmt "%s" s
 
-(** [pp_array_decl cty] returns the base type of a (multidimensionnal) array
-    and the string of indices. *)
-let rec pp_array_decl cty =
-  match cty with
-    | Cty_arr(n, cty') ->
-        let ty, s = pp_array_decl cty' in
-        ty, sprintf "[%ld]%s" n s
-    | _ -> cty, ""
 
-let rec pp_param_cty fmt = function
-    | Cty_arr(_, cty') ->
-          fprintf fmt "%a*" pp_param_cty cty'
-    | cty -> pp_cty fmt cty
-
-(* pp_vardecl, featuring an ugly hack coping with C's inconsistent concrete
-   syntax! *)
-let rec pp_vardecl fmt (s, cty) = match cty with
-  | Cty_arr _ ->
-      let ty, indices = pp_array_decl cty in
-      fprintf fmt "%a %a%s" pp_cty ty  pp_string s indices
-  | _ -> fprintf fmt "%a %a" pp_cty cty  pp_string s
+let rec pp_vardecl fmt (s, cty) = fprintf fmt "%a %a" pp_cty cty  pp_string s
 and pp_param_list fmt l = pp_list1 pp_vardecl "," fmt l
 and pp_var_list fmt l = pp_list pp_vardecl ";" fmt l
 
@@ -268,7 +251,7 @@ and pp_cexpr fmt ce = match ce with
       fprintf fmt "((%a){@[%a@]})" pp_cty t (pp_list1 pp_cexpr ",") el
   | Cconst c -> pp_cconst fmt c
   | Cvar s -> pp_string fmt s
-  | Cderef e -> fprintf fmt "*%a" pp_cexpr e
+  | Cderef e -> fprintf fmt "(*%a)" pp_cexpr e
   | Cfield (Cderef e, f) -> fprintf fmt "%a->%a" pp_cexpr e pp_shortname f
   | Cfield (e, f) -> fprintf fmt "%a.%a" pp_cexpr e pp_shortname f
   | Cmethod (Cderef e, m, e_l) ->
@@ -289,7 +272,7 @@ and pp_cconst_expr fmt ce = match ce with
 
 and pp_clhs fmt clhs = match clhs with
   | CLvar s -> pp_string fmt s
-  | CLderef lhs' -> fprintf fmt "*%a" pp_clhs lhs'
+  | CLderef lhs' -> fprintf fmt "(*%a)" pp_clhs lhs'
   | CLfield (CLderef lhs, f) -> fprintf fmt "%a->%a" pp_clhs lhs  pp_shortname f
   | CLfield (lhs, f) -> fprintf fmt "%a.%a" pp_clhs lhs  pp_shortname f
   | CLarray (lhs, e) ->
@@ -348,16 +331,16 @@ let pp_cfile_desc fmt filen cfile =
         Compiler_utils.print_header_info fmt "/*" "*/";
         fprintf fmt "#ifndef %s_H@\n" headern_macro;
         fprintf fmt "#define %s_H@\n@\n" headern_macro;
-        iter (fun d -> fprintf fmt "#include \"%s.h\"@\n" d)
-          deps;
+        iter (fun d -> fprintf fmt "#include \"%s.h\"@\n" d) deps;
+        fprintf fmt "#include <stdio.h>@\n";
+        fprintf fmt "#include <string.h>@\n";
+        fprintf fmt "#include <stdlib.h>@\n";
+        fprintf fmt "#include <array>@\n";
         iter (pp_cdecl fmt) cdecls;
         fprintf fmt "#endif // %s_H@\n@?" headern_macro
     | Csource cdefs ->
         let headern = filen_wo_ext ^ ".h" in
         Compiler_utils.print_header_info fmt "/*" "*/";
-        fprintf fmt "#include <stdio.h>@\n";
-        fprintf fmt "#include <string.h>@\n";
-        fprintf fmt "#include <stdlib.h>@\n";
         fprintf fmt "#include \"%s\"@\n@\n" headern;
         iter (pp_cdef fmt) cdefs
 
