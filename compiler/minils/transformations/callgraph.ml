@@ -44,7 +44,7 @@ sig
   val build : param list -> key list -> env
   module Instantiate :
   sig
-    val get_new_instances_of_node : node_dec -> program_desc list
+    val get_new_instances_of_node : node_dec -> program_desc list -> program_desc list
     val get_new_instances_from_program : program -> program_desc list
     val update_node : node_dec -> node_dec
   end
@@ -224,16 +224,19 @@ struct
       let _ = Idents.pop_node () in
       { n with n_name = ln; n_params = []; n_param_constraints = []; }
 
-    let get_new_instances_of_node n =
-      List.map (fun params -> Pnode (clone_instance n params)) (get_node_instances n.n_name)
+    let get_new_instances_of_node n acc =
+      List.fold_left
+        (fun acc params -> (Pnode (clone_instance n params))::acc)
+        acc
+        (get_node_instances n.n_name)
 
     let get_new_instances_from_program p =
       let program_desc acc pd = match pd with
         | Pnode n -> (* for every node in the program p, search for instance *)
-            (get_new_instances_of_node n)@acc
+            get_new_instances_of_node n acc
         | _ -> pd :: acc
       in
-      List.fold_left program_desc [] p.p_desc
+      List.rev (List.fold_left program_desc [] p.p_desc)
 
     let update_node n =
       instanciate_node_body n QualEnv.empty
@@ -421,14 +424,14 @@ let program p =
   (* Creates the list of instances starting from these nodes *)
   List.iter call_node to_gen_nodes;
   (* The current program generate the to_gen_nodes plus some instances *)
-  let pd = List.fold_right
-    (fun pd acc -> match pd with
+  let pd = List.rev (List.fold_left
+    (fun acc pd -> match pd with
       | Pnode n when need_instanciation n.n_name ->
-          (Param_instances.Instantiate.get_new_instances_of_node n)@acc
+          Param_instances.Instantiate.get_new_instances_of_node n acc
       | Pnode n ->
           (Pnode (Param_instances.Instantiate.update_node n))::acc
       | _ -> pd::acc)
-    p.p_desc []
+    [] p.p_desc)
   in
   let p = { p with p_desc = pd } in
   (* Generate all the remaining needed instances,*)
