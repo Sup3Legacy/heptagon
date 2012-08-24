@@ -8,13 +8,17 @@
 #ifndef __DECADES_STOCK_H_
 #define __DECADES_STOCK_H_
 
+/** Define STOCK_EMPTYWHITES if the stock is not big enough
+ * to never have empty white list.
+ */
+//#define STOCK_EMPTYWHITES
+
 #include "utils.h"
 #include <assert.h>
 
 #include "futures.h"
 
-/*TODO Si l'on est certain que white ne sera jamais vide,
-       il y a des tests que l'on peu enlever. */
+
 template <typename T, int size>
 class stock {
   /** Internal handling with doubly linked lists */
@@ -68,6 +72,32 @@ class stock {
     }
   }
 
+  inline void move_from_whites(n x, n &dest) {
+#ifdef STOCK_EMPTYWHITES
+    move(whites, x, dest);
+#else
+    //remove x from the white list
+    x->prev->next = x->next;
+    x->next->prev = x->prev;
+    if (x == whites)
+      // x is the head of the queue, move the head correctly
+      whites = x->next;
+    assert(whites); //whites should stay non-empty
+    //add x to the dest
+    if (dest) {
+      x->prev = dest->prev;
+      x->next = dest;
+      x->prev->next = x;
+      x->next->prev = x;
+    }
+    else {
+      x->prev = x;
+      x->next = x;
+      dest = x;
+    }
+#endif
+  }
+
   inline void move_all(n &q1, n &q2) {
     if (!q1) return;
     if (q2) {
@@ -81,6 +111,21 @@ class stock {
       q2 = q1;
     }
     q1 = 0;
+  }
+
+  inline void move_all_to_whites(n &q1) {
+#ifdef STOCK_EMPTYWHITES
+    move_all(q1,whites);
+#else
+    assert(whites); //The white queue should never be empty
+    if (!q1) return;
+    n end = q1->prev;
+    whites->prev->next = q1;
+    q1->prev = whites->prev;
+    end->next = whites;
+    whites->prev = end;
+    q1 = 0;
+#endif
   }
 
   inline n find_free() {
@@ -115,16 +160,15 @@ public :
 
   ext_n get_free() {
     n x = find_free();
-    move(whites,x,grays);
+    move_from_whites(x,grays);
     x->v.reset();
     return (reinterpret_cast<ext_n>(reinterpret_cast<future<T>*>(x)));
   }
 
 
   /**
-   * If the given black is null,
-   * it returns a fresh black,
-   * otherwise
+   * Sets the store [ext_x] to [o].
+   * If the given black is null, it is initialized.
    */
   void reset_store(ext_n &ext_x, T o) {
     if (!ext_x) {
@@ -134,7 +178,7 @@ public :
   }
   inline ext_n get_free_and_store() {
     n x = find_free();
-    move(whites,x,blacks);
+    move_from_whites(x,blacks);
     x->ref_count = 1;
     x->v.reset();
     return (reinterpret_cast<ext_n>(x));
@@ -178,55 +222,8 @@ public :
    */
   void tick() {
     //move gray to white
-    move_all(grays,whites);
+    move_all_to_whites(grays);
   }
-
-  /*
-  void print_all() {
-    printf("white : ");
-    print_list(whites);
-    printf(" black : ");
-    print_list(blacks);
-    printf(" gray : ");
-    print_list(grays);
-    printf("\n");
-    fflush(stdout);
-  }
-  void print_list(n q) {
-    if (q) {
-      n c = q;
-      printf("[ %d", c->v.get());
-      c = c->next;
-      while(c != q) {
-        printf(", %d", c->v.get());
-        c = c->next;
-      }
-      printf(" ]");
-      fflush(stdout);
-    }
-    else printf("[]");
-  }
-  void test() {
-    print_all();
-    move_all(whites,grays);
-    print_all();
-    move_all(grays,whites);
-    print_all();
-    move_to_tail(whites,whites->next,blacks);
-    print_all();
-    move_to_tail(whites,whites->prev,grays);
-    print_all();
-    move_to_tail(whites,whites,blacks);
-    print_all();
-    move_all(grays,blacks);
-    print_all();
-    move_all(blacks,whites);
-    print_all();
-  }
-   */
-
-
-
 };
 
 

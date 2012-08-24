@@ -242,8 +242,8 @@ let add_stores_tick acc =
     acc
 let stores_def acc =
   Stock.fold
-    (fun cty n acc ->
-      ((cname_of_qn (Stock.name_stock cty), Cty_stock (cty,n)))::acc)
+    (fun cty n acc -> (* succ to ensure stock white list is never empty *)
+      ((cname_of_qn (Stock.name_stock cty), Cty_stock (cty,Int32.succ n)))::acc)
     !current_stock
     acc
 
@@ -900,7 +900,8 @@ let mem_decls_defs_of_class_def cd =
         let add_param params =
           let queue_size,_ = Misc.assert_1min params in
           let queue_size = int_of_static_exp queue_size in
-          add_stock out_ty (Int32.succ queue_size)
+          (* +2 for the one used by the worker plus one for the get_free() *)
+          add_stock out_ty (Int32.succ (Int32.succ queue_size))
         in
         List.iter add_param params_l
       end;
