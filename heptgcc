@@ -1,2 +1,7 @@
 #!/bin/bash
-g++-mp-4.7 -std=c++11 -I ~/W/heptagon/lib/c ~/W/heptagon/lib/c/libdecades.a -I ../*_c -L ../*_c
+includes=""
+for i in ../*_c ; do
+	includes="$includes -I $i"
+done
+echo $includes
+g++-mp-4.7 -std=c++11 -I ~/W/heptagon/lib/c ~/W/heptagon/lib/c/libdecades.a $includes ../*_c/*.o $@
