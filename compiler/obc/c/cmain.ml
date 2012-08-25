@@ -94,8 +94,8 @@ let main_def_of_class_def cd =
     | Signature.Tid id when id = Initial.pint -> "%d"
     | Signature.Tid id when id = Initial.pbool -> "%d"
     | Tid _ -> "%s"
-    | Tfuture _ -> assert false (* TODO async *)
-    | Tbounded _ -> assert false
+    | Tfuture _ -> Misc.unsupported "Main node should not return futures"
+    | Tbounded _ -> "$d"
   in
 
   (** Does reading type [ty] need a buffer? When it is the case,
@@ -106,8 +106,8 @@ let main_def_of_class_def cd =
     | Signature.Tid id when id = Initial.pint -> None
     | Signature.Tid id when id = Initial.pbool -> None
     | Tid { name = n } -> Some n
-    | Tfuture _ -> assert false (* TODO async *)
-    | Tbounded _ -> assert false
+    | Tfuture _ -> Misc.unsupported "Main node should not input futures"
+    | Tbounded _ -> None
   in
 
   let cprint_string s = Csexpr (Cfun_call ("printf", [Cconst (Cstrlit s)])) in
