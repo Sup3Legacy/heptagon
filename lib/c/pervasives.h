@@ -20,5 +20,15 @@ static inline bool bool_of_int(int i)
   return i;
 }
 
+#include <sys/time.h>
+typedef struct timeval timeval;
+static inline long diff_timeval(timeval *starttime, timeval *finishtime)
+{
+  long msec;
+  msec=(finishtime->tv_sec-starttime->tv_sec)*1000;
+  msec+=(finishtime->tv_usec-starttime->tv_usec+500)/1000;
+  return msec;
+}
+
 #endif
 

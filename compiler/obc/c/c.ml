@@ -335,6 +335,7 @@ let pp_cfile_desc fmt filen cfile =
         fprintf fmt "#include <stdio.h>@\n";
         fprintf fmt "#include <string.h>@\n";
         fprintf fmt "#include <stdlib.h>@\n";
+        fprintf fmt "#include <time.h>@\n";
         fprintf fmt "#include <array>@\n";
         iter (pp_cdecl fmt) cdecls;
         fprintf fmt "#endif // %s_H@\n@?" headern_macro

@@ -168,7 +168,7 @@ let address_of_ty ty e =
   | _ -> Caddrof e
 let address_of_cty cty e =
   match cty with
-  | Cty_future t -> e
+  | Cty_future _ -> e
   | _ -> Caddrof e
 
 let inputlist_of_ovarlist vl =

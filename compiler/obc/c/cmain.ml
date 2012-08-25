@@ -27,7 +27,9 @@ let mk_float f = Cconst (Ccfloat f)
 
 (* Unique names for C variables handling step counts. *)
 let step_counter = fresh "step_c"
-and max_step = fresh"step_max"
+and max_step = fresh "step_max"
+and time_begin = fresh "t_begin"
+and time_end = fresh "t_end"
 
 let assert_node_res cd =
   let stepm = find_step_method cd in
@@ -95,7 +97,7 @@ let main_def_of_class_def cd =
     | Signature.Tid id when id = Initial.pbool -> "%d"
     | Tid _ -> "%s"
     | Tfuture _ -> Misc.unsupported "Main node should not return futures"
-    | Tbounded _ -> "$d"
+    | Tbounded _ -> "%d"
   in
 
   (** Does reading type [ty] need a buffer? When it is the case,
@@ -265,7 +267,8 @@ let main_def_of_class_def cd =
     if cd.cd_stateful
     then [Csexpr (Cfun_call ((cname_of_qn cd.cd_name) ^ "_reset"
                             , [Caddrof (Cvar "mem")]))]
-    else [] in
+    else []
+  in
 
   (mem_decl, varlist, rst_i, step_l)
 
@@ -278,7 +281,9 @@ let main_skel var_list prologue body =
     f_args = [("argc", Cty_int); ("argv", Cty_ptr (Cty_ptr Cty_char))];
     f_body = {
       var_decls =
-        (step_counter, Cty_int) :: (max_step, Cty_int) :: var_list;
+        (time_begin, Cty_id (local_qn "timeval"))
+        ::(time_end, Cty_id (local_qn "timeval"))
+        ::(step_counter, Cty_int) :: (max_step, Cty_int) :: var_list;
       block_body =
         [
         (* step_count = 0; max_step = 0; if (argc == 2) max_step = atoi(argv[1]); *)
@@ -290,6 +295,11 @@ let main_skel var_list prologue body =
           , []);
         ]
         @ prologue
+        @ (if not !Compiler_options.bench then []
+          else [Csexpr (Cfun_call("gettimeofday",
+                           [Caddrof (Cvar time_begin);Cconst (Ctag "NULL")]))
+               ]
+          )
         (* while (!max_step || step_c < max_step) *)
         @ (let cond =
             Cbop ("||", Cuop ("!", Cvar max_step)
@@ -299,7 +309,17 @@ let main_skel var_list prologue body =
              Caffect (CLvar step_counter
                      , Cbop ("+", Cvar step_counter, mk_int 1l))
            in
-           [Cwhile (Wwhiledo, cond, updt::body); Creturn (mk_int 0l)]
+           Cwhile (Wwhiledo, cond, updt::body)
+          )
+        :: (if not !Compiler_options.bench then [Creturn (mk_int 0l)]
+          else [Csexpr (Cfun_call("gettimeofday",
+                  [Caddrof (Cvar time_end); Cconst (Ctag "NULL")]));
+                Csexpr (Cfun_call("printf",
+                  [Cconst (Cstrlit "time : %ld\n"); Cfun_call("diff_timeval",
+                    [Caddrof (Cvar time_begin); Caddrof (Cvar time_end)])]));
+                Csexpr (Cfun_call ("fflush", [Cvar "stdout"]));
+                Creturn (mk_int 0l)
+               ]
           );
     }
   }
@@ -337,9 +357,10 @@ let mk_main name p =
     let (var_l, res_l, step_l) =
       (nvar_l @ var_l, res @ res_l, nstep_l @ step_l)
     in
+    let defs = defs @ [main_skel var_l res_l step_l] in
     let _ = Idents.pop_node () in
-    [("_main.cpp", Csource (defs @ [main_skel var_l res_l step_l]));
-    ("_main.h", Cheader ([name], []))];
+    [("_main.cpp", Csource defs);
+    ("_main.h", Cheader ([name], []))]
   ) else
     []
 
