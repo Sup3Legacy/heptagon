@@ -58,6 +58,8 @@ let set_simulation_node s =
 
 let hepts_simulation = ref false
 
+let bench = ref false
+
 let create_object_file = ref false
 
 let boolean = ref false
@@ -160,7 +162,9 @@ let check_options () =
   then (
     if !do_mem_alloc then err "Unable to activate memory allocation with strict SSA activated.";
     if !do_linear_typing then err "Unable to activate linear typing with strict SSA activated."
-  )
+  );
+  if !hepts_simulation && !bench
+  then err "Unable to activate benchmark and hepts simulation mode."
 
 let interf_all = ref false
 
@@ -174,6 +178,7 @@ and doc_stdlib = "<dir> Directory for the standard library"
 and doc_object_file = " Only generate a .epo object file"
 and doc_sim = "<node> Create simulation for node <node>"
 and doc_hepts = " Simulation for hepts (graphical simulator)"
+and doc_bench = " Generate main to do benchmarking"
 and doc_locate_stdlib = " Locate standard libray"
 and doc_no_pervasives = " Do not load the pervasives module"
 and doc_flatten = " Inline everything"

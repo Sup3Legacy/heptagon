@@ -242,22 +242,29 @@ let main_def_of_class_def cd =
       let args =
         map (fun vd -> Cvar (name vd.v_ident)) stepm.m_inputs
         @ (Caddrof (Cvar "_res")
-          :: if cd.cd_stateful then [Caddrof (Cvar "mem")] else []) in
-      Cfun_call ((cname_of_qn cd.cd_name) ^ "_step", args) in
-    concat scanf_calls
-    @ [Csexpr funcall]
-    @ printf_calls
-    @
-    (if !Compiler_options.hepts_simulation
-      then []
-      else [Csexpr (Cfun_call ("puts", [Cconst (Cstrlit "")]))])
-    @ [Csexpr (Cfun_call ("fflush", [Cvar "stdout"]))] in
+          :: if cd.cd_stateful then [Caddrof (Cvar "mem")] else [])
+      in
+      Cfun_call ((cname_of_qn cd.cd_name) ^ "_step", args)
+    in
+    if !Compiler_options.bench
+    then [Csexpr funcall]
+    else (
+      concat scanf_calls
+      @ [Csexpr funcall]
+      @ printf_calls
+      @
+      (if !Compiler_options.hepts_simulation
+        then []
+        else [Csexpr (Cfun_call ("puts", [Cconst (Cstrlit "")]))])
+      @ [Csexpr (Cfun_call ("fflush", [Cvar "stdout"]))]
+    )
+  in
 
-  (** Do not forget to initialize memory via reset if needed. *)
+  (** Initialize memory via reset if needed. *)
   let rst_i =
     if cd.cd_stateful
-    then [Csexpr (Cfun_call ((cname_of_qn cd.cd_name) ^ "_reset",
-          [Caddrof (Cvar "mem")]))]
+    then [Csexpr (Cfun_call ((cname_of_qn cd.cd_name) ^ "_reset"
+                            , [Caddrof (Cvar "mem")]))]
     else [] in
 
   (mem_decl, varlist, rst_i, step_l)
