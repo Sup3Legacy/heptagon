@@ -1,7 +1,33 @@
 #!/bin/bash
 includes=""
-objs=`ls ../*_c/*.o 2> /dev/null`
+objs=(`find ../*_c -name "*.o" -print`)
 for i in ../*_c ; do
 	includes="$includes -I $i"
 done
-g++-mp-4.7 -std=c++11 -I ~/W/heptagon/lib/c ~/W/heptagon/lib/c/libdecades.a $includes $objs $@
+case $1 in
+	-lib)
+		shift;
+		main=""
+		;;
+	-main)
+		shift;
+		main="$1"
+		;;
+	*)
+		main=_main
+		;;
+esac
+if [[ $# == 0 ]]
+then
+	sources=(`find . -name "*.cpp" \! -name "${main}.cpp" -print`)
+else
+	sources=$@
+fi
+echo "g++-mp-4.7 -std=c++11 -I ~/W/heptagon/lib/c $includes -c ${sources[*]}"
+g++-mp-4.7 -std=c++11 -I ~/W/heptagon/lib/c $includes -c ${sources[*]}
+if [ ! -x "${main}.cpp" ]
+then
+	echo "g++-mp-4.7 -std=c++11 -I ~/W/heptagon/lib/c ~/W/heptagon/lib/c/libdecades.a $includes ${objs[*]} ${sources[*]/.cpp/.o} "${main}.cpp""
+	g++-mp-4.7 -std=c++11 -I ~/W/heptagon/lib/c ~/W/heptagon/lib/c/libdecades.a $includes ${objs[*]} ${sources[*]/.cpp/.o} "${main}.cpp"
+fi
+
