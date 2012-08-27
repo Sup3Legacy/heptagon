@@ -20,6 +20,21 @@ static inline bool bool_of_int(int i)
   return i;
 }
 
+
+#include <stdlib.h>
+static inline int random(int i)
+{
+  return (rand()%i);
+}
+
+
+
+
+
+
+
+
+
 #include <sys/time.h>
 typedef struct timeval timeval;
 static inline long diff_timeval(timeval *starttime, timeval *finishtime)
