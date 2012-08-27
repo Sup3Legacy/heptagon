@@ -920,7 +920,7 @@ let mem_decls_defs_of_class_def cd =
       let open Format in
       (*WRAPPER_MEM_DEC(Simple__f,int,(int,int))*)
       let macro_dec =
-        fprintf str_formatter "WRAPPER_%s_MEM_DEC(%a,%a,(@[%a@]))"
+        fprintf str_formatter "WRAPPER_%s_MEM_DEC(%a,(%a),(@[%a@]))"
           node_or_fun
           pp_qualname q
           C.pp_cty out_ty
@@ -930,7 +930,7 @@ let mem_decls_defs_of_class_def cd =
       in
       (*WRAPPER_FUN_DEFS(Simple__f,int,(int x, int y),(x, y))*)
       let macro_def =
-        fprintf str_formatter "WRAPPER_%s_DEFS(%a,%a,(@[%a@]),(@[%a@]))"
+        fprintf str_formatter "WRAPPER_%s_DEFS(%a,(%a),(@[%a@]),(@[%a@]))"
           node_or_fun
           pp_qualname q
           C.pp_cty out_ty
