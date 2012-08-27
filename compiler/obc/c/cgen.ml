@@ -342,8 +342,10 @@ let rec cexpr_of_static_exp se =
         if !Compiler_options.unroll_loops && se.se_ty = Initial.tint
         then cexpr_of_static_exp (Static.simplify (find_const ln).c_value)
         else Cvar (cname_of_qn ln)
-    | Sfun _
-    | Sop _ -> Error.message se.se_loc Error.Estatic_exp_compute_failed
+    | Sfun (op,exps)
+    | Sop (op,exps) ->
+        let exps = List.map cexpr_of_static_exp exps in
+        cop_of_op_aux op exps
     | Sfield _ -> Misc.internal_error "cgen: sfield found"
     | Stuple _ -> Misc.internal_error "cgen: static tuple found"
     | Sasync s ->
@@ -354,7 +356,7 @@ let rec cexpr_of_static_exp se =
         Cmethod(Cderef future, "set2", [cs])
 
 (** [cexpr_of_exp exp] translates the Obj action [exp] to a C expression. *)
-let rec cexpr_of_exp out_env var_env exp =
+and cexpr_of_exp out_env var_env exp =
   match exp.e_desc with
     | Eextvalue w  -> cexpr_of_ext_value out_env var_env w
     (** Operators *)

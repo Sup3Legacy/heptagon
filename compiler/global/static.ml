@@ -56,7 +56,10 @@ type eval_error = Division_by_zero
 exception Evaluation_failed of eval_error * location
 
 (** Some unknown operators could be used preventing the evaluation *)
-type partial_eval_cause = Unknown_op of fun_name | Unknown_param of qualname
+type partial_eval_cause =
+  | Unknown_op of fun_name
+  | Unknown_param of qualname
+  | Unsupported_op of fun_name
 exception Partial_evaluation of partial_eval_cause * location
 
 let message exn =
@@ -77,6 +80,11 @@ let message exn =
               eprintf "%aUninstanciated param %a.@."
               Location.print_location loc
               Global_printer.print_qualname q
+          | Unsupported_op op ->
+              eprintf "%aThe operator %a is not supported for static \
+              evaluation@."
+              Location.print_location loc
+              Global_printer.print_qualname op
         )
     | _ -> raise exn
   end;
@@ -156,7 +164,10 @@ let apply_op partial loc op se_list =
       | "%", [Sint n1; Sint n2] -> Sint (Int32.rem n1 n2)
       | "max", [Sint n1; Sint n2] -> Sint (if Misc.int32_leq n2 n1 then n1 else n2)
       | "min", [Sint n1; Sint n2] -> Sint (if Misc.int32_leq n1 n2 then n1 else n2)
-      | f,_ -> Misc.internal_errorf "Static evaluation failed of the pervasive operator %s" f
+      | f, _ ->
+          if partial
+          then Sop(op, se_list)
+          else raise (Partial_evaluation (Unsupported_op op, loc))
   )
   else ( (* symbolic evaluation *)
     match op, sed_l with
