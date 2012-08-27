@@ -1,0 +1,65 @@
+#!/bin/bash
+
+weptcparams="-target c -O -lho -bench -s main"
+
+heptreg=".*\.ept"
+
+if [[ ! (($1 =~ $heptreg) || -x $1) ]]; then
+	echo "wrong file argument";
+	exit 1;
+fi
+
+file=$1
+shift
+
+tmpfile=${file/.ept/}
+param_names=()
+param_value=()
+
+while [[ !(-z $1 || -z $2) ]]; do
+	param_names+=($1)
+	param_value+=($2)
+	tmpfile+="_$1_$2"
+	shift
+	shift
+done
+
+echo "names ${param_names[@]}"
+echo "values ${param_value[@]}"
+
+if [[ -z $1 ]]; then
+	echo "a number of iteration is needed"
+	exit 2
+fi
+iterations=$1
+
+tmpbase="_$tmpfile"
+tmpfile="${tmpbase}.ept"
+cp "$file" "$tmpfile"
+
+for (( i=0; i<${#param_names[@]}; i++)); do
+	echo "sed -i -e "s/^const ${param_names[$i]} \(.*\)=.*$/const ${param_names[$i]} \1= ${param_value[$i]}/" $tmpfile"
+	sed -i "s/^const ${param_names[$i]} \(.*\)=.*$/const ${param_names[$i]} \1= ${param_value[$i]}/" $tmpfile
+done
+
+weptc $weptcparams "$tmpfile"
+mv -f ${tmpbase}_c ${tmpbase}_c_a
+cd ${tmpbase}_c_a
+heptgcc
+echo "${tmpbase:1}_${iterations}_a $(./a.out $iterations)" >> ../results
+cd ..
+
+weptc $weptcparams -noasync "$tmpfile"
+mv -f ${tmpbase}_c ${tmpbase}_c_na 
+cd ${tmpbase}_c_na
+heptgcc
+echo "${tmpbase:1}_${iterations}_na $(./a.out $iterations)" >> ../results
+cd ..
+
+rm ${tmpfile}
+rm -r ${tmpbase}_c{,_na,_a} 
+
+
+
+
+	
