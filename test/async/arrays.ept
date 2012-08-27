@@ -1,0 +1,28 @@
+
+const s :int = 100
+
+fun square(i:int) = (o:int)
+let
+  o = i*i;
+tel
+
+node f(i :int) = (o :int^s)
+var t : int^s;
+let
+  t = mapi<<s>> square ();
+  o = map<<s>> square (t);
+tel
+
+node g(i :int^s) = (o :int)
+var t : int^s;
+let
+  t = map<<s>> square (i);
+  o = fold<<s>> ( * ) (t,0);
+tel
+
+node main(i :int) = (o :int)
+var t :future(int^s);
+let
+  t = async (0^s) fby async<<2>> f(i);
+  o = g(!t);
+tel

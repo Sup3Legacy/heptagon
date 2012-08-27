@@ -1,0 +1,10 @@
+
+node f(x1,x2:int) = (y:int)
+let
+  y = x1+x2+(0 fby y);
+tel
+
+node main() = (z :int)
+let
+  z = !(async 0 fby async f(3,4));
+tel
