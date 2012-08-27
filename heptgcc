@@ -23,11 +23,11 @@ then
 else
 	sources=$@
 fi
-echo "g++-mp-4.7 -std=c++11 -I ~/W/heptagon/lib/c $includes -c ${sources[*]}"
-g++-mp-4.7 -std=c++11 -I ~/W/heptagon/lib/c $includes -c ${sources[*]}
+echo "g++-mp-4.7 -std=c++11 -O2 -I ~/W/heptagon/lib/c $includes -c ${sources[*]}"
+g++-mp-4.7 -std=c++11 -O2 -I ~/W/heptagon/lib/c $includes -c ${sources[*]}
 if [ ! -x "${main}.cpp" ]
 then
-	echo "g++-mp-4.7 -std=c++11 -I ~/W/heptagon/lib/c ~/W/heptagon/lib/c/libdecades.a $includes ${objs[*]} ${sources[*]/.cpp/.o} "${main}.cpp""
-	g++-mp-4.7 -std=c++11 -I ~/W/heptagon/lib/c ~/W/heptagon/lib/c/libdecades.a $includes ${objs[*]} ${sources[*]/.cpp/.o} "${main}.cpp"
+	echo "g++-mp-4.7 -std=c++11 -O2 -I ~/W/heptagon/lib/c ~/W/heptagon/lib/c/libdecades.a $includes ${objs[*]} ${sources[*]/.cpp/.o} "${main}.cpp""
+	g++-mp-4.7 -std=c++11 -O2 -I ~/W/heptagon/lib/c ~/W/heptagon/lib/c/libdecades.a $includes ${objs[*]} ${sources[*]/.cpp/.o} "${main}.cpp"
 fi
 
