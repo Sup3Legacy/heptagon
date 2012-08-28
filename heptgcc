@@ -1,4 +1,6 @@
 #!/bin/bash
+SCRIPT_DIR=`dirname $(python -c "import os, sys; print os.path.realpath(\"$0\")")`
+. ${SCRIPT_DIR}/config_bash
 includes=""
 objs=(`find ../*_c -name "*.o" -print`)
 for i in ../*_c ; do
@@ -23,11 +25,11 @@ then
 else
 	sources=$@
 fi
-echo "g++-mp-4.7 -std=c++11 -O2 -I ~/W/heptagon/lib/c $includes -c ${sources[*]}"
-g++-mp-4.7 -std=c++11 -O2 -I ~/W/heptagon/lib/c $includes -c ${sources[*]}
+echo "${CXX} ${CXXFLAGS} -I ~/W/heptagon/lib/c $includes -c ${sources[*]}"
+${CXX} ${CXXFLAGS} -I ~/W/heptagon/lib/c $includes -c ${sources[*]}
 if [ ! -x "${main}.cpp" ]
 then
-	echo "g++-mp-4.7 -std=c++11 -O2 -I ~/W/heptagon/lib/c ~/W/heptagon/lib/c/libdecades.a $includes ${objs[*]} ${sources[*]/.cpp/.o} "${main}.cpp""
-	g++-mp-4.7 -std=c++11 -O2 -I ~/W/heptagon/lib/c ~/W/heptagon/lib/c/libdecades.a $includes ${objs[*]} ${sources[*]/.cpp/.o} "${main}.cpp"
+	echo "${CXX} ${CXXFLAGS} -I ~/W/heptagon/lib/c ~/W/heptagon/lib/c/libdecades.a $includes ${objs[*]} ${sources[*]/.cpp/.o} "${main}.cpp""
+	${CXX} ${CXXFLAGS} -I ~/W/heptagon/lib/c ~/W/heptagon/lib/c/libdecades.a $includes ${objs[*]} ${sources[*]/.cpp/.o} "${main}.cpp"
 fi
 

@@ -1,0 +1,25 @@
+srcdir="."
+top_srcdir="."
+prefix=/usr/local
+exec_prefix=${prefix}
+bindir=${exec_prefix}/bin
+libdir=${exec_prefix}/lib
+
+INSTALL="/opt/local/libexec/gnubin//install -c"
+MAKE=MAKE
+
+CXX=g++-mp-4.7
+CXXFLAGS="-std=c++11 -O2 -Wall"
+
+BUILD=_build
+COMPILER=heptc
+SIMULATOR=hepts
+
+STDLIB_NAME=libdecades
+
+INSTALL_BINDIR=${bindir}
+INSTALL_LIBDIR=${libdir}/heptagon
+STDLIB_DIR=${exec_prefix}/lib/heptagon
+
+TARGET=byte
+ENABLE_SIMULATOR=no
