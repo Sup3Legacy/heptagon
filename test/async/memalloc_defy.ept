@@ -1,0 +1,14 @@
+
+const s :int = 200
+
+node f () = (t :int^200)
+let t = mapi<<200>> random (); tel
+
+node main(i :int) = (o :int)
+var c :bool; t,r :future int^200;
+let
+  t = async f();
+  c = (!t)[11] = 10;
+  r = async (0^200) fby (merge c (t when c) (r whenot c));
+  o = (!r).[i] default 0;
+tel
