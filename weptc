@@ -106,18 +106,18 @@ case $1 in
 ;;
 java )
   shift
-  compile -target java "$@"
+  compile -target java $@
   if [[ $STATUS == 0 ]]
   then
     if [[ ${#@} == 1 ]]
     then
-      java_compile "$@"
+      java_compile $@
     else
       while [[ ($1 != "--") && (${#@} -gt 1) ]]
       do
         shift
       done
-      java_compile "$@"
+      java_compile $@
     fi
   fi
 ;;
