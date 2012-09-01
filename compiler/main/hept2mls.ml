@@ -49,7 +49,8 @@ let fresh v =
 
 (* This function set every variable with v_is_memory=false,
    this is corrected at the end of the pass *)
-let translate_var { Heptagon.v_ident = n; Heptagon.v_type = ty; Heptagon.v_linearity = linearity;
+let translate_var { Heptagon.v_ident = n; Heptagon.v_type = ty;
+                    Heptagon.v_linearity = linearity;
                     Heptagon.v_loc = loc; Heptagon.v_clock = ck } =
   mk_var_dec ~loc:loc n ty ~is_memory:false linearity ck
 
@@ -125,7 +126,10 @@ let rec translate ({ Heptagon.e_desc = desc; Heptagon.e_ty = ty;
   let desc = match desc with
     | Heptagon.Econst _
     | Heptagon.Evar _
-    | Heptagon.Eapp({ Heptagon.a_op = Heptagon.Efield | Heptagon.Ereinit | Heptagon.Ebang }, _, _) ->
+    | Heptagon.Eapp({ Heptagon.a_op =
+        Heptagon.Efield
+      | Heptagon.Ereinit
+      | Heptagon.Ebang }, _, _) ->
         let w = translate_extvalue e in
         Eextvalue w
     | Heptagon.Ewhen (e,c,x) -> Ewhen (translate e, c, x)
@@ -142,7 +146,8 @@ let rec translate ({ Heptagon.e_desc = desc; Heptagon.e_ty = ty;
     | Heptagon.Eapp({ Heptagon.a_op = Heptagon.Earrow }, _, _) ->
         Misc.internal_error "Hept2mls : Earrow still present"
     | Heptagon.Eapp(app, e_list, reset) ->
-        Eapp (translate_app app, List.map translate_extvalue e_list, translate_reset reset)
+        let e_list = List.map translate_extvalue e_list in
+        Eapp (translate_app app, e_list, translate_reset reset)
     | Heptagon.Eiterator(it, app, n, pe_list, e_list, reset) ->
         Eiterator (translate_iterator_type it,
                    translate_app app, n,
