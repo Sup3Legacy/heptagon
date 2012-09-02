@@ -656,7 +656,7 @@ let rec cstm_of_act out_env var_env obj_env act =
         (match ccl with (** Cosmetic : convert to if statements. *)
         | [Ctag "true", cte; Ctag "false", cfe]
         | [Ctag "false", cfe; Ctag "true", cte] ->
-            [Cif (cc, cfe, cte)]
+            [Cif (cc, cte, cfe)]
         | [Ctag "true", cte] ->
           let cfe = [] in
             [Cif (cc, cte, cfe)]
