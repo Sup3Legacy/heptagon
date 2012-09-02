@@ -677,7 +677,7 @@ interface_desc:
   | s=node_sig         { Isignature s }
 
 node_sig:
-  | e=extern u=unsafe VAL n=node_or_fun f=ident pc=node_params LPAREN i=sig_args RPAREN
+  | e=extern u=unsafe option(VAL) n=node_or_fun f=ident pc=node_params LPAREN i=sig_args RPAREN
     returns LPAREN o=sig_args RPAREN
       { { sig_name = f;
           sig_stateful = n;
