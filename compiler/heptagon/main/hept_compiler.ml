@@ -21,8 +21,6 @@ let compile_program p =
   let p = silent_pass "Initialization check" !init Initialization.program p in
 
 
-  (* Remove async and futures *)
-  let p = silent_pass "Removing async calls" !no_async No_async.program p in
 
   (* Completion of partial definitions *)
   let p = pass "Completion" true Completion.program p pp in
@@ -53,6 +51,9 @@ let compile_program p =
 
   (* Inlining *)
   let p = pass "Inlining" true Inline.program p pp in
+
+  (* Remove async and futures *)
+  let p = silent_pass "Removing async calls" !no_async No_async.program p in
 
   (* Typing, just to make sure.
   let p = silent_pass "Statefulness check" true Stateful.program p in
