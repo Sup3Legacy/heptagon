@@ -1,0 +1,83 @@
+
+open Downscale_utils
+
+(* Images constantes *)
+const hd_w        :int = 1080
+const hd_h        :int = 1920
+const hd_stripe_h :int = 10
+const coeff   :int = 5
+
+(* Computed constantes *)
+(* Should be exact *)
+const stripe_nb   :int = hd_h / hd_stripe_h
+const sd_stripe_h :int = hd_stripe_h / coeff
+const sd_w        :int = hd_w / coeff
+const sd_h        :int = hd_h / coeff
+
+(*
+fun downscale_line<<k,w,h :int>>(img : float^w^h; line_nb :int) returns (line :float^(w/k))
+let
+  sline = mapi<< (w/k) >> (downscale_j_i<<k,k,w,h>>) <(img, line_nb)> ();
+tel
+*)
+
+fun downscale_stripe<<k,w,h :int>>(stripe :float^w^h) returns (sstripe :float^(w/k)^(h/k))
+let
+  sstripe = mapi<< (w/k), (h/k)>> (downscale_j_i<<k,w,h>>) <(stripe)> ();
+tel
+
+
+fun select_j_i(hd_stripe :float^hd_w^hd_stripe_h; sd_img :float^sd_w^sd_stripe_h^stripe_nb; sd_x, pos_y, j, i :int) returns (pixel :float)
+var sd_i, sd_j, sd_stripe, sd_stripe_i :int;
+let
+  sd_i = sd_x + i;
+  sd_stripe = sd_i/stripe_nb;
+  sd_stripe_i = sd_i%stripe_nb;
+  sd_j = j - pos_y;
+  switch ( sd_j >= 0 & sd_j < sd_w )
+    | true do pixel = sd_img[sd_j][sd_stripe_i][sd_stripe];
+    | false do pixel = hd_stripe[j][i];
+  end
+tel
+
+fun insert(frame_stripe :float^hd_w^hd_stripe_h; sd_img :float^sd_w^sd_stripe_h^stripe_nb; sd_x :int; hd_y :int) returns (pip_stripe :float^hd_w^hd_stripe_h)
+let
+  pip_stripe = mapi<<hd_w,hd_stripe_h>> (select_i_j <(frame_stripe, sd_img, sd_x, hd_y)>) ();
+tel
+
+(* position x is given in stripe number, y in pixel number *)
+node pip (pos_stripe_x, pos_y : int; frame_stripe, in_stripe : float^hd_w^hd_stripe_h)
+returns (pip_stripe : float^hd_w^hd_stripe_h)
+var sd_img :float^sd_w^sd_stripe_h^stripe_nb;
+let
+  reset
+    current_x = 0 fby current_x + 1;
+    automaton
+    state Before_x
+      do
+        pip_stripe = frame_stripe;
+      unless current_x >= pos_x
+      then Middle_x
+    state Middle_x
+      var current_sd_x :int;
+      do
+        current_sd_x = 0 fby current_sd_x + hd_stripe_h;
+        pip_stripe = insert (frame_stripe, past_sd_img, current_sd_x, pos_y);
+      until current_sd_x >= sd_h - hd_stripe_h
+      then After_x
+    state After_x
+      do
+        pip_stripe = frame_stripe;
+    end;
+  every true fby (current_x = stripe_nb - 1 );
+
+  current_sd_stripe = downscale_stripe(in_stripe);
+  sd_img = { 0^n with [0] = current_sd_stripe }
+           fby
+           { sd_img with [>current_x<] = current_sd_stripe };
+  past_sd_img = 0^sd_w^sd_stripe_h^stripe_nb fby sd_img;
+
+
+
+
+

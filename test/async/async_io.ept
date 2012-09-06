@@ -1,0 +1,51 @@
+
+fun process (data:string) returns (ndata:string)
+var x : int;
+let
+  x = do_stuff(1);
+  ndata = data
+tel
+
+
+(*
+unsafe node processRemoteFilesA (from, to :string) returns ()
+var last data :future string; last dest :string
+let
+  automaton
+    state Init do
+      dest = to;
+      data = async Io.read(from)
+    until true then Compute
+    state Compute
+      var last_data, p_last_data :string; good :future bool do
+      last_data = !(last data);
+      p_last_data = process (last_data);
+      good = async Io.write(last dest, p_last_data);
+  end
+tel
+*)
+
+(* will detect failures with a delay of 2 ticks. *)
+unsafe node processRemoteFilesA
+  (from,to :string) returns (failed :bool)
+var ok :future bool;
+let
+  data = process(read(from));
+  ok = async Io.write(pdata);
+  failed = !((async false) fby (async false) fby ok);
+tel
+
+(*
+nd0 nd1 nd2 nd3
+0   d0  d1  d2
+.   pd0 pd1 pd2
+.   g0  g1  g2
+
+*)
+
+(*
+  next_data = async read(in);
+  data = ! (pre next_data);
+  good = async write(out, data);
+tel
+*)

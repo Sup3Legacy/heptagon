@@ -1,0 +1,20 @@
+open Misc
+open Rapide_lent
+
+node main<<n,k:int>>() returns (z:int)
+var last s : int = 0;
+let
+	automaton
+	state Sense
+		var ns : int;
+		do
+			ns = sense<<n,k>>();
+			s = 0 fby ns;
+		until true then Wait
+	state Wait
+		do
+			s = last s
+		until counter() >= k-1 continue Sense
+	end;
+	z = compute<<n>>(s)
+tel

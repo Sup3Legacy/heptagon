@@ -1,0 +1,18 @@
+
+
+node pipe_int <<val node task(int)returns(int)>>
+  (x :future int) returns (y :int) 
+let
+  y = task(!x)
+tel
+
+node looped_pipeline (x :int) returns (y :int)
+  var y1, y2 :future int
+let
+  y1 = async f(r);
+  y2 = async pipe_int<<f>>(y1);
+  y = async pipe_int<<f>>(y2)
+tel
+
+
+

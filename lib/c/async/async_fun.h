@@ -1,7 +1,6 @@
 /*
  * async.h
  *
- *  Created on: 17 aožt 2012
  *      Author: lgerard
  */
 
@@ -40,8 +39,8 @@ struct wrapfun {
     	queues[i].attach_productor(); //Proactif !!
         workers[i] = new std::thread (
           [](work_queue *q) {
-            signal(SIGINT,[](int i){pthread_exit(0);});
-            signal(SIGTERM,[](int i){pthread_exit(0);});
+            setsignal(SIGINT,[](int i){pthread_exit(0);});
+            setsignal(SIGTERM,[](int i){pthread_exit(0);});
             while (true) {
               work_closure* r = q->get();
               r->ff(r->fo->to_set());

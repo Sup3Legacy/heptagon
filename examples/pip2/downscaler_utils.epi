@@ -1,0 +1,18 @@
+
+
+(** Downscale the block
+  (i*SCALE,j*SCALE)        - (i*SCALE+WINDOW,j)
+          |                                 |
+  (i*SCALE,j*SCALE+WINDOW) - (i*SCALE+WINDOW,j*SCALE+WINDOW)
+  of [img] to one pixel.
+*)
+val fun downscale_j_i <<scale, window, w, h : int>> (img :float^w^h) returns (pixel :float)
+(*
+ coeffs = {{};{};{}}; (*coeff gaussienne*)
+ x = 0;
+  for (k = 0; k < COEFF_PIP; k++) {
+    for (l = 0; l < COEFF_PIP ; l++) {
+      x = stripe[i*COEFF_PIP + k][j*COEFF_PIP + l] * coeffs[k][l];
+    }
+  }
+*)

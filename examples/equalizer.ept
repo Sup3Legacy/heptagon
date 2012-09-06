@@ -1,0 +1,20 @@
+
+node low_pass_filter<<rate :float; taps :int>>
+
+
+node eq_band <<rate :float; bands :int; taps :int>>
+             (cutoffs :float^(bands+1); gain, in : float; band :int) returns (composant :float)
+let
+  value = low_pass_filter<<rate, taps>>(cutoffs[>band<], 0)
+          - low_pass_filter<<rate, taps>>(cutoffs[>band+1<], 0);
+  composant = gain * value;
+tel
+
+
+node equalizer <<rate :float; bands :int; taps :int>>
+               (cutoffs :float^(bands+1); gains :float^bands; in :float) returns (out :float)
+let
+  composants = map<<bands>> (eq_band<<rate :float; taps :int>>) (cutoffs, gains, in^bands);
+  (* Sum up the composants *)
+  out = fold<<bands>> (+) (composants,0);
+tel

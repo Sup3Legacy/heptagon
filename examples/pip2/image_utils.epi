@@ -1,0 +1,16 @@
+
+
+
+(* returns an array of RGB values between 0 and 255 *)
+val node input_rgb_img_by_pixel(name :string) returns (pixel :int^3)
+
+(* returns a value between 0 and 255 *)
+val node input_bw_img_by_pixel(name :string) returns (pixel :int)
+
+(* returns a video image stripe by image stripe *)
+val node input_rgb_video_by_stripe(name :string; stripe_h :int; stripe_w :int) returns (pixel :int^3)
+
+
+val fun img_size (name :string) returns (width :int; height :int)
+val fun video_size (name :string) returns (width :int; height :int)
+

@@ -1,0 +1,51 @@
+open Time
+
+node network_read(client :int) returns (packet :int)
+let
+  packet = 0 fby client;
+tel
+node disk_read(client :int) returns (packet :int)
+let
+  data = 0 fby client;
+tel
+node compute(
+
+
+
+node scheduled_work<<val node f (future int) returns (int)>> (date :time; i : future int) returns (o :int; ok :bool)
+let
+  ok = sleep_until(date);
+  o = f(i when ok);
+tel
+
+node scheduled_task<<val node f () returns (int)>> (date :time) returns (o :int; ok :bool)
+let
+  ok = sleep_until(date);
+  o = f();
+tel
+ 
+
+node pipeline_task<<val node f (int) returns (int)>> (i : future int) returns (o :int)
+let
+  o = f(!i);
+tel
+
+(*
+node scheduled_task<<val node f int =int>> (date :Time.time; i : future int) returns (o :int; ok :bool)
+let
+  ok = Time.sleep_until(date);
+  o = pipeline_task<<f>>(i when ok);
+tel
+*)
+
+node serve_client<<start :time; period :int>>(client :int) returns (ok :int)
+var read_date : time;
+let
+  read_date = start fby add_time(read_date,read_period);
+  data = async scheduled_task<<network_read>>(read_date, client);
+  result = async scheduled_work<<compute>>(read_date, data);
+  
+  automaton
+  state Normal
+  do
+    

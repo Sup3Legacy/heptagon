@@ -1,7 +1,6 @@
 /*
  * async.h
  *
- *  Created on: 17 aožt 2012
  *      Author: lgerard
  */
 

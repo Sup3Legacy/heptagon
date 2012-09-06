@@ -1,0 +1,77 @@
+
+open Downscale_utils
+
+(* Images constantes *)
+const HD_W        :int = 1080;
+const HD_H        :int = 1920;
+const HD_STRIPE_H :int = 10;
+const COEFF_PIP   :int = 5;
+
+(* Computed constantes *)
+(* Should be exact *)
+const STRIPE_NB   :int = HD_H / HD_STRIPE_H;
+const SD_STRIPE_H :int = HD_STRIPE_H / COEFF_PIP;
+const SD_W        :int = HD_W / COEFF_PIP;
+const SD_H        :int = HD_H / COEFF_PIP;
+
+
+fun downscale_stripe(stripe :float^HD_W^HD_STRIPE_H) returns (sstripe :float^SD_W^SD_STRIPE_H)
+let
+  sstripe = mapi<<SD_STRIPE_H>> (mapi<<SD_W>> (downscalej_i<<COEFF_PIP>> <(stripe)>)) ();
+tel
+
+
+
+fun select_j_i(hd_stripe :float^HD_W^HD_STRIPE_H; sd_img :float^SD_W^SD_STRIPE^STRIPE_NB; sd_x, pos_y, j, i :int) returns (pixel :float)
+var sd_i, sd_j, sd_stripe, sd_stripe_i :int;
+let
+  sd_i = sd_x + i;
+  sd_stripe = sd_i/STRIPE_NB;
+  sd_stripe_i = sd_i%STRIPE_NB;
+  sd_j = j - pos_y;
+  switch ( sd_j >= 0 && sd_j < SD_W )
+    true -> pixel = sd_img[sd_j][sd_stripe_i][sd_stripe];
+    false -> pixel = hd_stripe[j][i];
+  end
+
+fun insert(frame_stripe :float^HD_W^HD_STRIPE_H; sd_img :float^SD_W^SD_STRIPE^STRIPE_NB; sd_x :int; hd_y :int) returns (pip_stripe :float^HD_W^HD_STRIPE_H)
+let
+  pip_stripe = mapi<<HD_STRIPE_H> (mapi<<HD_W>> (select_i_j <(frame_stripe, sd_img, sd_x, hd_y)>)) ();
+tel
+
+(* position x is given in stripe number, y in pixel number *)
+node pip (pos_stripe_x, pos_y : int; frame_stripe, in_stripe : float^HD_W^HD_STRIPE_H)
+returns (pip_stripe : float^HD_W^HD_STRIPE_H)
+var sd_img :float^SD_W^SD_STRIPE_H^STRIPE_NB;
+let
+  reset
+    current_x = 0 fby current_x + 1;
+    automaton
+    state Before_x
+      do
+        pip_stripe = frame_stripe;
+      unless current_x >= pos_x
+      then Middle_x
+    state Middle_x
+      var current_sd_x :int;
+      do
+        current_sd_x = 0 fby current_sd_x + HD_STRIPE_H;
+        pip_stripe = insert (frame_stripe, past_sd_img, current_sd_x, pos_y);
+      until current_sd_x >= SD_H - STRIPE_H
+      then After_x
+    state After_x
+      do
+        pip_stripe = frame_stripe;
+    end;
+  every true fby (current_x = STRIPE_NB - 1 );
+
+  current_sd_stripe = downscale_stripe(in_stripe);
+  sd_img = { 0^n with [0] = current_sd_stripe }
+           fby
+           { sd_img with [>current_x<] = current_sd_stripe };
+  past_sd_img = 0^SD_W^SD_STRIPE_H^STRIPE_NB fby sd_img;
+
+
+
+
+
