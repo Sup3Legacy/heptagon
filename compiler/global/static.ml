@@ -242,6 +242,11 @@ let simplify se =
   try eval_core true se
   with exn -> message exn
 
+let rec simplify_type ty = match ty with
+  | Tarray(ty, e) -> Tarray(simplify_type ty, simplify e)
+  | Tprod l -> Tprod (List.map (simplify_type) l)
+  | t -> t
+
 (** [eval env e] evaluate a static expression with the
     variable values taken from [env] and the global env.
     If it returns, there are no variable nor op left.
