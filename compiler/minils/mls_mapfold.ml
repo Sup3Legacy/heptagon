@@ -76,6 +76,10 @@ and extvalue_desc funs acc wd = match wd with
       let w, acc = extvalue_it funs acc w in
       Wbang w, acc
 
+and reset_it funs acc c_l =
+  let one acc w = extvalue_it funs acc w in
+  mapfold one acc c_l
+
 and edesc_it funs acc ed =
   try funs.edesc funs acc ed
   with Fallback -> edesc funs acc ed
@@ -83,14 +87,16 @@ and edesc funs acc ed = match ed with
   | Eextvalue w ->
       let w, acc = extvalue_it funs acc w in
       Eextvalue w, acc
-  | Efby (se, w) ->
+  | Efby (se, p, w, c) ->
       let se, acc = optional_wacc (static_exp_it funs.global_funs) acc se in
+      let p, acc = mapfold (static_exp_it funs.global_funs) acc p in
       let w, acc = extvalue_it funs acc w in
-      Efby (se, w), acc
+      let c, acc = reset_it funs acc c in
+      Efby (se, p, w, c), acc
   | Eapp(app, args, reset) ->
       let app, acc = app_it funs acc app in
       let args, acc = mapfold (extvalue_it funs) acc args in
-      let reset, acc = optional_wacc (var_ident_it funs.global_funs) acc reset in
+      let reset, acc = reset_it funs acc reset in
       Eapp (app, args, reset), acc
   | Emerge(x, c_w_list) ->
       let aux acc (c,w) =
@@ -116,7 +122,7 @@ and edesc funs acc ed = match ed with
       let params, acc = mapfold (static_exp_it funs.global_funs) acc params in
       let pargs, acc = mapfold (extvalue_it funs) acc pargs in
       let args, acc = mapfold (extvalue_it funs) acc args in
-      let reset, acc = optional_wacc (var_ident_it funs.global_funs) acc reset in
+      let reset, acc = reset_it funs acc reset in
       Eiterator (i, app, params, pargs, args, reset), acc
 
 

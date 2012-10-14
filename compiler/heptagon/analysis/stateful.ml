@@ -45,7 +45,7 @@ let is_app_async { a_async = a } = match a with
 let edesc funs stateful ed =
   let ed, stateful = Hept_mapfold.edesc funs stateful ed in
     match ed with
-      | Efby _ | Epre _ -> ed, true
+      | Efby _ -> ed, true
       | Eapp({ a_op = Earrow }, _, _) -> ed, true
       | Eapp({ a_op = (Enode f | Efun f) } as app, e_list, r) ->
           let ty_desc = find_value f in

@@ -427,6 +427,22 @@ let size_from_call_context c = match c with
 
 let empty_call_context = None
 
+
+let do_reset map a_list r_list =
+  let add acc w = match w.Minils.w_desc with
+  | Minils.Wconst se ->
+      (match Static.is_true se with
+      | None,_ -> Misc.unsupported "Unsupported reset expression@."
+      | Some b,_ -> if b then (List.map (control map w.Minils.w_ck) a_list)@acc else acc
+      )
+  | Minils.Wvar r ->
+      let ck = Clocks.Con (w.Minils.w_ck, Initial.mk_static_bool true, r) in
+      (List.map (control map ck) a_list)@acc
+  | _ -> Misc.unsupported "Unsupported reset expression@."
+  in
+  List.fold_left add [] r_list
+
+
 (** [si] the initialization actions used in the reset method,
     [j] obj decs
     [s] the actions used in the step method.
@@ -439,22 +455,17 @@ let rec translate_eq map call_context
     | _, Minils.Ewhen (e,_,_) ->
         translate_eq map call_context {eq with Minils.eq_rhs = e} (v, si, j, s)
     (* TODO Efby and Eifthenelse should be dealt with in translate_act, no ? *)
-    | Minils.Evarpat n, Minils.Efby (opt_c, e) ->
+    | Minils.Evarpat n, Minils.Efby (opt_c, p, e, r) ->
         let x = var_from_name map n in
-        let si = (match opt_c with
-                    | None -> si
-                    | Some c -> (Aassgn (x, mk_ext_value_static c)) :: si) in
+        let si,s = (match opt_c with
+                    | None -> si,s
+                    | Some c ->
+                      let ini = Aassgn (x, mk_ext_value_static c)in
+                      (ini :: si),((do_reset map [ini] r)@s))
+        in
         let action = Aassgn (var_from_name map n, translate_extvalue_to_exp map e) in
         v, si, j, (control map ck action) :: s
-(* should be unnecessary
-    | Minils.Etuplepat p_list,
-        Minils.Eapp({ Minils.a_op = Minils.Etuple }, act_list, _) ->
-        List.fold_right2
-          (fun pat e ->
-             translate_eq map call_context
-               (Minils.mk_equation pat e))
-          p_list act_list (v, si, j, s)
-*)
+
     | pat, Minils.Eapp({ Minils.a_op = Minils.Eifthenelse }, [e1;e2;e3], _) ->
         let cond = translate_extvalue_to_exp map e1 in
         let true_act = translate_act_extvalue map pat e2 in
@@ -468,13 +479,8 @@ let rec translate_eq map call_context
         let v', si', j', action = mk_node_call map call_context
           app loc name_list c_list e.Minils.e_ty in
         let action = List.map (control map ck) action in
-        let s = (match r, app.Minils.a_op with
-                   | Some r, Minils.Enode _ ->
-                       let ck = Clocks.Con (ck, Initial.mk_static_bool true, r) in
-                       let ra = List.map (control map ck) si' in
-                       ra @ action @ s
-                   | _, _ -> action @ s) in
-        v' @ v, si'@si, j'@j, s
+        let ra = do_reset map si' r in
+        v' @ v, si'@si, j'@j, ra@action@s
 
     | pat, Minils.Eiterator (it, app, n_list, pe_list, e_list, reset) ->
         let name_list = translate_pat map e.Minils.e_ty pat in
@@ -488,14 +494,8 @@ let rec translate_eq map call_context
         let si', j', action = translate_iterator map call_context it
           name_list app loc n_list xl xdl p_list c_list e.Minils.e_ty in
         let action = List.map (control map ck) action in
-        let s =
-          (match reset, app.Minils.a_op with
-             | Some r, Minils.Enode _ ->
-                 let ck = Clocks.Con (ck, Initial.mk_static_bool true, r) in
-                 let ra = List.map (control map ck) si' in
-                   ra @ action @ s
-             | _, _ -> action @ s)
-        in (v, si' @ si, j' @ j, s)
+        let ra = do_reset map si' reset in
+        (v, si' @ si, j' @ j, ra@action@s)
 
     | (pat, _) ->
         let action = translate_act map pat e in

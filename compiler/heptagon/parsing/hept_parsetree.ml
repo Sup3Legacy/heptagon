@@ -94,8 +94,7 @@ and edesc =
   | Evar of var_name (* can be a constant_name *)
   | Esfun of fun_name * exp list (* should become a Sfun *)
   | Elast of var_name
-  | Epre of exp option * exp
-  | Efby of exp * exp
+  | Efby of exp option * (exp list) * exp * exp option
   | Estruct of (qualname * exp) list
   | Eapp of app * exp list
   | Eiterator of iterator_type * app * exp list * exp list * exp list

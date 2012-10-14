@@ -206,18 +206,15 @@ let rec add_equation is_input (tenv : tom_env) eq =
 
       | Eapp (app, w_list, rst) ->
         let class_id_list, w_list = mapfold_right (extvalue is_input) w_list [] in
-        let class_id_list = match rst with
-          | None -> class_id_list
-          | Some rst ->
-            class_ref_of_var is_input
-              (mk_extvalue ~ty:Initial.tbool ~linearity:Linearity.Ltop (Wvar rst)) rst
-            :: class_id_list
-        in
-        Eapp (app, w_list, optional (fun _ -> dummy_var) rst), id, 0, class_id_list
+        let class_id_list, rst = mapfold_right (extvalue is_input) rst class_id_list in
+        Eapp (app, w_list, rst), id, 0, class_id_list
 
-      | Efby (seo, w) ->
+      | Efby (seo, p, w, r) ->
         let class_id_list, w = extvalue is_input w [] in
-        Efby (seo, w), id, 0, class_id_list
+        let class_id_list, r =
+          mapfold_right (extvalue is_input) r class_id_list
+        in
+        Efby (seo, p, w, r), id, 0, class_id_list
 
       | Ewhen (e', cn, x) ->
         let ed, add_when, when_count, class_id_list = decompose e' in
@@ -239,14 +236,8 @@ let rec add_equation is_input (tenv : tom_env) eq =
       | Eiterator (it, app, sel, partial_w_list, w_list, rst) ->
         let class_id_list, partial_w_list = mapfold_right (extvalue is_input) partial_w_list [] in
         let class_id_list, w_list = mapfold_right (extvalue is_input) w_list class_id_list in
-        let class_id_list = match rst with
-          | None -> class_id_list
-          | Some rst ->
-            class_ref_of_var is_input
-              (mk_extvalue ~ty:Initial.tbool ~linearity:Linearity.Ltop (Wvar rst)) rst
-            :: class_id_list
-        in
-        Eiterator (it, app, sel, partial_w_list, w_list, optional (fun _ -> dummy_var) rst),
+        let class_id_list, rst = mapfold_right (extvalue is_input) rst class_id_list in
+        Eiterator (it, app, sel, partial_w_list, w_list, rst),
         id, 0, class_id_list
 
       | Estruct field_val_list ->
@@ -414,15 +405,15 @@ and reconstruct_exp_desc mapping headd children =
     let w = assert_1 (reconstruct_extvalues mapping [w] children) in
     Eextvalue w
 
-  | Efby (ini, w) ->
-    let w = assert_1 (reconstruct_extvalues mapping [w] children) in
-    Efby (ini, w)
+  | Efby (ini, p, w, r) ->
+    let w = assert_1 (reconstruct_extvalues mapping [w] [List.hd children]) in
+    let r = reconstruct_extvalues mapping r (List.tl children) in
+    Efby (ini, p, w, r)
 
   | Eapp (app, w_list, rst_dummy) ->
-    let rst, children = match rst_dummy with
-      | None -> None, children
-      | Some _ -> Some (reconstruct_class_ref mapping (List.hd children)), List.tl children in
-    Eapp (app, reconstruct_extvalues mapping w_list children, rst)
+    let r_w = reconstruct_extvalues mapping (rst_dummy@w_list) children in
+    let r,w = split_at (List.length rst_dummy) r_w in
+    Eapp (app, w, r)
 
   | Ewhen _ -> assert false (* no Ewhen in exprs *)
 
@@ -436,12 +427,10 @@ and reconstruct_exp_desc mapping headd children =
     Estruct field_val_list
 
   | Eiterator (it, app, sel, partial_w_list, w_list, rst_dummy) ->
-    let rst, children = match rst_dummy with
-      | None -> None, children
-      | Some _ -> Some (reconstruct_class_ref mapping (List.hd children)), List.tl children in
-    let total_w_list = reconstruct_extvalues mapping (w_list @ partial_w_list) children in
-    let w_list, partial_w_list = split_at (List.length w_list) total_w_list in
-    Eiterator (it, app, sel, partial_w_list, w_list, rst)
+    let r_w_p = reconstruct_extvalues mapping (rst_dummy@w_list@partial_w_list) children in
+    let r, w_p = split_at (List.length rst_dummy) r_w_p in
+    let w, p = split_at (List.length w_list) w_p in
+    Eiterator (it, app, sel, p, w, r)
 
 and reconstruct_extvalues mapping w_list children =
   let rec reconstruct_extvalue w (children : class_ref list) =

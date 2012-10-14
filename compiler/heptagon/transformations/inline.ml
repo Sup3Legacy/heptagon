@@ -153,11 +153,15 @@ let eq funs (inline, nenv, cenv, subst) eq =
           Hept_mapfold.block_it funs (true, nenv, new_cenv, new_subst) code.n_block
         in
         (* Add the reset *)
-        let eqd = match rso with
-          | None -> Eblock block
-          | Some x -> (Ereset (block, x))
+        let rec add_reset b rso = match rso with
+          | [] -> b
+          | x::rso ->
+            let eqr = mk_equation ~loc:b.b_loc (Ereset (add_reset b rso, x)) in
+            { b with b_equs = [eqr]}
         in
-        mk_equation eqd, (inline, nenv, cenv, subst)
+        let block = add_reset block rso in
+        let eqblock = mk_equation ~loc:block.b_loc (Eblock (block))in
+        eqblock, (inline, nenv, cenv, subst)
       with Not_found ->
         eq, (inline, nenv,cenv,subst))
   | _ -> (* nothing to do *) eq, (inline, nenv, cenv, subst)

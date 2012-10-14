@@ -35,9 +35,7 @@ and desc =
   | Econst of static_exp
   | Evar of var_ident
   | Elast of var_ident
-  (* the static_exp purpose is the initialization of the mem_var *)
-  | Epre of static_exp option * exp
-  | Efby of exp * exp
+  | Efby of exp option * static_exp list * exp * exp list
   | Estruct of (field_name * exp) list
   | Ewhen of exp * sampling_value * var_ident
     (** exp when Constructor(ident) *)
@@ -45,9 +43,9 @@ and desc =
     (** merge ident (Constructor -> exp)+ *)
   | Esplit of var_ident * sampling_value list * exp
     (** [split ck e] with the constructor list associated to [ck] *)
-  | Eapp of app * exp list * exp option
+  | Eapp of app * exp list * exp list
   | Eiterator of iterator_type * app * static_exp list
-                  * exp list * exp list * exp option
+                  * exp list * exp list * exp list
 
 and app = {
   a_op      : op;

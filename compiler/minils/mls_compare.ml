@@ -62,6 +62,9 @@ struct
 
       | Wbang _, _ -> -1
 
+  let reset_compare r1 r2 =
+    list_compare extvalue_compare r1 r2
+
   let rec exp_compare e1 e2 =
     let cr = type_compare e1.e_ty e2.e_ty in
     if cr <> 0 then cr
@@ -72,14 +75,19 @@ struct
         match e1.e_desc, e2.e_desc with
         | Eextvalue w1, Eextvalue w2 ->
           extvalue_compare w1 w2
-        | Efby (seo1, e1), Efby (seo2, e2) ->
+        | Efby (seo1, p1, e1, r1), Efby (seo2, p2, e2, r2) ->
           let cr = option_compare static_exp_compare seo1 seo2 in
-          if cr <> 0 then cr else extvalue_compare e1 e2
+          if cr <> 0 then cr
+          else let cr = list_compare static_exp_compare p1 p2 in
+          if cr <> 0 then cr
+          else let cr = extvalue_compare e1 e2 in
+          if cr <> 0 then cr
+          else reset_compare r1 r2
         | Eapp (app1, el1, vio1), Eapp (app2, el2, vio2) ->
           let cr = app_compare app1 app2 in
           if cr <> 0 then cr
           else let cr = list_compare extvalue_compare el1 el2 in
-               if cr <> 0 then cr else option_compare ident_compare vio1 vio2
+          if cr <> 0 then cr else reset_compare vio1 vio2
         | Ewhen (e1, cn1, id1), Ewhen (e2, cn2, id2) ->
           let cr = compare cn1 cn2 in
           if cr <> 0 then cr
@@ -104,7 +112,7 @@ struct
             if cr <> 0 then cr else
               let cr = app_compare app1 app2 in
               if cr <> 0 then cr else
-                let cr = option_compare ident_compare vio1 vio2 in
+                let cr = reset_compare vio1 vio2 in
                 if cr <> 0 then cr else
                   let cr = list_compare extvalue_compare pel1 pel2 in
                   if cr <> 0 then cr else list_compare extvalue_compare el1 el2

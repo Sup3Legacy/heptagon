@@ -231,15 +231,14 @@ let rec typing h e =
     | Econst _ -> skeleton izero e.e_ty
     | Evar(x) -> IEnv.find_var_typ x h
     | Elast(x) -> IEnv.find_last_typ x h
-    | Epre(None, e1) ->
+    | Efby(None, p, e1, c) ->
+        List.iter (initialized_exp h) c;
         initialized_exp h e1;
         skeleton (ione (RExp e)) e1.e_ty
-    | Epre(Some _, e) ->
+    | Efby(Some v, p, e, c) ->
+        List.iter (initialized_exp h) c;
         initialized_exp h e;
-        skeleton izero e.e_ty
-    | Efby (e1, e2) ->
-        initialized_exp h e2;
-        skeleton (itype (typing h e1)) e.e_ty
+        typing h v
     | Eapp({ a_op = Etuple }, e_list, _) ->
         product (List.map (typing h) e_list)
     | Eapp(app, e_list, _) ->

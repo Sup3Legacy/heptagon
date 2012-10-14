@@ -718,7 +718,13 @@ let rec typing_ct h ct = match ct with
   | Clocks.Ck ck -> Clocks.Ck (typing_ck h ck)
   | Clocks.Cprod ct_l -> Clocks.Cprod (List.map (typing_ct h) ct_l)
 
-let rec typing h e =
+let rec typing_reset h r = match r with
+| [] -> []
+| c::r ->
+  let c = expect_e h Initial.tint c in
+  c::(typing_reset h r)
+
+and typing h e =
   try
     let typed_desc,ty = match e.e_desc with
       | Econst c ->
@@ -731,6 +737,7 @@ let rec typing h e =
 
       | Eapp(op, e_list, r) ->
           let ty, op, typed_e_list = typing_app h op e_list in
+          let r = typing_reset h r in
           Eapp(op, typed_e_list, r), ty
 
       | Estruct(l) ->
@@ -747,21 +754,17 @@ let rec typing h e =
           let l = List.map (typing_field h fields (Tid q)) l in
           Estruct l, Tid q
 
-      | Epre (None, e) ->
-          let typed_e,ty = typing h e in
-          Epre (None, typed_e), ty
-
-      | Epre (Some c, e) ->
-          let typed_c, t1 = typing_static_exp c in
-          let typed_e, t2 = typing h e in
-          let t = unify t1 t2 in
-          Epre(Some typed_c, typed_e), t
-
-      | Efby (e1, e2) ->
-          let typed_e1, t1 = typing h e1 in
+      | Efby (e1, p, e2, c) ->
+          let p = List.map (expect_se Initial.tint) p in
+          let c = typing_reset h c in
           let typed_e2, t2 = typing h e2 in
-          let t = unify t1 t2 in
-          Efby (typed_e1, typed_e2), t
+          let typed_e1, t = match e1 with
+          | None -> None, t2
+          | Some e1 ->
+              let typed_e1, t1 = typing h e1 in
+              Some (typed_e1), unify t1 t2
+          in
+          Efby (typed_e1, p, typed_e2, c), t
 
       | Eiterator (it, ({ a_op = (Enode f | Efun f);
                           a_params = params } as app),

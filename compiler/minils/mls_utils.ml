@@ -94,10 +94,8 @@ struct
 
     (* special cases *)
     let acc = match e.e_desc with
-      | Emerge(x,_)
-      | Eapp(_, _, Some x) | Eiterator (_, _, _, _, _, Some x) ->
-          add x acc
-      | Efby(_, e) ->
+      | Emerge(x,_) -> add x acc
+      | Efby(_, _, e, _) ->
           if is_left then
             (* do not consider variables to the right
                of the fby, only clocks*)
@@ -128,7 +126,7 @@ struct
     | y :: l -> if x = y then l else y :: remove x l
 
   let read is_left { eq_lhs = pat; eq_rhs = e } = match pat, e.e_desc with
-    |  Evarpat(n), Efby(_, e1) ->
+    |  Evarpat(n), Efby(_, _, e1, _) ->
          if is_left
          then remove n (read_extvalue is_left [] e1)
          else read_extvalue is_left [] e1
@@ -136,7 +134,7 @@ struct
 
   let rec is_fby e = match e.e_desc with
     | Ewhen (e, _, _) -> is_fby e
-    | Efby (_, _) -> true
+    | Efby (_, _, _, _) -> true
     | _ -> false
 
   let antidep { eq_rhs = e } = is_fby e
@@ -176,7 +174,7 @@ let node_memory_vars n =
   let rec eq funs acc ({ eq_lhs = pat; eq_rhs = e } as equ) =
     match pat, e.e_desc with
     | _, Ewhen(e,_,_) -> eq funs acc {equ with eq_rhs = e}
-    | Evarpat x, Efby(_, _) ->
+    | Evarpat x, Efby(_, _, _, _) ->
         let acc = (x, e.e_ty) :: acc in
         equ, acc
     | _, _ -> equ, acc

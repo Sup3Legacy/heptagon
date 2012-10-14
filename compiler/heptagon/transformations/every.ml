@@ -4,25 +4,27 @@ open Heptagon
 (* Transform [f (...) every e]
    into [f (...) every r] and add an equation [r=e] *)
 
-let is_var = function
-  | { e_desc = Evar _ } -> true
-  | _ -> false
+let rec transform (v,eq) re = match re with
+| [] -> [], (v,eq)
+| r::re ->
+    let r, vr, eqr = Reset.reset_var_from_exp r in
+    let re, acc = transform (vr@v, eqr@eq) re in
+    r::re, acc
 
 let block funs acc b =
   let b, (v, acc_eq_list) = Hept_mapfold.block funs ([], []) b in
     { b with b_local = v @ b.b_local; b_equs = acc_eq_list@b.b_equs }, acc
 
-let edesc funs (v,acc_eq_list) ed =
-  let ed, (v, acc_eq_list) = Hept_mapfold.edesc funs (v,acc_eq_list) ed in
+let edesc funs acc ed =
+  let ed, acc = Hept_mapfold.edesc funs acc ed in
   match ed with
-    | Eapp (op, e_list, Some re) when not (is_var re) ->
-        let re, vre, eqre = Reset.reset_var_from_exp re in
-        Eapp(op, e_list, Some re), (vre::v, eqre::acc_eq_list)
-    | Eiterator(it, op, n, pe_list, e_list, Some re) when not (is_var re) ->
-        let re, vre, eqre = Reset.reset_var_from_exp re in
-          Eiterator(it, op, n, pe_list, e_list, Some re),
-             (vre::v, eqre::acc_eq_list)
-    | _ -> ed, (v, acc_eq_list)
+    | Eapp (op, e_list, re) ->
+        let re, acc = transform acc re in
+        Eapp(op, e_list, re), acc
+    | Eiterator(it, op, n, pe_list, e_list, re) ->
+        let re, acc = transform acc re in
+        Eiterator(it, op, n, pe_list, e_list, re), acc
+    | _ -> ed, acc
 
 let program p =
   let funs = { Hept_mapfold.defaults

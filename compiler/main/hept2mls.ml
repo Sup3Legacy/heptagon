@@ -54,11 +54,6 @@ let translate_var { Heptagon.v_ident = n; Heptagon.v_type = ty;
                     Heptagon.v_loc = loc; Heptagon.v_clock = ck } =
   mk_var_dec ~loc:loc n ty ~is_memory:false linearity ck
 
-let translate_reset = function
-  | Some { Heptagon.e_desc = Heptagon.Evar n } -> Some n
-  | Some re -> Error.message re.Heptagon.e_loc Error.Ereset_not_var
-  | None -> None
-
 let translate_iterator_type = function
   | Heptagon.Imap -> Imap
   | Heptagon.Imapi -> Imapi
@@ -120,6 +115,8 @@ let rec translate_extvalue e =
         mk_extvalue e (Wbang (translate_extvalue e'))
     | _ -> Error.message e.Heptagon.e_loc Error.Enormalization
 
+let translate_reset = List.map translate_extvalue
+
 let rec translate ({ Heptagon.e_desc = desc; Heptagon.e_ty = ty;
                  Heptagon.e_level_ck = b_ck; Heptagon.e_linearity = linearity;
                  Heptagon.e_ct_annot = a_ct; Heptagon.e_loc = loc;  } as e) =
@@ -133,12 +130,15 @@ let rec translate ({ Heptagon.e_desc = desc; Heptagon.e_ty = ty;
         let w = translate_extvalue e in
         Eextvalue w
     | Heptagon.Ewhen (e,c,x) -> Ewhen (translate e, c, x)
-    | Heptagon.Epre(None, e) ->
-        Efby(None, translate_extvalue e)
-    | Heptagon.Epre(Some c, e) ->
-        Efby(Some c, translate_extvalue e)
-    | Heptagon.Efby ({ Heptagon.e_desc = Heptagon.Econst c }, e) ->
-        Efby(Some c, translate_extvalue e)
+    | Heptagon.Efby (v, p, e, c) ->
+        let e = translate_extvalue e in
+        let c = translate_reset c in
+        (match v with
+        | None -> Efby (None, p, e, c)
+        | Some { Heptagon.e_desc = Heptagon.Econst v } ->
+            Efby(Some v, p, e, c)
+        | _ -> Misc.internal_error "Wrong normal form for fby"
+        )
     | Heptagon.Estruct f_e_list ->
         let f_e_list = List.map
           (fun (f, e) -> (f, translate_extvalue e)) f_e_list in
@@ -154,7 +154,6 @@ let rec translate ({ Heptagon.e_desc = desc; Heptagon.e_ty = ty;
                    List.map translate_extvalue pe_list,
                    List.map translate_extvalue e_list,
                    translate_reset reset)
-    | Heptagon.Efby _ -> Misc.internal_error "Hept2mls : Efby still present"
     | Heptagon.Elast _ -> Misc.internal_error "Hept2mls : Elast still present"
     | Heptagon.Esplit _ -> Misc.internal_error "Hept2mls : Esplit still present"
     | Heptagon.Emerge (x, c_e_list) ->

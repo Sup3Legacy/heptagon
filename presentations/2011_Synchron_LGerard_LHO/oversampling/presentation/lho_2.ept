@@ -19,6 +19,3 @@ let
   x = 0 fby (x+10);
   out = g(x);
 tel
-
-c = sample n;
-node array_to_stream(x:int^n, c:bool) returns (y:int)

@@ -27,8 +27,9 @@ let compute_uses eqs =
     let defs = Mls_utils.Vars.def [] eq in
     let reads =
       List.fold_left
-	(fun acc x -> if List.mem x defs then acc else (x::acc))
-	[] reads in
+        (fun acc x -> if List.mem x defs then acc else (x::acc))
+        [] reads
+    in
     List.fold_left incr_uses env reads
   in
   List.fold_left aux Env.empty eqs
@@ -70,9 +71,7 @@ struct
       try
         if Env.find x env = 1 then acc + 1 else acc
       with
-        | Not_found ->
-	    (* self use of x *)
-	    acc
+        | Not_found -> (* self use of x *) acc
     in
     List.fold_left is_killed 0 (Mls_utils.Vars.read false eq)
 

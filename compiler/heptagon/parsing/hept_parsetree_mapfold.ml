@@ -125,14 +125,12 @@ and edesc funs acc ed = match ed with
       let e, acc = exp_it funs acc e in
       Easync e, acc
   | Evar _ | Elast _ -> ed, acc
-  | Epre (se, e) ->
-      let se, acc = optional_wacc (exp_it funs) acc se in
-      let e, acc = exp_it funs acc e in
-      Epre (se, e), acc
-  | Efby (e1, e2) ->
-      let e1, acc = exp_it funs acc e1 in
+  | Efby (e1, p, e2, c) ->
+      let e1, acc = Misc.optional_wacc (exp_it funs) acc e1 in
+      let p, acc = mapfold (exp_it funs) acc p in
       let e2, acc = exp_it funs acc e2 in
-      Efby (e1,e2), acc
+      let c, acc = Misc.optional_wacc (exp_it funs) acc c in
+      Efby (e1,p,e2,c), acc
   | Estruct n_e_list ->
       let aux acc (n,e) =
         let e, acc = exp_it funs acc e in

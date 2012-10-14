@@ -119,8 +119,7 @@ module InterfRead = struct
     let _, acc = Mls_mapfold.exp funs acc e in
     (* special cases *)
     let acc = match e.e_desc with
-      | Emerge(x,_)  | Eapp(_, _, Some x)
-      | Eiterator (_, _, _, _, _, Some x) -> (Ivar x)::acc
+      | Emerge(x,_) -> (Ivar x)::acc
       | _ -> acc
     in
       e, acc
@@ -505,7 +504,7 @@ let process_eq ({ eq_lhs = pat; eq_rhs = e } as eq) =
           List.iter (add_interference_link_from_ivar acc_out) outvars;
           (*affinity between inputs and outputs*)
           List.iter (fun inv -> List.iter (add_affinity_link_from_ivar inv) outvars) invars
-    | Evarpat x, Efby(_, w) -> (* x  = _ fby y *)
+    | Evarpat x, Efby(_, p, w, _) -> (* x  = _ fby y *)
       (try
          add_affinity_link_from_ivar (InterfRead.ivar_of_extvalue w) (Ivar x)
        with
@@ -555,7 +554,7 @@ let add_init_return_eq f =
     let exp_of_mem x = exp_of_vd (World.vd_from_ident x) in
     let decs = List.map exp_of_vd decs in
     let mems = IdentSet.fold (fun iv acc -> (exp_of_mem iv)::acc) !World.memories [] in
-    Eapp(mk_app Earray, decs@mems, None)
+    Eapp(mk_app Earray, decs@mems, [])
   in
 
    (** a_1,..,a_p = __init__  *)

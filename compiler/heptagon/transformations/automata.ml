@@ -43,7 +43,7 @@ let mk_switch_equation e l =
   mk_equation (Eswitch (e, l))
 
 let mk_exp_fby_false e =
-  mk_exp (Epre (Some (mk_static_bool false), e))
+  mk_exp (Efby (Some(dfalse), [], e, []))
     (Tid Initial.pbool) Linearity.Ltop
 
 let mk_constructor constr ty =
@@ -51,7 +51,10 @@ let mk_constructor constr ty =
 
 (* Be sure that [initial] is of the right type [e.e_ty] before using this *)
 let mk_exp_fby_state initial e =
-  { e with e_desc = Epre (Some (mk_constructor initial e.e_ty), e) }
+  let efby =
+    Efby (Some(mk_static_exp_exp e.e_ty (Sconstructor initial)), [], e, [])
+  in
+  { e with e_desc = efby }
 
 (* the list of enumerated types introduced to represent states *)
 let state_type_dec_list = ref []

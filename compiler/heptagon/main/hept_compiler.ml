@@ -33,6 +33,9 @@ let compile_program p =
 
   (* Shared variables (last) *)
   let p = pass "Last" true Last.program p pp in
+  
+  (* Initialized registers *)
+  let p = pass "fby" true Fby.program p pp in
 
   (* Reset *)
   let p = pass "Reset" true Reset.program p pp in

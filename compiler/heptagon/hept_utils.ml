@@ -17,14 +17,16 @@ open Heptagon
 
 (* Helper functions to create AST. *)
 (* TODO : After switch, all mk_exp should take care of level_ck *)
-let mk_exp desc ?(level_ck = Cbase) ?(ct_annot = None) ?(loc = (no_location ())) ty linearity =
+let mk_exp desc ?(level_ck = Cbase) ?(ct_annot = None)
+                ?(loc = (no_location ())) ty linearity =
   { e_desc = desc; e_ty = ty; e_ct_annot = ct_annot; e_linearity = linearity;
     e_level_ck = level_ck; e_loc = loc; }
 
 let mk_app ?(async = None) ?(params=[]) ?(unsafe=false) ?(inlined=false) op =
-  { a_op = op; a_params = params; a_unsafe = unsafe; a_inlined = inlined; a_async = async }
+  { a_op = op; a_params = params; a_unsafe = unsafe;
+    a_inlined = inlined; a_async = async }
 
-let mk_op_app ?(params=[]) ?(unsafe=false) ?(reset=None) op args =
+let mk_op_app ?(params=[]) ?(unsafe=false) ?(reset=[]) op args =
   Eapp(mk_app ~params:params ~unsafe:unsafe op, args, reset)
 
 let mk_type_dec name desc =
@@ -45,10 +47,11 @@ let mk_block ?(stateful = true) ?(defnames = Env.empty) ?(locals = []) eqs =
   { b_local = locals; b_equs = eqs; b_defnames = defnames;
     b_stateful = stateful; b_loc = (no_location ()); }
 
-let dfalse =
-  mk_exp (Econst (mk_static_bool false)) (Tid Initial.pbool) Ltop
-let dtrue =
-  mk_exp (Econst (mk_static_bool true)) (Tid Initial.pbool) Ltop
+let mk_static_exp_exp ty se_d =
+  mk_exp (Econst (mk_static_exp ty se_d)) ty Ltop
+
+let dfalse = mk_static_exp_exp Initial.tbool (Sbool false)
+let dtrue = mk_static_exp_exp Initial.tbool (Sbool true)
 
 let mk_ifthenelse e1 e2 e3 =
   { e3 with e_desc = mk_op_app Eifthenelse [e1; e2; e3] }
@@ -61,7 +64,8 @@ let mk_switch_equation e l =
 
 let mk_node
     ?(input = []) ?(output = []) ?(contract = None)
-    ?(stateful = true) ?(unsafe = false) ?(loc = (no_location ())) ?(param = []) ?(constraints = [])
+    ?(stateful = true) ?(unsafe = false)
+    ?(loc = (no_location ())) ?(param = []) ?(constraints = [])
     name block =
   { n_name = name;
     n_stateful = stateful;

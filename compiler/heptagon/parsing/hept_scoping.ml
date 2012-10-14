@@ -265,12 +265,15 @@ and translate_desc loc env = function
   | Easync c -> Heptagon.Econst (expect_static_exp c)
   | Evar x -> Heptagon.Evar (Rename.var loc env x)
   | Elast x -> Heptagon.Elast (Rename.last loc env x)
-  | Epre (None, e) -> Heptagon.Epre (None, translate_exp env e)
-  | Epre (Some c, e) ->
-      Heptagon.Epre (Some (expect_static_exp c),
-                     translate_exp env e)
-  | Efby (e1, e2) -> Heptagon.Efby (translate_exp env e1,
-                                    translate_exp env e2)
+  | Efby (e1, p, e2, c) ->
+      let c = match c with
+      | None -> []
+      | Some e -> [translate_exp env e]
+      in
+      Heptagon.Efby (Misc.optional (translate_exp env) e1,
+                     List.map (expect_static_exp) p,
+                     translate_exp env e2,
+                     c)
   | Estruct f_e_list ->
       let f_e_list =
         List.map (fun (f,e) -> qualify_field f, translate_exp env e)
@@ -281,7 +284,7 @@ and translate_desc loc env = function
       let params = List.map (expect_static_exp) params in
       let async = Misc.optional (List.map expect_static_exp) async in
       let app = mk_app ~params:params ~async:async ~inlined:inl (translate_op op) in
-      Heptagon.Eapp (app, e_list, None)
+      Heptagon.Eapp (app, e_list, [])
 
   | Eiterator (it, { a_op = op; a_params = params; a_async = async }, n_list, pe_list, e_list) ->
       let e_list = List.map (translate_exp env) e_list in
@@ -291,7 +294,7 @@ and translate_desc loc env = function
       let async = Misc.optional (List.map expect_static_exp) async in
       let app = mk_app ~params:params ~async:async (translate_op op) in
       Heptagon.Eiterator (translate_iterator_type it,
-                          app, n_list, pe_list, e_list, None)
+                          app, n_list, pe_list, e_list, [])
   | Ewhen (e, c, x) ->
       let x = Rename.var loc env x in
       let e = translate_exp env e in

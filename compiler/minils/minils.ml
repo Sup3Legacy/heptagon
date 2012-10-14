@@ -52,9 +52,9 @@ and exp = {
 
 and edesc =
   | Eextvalue of extvalue
-  | Efby of static_exp option * extvalue
-                       (** static_exp fby extvalue *)
-  | Eapp of app * extvalue list * var_ident option
+  | Efby of static_exp option * static_exp list * extvalue * extvalue list
+                       (** static_exp fby<<n>> extvalue *)
+  | Eapp of app * extvalue list * extvalue list
                        (** app ~args=(extvalue,extvalue...) reset ~r=ident *)
   | Ewhen of exp * sampling_value * var_ident  (** e when C(c) *)
   | Emerge of var_ident * (sampling_value * extvalue) list
@@ -62,7 +62,7 @@ and edesc =
   | Estruct of (field_name * extvalue) list
                        (** { field=extvalue; ... } *)
   | Eiterator of iterator_type * app * static_exp list
-                 * extvalue list * extvalue list * var_ident option
+                 * extvalue list * extvalue list * extvalue list
                        (** map f <<n>> <(extvalue)> (extvalue) reset ident *)
 
 and app = { a_op: op;

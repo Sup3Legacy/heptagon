@@ -65,7 +65,7 @@ let tuple_of_vd_list l =
   let el = List.map exp_of_vd l in
   let ty = type_of_vd_list l in
   let lin = linearity_of_vd_list l in
-  mk_exp (Eapp (mk_app Etuple, el, None)) ty lin
+  mk_exp (Eapp (mk_app Etuple, el, [])) ty lin
 
 let vd_of_arg ad =
     mk_var_dec (fresh_vd_of_arg ad) ad.a_type ad.a_linearity
@@ -94,7 +94,7 @@ let mk_call app acc_eq_list =
   let args = List.map exp_of_vd new_inp in
   let out_ty = type_of_vd_list new_outp in
   let out_lin = linearity_of_vd_list new_outp in
-  let e = mk_exp (Eapp (app, args, None)) out_ty out_lin in
+  let e = mk_exp (Eapp (app, args, [])) out_ty out_lin in
   match List.length new_outp with
     | 1 -> new_inp, e, acc_eq_list
     | _ ->
@@ -135,7 +135,7 @@ let edesc funs acc ed =
           let _, outp = get_node_inp_outp f in
           let f_out_type = type_of_vd_list outp in
           let f_out_lin = linearity_of_vd_list outp in
-          let call = mk_exp (Eapp(f, largs, None)) f_out_type f_out_lin in
+          let call = mk_exp (Eapp(f, largs, [])) f_out_type f_out_lin in
           let eq = mk_equation (Eeq(pat_of_vd_list outp, call)) in
           (* create the lambda *)
           let anon = mk_app

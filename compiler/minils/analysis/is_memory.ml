@@ -16,7 +16,7 @@ let memory_set n =
         let rec eq funs acc ({ eq_lhs = pat; eq_rhs = e } as equ) =
     match pat, e.e_desc with
     | _, Ewhen(e,_,_) -> eq funs acc {equ with eq_rhs = e}
-    | Evarpat x, Efby(_, _) ->
+    | Evarpat x, Efby(_, _, _, _) ->
         equ, IdentSet.add x acc
     | _, _ -> equ, acc
   in

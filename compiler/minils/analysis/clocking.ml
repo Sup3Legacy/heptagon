@@ -159,9 +159,10 @@ let typing_eq h ({ eq_lhs = pat; eq_rhs = e; eq_loc = loc } as eq) =
   (* typing the expression, returns ct, ck_base *)
   let rec typing e =
     let ct,base = match e.e_desc with
-      | Eextvalue w
-      | Efby (_, w) ->
+      | Eextvalue w -> let ck = typing_extvalue h w in Ck ck, ck
+      | Efby (_,_,w,r) ->
           let ck = typing_extvalue h w in
+          let _ = List.map (typing_extvalue h) r in (*Hyperchornous reset*)
           Ck ck, ck
       | Ewhen (e,c,n) ->
           let ck_n = ck_of_name h n in
@@ -176,11 +177,13 @@ let typing_eq h ({ eq_lhs = pat; eq_rhs = e; eq_loc = loc } as eq) =
           let ck = fresh_clock () in
           List.iter (fun (_, e) -> expect_extvalue h ck e) l;
           Ck ck, ck
-      | Eapp({a_op = op}, args, _) -> (* hyperchronous reset *)
+      | Eapp({a_op = op}, args, r) ->
           let base_ck = fresh_clock () in
           let ct = typing_app h base_ck pat op args in
+          let _ = List.map (typing_extvalue h) r in (*Hyperchornous reset*)
           ct, base_ck
-      | Eiterator (it, {a_op = op}, nl, pargs, args, _) -> (* hyperchronous reset *)
+      | Eiterator (it, {a_op = op}, nl, pargs, args, r) ->
+          let _ = List.map (typing_extvalue h) r in (*Hyperchornous reset*)
           let base_ck = fresh_clock() in
           let ct = match it with
             | Imap -> (* exactly as if clocking the node *)
@@ -228,10 +231,11 @@ let typing_eq h ({ eq_lhs = pat; eq_rhs = e; eq_loc = loc } as eq) =
   let ct,base_ck = typing e in
   let pat_ct = typing_pat h pat in
   (try unify ct pat_ct
-    with Unify ->
-      eprintf "Incoherent clock between right and left side of the equation.@\n";
-      error_message loc (Etypeclash (ct, pat_ct)));
-  { eq with eq_base_ck = base_ck }
+   with Unify ->
+     eprintf "Incoherent clock between right and left side of the equation.@\n";
+     error_message loc (Etypeclash (ct, pat_ct))
+  );
+  { eq with eq_base_ck = base_ck; eq_rhs = e }
 
 let typing_eqs h eq_list = List.map (typing_eq h) eq_list
 

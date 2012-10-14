@@ -411,14 +411,14 @@ let rec typing_exp env e =
     | Econst _ -> lin_skeleton Ltop e.e_ty, env
     | Evar x -> lin_of_ident x env, env
     | Elast x -> lin_of_ident x env, env
-    | Epre (_, e) ->
-      let lin = (not_linear_for_exp e) in
-      let env = safe_expect env lin e in
-        lin, env
-    | Efby (e1, e2) ->
-        let env = safe_expect env (not_linear_for_exp e1) e1 in
-        let env = safe_expect env (not_linear_for_exp e1) e2 in
-          not_linear_for_exp e1, env
+    | Efby (e1, _, e2, c) ->
+        let lin = not_linear_for_exp e2 in
+        let env = safe_expect env lin e2 in
+        let env = match e1 with
+          | None -> env
+          | Some e -> safe_expect env lin e
+        in
+        lin,env
     | Eapp ({ a_op = Efield }, _, _) -> Ltop, env
     | Eapp ({ a_op = Earray }, _, _) -> Ltop, env
     | Estruct _ -> Ltop, env
@@ -764,10 +764,13 @@ and typing_eq env eq =
           env, u, i
     (*TODO: faire la meme chose si on a un tuple *)
     (* for init<<r>> y = v fby x, we expect a linear type for x *)
-    | Eeq(Evarpat y, { e_desc = Efby(e_1, e_2) }) ->
+    | Eeq(Evarpat y, { e_desc = Efby(e_1, _, e_2, _) }) ->
         let lin = lin_of_ident y env in
         let _, env = check_init env eq.eq_loc eq.eq_inits lin in
-        safe_expect env Ltop e_1;
+        (match e_1 with
+          | None -> ()
+          | Some e_1 -> let _ = safe_expect env Ltop e_1 in ()
+        );
         safe_expect env lin e_2
     | Eeq(pat, e) ->
         let lin_pat = typing_pat env pat in

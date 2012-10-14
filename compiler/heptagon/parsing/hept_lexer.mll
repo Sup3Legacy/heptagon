@@ -29,6 +29,7 @@ List.iter (fun (str,tok) -> Hashtbl.add keyword_table str tok) [
  "switch", SWITCH;
  "type", TYPE;
  "every", EVERY;
+ "revery", REVERY;
  "true", BOOL(true);
  "false", BOOL(false);
  "pre", PRE;

@@ -101,11 +101,14 @@ let rec typing e =
           | Lat _ -> linread x
           | _ -> read x)
     | Elast(x) -> lastread x
-    | Epre (_, e) -> pre (typing e)
-    | Efby (e1, e2) ->
-        let t1 = typing e1 in
+    | Efby (e1, p, e2, c) ->
         let t2 = pre (typing e2) in
-          candlist [t1; t2]
+        (match e1 with
+        | None -> t2
+        | Some e1 ->
+            let t1 = typing e1 in
+            candlist [t1; t2]
+        )
     | Eapp({ a_op = op }, e_list, _) -> apply op e_list
     | Estruct(l) ->
         let l = List.map (fun (_, e) -> typing e) l in

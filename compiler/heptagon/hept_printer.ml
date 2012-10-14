@@ -107,11 +107,14 @@ and print_exp_desc ff = function
   | Evar x -> print_ident ff x
   | Elast x -> fprintf ff "last %a" print_ident x
   | Econst c -> print_static_exp ff c
-  | Epre(None, e) -> fprintf ff "pre %a" print_exp e
-  | Epre(Some c, e) ->
-      fprintf ff "@[<2>%a fby@ %a@]" print_static_exp c  print_exp e
-  | Efby(e1, e2) ->
-      fprintf ff "@[<2>%a fby@ %a@]" print_exp e1  print_exp e2
+  | Efby(e1, p, e2, c) -> (match e1 with
+      | None ->
+        fprintf ff "@[<2>pre%a@ %a%a@]"
+          print_params p print_exp e2 print_every c
+      | Some e1 ->
+        fprintf ff "@[<2>%a fby%a@ %a%a@]"
+          print_exp e1 print_params p print_exp e2 print_every c
+      )
   | Eapp(app, args, reset) ->
       fprintf ff "@[<2>%a@,%a@]"
         print_app (app, args) print_every reset
@@ -164,7 +167,8 @@ and print_tag_e_list ff tag_e_list =
   fprintf ff "@[%a@]" (print_list print_handler "" " " "") tag_e_list
 
 and print_every ff reset =
-  print_opt (fun ff id -> fprintf ff " every %a" print_exp id) ff reset
+  let print_one_every ff c = fprintf ff " every(%a)" print_exp c in
+  fprintf ff "@[%a@]" (print_list print_one_every """""") reset
 
 and print_app ff (app, args) =
   print_async ff app.a_async;

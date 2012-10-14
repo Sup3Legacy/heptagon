@@ -27,7 +27,7 @@ let build_env nd =
   let add_none env l = List.fold_left (fun env vd -> Env.add vd.v_ident None env) env l in
   let rec add_eq env eq = match eq.eq_lhs, eq.eq_rhs.e_desc with
     | _, Ewhen (e, _, _) -> add_eq env { eq with eq_rhs = e }
-    | Evarpat x, Efby (_, w) -> Env.add x (ident_of_extvalue w) env
+    | Evarpat x, Efby (_, _, w, _) -> Env.add x (ident_of_extvalue w) env
     | _, _ ->
        List.fold_left (fun env id -> Env.add id None env) env (Vars.def [] eq)
   in
@@ -43,7 +43,7 @@ let build_env nd =
 
 let rec replace_fby e exp_mem_x = match e.e_desc with
   | Ewhen (e1, c, y) -> { e with e_desc = Ewhen (replace_fby e1 exp_mem_x, c, y) }
-  | Efby (_, _) -> exp_mem_x
+  | Efby (_, _, _, _) -> exp_mem_x
   | _ -> assert false
 
 let rec depends_on x y env =

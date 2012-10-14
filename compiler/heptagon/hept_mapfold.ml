@@ -97,14 +97,12 @@ and edesc funs acc ed = match ed with
   | Elast v ->
       let v, acc = var_ident_it funs.global_funs acc v in
       Elast v, acc
-  | Epre (se, e) ->
-      let se, acc = optional_wacc (static_exp_it funs.global_funs) acc se in
-      let e, acc = exp_it funs acc e in
-      Epre (se, e), acc
-  | Efby (e1, e2) ->
-      let e1, acc = exp_it funs acc e1 in
+  | Efby (e1, p, e2, c) ->
+      let e1, acc = optional_wacc (exp_it funs) acc e1 in
+      let p, acc = mapfold (static_exp_it funs.global_funs) acc p in
       let e2, acc = exp_it funs acc e2 in
-      Efby (e1,e2), acc
+      let c, acc = mapfold (exp_it funs) acc c in
+      Efby (e1,p,e2,c), acc
   | Estruct n_e_list ->
       let aux acc (n,e) =
         let e, acc = exp_it funs acc e in
@@ -114,14 +112,14 @@ and edesc funs acc ed = match ed with
   | Eapp (app, args, reset) ->
       let app, acc = app_it funs acc app in
       let args, acc = mapfold (exp_it funs) acc args in
-      let reset, acc = optional_wacc (exp_it funs) acc reset in
+      let reset, acc = mapfold (exp_it funs) acc reset in
       Eapp (app, args, reset), acc
   | Eiterator (i, app, params, pargs, args, reset) ->
       let app, acc = app_it funs acc app in
       let params, acc = mapfold (static_exp_it funs.global_funs) acc params in
       let pargs, acc = mapfold (exp_it funs) acc pargs in
       let args, acc = mapfold (exp_it funs) acc args in
-      let reset, acc = optional_wacc (exp_it funs) acc reset in
+      let reset, acc = mapfold (exp_it funs) acc reset in
       Eiterator (i, app, params, pargs, args, reset), acc
   | Ewhen (e, c, n) ->
       let e, acc = exp_it funs acc e in

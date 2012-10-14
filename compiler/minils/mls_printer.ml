@@ -74,7 +74,8 @@ and print_exp ff e =
   else fprintf ff "%a" print_exp_desc e.e_desc
 
 and print_every ff reset =
-  print_opt (fun ff id -> fprintf ff " every %a" print_ident id) ff reset
+  let print_one_every ff w = fprintf ff " every(%a)" print_extvalue w in
+  fprintf ff "@[%a@]" (print_list print_one_every """""") reset
 
 and print_extvalue ff w =
   if !Compiler_options.full_type_info then
@@ -96,8 +97,17 @@ and print_extvalue_desc ff = function
 
 and print_exp_desc ff = function
   | Eextvalue w -> print_extvalue ff w
-  | Efby ((Some c), w) -> fprintf ff "@[<2>%a fby@ %a@]" print_static_exp c print_extvalue w
-  | Efby (None, w) -> fprintf ff "pre %a" print_extvalue w
+  | Efby ((Some v), p, w, c) ->
+      fprintf ff "@[<2>%a fby%a@ %a%a@]"
+        print_static_exp v
+        (print_list_r print_static_exp "<<"", "">>") p
+        print_extvalue w
+        print_every c
+  | Efby (None, p, w, c) ->
+      fprintf ff "@[<2>pre%a@ %a%a@]"
+        (print_list_r print_static_exp "<<"", "">>") p
+        print_extvalue w
+        print_every c
   | Eapp (app, args, reset) ->
       fprintf ff "@[<2>%a@,%a@]" print_app (app, args) print_every reset
   | Emerge (x, tag_w_list) ->

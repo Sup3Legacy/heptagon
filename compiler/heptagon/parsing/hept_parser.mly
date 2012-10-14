@@ -18,7 +18,7 @@ open Hept_parsetree
 %token <string> STRING
 %token <string * string> PRAGMA
 %token TYPE FUN NODE RETURNS VAR VAL OPEN END CONST UNSAFE EXTERNAL
-%token FBY PRE SWITCH EVERY
+%token FBY PRE SWITCH EVERY REVERY
 %token OR STAR NOT
 %token AMPERSAND
 %token AMPERAMPER
@@ -77,8 +77,10 @@ open Hept_parsetree
 %right NOT
 %right prec_uminus
 %right PRE
+%left REVERY
 %left POWER
 %right PREFIX
+
 
 
 %start program
@@ -464,14 +466,18 @@ merge_handlers:
 merge_handler:
   | LPAREN c=sampling_value ARROW e=exp RPAREN { (c,e) }
 
+%inline every_reset:
+  | /* */ { None }
+  | REVERY c=exp { Some c}
+
 exp:
   | e=simple_exp { e }
   | e=_exp { mk_exp e (Loc($startpos,$endpos)) }
 _exp:
-  | simple_exp FBY exp
-      { Efby ($1, $3) }
-  | PRE exp
-      { Epre (None, $2) }
+  | i=simple_exp FBY p=call_params x=exp c=every_reset
+      { Efby (Some i, p, x, c) }
+  | PRE p=call_params x=exp c=every_reset
+      { Efby (None, p,x,c) }
   /* node call*/
   | n=node_name LPAREN args=exps RPAREN
       { Eapp(n, args) }

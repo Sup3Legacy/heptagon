@@ -83,6 +83,14 @@ let inline_extvalue_node env nd =
      with Not_found -> w_d), ()
   in
 
+  let inline_ck env funs () ck =
+    let ck, () = Global_mapfold.ck funs () ck in
+    (try match ck with
+      | Con (ck, cn, x) -> Con (ck, cn, find_sampler env x)
+      | _ -> ck
+     with Not_found -> ck), ()
+  in
+
   let inline_edesc env funs () e_d =
     let e_d', () = Mls_mapfold.edesc funs () e_d in
     (* Format.eprintf "From %a to %a@." print_exp_desc e_d print_exp_desc e_d'; *)
@@ -90,17 +98,8 @@ let inline_extvalue_node env nd =
     (try match e_d with
       | Emerge (x, cl) -> Emerge (find_sampler env x, cl)
       | Ewhen (e, v, x) -> Ewhen (e, v, find_sampler env x)
-      | Eapp (op, args, Some x) -> Eapp (op, args, Some (find_sampler env x))
       | _ -> e_d
      with Not_found -> e_d), ()
-  in
-
-  let inline_ck env funs () ck =
-    let ck, () = Global_mapfold.ck funs () ck in
-    (try match ck with
-      | Con (ck, cn, x) -> Con (ck, cn, find_sampler env x)
-      | _ -> ck
-     with Not_found -> ck), ()
   in
 
   let env =
@@ -160,13 +159,13 @@ let form_new_extvalue_node nd =
       (*   (try Svar (Q (qualify_const local_const (ToQ n))) *)
       (*    with Error.ScopingError _ -> raise Errors.Fallback) *)
 
-      | Eapp ({ a_op = Efun ({ qual = Names.Pervasives; } as funn); }, w_list, None) ->
+      | Eapp ({ a_op = Efun ({ qual = Names.Pervasives; } as funn); }, w_list, []) ->
         Sop (funn, form_new_consts w_list)
 
-      | Eapp ({ a_op = Earray_fill; a_params = n_list; }, [w], None) ->
+      | Eapp ({ a_op = Earray_fill; a_params = n_list; }, [w], []) ->
         Sarray_power (form_new_const_w w, n_list)
 
-      | Eapp ({ a_op = Earray; }, w_list, None) ->
+      | Eapp ({ a_op = Earray; }, w_list, []) ->
         Sarray (form_new_consts w_list)
 
       | Estruct w_list ->
@@ -205,7 +204,6 @@ let compute_needed nd =
     (match e_d with
       | Emerge (x, _) -> IdentSet.add x ids
       | Ewhen (_, _, x) -> IdentSet.add x ids
-      | Eapp (_, _, Some x) -> IdentSet.add x ids
       | _ -> ids)
 
   and compute_needed_extvalue_desc funs ids w_d =

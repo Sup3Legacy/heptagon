@@ -73,12 +73,16 @@ let equation (d_list, eq_list) e =
               | _ -> assert false)
           in
           let var_list, d_list =
-            mapfold2 (fun d_list ty lin -> add_one_var ty lin d_list) d_list ty_list lin_list in
+            mapfold2
+              (fun d_list ty lin -> add_one_var ty lin d_list)
+              d_list ty_list lin_list
+          in
           let pat_list = List.map (fun n -> Evarpat n) var_list in
-          let eq_list = (mk_equation (Eeq (Etuplepat pat_list, e))) :: eq_list in
+          let eq_list = (mk_equation (Eeq (Etuplepat pat_list, e)))::eq_list in
           let e_list = Misc.map3
-            (fun n ty lin -> mk_exp (Evar n) ty lin) var_list ty_list lin_list in
-          let e = Eapp(mk_app Etuple, e_list, None) in
+            (fun n ty lin -> mk_exp (Evar n) ty lin) var_list ty_list lin_list
+          in
+          let e = Eapp(mk_app Etuple, e_list, []) in
             (d_list, eq_list), e
       | _ ->
           let n, d_list = add_one_var e.e_ty e.e_linearity d_list in
@@ -104,7 +108,7 @@ let whenc context e c n e_orig =
   in
     if is_list e then (
       let e_list, context = Misc.mapfold (when_on_c c n) context (e_to_e_list e) in
-          context, { e_orig with e_desc = Eapp(mk_app Etuple, e_list, None) }
+          context, { e_orig with e_desc = Eapp(mk_app Etuple, e_list, []) }
     ) else
       let e, context = when_on_c c n context e in
       context, e
@@ -137,8 +141,7 @@ let rec translate kind context e =
   let context, e' = match e.e_desc with
     | Econst _
     | Evar _ -> context, e
-    | Epre(v, e1) -> fby kind context e v e1
-    | Efby({ e_desc = Econst v }, e1) -> fby kind context e (Some v) e1
+    | Efby(v, p, e1, c) -> fby kind context e v p e1 c
     | Estruct l ->
         let translate_field context (f, e) =
           let context, e = translate ExtValue context e in
@@ -165,8 +168,8 @@ let rec translate kind context e =
         let context, e1 = translate ExtValue context e1 in
         let mk_when c = mk_exp (Ewhen (e1, c, x)) e1.e_ty e1.e_linearity in
         let el = List.map mk_when cl in
-        context, { e with e_desc = Eapp(mk_app Etuple, el, None) }
-    | Elast _ | Efby _ ->
+        context, { e with e_desc = Eapp(mk_app Etuple, el, []) }
+    | Elast _ ->
         Error.message e.e_loc Error.Eunsupported_language_construct
   in add context kind e'
 
@@ -178,33 +181,35 @@ and translate_list kind context e_list =
         let context, e_list = translate_list kind context e_list in
           context, e :: e_list
 
-and fby kind context e v e1 =
-  let mk_fby c e =
-    mk_exp ~loc:e.e_loc (Epre(Some c, e)) e.e_ty Ltop in
-  let mk_pre e =
-    mk_exp ~loc:e.e_loc (Epre(None, e)) e.e_ty Ltop in
+and fby kind context e v p e1 c =
+  let mk_fby v e = mk_exp ~loc:e.e_loc (Efby(v, p, e, c)) e.e_ty Ltop in
   let context, e1 = translate ExtValue context e1 in
-  match e1.e_desc, v with
-    | Eapp({ a_op = Etuple } as app, e_list, r),
-      Some { se_desc = Stuple se_list } ->
-        let e_list = List.map2 mk_fby se_list e_list in
-        let e = { e with e_desc = Eapp(app, e_list, r) } in
-          translate kind context e
-    | Econst { se_desc = Stuple se_list },
-      Some { se_desc = Stuple v_list } ->
-        let e_list = List.map2 mk_fby v_list
-          (exp_list_of_static_exp_list se_list) in
-        let e = { e with e_desc = Eapp(mk_app Etuple, e_list, None) } in
-          translate kind context e
-    | Eapp({ a_op = Etuple } as app, e_list, r), None ->
-        let e_list = List.map mk_pre e_list in
-        let e = { e with e_desc = Eapp(app, e_list, r) } in
-          translate kind context e
-    | Econst { se_desc = Stuple se_list }, None ->
-        let e_list = List.map mk_pre (exp_list_of_static_exp_list se_list) in
-        let e = { e with e_desc = Eapp(mk_app Etuple, e_list, None) } in
-          translate kind context e
-    | _ -> context, { e with e_desc = Epre(v, e1) }
+  let mk_v_list v size = match v with
+  | None -> Misc.repeat_list None size
+  | Some { e_desc = Econst { se_desc = Stuple se_list } } ->
+      List.map (fun x -> Some x) (exp_list_of_static_exp_list se_list)
+  | Some { e_desc = Eapp({ a_op = Etuple }, e_list, _)} ->
+      List.map (fun x -> Some x) e_list
+  | Some e ->
+      [Some e]
+  in
+  let fby_list =
+    let e1_list = match e1.e_desc with
+    | Eapp({ a_op = Etuple }, e_list, _) ->
+        e_list
+    | Econst { se_desc = Stuple se_list } ->
+        exp_list_of_static_exp_list se_list
+    | _ ->
+        [e1]
+    in
+    List.map2 mk_fby (mk_v_list v (List.length e1_list)) e1_list
+  in
+  match fby_list with
+  | [] -> Misc.internal_error "lost all expressions !"
+  | [e] -> context, e
+  | e_list ->
+      translate kind context { e with e_desc = Eapp(mk_app Etuple, e_list, []) }
+
 
 (** transforms [if x then e1, ..., en else e'1,..., e'n]
     into [if x then e1 else e'1, ..., if x then en else e'n]  *)
@@ -215,17 +220,17 @@ and ifthenelse context e e1 e2 e3 =
   let mk_ite_list e2_list e3_list =
     let mk_ite e'2 e'3 =
       mk_exp ~loc:e.e_loc
-        (Eapp (mk_app Eifthenelse, [e1; e'2; e'3], None)) e'2.e_ty e'2.e_linearity
+        (Eapp (mk_app Eifthenelse, [e1; e'2; e'3], [])) e'2.e_ty e'2.e_linearity
     in
     let e_list = List.map2 mk_ite e2_list e3_list in
-      { e with e_desc = Eapp(mk_app Etuple, e_list, None) }
+      { e with e_desc = Eapp(mk_app Etuple, e_list, []) }
   in
     if is_list e2 then (
       let e2_list, context = add_list context ExtValue (e_to_e_list e2) in
       let e3_list, context = add_list context ExtValue (e_to_e_list e3) in
         context, mk_ite_list e2_list e3_list
     ) else
-      context, { e with e_desc = Eapp (mk_app Eifthenelse, [e1; e2; e3], None) }
+      context, { e with e_desc = Eapp (mk_app Eifthenelse, [e1; e2; e3], []) }
 
 (** transforms [merge x (c1, (e11,...,e1n));...;(ck, (ek1,...,ekn))] into
     [merge x (c1, e11)...(ck, ek1),..., merge x (c1, e1n)...(ck, ekn)]    *)
@@ -268,7 +273,7 @@ and merge context e x c_e_list =
                   context e_lists in
               let e_list = mk_merge x c_list e_lists in
                 context, { e with
-                             e_desc = Eapp(mk_app Etuple, e_list, None) }
+                             e_desc = Eapp(mk_app Etuple, e_list, []) }
             ) else
               context, { e with
                            e_desc = Emerge(x, c_e_list) }
