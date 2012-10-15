@@ -25,10 +25,10 @@ type obj_ident = var_ident
 
 
 type const_dec = {
-  c_name : qualname;
+  c_name  : qualname;
   c_value : static_exp;
-  c_type : ty;
-  c_loc : location }
+  c_type  : ty;
+  c_loc   : location }
 
 type pattern = { pat_desc : pat_desc; pat_ty : ty; pat_loc : location }
 
@@ -86,41 +86,43 @@ and case_value = static_exp
 
 and block =
     { b_locals : var_dec list;
-      b_body : act list }
+      b_body   : act list }
 
 and var_dec =
-    { v_ident : var_ident;
-      v_type : ty;
-      v_alias : bool; (* this var_dec only declare a const pointer, no allocation is needed *)
+    { v_ident     : var_ident;
+      v_type      : ty;
+      (* size of the memory if it is a fby<<n>> *)
+      v_size      : static_exp option;
+      v_alias     : bool; (* this var_dec only declare a const pointer, no allocation is needed *)
       v_linearity : linearity;
-      v_mutable : bool;
-      v_loc : location }
+      v_mutable   : bool;
+      v_loc       : location }
 
 type obj_dec =
-    { o_ident : obj_ident;
-      o_async : async_t;
-      o_class : class_name;
+    { o_ident  : obj_ident;
+      o_async  : async_t;
+      o_class  : class_name;
       o_params : static_exp list;
       (** size of the array if the declaration is an array of obj *)
-      o_size : static_exp list option;
-      o_loc : location }
+      o_size   : static_exp list option;
+      o_loc    : location }
 
 type method_def =
-    { m_name : method_name;
-      m_inputs : var_dec list;
+    { m_name    : method_name;
+      m_inputs  : var_dec list;
       m_outputs : var_dec list;
-      m_body : block; }
+      m_body    : block; }
 
 type class_def =
     { cd_name : class_name;
       (** when false, the class is a function with static parameters
           calling other functions with parameters *)
-      cd_stateful : bool;
-      cd_mems : var_dec list;
-      cd_objs  : obj_dec list;
-      cd_params : param list;
-      cd_methods: method_def list;
-      cd_loc : location;
+      cd_stateful  : bool;
+      cd_mems      : var_dec list;
+      cd_objs      : obj_dec list;
+      cd_params    : param list;
+      cd_methods   : method_def list;
+      cd_loc       : location;
       cd_mem_alloc : (ty * Interference_graph.ivar list) list; }
 
 
@@ -141,8 +143,8 @@ type signature = {
 
 type interface =
     { i_modname : modul;
-      i_opened : modul list;
-      i_desc : interface_desc list }
+      i_opened  : modul list;
+      i_desc    : interface_desc list }
 
 and interface_desc =
   | Itypedef of type_dec

@@ -17,6 +17,7 @@ type error =
   | Eoutput_linearity_not_declared of linearity_var
   | Emapi_bad_args of linearity
   | Ewrong_init of linearity_var * linearity
+  | Eunsupported_fbyn
 
 exception TypingError of error
 
@@ -72,6 +73,11 @@ let message loc kind =
           print_location loc
           r
           print_linearity lin
+    | Eunsupported_fbyn ->
+        Format.eprintf
+          "%aIt is for now unsupported to handle fby<<n>>\
+             with linear annotations.@."
+          print_location loc
   end;
   raise Errors.Error
 
@@ -418,6 +424,8 @@ let rec typing_exp env e =
           | None -> env
           | Some e -> safe_expect env lin e
         in
+       (* if (is_linear and p!=[])
+        then message loc Eunsupported_fbyn*)
         lin,env
     | Eapp ({ a_op = Efield }, _, _) -> Ltop, env
     | Eapp ({ a_op = Earray }, _, _) -> Ltop, env

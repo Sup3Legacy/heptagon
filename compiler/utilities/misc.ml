@@ -306,6 +306,11 @@ let split_string s separator = Str.split (separator |> Str.quote |> Str.regexp) 
 
 let file_extension s = split_string s "." |> last_element
 
+let remove_extension s =
+  let ss = split_string s "." in
+  let ss, ext = split_last ss in
+  String.concat "." ss
+
 (** Memoize the result of the function [f]*)
 let memoize f =
   let map = Hashtbl.create 100 in

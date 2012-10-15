@@ -97,7 +97,7 @@ let lexbuf_from_file file_name =
   let ic =
     try open_in file_name
     with _ ->
-      Format.eprintf "Error, can't open file %s" file_name;
+      Format.eprintf "Error, can't open file %s@." file_name;
       raise Errors.Error
   in
   let lexbuf = Lexing.from_channel ic in

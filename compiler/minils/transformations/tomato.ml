@@ -406,8 +406,8 @@ and reconstruct_exp_desc mapping headd children =
     Eextvalue w
 
   | Efby (ini, p, w, r) ->
-    let w = assert_1 (reconstruct_extvalues mapping [w] [List.hd children]) in
-    let r = reconstruct_extvalues mapping r (List.tl children) in
+    let r_w = reconstruct_extvalues mapping (r@[w]) children in
+    let r,w = split_last r_w in
     Efby (ini, p, w, r)
 
   | Eapp (app, w_list, rst_dummy) ->

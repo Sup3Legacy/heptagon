@@ -143,6 +143,9 @@ val (|>) : 'a -> ('a -> 'b) -> 'b
 (** Return the extension of a filename string *)
 val file_extension : string -> string
 
+(** Return the name without the last part separated by a point *)
+val remove_extension : string -> string
+
 (** Internal error : Is used with a format when an assertion is wrong *)
 val internal_errorf : ('a->'b, Format.formatter, unit) Pervasives.format -> 'a -> 'c
 

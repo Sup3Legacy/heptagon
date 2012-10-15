@@ -324,7 +324,7 @@ and pp_init fmt init = match init with
 
 let pp_cfile_desc fmt filen cfile =
   (** [filen_wo_ext] is the file's name without the extension. *)
-  let filen_wo_ext = String.sub filen 0 (String.length filen - 4) in
+  let filen_wo_ext = Misc.remove_extension filen in
   match cfile with
     | Cheader (deps, cdecls) ->
         let headern_macro = String.uppercase filen_wo_ext in

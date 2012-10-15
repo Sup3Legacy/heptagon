@@ -6,9 +6,12 @@ open Obc
 
 let print_vd ff vd =
   fprintf ff "@[<v>";
-  if vd.v_mutable then
-    fprintf ff "mutable ";
+  if vd.v_mutable then fprintf ff "mutable ";
   print_ident ff vd.v_ident;
+  (match vd.v_size with
+  | None -> ()
+  | Some s -> fprintf ff "<<%a>>" print_static_exp s
+  );
   fprintf ff ": ";
   print_type ff vd.v_type;
   fprintf ff "@]"

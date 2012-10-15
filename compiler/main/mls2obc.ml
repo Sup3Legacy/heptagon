@@ -211,9 +211,16 @@ let rec translate_pat map ty pat = match pat, ty with
         ty_l pat_list []
   | Minils.Etuplepat _, _ -> Misc.internal_error "Ill-typed pattern"
 
-let translate_var_dec l =
+let translate_var_dec mems l =
   let one_var { Minils.v_ident = x; Minils.v_type = t; Minils.v_linearity = lin; v_loc = loc } =
-    mk_var_dec ~loc:loc ~linearity:lin x t
+    let size =
+      try (match Is_memory.mem_size mems x with
+      | [] -> None
+      | [n] -> Some n
+      | _ -> Misc.unsupported "fby with too much static arguments"
+      ) with Not_found -> None
+    in
+    mk_var_dec ~loc:loc ~linearity:lin ~size:size x t
   in
   List.map one_var l
 
@@ -429,32 +436,38 @@ let empty_call_context = None
 
 
 let do_reset map a_list r_list =
-  let add acc w = match w.Minils.w_desc with
+  let rec add base_ck acc w = match w.Minils.w_desc with
   | Minils.Wconst se ->
       (match Static.is_true se with
       | None,_ -> Misc.unsupported "Unsupported reset expression@."
-      | Some b,_ -> if b then (List.map (control map w.Minils.w_ck) a_list)@acc else acc
+      | Some b,_ ->
+          if b
+          then (List.map (control map base_ck) a_list)@acc
+          else acc
       )
   | Minils.Wvar r ->
-      let ck = Clocks.Con (w.Minils.w_ck, Initial.mk_static_bool true, r) in
+      let ck = Clocks.Con (base_ck, Initial.mk_static_bool true, r) in
       (List.map (control map ck) a_list)@acc
+  | Minils.Wwhen (r,c,x) ->
+      let base_ck = Clocks.Con (base_ck, c, x) in
+      add base_ck acc r
   | _ -> Misc.unsupported "Unsupported reset expression@."
   in
-  List.fold_left add [] r_list
+  List.fold_left (fun acc r -> add r.Minils.w_ck acc r) [] r_list
 
 
 (** [si] the initialization actions used in the reset method,
     [j] obj decs
     [s] the actions used in the step method.
     [v] var decs *)
-let rec translate_eq map call_context
+let rec translate_eq mems map call_context
     ({ Minils.eq_lhs = pat; Minils.eq_base_ck = ck; Minils.eq_rhs = e } as eq)
     (v, si, j, s) =
   let { Minils.e_desc = desc; Minils.e_loc = loc } = e in
   match (pat, desc) with
     | _, Minils.Ewhen (e,_,_) ->
-        translate_eq map call_context {eq with Minils.eq_rhs = e} (v, si, j, s)
-    (* TODO Efby and Eifthenelse should be dealt with in translate_act, no ? *)
+        translate_eq mems map call_context {eq with Minils.eq_rhs = e} (v, si, j, s)
+
     | Minils.Evarpat n, Minils.Efby (opt_c, p, e, r) ->
         let x = var_from_name map n in
         let si,s = (match opt_c with
@@ -463,7 +476,9 @@ let rec translate_eq map call_context
                       let ini = Aassgn (x, mk_ext_value_static c)in
                       (ini :: si),((do_reset map [ini] r)@s))
         in
-        let action = Aassgn (var_from_name map n, translate_extvalue_to_exp map e) in
+        let action =
+          Aassgn (var_from_name map n, translate_extvalue_to_exp map e)
+        in
         v, si, j, (control map ck action) :: s
 
     | pat, Minils.Eapp({ Minils.a_op = Minils.Eifthenelse }, [e1;e2;e3], _) ->
@@ -476,7 +491,7 @@ let rec translate_eq map call_context
     | pat, Minils.Eapp ({ Minils.a_op = Minils.Efun _ | Minils.Enode _ } as app, e_list, r) ->
         let name_list = translate_pat map e.Minils.e_ty pat in
         let c_list = List.map (translate_extvalue_to_exp map) e_list in
-        let v', si', j', action = mk_node_call map call_context
+        let v', si', j', action = mk_node_call mems map call_context
           app loc name_list c_list e.Minils.e_ty in
         let action = List.map (control map ck) action in
         let ra = do_reset map si' r in
@@ -491,7 +506,7 @@ let rec translate_eq map call_context
           Some { oa_index = List.map (fun x -> mk_pattern_int (Lvar x)) xl;
                  oa_size = n_list} in
         let n_list = List.map mk_exp_static_int n_list in
-        let si', j', action = translate_iterator map call_context it
+        let si', j', action = translate_iterator mems map call_context it
           name_list app loc n_list xl xdl p_list c_list e.Minils.e_ty in
         let action = List.map (control map ck) action in
         let ra = do_reset map si' reset in
@@ -502,10 +517,10 @@ let rec translate_eq map call_context
         let action = List.map (control map ck) action in
           v, si, j, action @ s
 
-and translate_eq_list map call_context act_list =
-  List.fold_right (translate_eq map call_context) act_list ([], [], [], [])
+and translate_eq_list mems map call_context act_list =
+  List.fold_right (translate_eq mems map call_context) act_list ([], [], [], [])
 
-and mk_node_call map call_context app loc (name_list : Obc.pattern list) args ty =
+and mk_node_call mems map call_context app loc (name_list : Obc.pattern list) args ty =
   match app.Minils.a_op with
     | Minils.Efun f when is_op f ->
         let act = match name_list with
@@ -543,7 +558,7 @@ and mk_node_call map call_context app loc (name_list : Obc.pattern list) args ty
         let map = List.fold_left add_input map nd.Minils.n_input in
         let map = List.fold_left2 build map nd.Minils.n_output name_list in
         let map = List.fold_left add_input map nd.Minils.n_local in
-        let v, si, j, s = translate_eq_list map call_context nd.Minils.n_equs in
+        let v, si, j, s = translate_eq_list mems map call_context nd.Minils.n_equs in
         let env = List.fold_left2 build Env.empty nd.Minils.n_input args in
           v @ nd.Minils.n_local, si, j, subst_act_list env s
     | Minils.Efun f when (app.Minils.a_async = None)
@@ -571,7 +586,7 @@ and mk_node_call map call_context app loc (name_list : Obc.pattern list) args ty
         [], si, [obj], s
     | _ -> assert false
 
-and translate_iterator map call_context it name_list
+and translate_iterator mems map call_context it name_list
     app loc n_list xl xdl p_list c_list ty =
   let rec unarray n ty = match ty, n with
     | Tarray (t,_), 1 -> t
@@ -606,9 +621,9 @@ and translate_iterator map call_context it name_list
         let ty_list = List.map unarray (Signature.unprod ty) in
         let name_list = array_of_output name_list (Signature.unprod ty) in
         let node_out_ty = Signature.prod ty_list in
-        let v, si, j, action = mk_node_call map call_context
+        let v, si, j, action = mk_node_call mems map call_context
           app loc name_list (p_list@c_list) node_out_ty in
-        let v = translate_var_dec v in
+        let v = translate_var_dec mems v in
         let b = mk_block ~locals:v action in
         let bi = mk_block si in
           [mk_loop bi xdl n_list], j, [mk_loop b xdl n_list]
@@ -618,9 +633,9 @@ and translate_iterator map call_context it name_list
         let ty_list = List.map unarray (Signature.unprod ty) in
         let name_list = array_of_output name_list (Signature.unprod ty) in
         let node_out_ty = Signature.prod ty_list in
-        let v, si, j, action = mk_node_call map call_context
+        let v, si, j, action = mk_node_call mems map call_context
           app loc name_list (p_list@c_list@(List.map mk_evar_int xl)) node_out_ty in
-        let v = translate_var_dec v in
+        let v = translate_var_dec mems v in
         let b = mk_block ~locals:v action in
         let bi = mk_block si in
           [mk_loop bi xdl n_list], j, [mk_loop b xdl n_list]
@@ -633,12 +648,12 @@ and translate_iterator map call_context it name_list
         let (name_list, acc_out) = Misc.split_last name_list in
         let name_list = array_of_output name_list ty_name_list in
         let node_out_ty = Signature.prod (Misc.map_butlast unarray ty_list) in
-        let v, si, j, action = mk_node_call map call_context app loc
+        let v, si, j, action = mk_node_call mems map call_context app loc
           (name_list @ [ acc_out ])
           (p_list @ c_list @ [ exp_of_pattern acc_out ])
           node_out_ty
         in
-        let v = translate_var_dec v in
+        let v = translate_var_dec mems v in
         let b = mk_block ~locals:v action in
         let bi = mk_block si in
           [mk_loop bi xdl n_list], j,
@@ -649,10 +664,10 @@ and translate_iterator map call_context it name_list
         let c_list = array_of_input c_list in
         let acc_out = last_element name_list in
         let v, si, j, action =
-          mk_node_call map call_context app loc name_list
+          mk_node_call mems map call_context app loc name_list
             (p_list @ c_list @ [ exp_of_pattern acc_out ]) ty
         in
-        let v = translate_var_dec v in
+        let v = translate_var_dec mems v in
         let b = mk_block ~locals:v action in
         let bi = mk_block si in
           [mk_loop bi xdl n_list], j,
@@ -662,10 +677,10 @@ and translate_iterator map call_context it name_list
         let (c_list, acc_in) = split_last c_list in
         let c_list = array_of_input c_list in
         let acc_out = last_element name_list in
-        let v, si, j, action = mk_node_call map call_context app loc name_list
+        let v, si, j, action = mk_node_call mems  map call_context app loc name_list
           (p_list @ c_list @ (List.map mk_evar_int xl) @ [ exp_of_pattern acc_out ]) ty
         in
-        let v = translate_var_dec v in
+        let v = translate_var_dec mems v in
         let b = mk_block ~locals:v action in
         let bi = mk_block si in
           [mk_loop bi xdl n_list], j,
@@ -677,8 +692,8 @@ let remove m d_list =
 let translate_contract map mems = function
   | None -> ([], [], [], [])
   | Some c ->
-      let (v, si, j, s_list) = translate_eq_list map empty_call_context c.Minils.c_eq in
-      let d_list = translate_var_dec (v @ c.Minils.c_local) in
+      let (v, si, j, s_list) = translate_eq_list mems map empty_call_context c.Minils.c_eq in
+      let d_list = translate_var_dec mems (v @ c.Minils.c_local) in
       let d_list = List.filter (fun vd -> not (Is_memory.is_memory mems vd.v_ident)) d_list in
       (si, j, s_list, d_list)
 
@@ -719,11 +734,11 @@ let translate_node
     | None -> [], []
     | Some c -> c.Minils.c_controllables, c.Minils.c_local in
   let subst_map = subst_map i_list o_list c_list c_locals d_list in
-  let (v, si, j, s_list) = translate_eq_list subst_map empty_call_context eq_list in
+  let (v, si, j, s_list) = translate_eq_list mems subst_map empty_call_context eq_list in
   let (si', j', s_list', d_list') = translate_contract subst_map mems contract in
-  let i_list = translate_var_dec i_list in
-  let o_list = translate_var_dec o_list in
-  let d_list = translate_var_dec (v @ d_list) in
+  let i_list = translate_var_dec mems i_list in
+  let o_list = translate_var_dec mems o_list in
+  let d_list = translate_var_dec mems (v @ d_list) in
   let m, d_list = List.partition (fun vd -> Is_memory.is_memory mems vd.v_ident) d_list in
   let m', o_list = List.partition (fun vd -> Is_memory.is_memory mems vd.v_ident) o_list in
   let s = s_list @ s_list' in
