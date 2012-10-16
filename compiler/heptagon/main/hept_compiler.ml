@@ -33,7 +33,7 @@ let compile_program p =
 
   (* Shared variables (last) *)
   let p = pass "Last" true Last.program p pp in
-  
+
   (* Initialized registers *)
   let p = pass "fby" true Fby.program p pp in
 
@@ -67,11 +67,18 @@ let compile_program p =
   (* Causality check needs to be after Inlining *)
   let p = silent_pass "Causality check" !causality Causality.program p in
 
+  (* Initialized registers *)
+  let p = pass "fby" true Fby.program p pp in
+
+  (* Remove fby<<n>> *)
+  let p = pass "fbyn" true Fbyn.program p pp in
+
   (* Reset again after inlining *)
   let p = pass "Reset" true Reset.program p pp in
 
   (* Every again after reset *)
   let p = pass "Every" true Every.program p pp in
+
 
 
   (* Boolean pass *)

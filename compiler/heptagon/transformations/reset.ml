@@ -14,7 +14,6 @@ open Misc
 open Heptagon
 open Hept_utils
 open Signature
-open Initial
 
 (* We introduce an initialization variable for each reset block  *)
 (* e1 -> e2 is translated into if (true fby false) then e1 else e2 *)

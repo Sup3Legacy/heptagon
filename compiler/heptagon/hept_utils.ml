@@ -12,7 +12,6 @@ open Idents
 open Signature
 open Linearity
 open Clocks
-open Initial
 open Heptagon
 
 (* Helper functions to create AST. *)
@@ -39,9 +38,9 @@ let mk_equation ?(loc=(no_location ())) desc =
     eq_inits = Lno_init;
     eq_loc = loc; }
 
-let mk_var_dec ?(last = Var) ?(clock = fresh_clock()) name ty linearity =
+let mk_var_dec ?(loc = no_location()) ?(last = Var) ?(clock = fresh_clock()) name ty linearity =
   { v_ident = name; v_type = ty; v_linearity = linearity; v_clock = clock;
-    v_last = last; v_loc = (no_location ()) }
+    v_last = last; v_loc = loc }
 
 let mk_block ?(stateful = true) ?(defnames = Env.empty) ?(locals = []) eqs =
   { b_local = locals; b_equs = eqs; b_defnames = defnames;
@@ -58,9 +57,6 @@ let mk_ifthenelse e1 e2 e3 =
 
 let mk_simple_equation pat e =
   mk_equation (Eeq(pat, e))
-
-let mk_switch_equation e l =
-  mk_equation (Eswitch (e, l))
 
 let mk_node
     ?(input = []) ?(output = []) ?(contract = None)
@@ -122,3 +118,22 @@ let signature_of_node n =
       node_external = false;
       node_loc = n.n_loc }
 
+
+let mk_var_exp ?(loc = no_location()) n ty =
+  mk_exp ~loc:loc (Evar n) ty Linearity.Ltop
+
+let mk_pair e1 e2 =
+  mk_exp (mk_op_app Etuple [e1;e2]) (Tprod [e1.e_ty; e2.e_ty])
+    (Linearity.Ltuple [Linearity.Ltop; Linearity.Ltop])
+
+let mk_reset_equation eq_list e =
+  mk_equation (Ereset (mk_block eq_list, e))
+
+let mk_switch_equation e l =
+  mk_equation (Eswitch (e, l))
+
+let mk_constructor constr ty =
+  mk_static_exp ty (Sconstructor constr)
+
+let mk_exp_int i =
+  mk_static_exp_exp Initial.tint (Sint (Int32.of_int i))

@@ -476,6 +476,8 @@ let rec translate_eq mems map call_context
                       let ini = Aassgn (x, mk_ext_value_static c)in
                       (ini :: si),((do_reset map [ini] r)@s))
         in
+        if p!= []
+        then Misc.internal_error "Static Arguments not treated in a fby";
         let action =
           Aassgn (var_from_name map n, translate_extvalue_to_exp map e)
         in

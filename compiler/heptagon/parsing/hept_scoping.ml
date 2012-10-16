@@ -189,7 +189,7 @@ let rec translate_static_exp se =
   with
     | ScopingError err -> message se.se_loc err
 
-and translate_static_exp_desc loc ed =
+and translate_static_exp_desc _ ed =
   let t = translate_static_exp in
   match ed with
     | Svar (ToQ _) | Sfun (ToQ _,_) -> assert false (* parsing and static scoping should prevent it *)

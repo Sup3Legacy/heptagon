@@ -16,7 +16,6 @@ open Idents
 open Heptagon
 open Hept_utils
 open Hept_mapfold
-open Initial
 
 type var = S | NS | R | NR | PNR
 let fresh t =
@@ -29,25 +28,10 @@ let fresh t =
   in
   Idents.gen_var "automata" ~reset:reset name
 
-let mk_var_exp n ty =
-  mk_exp (Evar n) ty Linearity.Ltop
-
-let mk_pair e1 e2 =
-  mk_exp (mk_op_app Etuple [e1;e2]) (Tprod [e1.e_ty; e2.e_ty])
-    (Linearity.Ltuple [Linearity.Ltop; Linearity.Ltop])
-
-let mk_reset_equation eq_list e =
-  mk_equation (Ereset (mk_block eq_list, e))
-
-let mk_switch_equation e l =
-  mk_equation (Eswitch (e, l))
 
 let mk_exp_fby_false e =
   mk_exp (Efby (Some(dfalse), [], e, []))
     (Tid Initial.pbool) Linearity.Ltop
-
-let mk_constructor constr ty =
-  mk_static_exp ty (Sconstructor constr)
 
 (* Be sure that [initial] is of the right type [e.e_ty] before using this *)
 let mk_exp_fby_state initial e =
