@@ -70,9 +70,6 @@ let compile_program p =
   (* Initialized registers *)
   let p = pass "fby" true Fby.program p pp in
 
-  (* Remove fby<<n>> *)
-  let p = pass "fbyn" true Fbyn.program p pp in
-
   (* Reset again after inlining *)
   let p = pass "Reset" true Reset.program p pp in
 
@@ -86,6 +83,9 @@ let compile_program p =
   let p = pass "Boolean" !boolean Boolean.program p pp in
 *)
   let p = pass "Normalization" !boolean Normalize.program p pp in
+
+  (* Remove fby<<n>> *)
+  let p = pass "fbyn" true Fbyn.program p pp in
 
   (* Block flatten *)
   let p = pass "Block" true Block.program p pp in

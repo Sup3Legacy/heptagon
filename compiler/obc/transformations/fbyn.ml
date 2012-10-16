@@ -5,6 +5,11 @@ open Initial
 open Heptagon
 open Hept_utils
 
+
+(* Requires normalization ....*)
+
+(* TODO should be done in Minils *)
+
 (* Translate fby<<n>> into an array and index *)
 
 
@@ -22,11 +27,16 @@ y_m = if y_b then 0 else y_n
 
 
 let fresh var prefix =
-  Idents.gen_var "fbyn" ~reset:true (var^"_"^prefix)
+  Idents.gen_var "fbyn" (var^"_"^prefix)
 
-let new_var loc from_var prefix t =
+let fresh_lin () =
+    let var = Idents.name (Idents.gen_var "fbyn" ("__LIN!__")) in
+    Lat var, Linit_var var
+
+
+let new_var loc from_var prefix ?(lin=Ltop) t=
   let y = fresh from_var prefix in
-  let vd = mk_var_dec ~loc:loc y t Ltop in
+  let vd = mk_var_dec ~loc:loc y t lin in
   let e = mk_var_exp y t in
   let pat = Evarpat y in
   vd, e, pat
@@ -52,6 +62,7 @@ let exp funs (y, vd_acc, eq_acc) e = match e.e_desc with
   | Efby (sv, [n], x, r) ->
       let loc = e.e_loc in
       let t = Tarray (x.e_ty, n) in
+      let lin, lin_inits = fresh_lin () in
       let sv = match sv with
       | None -> None
       | Some ({e_desc = Econst v} as ev) ->
@@ -61,8 +72,8 @@ let exp funs (y, vd_acc, eq_acc) e = match e.e_desc with
       | _ -> Misc.internal_error "Pass fbyn shoudl come after \
                                   pass fby (normalize into true fby)"
       in
-      let (vd_u, e_u, pat_u) = new_var loc y "u" t
-      and vd_d, e_d, pat_d = new_var loc y "d" t
+      let (vd_u, e_u, pat_u) = new_var loc y "u" ~lin t
+      and vd_d, e_d, pat_d = new_var loc y "d" ~lin t
       and vd_i, e_i, pat_i = new_var loc y "i" (Tbounded n)
       and vd_n, e_n, pat_n = new_var loc y "n" tint
       and vd_b, e_b, pat_b = new_var loc y "b" tbool
@@ -73,7 +84,7 @@ let exp funs (y, vd_acc, eq_acc) e = match e.e_desc with
       let eq_y_u = mk_equation ~loc:loc (Eeq (pat_u,e_y_u)) in
       (* y_d = 42^n fby y_u every r *)
       let e_y_d = mk_exp (Efby (sv, [], e_u, r)) ~loc:loc t Ltop in
-      let eq_y_d = mk_equation ~loc:loc (Eeq (pat_d, e_y_d)) in
+      let eq_y_d = mk_equation ~loc:loc ~inits:lin_inits (Eeq (pat_d, e_y_d)) in
       (* y_i = 0 fby y_m *)
       let e_y_i =
         mk_exp (Efby (Some (mk_exp_int 0), [], e_m, [])) ~loc:loc tint Ltop in
