@@ -22,7 +22,7 @@ y_m = if y_b then 0 else y_n
 
 
 let fresh var prefix =
-  Idents.gen_var "fbyn" ~reset:true (var^prefix)
+  Idents.gen_var "fbyn" ~reset:true (var^"_"^prefix)
 
 let new_var loc from_var prefix t =
   let y = fresh from_var prefix in
@@ -88,7 +88,7 @@ let exp funs (y, vd_acc, eq_acc) e = match e.e_desc with
       (* y_b = y_n >= n *)
       let e_y_b =
         mk_exp (mk_op_app (Efun(mk_pervasives ">="))
-               [e_i; mk_static_exp_exp tint n.se_desc])
+               [e_n; mk_static_exp_exp tint n.se_desc])
                ~loc:loc tint Ltop
       in
       let eq_y_b = mk_equation ~loc:loc (Eeq (pat_b, e_y_b)) in

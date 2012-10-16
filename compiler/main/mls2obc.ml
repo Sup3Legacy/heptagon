@@ -83,7 +83,13 @@ let rec extvalue_of_idx_list w l = match Modules.unalias_type w.w_ty, l with
 
 let ext_value_of_trunc_idx_list p l =
   let mk_between idx se =
-    mk_exp_int (Eop (mk_pervasives "between", [idx; mk_ext_value_exp se.se_ty (Wconst se)]))
+    match idx.e_ty with
+    | Tbounded n
+      when let c,_ = Static.is_true (mk_static_int_op "<=" [n;se]) in
+           Some true = c ->
+        idx
+    | _ ->
+        mk_exp_int (Eop (mk_pervasives "between", [idx; mk_ext_value_exp se.se_ty (Wconst se)]))
   in
   let rec aux p l = match p.w_ty, l with
     | _, [] -> p
@@ -131,19 +137,35 @@ let array_elt_of_exp_list idx_list e =
     and bounds = [n1;..;np], it returns
     0<= e1 < n1 && .. && 0 <= ep < np *)
 let rec bound_check_expr idx_list bounds =
+  let mix sse1 sse2 = match sse1, sse2 with
+    | None, None -> None
+    | Some e, None | None, Some e -> Some e
+    | Some e1, Some e2 -> Some (mk_exp_bool (Eop (op_from_string "&", [e1;e2])))
+  in
   let mk_comp idx n =
-        let e1 = mk_exp_bool (Eop (op_from_string "<",
-                                 [idx; mk_ext_value_exp_int (Wconst n)])) in
-        let e2 = mk_exp_bool (Eop (op_from_string "<=",
-                                 [mk_ext_value_exp_int (Wconst (mk_static_int 0)); idx])) in
-          mk_exp_bool (Eop (op_from_string "&", [e1;e2]))
+    (* if enough bounded, no need to check upper bound *)
+    let e1 = match idx.e_ty with
+      | Tbounded se
+        when let c,_ = Static.is_true (mk_static_int_op "<=" [se;n]) in
+            Some true = c -> None
+      | _ ->
+          Some (mk_exp_bool (Eop (op_from_string "<",
+                                 [idx; mk_ext_value_exp_int (Wconst n)])))
+    in
+    (* if bounded, no need to check lower bound *)
+    let e2 = match idx.e_ty with
+      | Tbounded _ -> None
+      | _ ->
+        Some (mk_exp_bool (Eop (op_from_string "<=",
+                                 [mk_ext_value_exp_int (Wconst (mk_static_int 0)); idx])))
+    in
+    mix e1 e2
   in
   match (idx_list, bounds) with
     | [idx], n::_ -> mk_comp idx n
     | (idx :: idx_list, n :: bounds) ->
         let e = mk_comp idx n in
-          mk_exp_bool (Eop (op_from_string "&",
-                           [e; bound_check_expr idx_list bounds]))
+        mix e (bound_check_expr idx_list bounds)
     | (_, _) -> internal_error "mls2obc bounds"
 
 let mk_plus_one e = match e.e_desc with
@@ -372,7 +394,10 @@ and translate_act map pat
         let true_act = Aassgn (x, mk_exp w.w_ty (Eextvalue w)) in
         let false_act = Aassgn (x, translate_extvalue_to_exp map e2) in
         let cond = bound_check_expr idx bounds in
-          [ mk_ifthenelse cond [true_act] [false_act] ]
+        (match cond with
+        | None -> [true_act]
+        | Some cond -> [ mk_ifthenelse cond [true_act] [false_act] ]
+        )
 
     | Minils.Evarpat x, Minils.Eapp ({ Minils.a_op = Minils.Eselect_trunc }, e1::idx, _) ->
         let x = var_from_name map x in
@@ -392,10 +417,16 @@ and translate_act map pat
         if !Compiler_options.strict_ssa
         then (
           let ssa_up = ssa_update_array x e1 idx e2 in
-          [ mk_ifthenelse cond ssa_up [copy] ]
+          (match cond with
+          | None -> ssa_up
+          | Some cond -> [ mk_ifthenelse cond ssa_up [copy] ]
+          )
         ) else (
           let assgn = Aassgn (pattern_of_idx_list x idx, e2) in
-          [copy; mk_if cond [assgn]]
+          (match cond with
+          | None -> [copy; assgn]
+          | Some cond -> [copy; mk_if cond [assgn]]
+          )
         )
 
     | Minils.Evarpat x,
