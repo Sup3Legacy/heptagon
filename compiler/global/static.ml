@@ -171,7 +171,7 @@ let apply_op partial loc op se_list =
   )
   else ( (* symbolic evaluation *)
     match op, se_list with
-      | {qual = Pervasives; name = "=" }, [se1;se2]
+      | {qual = Pervasives; name = "=" | "<=" | ">=" }, [se1;se2]
           when static_exp_desc_compare se1.se_desc se2.se_desc = 0 -> Sbool true
       | {qual = Pervasives; name = ">" }, [{se_ty = Tbounded _};{se_desc = Sint i}]
       | {qual = Pervasives; name = "<" }, [{se_desc = Sint i};{se_ty = Tbounded _}]
@@ -179,12 +179,12 @@ let apply_op partial loc op se_list =
       | {qual = Pervasives; name = ">=" }, [{se_ty = Tbounded _};{se_desc = Sint i}]
       | {qual = Pervasives; name = "<=" }, [{se_desc = Sint i};{se_ty = Tbounded _}]
           when i<=Int32.zero -> Sbool true
-      | {qual = Pervasives; name = ">" }, [{se_ty = Tbounded {se_desc = Sint n}};{se_desc = Sint i}]
-      | {qual = Pervasives; name = "<" }, [{se_desc = Sint i};{se_ty = Tbounded {se_desc = Sint n}}]
-          -> Sbool (n>i)
-      | {qual = Pervasives; name = ">=" }, [{se_ty = Tbounded {se_desc = Sint n}};{se_desc = Sint i}]
-      | {qual = Pervasives; name = "<=" }, [{se_desc = Sint i};{se_ty = Tbounded {se_desc = Sint n}}]
-          -> Sbool (n>=i)
+      | {qual = Pervasives; name = "<" }, [{se_ty = Tbounded {se_desc = Sint n}};{se_desc = Sint i}]
+      | {qual = Pervasives; name = ">" }, [{se_desc = Sint i};{se_ty = Tbounded {se_desc = Sint n}}]
+          -> Sbool (n<=i)
+      | {qual = Pervasives; name = "<=" }, [{se_ty = Tbounded {se_desc = Sint n}};{se_desc = Sint i}]
+      | {qual = Pervasives; name = ">=" }, [{se_desc = Sint i};{se_ty = Tbounded {se_desc = Sint n}}]
+          -> Sbool ((Int32.pred n)<=i)
       | _ ->
           if partial
           then Sop(op, se_list) (* partial evaluation *)
