@@ -19,23 +19,22 @@ open Static
 open Obc
 open Obc_mapfold
 
-let extvaluedesc funs acc evd = match evd with
+let extvaluedesc funs () evd = match evd with
   | Warray (ev,e) ->
-      let ev, acc = extvalue_it funs acc ev in
+      let ev, () = extvalue_it funs () ev in
       (match ev.w_desc with
         | Wconst se ->
-          let se = simplify se in
           (match se.se_desc with
             | Sarray_power (sv, [_]) ->
-              Wconst sv, acc
+              Wconst sv, ()
             | Sarray_power (sv, _::idx) ->
-              Wconst { se with se_desc = Sarray_power (sv, idx)}, acc
+              Wconst { se with se_desc = Sarray_power (sv, idx)}, ()
             | Sarray sv_l ->
               (match e.e_desc with
                 | Eextvalue { w_desc = Wconst i } ->
                   (try
                      let indice = int_of_static_exp i in
-                     Wconst (Misc.nth_of_list (Int32.to_int indice + 1) sv_l), acc
+                     Wconst (Misc.nth_of_list (Int32.to_int indice + 1) sv_l), ()
                    with _ -> raise Errors.Fallback)
                 | _ -> raise Errors.Fallback
               )
@@ -45,8 +44,15 @@ let extvaluedesc funs acc evd = match evd with
       )
   | _ -> raise Errors.Fallback
 
+let static_exp _ () se = Static.simplify se, ()
+
 let program p =
-  let funs = { defaults with evdesc = extvaluedesc } in
-  let p, _ = program_it funs [] p in
+  let gfuns = {Global_mapfold.defaults with
+                 Global_mapfold.static_exp = static_exp}
+  in
+  let funs = { defaults with evdesc      = extvaluedesc;
+                             global_funs = gfuns}
+  in
+  let p, _ = program_it funs () p in
   p
 

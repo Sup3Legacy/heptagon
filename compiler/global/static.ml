@@ -93,7 +93,7 @@ let message exn =
 
 
 let funs_apply_subst env =
-  let stexp_desc funs () = function
+  let stexp_desc _ () = function
     | Svar ln ->
       begin try
         let se = QualEnv.find ln env in
@@ -164,15 +164,27 @@ let apply_op partial loc op se_list =
       | "%", [Sint n1; Sint n2] -> Sint (Int32.rem n1 n2)
       | "max", [Sint n1; Sint n2] -> Sint (if Misc.int32_leq n2 n1 then n1 else n2)
       | "min", [Sint n1; Sint n2] -> Sint (if Misc.int32_leq n1 n2 then n1 else n2)
-      | f, _ ->
+      | _, _ ->
           if partial
           then Sop(op, se_list)
           else raise (Partial_evaluation (Unsupported_op op, loc))
   )
   else ( (* symbolic evaluation *)
-    match op, sed_l with
-      | {qual = Pervasives; name = "=" }, [sed1;sed2]
-          when static_exp_desc_compare sed1 sed2 = 0 -> Sbool true
+    match op, se_list with
+      | {qual = Pervasives; name = "=" }, [se1;se2]
+          when static_exp_desc_compare se1.se_desc se2.se_desc = 0 -> Sbool true
+      | {qual = Pervasives; name = ">" }, [{se_ty = Tbounded _};{se_desc = Sint i}]
+      | {qual = Pervasives; name = "<" }, [{se_desc = Sint i};{se_ty = Tbounded _}]
+          when i<Int32.zero -> Sbool true
+      | {qual = Pervasives; name = ">=" }, [{se_ty = Tbounded _};{se_desc = Sint i}]
+      | {qual = Pervasives; name = "<=" }, [{se_desc = Sint i};{se_ty = Tbounded _}]
+          when i<=Int32.zero -> Sbool true
+      | {qual = Pervasives; name = ">" }, [{se_ty = Tbounded {se_desc = Sint n}};{se_desc = Sint i}]
+      | {qual = Pervasives; name = "<" }, [{se_desc = Sint i};{se_ty = Tbounded {se_desc = Sint n}}]
+          -> Sbool (n>i)
+      | {qual = Pervasives; name = ">=" }, [{se_ty = Tbounded {se_desc = Sint n}};{se_desc = Sint i}]
+      | {qual = Pervasives; name = "<=" }, [{se_desc = Sint i};{se_ty = Tbounded {se_desc = Sint n}}]
+          -> Sbool (n>=i)
       | _ ->
           if partial
           then Sop(op, se_list) (* partial evaluation *)
