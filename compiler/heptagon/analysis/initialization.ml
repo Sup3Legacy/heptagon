@@ -231,11 +231,11 @@ let rec typing h e =
     | Econst _ -> skeleton izero e.e_ty
     | Evar(x) -> IEnv.find_var_typ x h
     | Elast(x) -> IEnv.find_last_typ x h
-    | Efby(None, p, e1, c) ->
+    | Efby(None, _, e1, c) ->
         List.iter (initialized_exp h) c;
         initialized_exp h e1;
         skeleton (ione (RExp e)) e1.e_ty
-    | Efby(Some v, p, e, c) ->
+    | Efby(Some v, _, e, c) ->
         List.iter (initialized_exp h) c;
         initialized_exp h e;
         typing h v
