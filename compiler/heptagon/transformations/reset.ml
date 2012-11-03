@@ -15,10 +15,10 @@ open Heptagon
 open Hept_utils
 open Signature
 
-(* We introduce an initialization variable for each reset block  *)
 (* e1 -> e2 is translated into if (true fby false) then e1 else e2 *)
 (* fby are translated to pre *)
-
+(* Remove reset blocks by marking node calls and fby
+     with corresponding reset condition *)
 
 
 let fresh () = Idents.gen_var "reset" ~reset:true "reset"
