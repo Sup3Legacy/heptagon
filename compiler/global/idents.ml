@@ -185,7 +185,11 @@ module IdentSet = struct
   let print_t ff s =
     Format.fprintf ff "@[<hov>{@ ";
     iter (fun e -> Format.fprintf ff "%a,@ " M.print_t e) s;
-    Format.fprintf ff "}@]";
+    Format.fprintf ff "}@]"
+
+  let to_list s =
+    fold (fun x acc -> x::acc) s []
+
 end
 
 module S = Set.Make (struct type t = string
