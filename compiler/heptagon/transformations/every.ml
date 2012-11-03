@@ -3,6 +3,8 @@ open Heptagon
 
 (* Transform [f (...) every e]
    into [f (...) every r] and add an equation [r=e] *)
+(* Transform [ ... fby ... every e]
+   into [... fby ... every r] and add an equation [r=e] *)
 
 let rec transform (v,eq) re = match re with
 | [] -> [], (v,eq)
@@ -18,13 +20,16 @@ let block funs acc b =
 let edesc funs acc ed =
   let ed, acc = Hept_mapfold.edesc funs acc ed in
   match ed with
-    | Eapp (op, e_list, re) ->
-        let re, acc = transform acc re in
-        Eapp(op, e_list, re), acc
-    | Eiterator(it, op, n, pe_list, e_list, re) ->
-        let re, acc = transform acc re in
-        Eiterator(it, op, n, pe_list, e_list, re), acc
-    | _ -> ed, acc
+  | Efby (i,p,e,re) ->
+      let re, acc = transform acc re in
+      Efby (i,p,e,re), acc
+  | Eapp (op, e_list, re) ->
+      let re, acc = transform acc re in
+      Eapp(op, e_list, re), acc
+  | Eiterator(it, op, n, pe_list, e_list, re) ->
+      let re, acc = transform acc re in
+      Eiterator(it, op, n, pe_list, e_list, re), acc
+  | _ -> ed, acc
 
 let program p =
   let funs = { Hept_mapfold.defaults
