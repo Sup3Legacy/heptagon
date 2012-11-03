@@ -93,6 +93,11 @@ and edesc funs acc ed = match ed with
       let w, acc = extvalue_it funs acc w in
       let c, acc = reset_it funs acc c in
       Efby (se, p, w, c), acc
+  | Efbyread (x, se, c) ->
+      let x, acc = var_ident_it funs.global_funs acc x in
+      let se, acc = optional_wacc (static_exp_it funs.global_funs) acc se in
+      let c, acc = reset_it funs acc c in
+      Efbyread (x, se, c), acc
   | Eapp(app, args, reset) ->
       let app, acc = app_it funs acc app in
       let args, acc = mapfold (extvalue_it funs) acc args in

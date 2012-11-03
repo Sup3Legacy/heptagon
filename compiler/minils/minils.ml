@@ -53,7 +53,9 @@ and exp = {
 and edesc =
   | Eextvalue of extvalue
   | Efby of static_exp option * static_exp list * extvalue * extvalue list
-                       (** static_exp fby<<n>> extvalue *)
+                       (** static_exp fby<<n>> extvalue every re*)
+  | Efbyread of var_ident * static_exp option * extvalue list
+                       (** read_mem x reset to se every re *)
   | Eapp of app * extvalue list * extvalue list
                        (** app ~args=(extvalue,extvalue...) reset ~r=ident *)
   | Ewhen of exp * sampling_value * var_ident  (** e when C(c) *)

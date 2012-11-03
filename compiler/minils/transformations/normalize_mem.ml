@@ -3,90 +3,56 @@ open Minils
 open Mls_mapfold
 open Mls_utils
 
-(**  Adds an extra equation for outputs that are also memories.
-     For instance, if o is an output, then:
-       o = v fby e
-     becomes
-       mem_o = v fby e;
-       o = mem_o
+(** REQUIRE no inner blocks *)
 
-     We also need to add one copy if two (or more) registers are defined by each other, eg:
-       x = v fby y;
-       y = v fby x;
+(**
+       o = v fby e every r
      becomes
-       mem_x = v fby y;
-       x = mem_x;
-       y = v fby x
+       mem_o = v fby e every r;
+       o = v fbyread mem_o every r
 *)
 
-(** Builds the initial environment, that maps any register to the ident on the right hand side.
-    For outputs that are also registers, if normalize_outputs is true,
-    they are mapped to themselves to force the copy (made necessary by the calling convention).
-    Other variables are mapped to None. *)
-let build_env nd =
-  let add_none env l = List.fold_left (fun env vd -> Env.add vd.v_ident None env) env l in
-  let rec add_eq env eq = match eq.eq_lhs, eq.eq_rhs.e_desc with
-    | _, Ewhen (e, _, _) -> add_eq env { eq with eq_rhs = e }
-    | Evarpat x, Efby (_, _, w, _) -> Env.add x (ident_of_extvalue w) env
-    | _, _ ->
-       List.fold_left (fun env id -> Env.add id None env) env (Vars.def [] eq)
-  in
-  let env = add_none Env.empty nd.n_input in
-  let env = List.fold_left add_eq env nd.n_equs in
-  let env =
-    if !Compiler_options.normalize_register_outputs then
-      List.fold_left (fun env vd -> Env.add vd.v_ident (Some vd.v_ident) env) env nd.n_output
-    else
-      env
-  in
-  env
 
-let rec replace_fby e exp_mem_x = match e.e_desc with
-  | Ewhen (e1, c, y) -> { e with e_desc = Ewhen (replace_fby e1 exp_mem_x, c, y) }
-  | Efby (_, _, _, _) -> exp_mem_x
+let rec replace_fby e x_mem = match e.e_desc with
+  | Ewhen (e1, c, y) -> Misc.internal_error " Does really happen "
+    (*{ e with e_desc = Ewhen (replace_fby e1 exp_mem_x, c, y) } *)
+  | Efby (None, _, _, _) -> (* no need to reset *)
+      let d = Efbyread (x_mem, None, []) in
+      { e with e_desc = d }
+  | Efby (Some v, _, _, re) ->
+      let d = Efbyread (x_mem, Some v, re) in
+      { e with e_desc = d }
   | _ -> assert false
 
-let rec depends_on x y env =
-  match Env.find y env with
-    | None -> false
-    | Some z ->
-      if ident_compare x z = 0 then true
-      else if ident_compare y z = 0 then false
-      else depends_on x z env
-
-let eq _ (env, vds, v, eqs) eq = match eq.eq_lhs, eq.eq_rhs with
-  | Evarpat x, e when Vars.is_fby e && depends_on x x env ->
+let eq _ (vds, v, eqs) eq = match eq.eq_lhs, eq.eq_rhs with
+  | Evarpat x, e when Vars.is_fby e ->
         let vd = vd_find x vds in
         let x_mem = Idents.gen_var "normalize_mem" ("mem_"^(Idents.name x)) in
         let vd_mem = { vd with v_ident = x_mem } in
-        let ck = Misc.assert_1 (Clocks.unprod e.e_ct) in
-        let exp_mem_x = mk_extvalue_exp e.e_level_ck vd.v_type
-          ~clock:ck ~linearity:vd.v_linearity (Wvar x_mem) in
-        (* mem_o = v fby e *)
+        (* mem_o = v fby e every r *)
         let eq_copy = { eq with eq_lhs = Evarpat x_mem } in
-        (* o = mem_o *)
-        let eq = { eq with eq_rhs = replace_fby e exp_mem_x } in
-        (* remove the dependency in env *)
-        let env = Env.add x None env in
-        eq, (env, vds, vd_mem::v, eq::eq_copy::eqs)
+        (* o = v fbyread mem_o every r *)
+        let eq = { eq with eq_rhs = replace_fby e x_mem } in
+        eq, (vds, vd_mem::v, eq::eq_copy::eqs)
   | _, _ ->
-      eq, (env, vds, v, eq::eqs)
+      eq, (vds, v, eq::eqs)
 
-(* Leave contract unchanged (no output defined in it) *)
-let contract _ acc c = c, acc
+let contract funs acc ct =
+  let ct, (_, v, eqs) =
+    Mls_mapfold.contract_it funs (ct.c_local, [], []) ct
+  in
+  let ct = { ct with c_local = v @ ct.c_local; c_eq = List.rev eqs } in
+  ct, acc
 
-let node funs acc nd =
-  let env = build_env nd in
-  let nd, (_, _, v, eqs) =
-    Mls_mapfold.node_dec funs (env, nd.n_local @ nd.n_output, [], []) nd
+let node_dec funs acc nd =
+  let nd, (_, v, eqs) =
+    Mls_mapfold.node_dec funs (nd.n_local @ nd.n_output, [], []) nd
   in
   let nd = { nd with n_local = v @ nd.n_local; n_equs = List.rev eqs } in
   let nd = Is_memory.update_node nd in
   nd, acc
 
 let program p =
-  let funs =
-    { Mls_mapfold.defaults with eq = eq; node_dec = node; contract = contract }
-  in
-  let p, _ = Mls_mapfold.program_it funs (Env.empty, [], [], []) p in
+  let funs = { Mls_mapfold.defaults with eq; node_dec; contract } in
+  let p, _ = Mls_mapfold.program_it funs ([], [], []) p in
   p

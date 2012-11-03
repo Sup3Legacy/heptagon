@@ -278,7 +278,7 @@ let rec translate map e =
         let f_e_list = List.map
           (fun (f, e) -> (f, (translate_extvalue_to_exp map e))) f_e_list in
           Estruct f_e_list
-  (*Remaining array operators*)
+    (*Remaining array operators*)
     | Minils.Eapp ({ Minils.a_op = Minils.Earray }, e_list, _) ->
         Earray (List.map (translate_extvalue_to_exp map ) e_list)
     | Minils.Eapp ({ Minils.a_op = Minils.Eselect;
@@ -290,7 +290,7 @@ let rec translate map e =
         let e = translate map e in
         e.e_desc
   (* Already treated cases when translating the [eq] *)
-    | Minils.Eiterator _ | Minils.Emerge _ | Minils.Efby _
+    | Minils.Eiterator _ | Minils.Emerge _ | Minils.Efby _ | Minils.Efbyread _
     | Minils.Eapp ({Minils.a_op=(Minils.Enode _|Minils.Efun _|Minils.Econcat
                                 |Minils.Eupdate|Minils.Eselect_dyn
                                 |Minils.Eselect_trunc|Minils.Eselect_slice
@@ -498,15 +498,22 @@ let rec translate_eq mems map call_context
   match (pat, desc) with
     | _, Minils.Ewhen (e,_,_) ->
         translate_eq mems map call_context {eq with Minils.eq_rhs = e} (v, si, j, s)
-
-    | Minils.Evarpat n, Minils.Efby (opt_c, p, e, r) ->
-        let x = var_from_name map n in
+    | Minils.Evarpat n, Minils.Efbyread(x, opt_c, r) ->
+        let action =
+          Aassgn (var_from_name map n, ext_value_exp_from_name map x)
+        in
+        let s = (control map ck action)::s in
+        let m = var_from_name map x in
         let si,s = (match opt_c with
                     | None -> si,s
                     | Some c ->
-                      let ini = Aassgn (x, mk_ext_value_static c)in
+                      let ini = Aassgn (m, mk_ext_value_static c) in
                       (ini :: si),((do_reset map [ini] r)@s))
         in
+        v, si, j, s
+
+    | Minils.Evarpat n, Minils.Efby (_, p, e, _) ->
+        (* reseting is handled at the fbyread point *)
         if p!= []
         then Misc.internal_error "Static Arguments not treated in a fby";
         let action =

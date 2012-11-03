@@ -216,6 +216,17 @@ let rec add_equation is_input (tenv : tom_env) eq =
         in
         Efby (seo, p, w, r), id, 0, class_id_list
 
+      | Efbyread (x, seo, r) ->
+        let x_id =
+          class_ref_of_var is_input
+            (mk_extvalue ~clock:(Clocks.first_ck e.e_ct) ~ty:Initial.tbool
+               ~linearity:Linearity.Ltop (Wvar x)) x
+        in
+        let class_id_list, r =
+          mapfold_right (extvalue is_input) r []
+        in
+        Efbyread (dummy_var, seo, r), id, 0, x_id :: class_id_list
+
       | Ewhen (e', cn, x) ->
         let ed, add_when, when_count, class_id_list = decompose e' in
         ed, (fun f e' -> f { e with e_desc = Ewhen (add_when f e', cn, x) }), when_count + 1,
@@ -409,6 +420,11 @@ and reconstruct_exp_desc mapping headd children =
     let r_w = reconstruct_extvalues mapping (r@[w]) children in
     let r,w = split_last r_w in
     Efby (ini, p, w, r)
+
+  | Efbyread (_, ini, r) ->
+    let x_ref, children = List.hd children, List.tl children in
+    let r = reconstruct_extvalues mapping r children in
+    Efbyread (reconstruct_class_ref mapping x_ref, ini, r)
 
   | Eapp (app, w_list, rst_dummy) ->
     let r_w = reconstruct_extvalues mapping (rst_dummy@w_list) children in

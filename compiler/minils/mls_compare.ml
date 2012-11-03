@@ -83,6 +83,12 @@ struct
           else let cr = extvalue_compare e1 e2 in
           if cr <> 0 then cr
           else reset_compare r1 r2
+        | Efbyread (x1, seo1, r1), Efbyread (x2, seo2, r2) ->
+          let cr = ident_compare x1 x2 in
+          if cr <> 0 then cr
+          else let cr = option_compare static_exp_compare seo1 seo2 in
+          if cr <> 0 then cr
+          else reset_compare r1 r2
         | Eapp (app1, el1, vio1), Eapp (app2, el2, vio2) ->
           let cr = app_compare app1 app2 in
           if cr <> 0 then cr
@@ -122,10 +128,13 @@ struct
         | Efby _, Eextvalue _ -> -1
         | Efby _, _ -> 1
 
-        | Eapp _, (Eextvalue _ | Efby _) -> -1
+        | Efbyread _, (Eextvalue _ | Efby _) -> -1
+        | Efbyread _, _ -> 1
+
+        | Eapp _, (Efbyread _ | Eextvalue _ | Efby _) -> -1
         | Eapp _, _ -> 1
 
-        | Ewhen _, (Eextvalue _ | Efby _ | Eapp _) -> -1
+        | Ewhen _, (Efbyread _ | Eextvalue _ | Efby _ | Eapp _) -> -1
         | Ewhen _, _ -> 1
 
         | Emerge _, (Estruct _ | Eiterator _) -> 1

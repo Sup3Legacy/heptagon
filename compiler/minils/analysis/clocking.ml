@@ -164,6 +164,10 @@ let typing_eq h ({ eq_lhs = pat; eq_rhs = e; eq_loc = loc } as eq) =
           let ck = typing_extvalue h w in
           let _ = List.map (typing_extvalue h) r in (*Hyperchornous reset*)
           Ck ck, ck
+      | Efbyread (x,_,r) ->
+          let _ = List.map (typing_extvalue h) r in (*Hyperchornous reset*)
+          let ck = ck_of_name h x in
+          Ck ck, ck
       | Ewhen (e,c,n) ->
           let ck_n = ck_of_name h n in
           let base = expect (skeleton ck_n e.e_ty) e in
