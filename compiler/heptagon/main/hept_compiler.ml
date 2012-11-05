@@ -25,14 +25,14 @@ let compile_program p =
   (* Completion of partial definitions *)
   let p = pass "Completion" true Completion.program p pp in
 
+  (* Shared variables (remove last) *)
+  let p = pass "Last" true Last.program p pp in
+
   (* Automata *)
   let p = pass "Automata" true Automata.program p pp in
 
   (* Present *)
   let p = pass "Present" true Present.program p pp in
-
-  (* Shared variables (last) *)
-  let p = pass "Last" true Last.program p pp in
 
   (* Initialized registers *)
   let p = pass "fby" true Fby.program p pp in
