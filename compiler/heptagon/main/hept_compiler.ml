@@ -10,9 +10,10 @@
 open Compiler_options
 open Compiler_utils
 
-let pp p = if !verbose then Hept_printer.print stdout p
 
 let compile_program p =
+  let pp p = if !verbose then Hept_printer.print stdout p in
+
   (* Typing *)
   let p = silent_pass "Statefulness check" true Stateful.program p in
   let p = silent_pass "Unsafe check" true Unsafe.program p in
@@ -95,5 +96,6 @@ let compile_program p =
 
 
 let compile_interface i =
-  let i = silent_pass "Typing" true Typing.interface i in
+  let pp p = if !verbose then Hept_printer.print_interface stdout p in
+  let i = pass "Typing" true Typing.interface i pp in
   i

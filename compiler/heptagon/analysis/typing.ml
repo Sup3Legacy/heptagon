@@ -1375,14 +1375,34 @@ let rec check_params_type ps =
   in
   List.map check_param ps
 
-and typing_arg a =
-  { a with a_type = check_type a.a_type }
+and build_args h args =
+  let one h a =
+    let ty = check_type a.a_type in
+    match a.a_name with
+    | None -> {a with a_type = ty}, h
+    | Some n -> {a with a_type = ty}, NamesEnv.add n ty h
+  in
+  mapfold one h args
+
+and typing_sigck h ck = match ck with
+  | Cbase -> Cbase
+  | Con (ck,se,n) ->
+      let pointeau_t = NamesEnv.find n h in
+      let se = expect_se pointeau_t se in
+      let ck = typing_sigck h ck in
+      Con (ck,se,n)
+
+and typing_arg h a =
+  let ck = typing_sigck h a.a_clock in
+  {a with a_clock = ck}
 
 and typing_signature s n =
   Idents.push_node n;
   let params = check_params_type s.node_params in
-  let inputs = List.map (typing_arg ) s.node_inputs in
-  let outputs = List.map (typing_arg ) s.node_outputs in
+  let inputs, h = build_args NamesEnv.empty s.node_inputs in
+  let inputs = List.map (typing_arg h) inputs in
+  let outputs, h = build_args h s.node_outputs in
+  let outputs = List.map (typing_arg h) outputs in
   let s = { s with node_params = params;
                    node_inputs = inputs;
                    node_outputs = outputs }
@@ -1410,24 +1430,21 @@ let node ({ n_name = f; n_input = i_list; n_output = o_list;
     included_env defined_names output_names;
     included_env output_names defined_names;
 
-    (* update the node signature to add static params constraints *)
-    let s = find_value f in
-    let cl = List.map (expect_se Initial.tbool) s.node_param_constraints in
+    let cl = List.map (expect_se Initial.tbool) n.n_param_constraints in
     let cl = cl @ get_constraints () in
-    let cl = solve cl in
-    (*TODO on solve les contraintes que l'on vient d'ajouter.*)
-    (*Pour l'instant, sans apliquer de substitution avec apply_subst, solve n'aura rien a faire.*)
-    let node_inputs = List.map (typing_arg ) s.node_inputs in
-    let node_outputs = List.map (typing_arg ) s.node_outputs in
-    replace_value f { s with node_param_constraints = cl;
-                             node_inputs = node_inputs; node_outputs = node_outputs };
-    let _ = Idents.pop_node () in
-    { n with
+    let all_constraints = solve cl in
+
+    let n = { n with
         n_input = typed_i_list;
         n_output = typed_o_list;
         n_params = typed_params;
+        n_param_constraints = all_constraints;
         n_contract = typed_contract;
         n_block = typed_b }
+    in
+    replace_value f (Hept_utils.signature_of_node n);
+    let _ = Idents.pop_node () in
+    n
   with
     | TypingError(error) -> message loc error
 

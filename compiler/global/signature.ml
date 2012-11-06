@@ -89,7 +89,7 @@ and arg = {
   a_clock : ck; (** [a_clock] set to [Cbase] means at the node activation clock *)
   a_linearity : linearity;
   (** [a_is_memory] is only correct after entering Minils (corrected with the Is_memory pass *)
-  a_is_memory : bool;
+  a_is_memory : bool; (* TODO WRONG should be removed *)
 }
 
 (** Constraints on size expressions *)
