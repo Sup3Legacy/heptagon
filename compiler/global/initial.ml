@@ -24,6 +24,8 @@ let pfloat = { qual = Pervasives; name = "float" }
 let tfloat = Tid pfloat
 let pstring = { qual = Pervasives; name = "string" }
 let tstring = Tid pstring
+let plong = { qual = Pervasives; name = "long" }
+let tlong = Tid plong
 
 let pfile = { qual = Module "Iostream"; name = "file" }
 let tfile = Tid pfile

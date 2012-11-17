@@ -133,6 +133,7 @@ let copname = function
 let cformat_of_format s =
   let aux m = match m with
     | "b" -> "d" (*no booleans in C*)
+    | "l" -> "ld"
     | _ -> m
   in
   match s with

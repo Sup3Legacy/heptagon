@@ -29,6 +29,7 @@ let types_of_format_string s =
     | Modifier "d" -> Initial.tint::acc
     | Modifier "f" -> Initial.tfloat::acc
     | Modifier "s" -> Initial.tstring::acc
+    | Modifier "l" -> Initial.tlong::acc
     | _ -> acc
   in
   let sl = format_of_string s in
