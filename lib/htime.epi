@@ -1,0 +1,18 @@
+(* The time module *)
+
+(* The time is given in milliseconds *)
+
+external fun add_time(long;int) returns (long)
+
+(* Get time in microseconds *)
+external fun get_um_time() returns (long)
+
+(* Get time in milliseconds *)
+external fun get_m_time() returns (long)
+
+(* Blocking wait, returns false when interrupted or given time is less than current time. *)
+external unsafe fun sleep_until(long) returns (bool)
+
+(* Return the starting date of the program. Will return the same for any instance. *)
+external fun start_time() returns (long)
+
