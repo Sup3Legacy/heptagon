@@ -7,7 +7,7 @@ type module_name = name
 
 type modul =
   | Pervasives
-  | LocalModule of modul (** the static parameters of modul *)
+  | LocalModule of modul (** the static parameters of modul *) (*TODO should be qualname*)
   | Module of module_name
   | QualModule of qualname
 
