@@ -48,6 +48,7 @@ cd ${tmpbase}_c_a
 heptgcc
 echo "${tmpbase:1}_${iterations}_a $(./a.out $iterations)" >> ../results
 cd ..
+rm -r ${tmpbase}_c_a
 
 weptc $weptcparams -noasync "$tmpfile"
 mv -f ${tmpbase}_c ${tmpbase}_c_na 
@@ -55,9 +56,9 @@ cd ${tmpbase}_c_na
 heptgcc
 echo "${tmpbase:1}_${iterations}_na $(./a.out $iterations)" >> ../results
 cd ..
+rm -r ${tmpbase}_c_na
 
 rm ${tmpfile}
-rm -r ${tmpbase}_c{,_na,_a} 
 
 
 
