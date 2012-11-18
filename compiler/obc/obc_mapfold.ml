@@ -175,10 +175,14 @@ and var_decs funs acc vds = mapfold (var_dec_it funs) acc vds
 
 and obj_dec_it funs acc od = funs.obj_dec funs acc od
 and obj_dec funs acc od =
+  let o_async, acc = optional_wacc
+    (mapfold (static_exp_it funs.global_funs)) acc od.o_async in
   let o_size, acc = optional_wacc
     (mapfold (static_exp_it funs.global_funs)) acc od.o_size in
+  let o_params, acc =
+    mapfold (static_exp_it funs.global_funs) acc od.o_params in
   let v, acc = var_ident_it funs.global_funs acc od.o_ident in
-  { od with o_size = o_size; o_ident = v }, acc
+  { od with o_size ; o_ident = v ; o_async ; o_params }, acc
 
 and obj_decs_it funs acc ods = funs.obj_decs funs acc ods
 and obj_decs funs acc ods = mapfold (obj_dec_it funs) acc ods
