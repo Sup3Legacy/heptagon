@@ -1,0 +1,9 @@
+
+node main () = (o:bool)
+var x,y,yy : int;
+let
+  x = 0 fby (x+1);
+  y = 42 fby<<3>> x;
+  yy = 42 fby (42 fby (42 fby x));
+  o = (y = yy);
+tel

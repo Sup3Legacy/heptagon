@@ -1,0 +1,12 @@
+const n:int = 3
+
+node main(x:int) = (y:int)
+var y_d : int^n; y_i,y_n,y_m : int; y_b : bool;
+let
+y = y_d[>y_i<];
+y_d = (42^n) fby [y_d with [y_i] = x];
+y_i = 0 fby y_m;
+y_n = y_i + 1;
+y_b = y_n >= n;
+y_m = if y_b then 0 else y_n;
+tel
