@@ -1,27 +1,26 @@
-srcdir      = @srcdir@
-top_srcdir  = @top_srcdir@
-prefix      = @prefix@
-exec_prefix = @exec_prefix@
-bindir      = @bindir@
-libdir      = @libdir@
+srcdir=@srcdir@
+top_srcdir=@top_srcdir@
+prefix=@prefix@
+exec_prefix=@exec_prefix@
+bindir=@bindir@
+libdir=@libdir@
 
-INSTALL= @INSTALL@
-MAKE= @MAKE@
+INSTALL=@INSTALL@
 
 CXX=g++-mp-4.7
-CXXFLAGS="-std=c++11"
+CXXFLAGS="-std=c++11 -O2"
 
-BUILD= _build
+BUILD=_build
 COMPILER=heptc
 SIMULATOR=hepts
 
 STDLIB_NAME=libdecades
 
-INSTALL_BINDIR=$(bindir)
-INSTALL_LIBDIR=$(libdir)/heptagon
+INSTALL_BINDIR=${bindir}
+INSTALL_LIBDIR=${libdir}/heptagon
 STDLIB_DIR=@stdlib_dir@
 
-OCAMLBUILD=STDLIB=$(STDLIB_DIR) @OCAMLBUILD@
+OCAMLBUILD=STDLIB=${STDLIB_DIR} @OCAMLBUILD@
 
 TARGET=byte
 ENABLE_SIMULATOR=@enable_simulator@

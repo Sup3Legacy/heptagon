@@ -1,15 +1,14 @@
-srcdir="."
-top_srcdir="."
+srcdir=.
+top_srcdir=.
 prefix=/usr/local
 exec_prefix=${prefix}
 bindir=${exec_prefix}/bin
 libdir=${exec_prefix}/lib
 
 INSTALL="/opt/local/libexec/gnubin//install -c"
-MAKE=MAKE
 
 CXX=g++-mp-4.7
-CXXFLAGS="-std=c++11 -O2 -Wall"
+CXXFLAGS="-std=c++11 -O2"
 
 BUILD=_build
 COMPILER=heptc
@@ -20,6 +19,8 @@ STDLIB_NAME=libdecades
 INSTALL_BINDIR=${bindir}
 INSTALL_LIBDIR=${libdir}/heptagon
 STDLIB_DIR=${exec_prefix}/lib/heptagon
+
+OCAMLBUILD=STDLIB="${STDLIB_DIR} ocamlbuild"
 
 TARGET=byte
 ENABLE_SIMULATOR=no

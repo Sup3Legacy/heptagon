@@ -91,18 +91,50 @@ function java_compile
   done
 }
 
-
+function c_compile
+{
+	for lastarg in "$@";
+	do
+		base_f=`basename ${lastarg} .ept`
+		pushd "${base_f}_c" > /dev/null
+		heptgcc
+		STATUS=$?
+		if [[ $STATUS != 0 ]]
+		then
+			break
+		fi
+		popd > /dev/null
+	done
+}
 
 case $1 in
 "-h" | "--help" | "-help" )
-  echo "Calling <weptc [<type>] [java]>"
+  echo "Calling <weptc [<type>] [java|c]> <options> [file|-- files]"
   echo "  calls the <type> (debug, native or byte) compiler"
   echo "  if <type> is not provided, it uses any existing one."
   echo "  If the one needed isn't present it will be generated"
-  echo "  Adding java will generate java code and compile it."
+  echo "  Adding java|c will generate java|c code and compile it."
   echo "  Any further options are given to the compiler."
   echo "The compiler usage follows:"
   $HEPTC --help
+;;
+c )
+  shift
+  compile -target c $@
+  if [[ $STATUS == 0 ]]
+  then
+    if [[ ${#@} == 1 ]]
+    then
+      c_compile $@
+    else
+      while [[ ($1 != "--") && (${#@} -gt 1) ]]
+      do
+        shift
+      done
+      shift
+      c_compile $@
+    fi
+  fi
 ;;
 java )
   shift
@@ -117,6 +149,7 @@ java )
       do
         shift
       done
+      shift
       java_compile $@
     fi
   fi
