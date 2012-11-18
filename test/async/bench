@@ -5,8 +5,9 @@ weptcparams="-target c -O -lho -bench -s main"
 heptreg=".*\.ept"
 
 if [[ ! (($1 =~ $heptreg) || -x $1) ]]; then
-	echo "wrong file argument";
-	exit 1;
+	echo "wrong file argument"
+	echo "usage bench <file>.ept {<paramname> <value>}* <iteration>"
+	exit 1
 fi
 
 file=$1
@@ -38,7 +39,6 @@ tmpfile="${tmpbase}.ept"
 cp "$file" "$tmpfile"
 
 for (( i=0; i<${#param_names[@]}; i++)); do
-	echo sed -i -e "\"s/^const ${param_names[$i]} \(.*\)=.*$/const ${param_names[$i]} \1= ${param_value[$i]}/\"" $tmpfile
 	sed -i -e "s/^const ${param_names[$i]} \(.*\)=.*$/const ${param_names[$i]} \\1= ${param_value[$i]}/" $tmpfile
 done
 
