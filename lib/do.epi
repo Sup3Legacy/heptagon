@@ -1,3 +1,2 @@
 (* Should be calibrated to be around 100ns *)
-external unsafe fun stuff(int) returns ()
-external fun stuffi(int) returns (int)
+external fun stuff(int) returns (int)
