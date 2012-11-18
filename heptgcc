@@ -1,11 +1,25 @@
 #!/bin/bash
 SCRIPT_DIR=`dirname $(python -c "import os, sys; print os.path.realpath(\"$0\")")`
 . ${SCRIPT_DIR}/config_bash
+
 includes=""
-objs=(`find ../*_c -name "*.o" -print`)
-for i in ../*_c ; do
+RUN_DIR=${PWD##*/}
+objs=(`find .. -name "$RUN_DIR" -prune -o -name "*.o" -print`)
+
+for i in `find .. -name "$RUN_DIR" -prune -o -type d -print` ; do
 	includes="$includes -I $i"
 done
+
+verbose=0
+case $1 in
+	-v)
+		shift;
+		verbose=1;
+		;;
+	-h)
+		echo "Usage : heptgcc [-v] [-lib|-main node] file.ept"
+		echo "heptgcc file.ept  ==> heptgcc -main main file.ept"
+esac
 case $1 in
 	-lib)
 		shift;
@@ -25,11 +39,22 @@ then
 else
 	sources=$@
 fi
-echo "${CXX} ${CXXFLAGS} -I ~/W/heptagon/lib/c $includes -c ${sources[*]}"
+
+function v {
+	if [[ ${verbose} == 1 ]]
+	then
+		echo $1
+	fi
+}
+
+v "/bin/rm -f *.o";
+/bin/rm -f *.o
+
+v "${CXX} ${CXXFLAGS} -I ~/W/heptagon/lib/c $includes -c ${sources[*]}"
 ${CXX} ${CXXFLAGS} -I ~/W/heptagon/lib/c $includes -c ${sources[*]}
 if [ ! -x "${main}.cpp" ]
 then
-	echo "${CXX} ${CXXFLAGS} -I ~/W/heptagon/lib/c ~/W/heptagon/lib/c/libdecades.a $includes ${objs[*]} ${sources[*]/.cpp/.o} "${main}.cpp""
+	v "${CXX} ${CXXFLAGS} -I ~/W/heptagon/lib/c ~/W/heptagon/lib/c/libdecades.a $includes ${objs[*]} ${sources[*]/.cpp/.o} "${main}.cpp""
 	${CXX} ${CXXFLAGS} -I ~/W/heptagon/lib/c ~/W/heptagon/lib/c/libdecades.a $includes ${objs[*]} ${sources[*]/.cpp/.o} "${main}.cpp"
 fi
 
