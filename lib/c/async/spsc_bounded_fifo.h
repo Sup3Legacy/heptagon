@@ -49,16 +49,16 @@ public:
 
   T* to_fill() {
     int current = p.current.load(memory_order_relaxed);
-        p.next = (current >= _size) ? 0 : current + 1;
-        if (p.next == p.max) {
-          // need to synchro and wait for max to grow
-          p.max = c.current.load(memory_order_acquire);
-          while ( p.next == p.max ) {
-            std::this_thread::yield();
-            p.max = c.current.load(memory_order_acquire);
-          }
-        }
-        return &data_array[current];
+    p.next = INCR_MOD(current, _size);
+    if (p.next == p.max) {
+      // need to synchro and wait for max to grow
+      p.max = c.current.load(memory_order_acquire);
+      while ( p.next == p.max ) {
+        std::this_thread::yield();
+        p.max = c.current.load(memory_order_acquire);
+      }
+    }
+    return &data_array[current];
   }
 
   void commit() {
@@ -87,7 +87,7 @@ public:
   T * get() {
     bool prod_present;
     int current = c.current.load(memory_order_relaxed);
-    int next = (current >= _size) ? 0 : current + 1; //TODO mauvais modulo ?
+    int next = INCR_MOD(current,_size);
     if (next == c.max) {
       // need to synchro and wait for max to grow
       while (true) {
