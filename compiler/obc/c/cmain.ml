@@ -199,15 +199,16 @@ let main_def_of_class_def cd =
     let read_lhs_of_ty_for_vd vd =
       read_lhs_of_ty (Cvar (Idents.name vd.v_ident)) vd.v_type in
     split (map read_lhs_of_ty_for_vd stepm.m_inputs) in
-  let single_out = List.length stepm.m_outputs = 1 in
+  let nb_out = List.length stepm.m_outputs in
   let (printf_calls, printf_decls) =
     let write_lhs_of_ty_for_vd vd =
       let (stm, vars) =
-        if single_out
-        then write_lhs_of_ty (Cvar "_res") vd.v_type
-        else
-          write_lhs_of_ty
-            (Cfield (Cvar "_res", local_qn (name vd.v_ident))) vd.v_type
+        match nb_out with
+        | 0 -> assert false;
+        | 1 -> write_lhs_of_ty (Cvar "_res") vd.v_type
+        | _ ->
+            write_lhs_of_ty
+              (Cfield (Cvar "_res", local_qn (name vd.v_ident))) vd.v_type
       in
       if !Compiler_options.hepts_simulation
       then (stm, vars)
@@ -218,11 +219,12 @@ let main_def_of_class_def cd =
   let printf_calls = List.concat printf_calls in
 
   let cinp = inputlist_of_ovarlist stepm.m_inputs in
-  let tout = match single_out with
-    | true -> ctype_of_otype (Misc.assert_1 stepm.m_outputs).v_type
-    | false -> Cty_id (qn_append cd.cd_name "_out")
+  let cout =
+    match nb_out with
+    | 0 -> []
+    | 1 -> ["_res", ctype_of_otype (Misc.assert_1 stepm.m_outputs).v_type]
+    | _ -> ["_res", Cty_id (qn_append cd.cd_name "_out")]
   in
-  let cout = ["_res", tout] in
 
   let mem_decl =
     if cd.cd_stateful
@@ -243,8 +245,8 @@ let main_def_of_class_def cd =
     let funcall =
       let args =
         map (fun vd -> Cvar (name vd.v_ident)) stepm.m_inputs
-        @ (Caddrof (Cvar "_res")
-          :: if cd.cd_stateful then [Caddrof (Cvar "mem")] else [])
+        @ (if nb_out > 0 then [Caddrof (Cvar "_res")] else [])
+        @ (if cd.cd_stateful then [Caddrof (Cvar "mem")] else [])
       in
       Cfun_call ((cname_of_qn cd.cd_name) ^ "_step", args)
     in
@@ -375,20 +377,20 @@ let program p =
   let filename =
     filename_of_name (cname_of_name (modul_to_string p.p_modname)) in
   let dirname = build_path (filename ^ "_c") in
-  let dir = clean_dir dirname in
+  ensure_dir dirname;
   let c_ast = translate filename p in
   let c_ast =
     if !Compiler_options.unroll_loops
     then List.map Cunroll.cfile c_ast
     else c_ast
   in
-  C.output dir c_ast
+  C.output dirname c_ast
 
 let interface i =
   let filename =
     filename_of_name (cname_of_name (modul_to_string i.i_modname))
   in
   let dirname = build_path (filename ^ "_c") in
-  let dir = clean_dir dirname in
+  ensure_dir dirname;
   let c_ast = interface_header (Filename.basename filename) i in
-  C.output dir c_ast
+  C.output dirname c_ast
