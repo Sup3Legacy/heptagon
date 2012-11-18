@@ -1,0 +1,1 @@
+weptc c -s main -bench  -- utils.ept slow_fast.ept

@@ -1,0 +1,12 @@
+node sum(x :int) = (y :int)
+let
+  y = x + (0 fby y)
+tel
+
+node period << n :int | n > 0 >> () returns (c :bool)
+var cpt, next_cpt :int;
+let
+  next_cpt = if (cpt = n) then 1 else (cpt + 1);
+  cpt = 1 fby next_cpt;
+  c = (cpt = 1);
+tel

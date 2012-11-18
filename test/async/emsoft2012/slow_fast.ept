@@ -1,0 +1,46 @@
+
+open Iostream
+open Htime
+open Utils
+
+unsafe node slow (h:float; s:float) = (o:float)
+let
+  () = Do.stuff(9);
+  o = s +. (3.14 *. h);
+tel
+
+unsafe node fast (h:float; s:float) = (o:float) 
+let
+  () = Do.stuff(3);
+  o = s +. (3.0 *. h);
+tel
+
+unsafe node slow_fast() = (y :float)
+var big :bool; yf :float; ys :future float
+let
+  ys = (async 0.0) fby async slow(1.0, !ys);
+  yf = 0.0 fby fast(1.0/.3.0, y);
+  big = period<<3>>();
+  y = merge big (!ys) (yf whenot big);
+tel
+
+unsafe node main() = ()
+var y : float;
+let
+  y = slow_fast();
+(*  () = printf("date : %l", get_um_time());
+  () = printf("y : %f", y);*)
+tel
+
+unsafe node mainfast() = ()
+var y : float;
+let
+  y = 0.0 fby fast(1.0/.3.0, y);
+tel
+
+unsafe node mainslow() = ()
+var y : float;
+let
+  y = 0.0 fby slow(1.0, y);
+tel
+

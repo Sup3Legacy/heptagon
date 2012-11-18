@@ -12,39 +12,39 @@ let
 (*%  () = Iostream.printf(" next_cpt : %d\n cpt : %d\n",next_cpt,cpt);*)
 tel
 
-fun fast(x :float) returns (y :float)
+unsafe fun fast(x :float) returns (y :float)
 let
   y = x +. 1.0;
 (*%*)  () = Do.stuff(1);
 tel
 
 
-fun slow(x :float) returns (y :float)
+unsafe fun slow(x :float) returns (y :float)
 let
   y = x +. 3.14;
 (*%*)  () = Do.stuff(3);
 tel
 
 
-node slow_fast() returns (y :float)
+unsafe node slow_fast() returns (y :float)
 var big_step :bool; ys, yf :float;
 let
   big_step = period<<3>>(); (*% (100) *)
   ys = 0.0 fby slow(y when big_step);
   y = merge big_step (ys) (yf);
-  yf = fast ((pre y) whenot big_step);
+  yf = fast ((0.0 fby y) whenot big_step);
    () = Iostream.printf(" big_step : %b\n y : %f\n", big_step, y);
    () = Iostream.printf(" ys : %f\n", ys);
    () = Iostream.printf(" yf : %f\n", yf);
 tel
 
-node a_slow_fast() returns (y :float)
+unsafe node a_slow_fast() returns (y :float)
 var big_step :bool; ys :future float; yf :float;
 let
   big_step = period<<3>>(); (*% (100) *)
   ys = async 0.0 fby async slow(y when big_step);
   y = merge big_step (!ys) (yf);
-  yf = fast ((pre y) whenot big_step);
+  yf = fast ((0.0 fby y) whenot big_step);
   () = Iostream.printf(" big_step : %b\n y : %f\n", big_step, y);
   () = Iostream.printf(" yf : %f\n", yf);
 tel
@@ -63,7 +63,7 @@ let
   y2 = parallel_map<<2,sum>> ([1,3]);
 tel
 
-node partial_desync_b() = (y:int; c:bool)
+unsafe node partial_desync_b() = (y:int; c:bool)
 var f_y1, f_y2 : int
 let
   f_y1 = sum(1);
@@ -74,7 +74,7 @@ let
   () = Iostream.printf(" y : %d\n",y);
 tel
 
-node partial_desync() = (y:int; c:bool)
+unsafe node partial_desync() = (y:int; c:bool)
 var f_y1, f_y2 : future int
 let
   f_y1 = async sum(1);
@@ -83,19 +83,19 @@ let
   y = (! f_y1 when c) + (! f_y2 when c);
 tel
 
-node array_data<<val node f(int) = (int);>>
+unsafe node array_data<<val node f(int) = (int);>>
   (x :int) = (y :int) var half :bool;
 let
   half = true fby (not half);
   reset y = f(x) every half;
 tel
 
-node array_sum() = (y :int)
+unsafe node array_sum() = (y :int)
 let
   y = array_data<<sum>> (0)
 tel
 
-node array_dp<<n, p :int; val node g(int) = (int);>>
+unsafe node array_dp<<n, p :int; val node g(int) = (int);>>
   (x :int) = (y :int)
 var r :bool; ay :future int;
 let
@@ -108,7 +108,7 @@ let
 
 tel
 
-node m_array_dp() returns (y :int)
+unsafe node m_array_dp() returns (y :int)
 var x:int
 let
   x = 1 fby (x + 1);
