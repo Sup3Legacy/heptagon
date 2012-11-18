@@ -3,15 +3,19 @@ open Iostream
 open Htime
 open Utils
 
+const factor : int = 10
+
 unsafe node slow (h:float; s:float) = (o:float)
+var x :int;
 let
-  () = Do.stuff(9);
+  x = Do.stuff(3*factor);
   o = s +. (3.14 *. h);
 tel
 
 unsafe node fast (h:float; s:float) = (o:float) 
+var x :int;
 let
-  () = Do.stuff(3);
+  x = Do.stuff(1*factor);
   o = s +. (3.0 *. h);
 tel
 
