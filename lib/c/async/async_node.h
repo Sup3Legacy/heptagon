@@ -41,8 +41,8 @@ struct wrapnode {
       for(int i = 0; i<queue_nb; i++) {
         workers[i] = new std::thread (
           [](work_queue *q) {
-            signal(SIGINT,[](int i){pthread_exit(0);});
-            signal(SIGTERM,[](int i){pthread_exit(0);});
+//            signal(SIGINT,[](int i){pthread_exit(0);});
+//            signal(SIGTERM,[](int i){pthread_exit(0);});
             Mem m;
             f_reset(&m);
             while (true) {
@@ -61,13 +61,13 @@ struct wrapnode {
     async(const async&) = delete;
 
     ~async() {
-      for(int i = 0; i<queue_nb; i++)
-        pthread_kill(workers[i]->native_handle(),SIGTERM);
-      for(int i = 0; i<queue_nb; i++) {
-        workers[i]->join();
-        delete(workers[i]);
-      }
-      delete[](workers);
+//      for(int i = 0; i<queue_nb; i++)
+//        pthread_kill(workers[i]->native_handle(),SIGTERM);
+//      for(int i = 0; i<queue_nb; i++) {
+//        workers[i]->join();
+//        delete(workers[i]);
+//      }
+//      delete[](workers);
     }
 
     /** Push in the current queue and reset the [need_reset] flag.

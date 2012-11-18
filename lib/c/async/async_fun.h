@@ -39,8 +39,8 @@ struct wrapfun {
     	queues[i].attach_productor(); //Proactif !!
         workers[i] = new std::thread (
           [](work_queue *q) {
-            setsignal(SIGINT,[](int i){pthread_exit(0);});
-            setsignal(SIGTERM,[](int i){pthread_exit(0);});
+//            setsignal(SIGINT,[](int i){pthread_exit(0);});
+//            setsignal(SIGTERM,[](int i){pthread_exit(0);});
             while (true) {
               work_closure* r = q->get();
               r->ff(r->fo->to_set());
@@ -56,23 +56,23 @@ struct wrapfun {
     async(const async&) = delete;
 
     ~async() {
-      for(int i = 0; i<queue_nb; i++) {
-    	int r = pthread_kill(workers[i]->native_handle(),SIGTERM);
-    	if (r==0) {
-    		printf("killed %d\n",i);
-    		fflush(stdout);
-    	} else {
-    		printf("killed failed %d\n",i);
-    		fflush(stdout);
-    	}
-      }
-      for(int i = 0; i<queue_nb; i++) {
-        workers[i]->join();
-        printf("joined %d\n",i);
-        fflush(stdout);
-        delete(workers[i]);
-      }
-      delete[](workers);
+//      for(int i = 0; i<queue_nb; i++) {
+//    	int r = pthread_kill(workers[i]->native_handle(),SIGTERM);
+//    	if (r==0) {
+//    		printf("killed %d\n",i);
+//    		fflush(stdout);
+//    	} else {
+//    		printf("killed failed %d\n",i);
+//    		fflush(stdout);
+//    	}
+//      }
+//      for(int i = 0; i<queue_nb; i++) {
+//        workers[i]->join();
+//        printf("joined %d\n",i);
+//        fflush(stdout);
+//        delete(workers[i]);
+//      }
+//      delete[](workers);
     }
 
     /** Push in the current queue and reset the [need_reset] flag.
