@@ -4,6 +4,7 @@ open Htime
 open Utils
 
 const factor : int = 10
+const delay : int = 1
 
 unsafe node slow (h:float; s:float) = (o:float)
 var x :int;
@@ -22,14 +23,13 @@ tel
 unsafe node slow_fast() = (y :float)
 var big :bool; yf :float; ys :future float
 let
-  ys = (async 0.0) fby async slow(1.0, !ys);
+  ys = (async 0.0) fby<<delay>> async slow(1.0, !ys);
   yf = 0.0 fby fast(1.0/.3.0, y);
   big = period<<3>>();
   y = merge big (!ys) (yf whenot big);
 tel
 
-unsafe node main() = ()
-var y : float;
+unsafe node main() = (y:float)
 let
   y = slow_fast();
 (*  () = printf("date : %l", get_um_time());
