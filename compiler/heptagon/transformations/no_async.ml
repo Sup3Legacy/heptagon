@@ -37,4 +37,5 @@ let program p =
           ty = my_ty } }
   in
   let p, _ = program_it funs () p in
-  Typing.program p
+  p
+  (*Typing.program p*)
