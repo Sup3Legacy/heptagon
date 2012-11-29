@@ -16,18 +16,18 @@ template<typename T, int size>
 class queue {
 
   typedef struct productor {
-    atomic<int> current;
+    atomic<int> current; //current writing position, should not get
     int max; //private local to the productor
     int next; //private local to the productor
     atomic<bool> present;
-    productor(int _size) : current(0), max(_size), present(false) {}
+    productor() : current(0), max(size), present(false) {}
   } CACHE_ALIGNED productor;
 
   typedef struct consumer{
-    atomic_int current;
+    atomic_int current; //current reading position, should not set
     int max; //private local to the consumer
     int next; //private local to the consumer
-    consumer(int _size) : current(_size), max(0), next(0) {}
+    consumer() : current(size), max(0) {}
   } CACHE_ALIGNED consumer;
 
   const int _size; //internal size is external size + 1
@@ -38,7 +38,7 @@ class queue {
   consumer c;
 
 public:
-  queue():_size(size+1),wake_up(),m(),p(_size),c(_size){
+  queue():_size(size+1),wake_up(),m(),p(),c(){
     data_array = new T[_size];
   }
   //Prevent copy constructor, since it should never happen
@@ -49,15 +49,15 @@ public:
 
   T* to_fill() {
     int current = p.current.load(memory_order_relaxed);
-    p.next = INCR_MOD(current, _size);
-    if (p.next == p.max) {
+    if (current == p.max) {
       // need to synchro and wait for max to grow
       p.max = c.current.load(memory_order_acquire);
-      while ( p.next == p.max ) {
+      while ( current == p.max ) {
         std::this_thread::yield();
         p.max = c.current.load(memory_order_acquire);
       }
     }
+    p.next = INCR_MOD(current, _size);
     return &data_array[current];
   }
 
@@ -93,9 +93,6 @@ public:
       while (true) {
         prod_present = p.present.load(memory_order_acquire);
         c.max = p.current.load(memory_order_acquire);
-        //since [present] is retrieved before [current],
-        //if not present then [current] is the last current place,
-        //the consumer may then sleep until a new prod is attached
         if (next != c.max) break; // finish busy wait
         else if (!prod_present) {
           unique_lock<mutex> lock(m);
