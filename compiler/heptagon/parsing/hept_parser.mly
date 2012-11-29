@@ -567,8 +567,8 @@ _exp:
 %inline async:
   | /*empty*/ { None }
   | ASYNC
-      { Some [mk_static_exp_exp (Sint !Compiler_options.java_queue_nb) (Loc($startpos,$endpos));
-              mk_static_exp_exp (Sint !Compiler_options.java_queue_size) (Loc($startpos,$endpos))] }
+      { Some [mk_static_exp_exp (Sint !Compiler_options.async_queue_nb) (Loc($startpos,$endpos));
+              mk_static_exp_exp (Sint !Compiler_options.async_queue_size) (Loc($startpos,$endpos))] }
   | ASYNC DOUBLE_LESS l=slist(COMMA,exp) DOUBLE_GREATER { Some l }
 
 app:

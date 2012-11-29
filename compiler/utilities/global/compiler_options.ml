@@ -78,10 +78,10 @@ let set_target_path path =
   target_path := Some path
 
 
-let java_queue_size = ref 1l
-let java_queue_nb = ref 1l
+let async_queue_size = ref 1l
+let async_queue_nb = ref 1l
 
-let set_java_queue_size i = java_queue_size := Int32.of_int i
+let set_async_queue_size i = async_queue_size := Int32.of_int i
 
 let no_async = ref false
 
@@ -201,10 +201,11 @@ and doc_lho = " Enable LHO"
 and doc_strict_ssa = " Ensure that the generated code is SSA, even for array elements."
 and doc_memalloc = " Enable memory allocation and linear annotations"
 and doc_memalloc_only = " Enable memory allocation"
-and doc_java_queue_size = " Set the default input queue size for async nodes, 0 means threadPool, \
+and doc_async_queue_size = " Set the default input queue size for async nodes, \
 default to 1"
 and doc_noasync = " Erase asynchronous calls and futures."
-and doc_java_queue_nb = " Set the default thread number for async nodes, default to 1"
+and doc_async_queue_nb = " Set the default thread number for async nodes, \
+0 means threadPool, default to 1"
 and doc_linear_only = " Enable linear annotations"
 and doc_interf_scheduler = " Use the old scheduler"
 and doc_no_clocking_error = " Disable clocking errors (use at your own risk!)"
