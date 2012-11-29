@@ -1,0 +1,16 @@
+
+const decouple : int = 10
+const stuff : int = 10000
+
+node d(x:int) = (y:int)
+let
+  y = Do.stuff(stuff) + x;
+tel
+
+node main() = (y :int)
+var x,yy :int;
+let
+  x = 0 fby x + 1;
+  y = !((async 0) fby<<decouple>> async<<decouple>> d(x));
+  yy = d(x+2) + y;
+tel
