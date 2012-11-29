@@ -39,7 +39,7 @@ tmpfile="${tmpbase}.ept"
 cp "$file" "$tmpfile"
 
 for (( i=0; i<${#param_names[@]}; i++)); do
-	sed -i -e "s/^const ${param_names[$i]} \(.*\)=.*$/const ${param_names[$i]} \\1= ${param_value[$i]}/" $tmpfile
+	sed -i '' -e "s/^const ${param_names[$i]} \(.*\)=.*$/const ${param_names[$i]} \\1= ${param_value[$i]}/" $tmpfile
 done
 
 weptc $weptcparams "$tmpfile"
