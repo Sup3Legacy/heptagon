@@ -10,3 +10,19 @@ let
   cpt = 1 fby next_cpt;
   c = (cpt = 1);
 tel
+
+
+node main() = ()
+var a,b,c,d,e,f,h,i,j :bool;
+let
+
+  a = period<<2>>();
+  b = period<<1>>();
+  c = period<<4>>();
+  f = period<<3>>();
+  j = period<<8>>();
+  d = period<<16>>();
+  e = period<<32>>();
+  h = period<<64>>();
+  i = period<<128>>();
+tel

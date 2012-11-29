@@ -3,35 +3,30 @@ open Iostream
 open Htime
 open Utils
 
-const factor : int = 10
-const delay : int = 1
+const stuff : int = 1
+const delay : int = 0
 
 unsafe node slow (h:float; s:float) = (o:float)
 var x :int;
 let
-  x = Do.stuff(3*factor);
+  x = Do.stuff(3*stuff);
   o = s +. (3.14 *. h);
 tel
 
 unsafe node fast (h:float; s:float) = (o:float) 
 var x :int;
 let
-  x = Do.stuff(1*factor);
+  x = Do.stuff(1*stuff);
   o = s +. (3.0 *. h);
 tel
 
-unsafe node slow_fast() = (y :float)
+unsafe node main() = (y :float)
 var big :bool; yf :float; ys :future float
 let
-  ys = (async 0.0) fby<<delay>> async slow(1.0, !ys);
+  ys = (async 0.0) fby<<1>> async<<delay>> slow(1.0, !ys);
   yf = 0.0 fby fast(1.0/.3.0, y);
   big = period<<3>>();
   y = merge big (!ys) (yf whenot big);
-tel
-
-unsafe node main() = (y:float)
-let
-  y = slow_fast();
 (*  () = printf("date : %l", get_um_time());
   () = printf("y : %f", y);*)
 tel
