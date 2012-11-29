@@ -755,7 +755,9 @@ and typing h e =
           Estruct l, Tid q
 
       | Efby (e1, p, e2, c) ->
-          let p = List.map (expect_se Initial.tint) p in
+          let size = assert_1 p in
+          let size = expect_se Initial.tint size in
+          add_constraint_leq (mk_static_int 0) size;
           let c = typing_reset h c in
           let typed_e2, t2 = typing h e2 in
           let typed_e1, t = match e1 with
@@ -764,7 +766,7 @@ and typing h e =
               let typed_e1, t1 = typing h e1 in
               Some (typed_e1), unify t1 t2
           in
-          Efby (typed_e1, p, typed_e2, c), t
+          Efby (typed_e1, [size], typed_e2, c), t
 
       | Eiterator (it, ({ a_op = (Enode f | Efun f);
                           a_params = params } as app),
