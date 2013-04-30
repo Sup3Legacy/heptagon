@@ -1,0 +1,5 @@
+node f()
+returns (o : int)
+let
+	o = 1 fby<<1, 2>> o + 1
+tel
