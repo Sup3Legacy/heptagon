@@ -94,7 +94,9 @@ struct
 
     (* special cases *)
     let acc = match e.e_desc with
-      | Emerge(x,_) -> add x acc
+      | Emerge(x,_)
+      | Efbyread(x,_,_)
+      | Ewhen(_,_,x) -> add x acc
       | Efby(_, _, e, _) ->
           if is_left then
             (* do not consider variables to the right

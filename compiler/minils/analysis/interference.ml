@@ -117,8 +117,10 @@ module InterfRead = struct
   let read_exp funs acc e =
     (* recursive call *)
     let _, acc = Mls_mapfold.exp funs acc e in
-    (* special cases *)
+    (* special cases : every naked ident *)
     let acc = match e.e_desc with
+      | Efbyread(x,_,_)
+      | Ewhen(_,_,x)
       | Emerge(x,_) -> (Ivar x)::acc
       | _ -> acc
     in
@@ -169,13 +171,14 @@ module World = struct
         None -> env
       | Some c ->
           let env = build env c.c_local in
-          build env c.c_controllables in
-      igs := [];
-      vds := env;
-      (* build the set of memories *)
-      let mems = Mls_utils.node_memory_vars f in
-      let s = List.fold_left (fun s (x, _) -> IdentSet.add x s) IdentSet.empty mems in
-      memories := s
+          build env c.c_controllables
+    in
+    igs := [];
+    vds := env;
+    (* build the set of memories *)
+    let mems = Mls_utils.node_memory_vars f in
+    let s = List.fold_left (fun s (x, _) -> IdentSet.add x s) IdentSet.empty mems in
+    memories := s
 
   let vd_from_ident x =
     try Env.find x !vds
