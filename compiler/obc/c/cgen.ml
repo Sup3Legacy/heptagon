@@ -664,7 +664,7 @@ let rec cstm_of_act out_env var_env obj_env act =
         | [Ctag "false", cfe] ->
           let cc = Cuop ("!", cc) in
           let cte = [] in
-            [Cif (cc, cte, cfe)]
+            [Cif (cc, cfe, cte)]
         | _ ->
             [Cswitch (cc, ccl)])
     | Ablock b ->
