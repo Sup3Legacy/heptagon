@@ -6,7 +6,7 @@ open Java
 open Java_printer
 
 let load_conf () =
-(* TODO Compiler_options.normalize_register_outputs := false; make it work before desactivating *)
+(* TODO calling convention speciale *)
   Compiler_options.do_scalarize := true;
   Compiler_options.functions_are_classes := false;
   ()

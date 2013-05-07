@@ -327,9 +327,20 @@ let compute_live_vars eqs =
     let def_ivars = InterfRead.def eq in
     (* add vars used in the equation *)
     let alive_vars = List.fold_left VarEnv.add_ivar alive_vars read_ivars in
-    (* remove vars defined in this equation *)
-    let alive_vars =
-      List.fold_left (fun alive_vars id -> VarEnv.remove_except_mem id alive_vars) alive_vars def_ivars
+    (* remove variables dead before the equation *)
+    let alive_vars = match !Compiler_options.calling_convention with
+    | Compiler_options.ExternalStruct -> (* kill them *)
+        List.fold_left
+          (fun alive_vars id -> VarEnv.remove_except_mem id alive_vars)
+            alive_vars def_ivars
+    | Compiler_options.OnePointer_or_ExternalStruct ->
+        (match def_ivars, eq.eq_rhs.e_desc with
+        | [_], Eapp _ -> alive_vars (* keep it alive *)
+        | _, _ -> (* kill then *)
+            List.fold_left
+              (fun alive_vars id -> VarEnv.remove_except_mem id alive_vars)
+                alive_vars def_ivars
+        )
     in
     print_debug "%a@," Mls_printer.print_eq eq;
     print_debug_var_env "alive" alive_vars;

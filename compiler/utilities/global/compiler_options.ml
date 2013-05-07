@@ -11,7 +11,7 @@
 open Names
 
 (* version of the compiler *)
-let version = "0.4"
+let version = "0.5.Leonard"
 let date = "DATE"
 
 (* standard module *)
@@ -132,7 +132,6 @@ let use_old_scheduler = ref false
 let no_clocking_error = ref false
 
 
-let normalize_register_outputs = ref true
 let strict_ssa = ref false
 (* if this option is on, generate code that first copies the whole array and then modifies one element.
    Otherwise, generate two loops so that each element in the array is only assigned once. *)
@@ -141,6 +140,17 @@ let memcpy_array_and_struct = ref true
 let set_strict_ssa () =
   strict_ssa := true;
   memcpy_array_and_struct := false
+
+
+
+type calling_conventions =
+  | ExternalStruct (* outputs are written in a fresh structure given as argument *)
+  | OnePointer_or_ExternalStruct
+    (* Same as ExternalStruct, except when only one output,
+        in which case it'll be directly written in the adress given by the caller *)
+
+let calling_convention = ref ExternalStruct
+
 
 let functions_are_classes = ref true
 

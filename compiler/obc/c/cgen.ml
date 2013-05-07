@@ -29,7 +29,9 @@ open Format
 
 
 let load_conf () =
-  Compiler_options.enforce_callgraph := true
+  Compiler_options.enforce_callgraph := true;
+  Compiler_options.calling_convention :=
+    Compiler_options.OnePointer_or_ExternalStruct
 
 module Error =
 struct
