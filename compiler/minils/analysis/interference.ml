@@ -346,6 +346,15 @@ let compute_live_vars eqs =
     print_debug_var_env "alive" alive_vars;
     let alive_vars_list = VarEnv.fold (fun _ ivs acc -> (IvarSet.elements ivs)@acc) alive_vars [] in
     let res = (eq, alive_vars_list)::res in
+    (* remove variables dead after the equation *)
+    let alive_vars = match !Compiler_options.calling_convention with
+    | Compiler_options.ExternalStruct -> alive_vars
+    | Compiler_options.OnePointer_or_ExternalStruct ->
+        (match def_ivars, eq.eq_rhs.e_desc with
+        | [id], Eapp _ -> VarEnv.remove_except_mem id alive_vars
+        | _, _ -> alive_vars
+        )
+    in
     alive_vars, res
   in
   let add_mem x env =
