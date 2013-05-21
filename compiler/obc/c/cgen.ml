@@ -174,16 +174,19 @@ let address_of_cty cty e =
   | Cty_future _ -> e
   | _ -> Caddrof e
 
+
+let inputtype_of_type is_mutable t =
+  if is_mutable
+  then pointer_type t
+  else const_reference_type t
+
+
 let inputlist_of_ovarlist vl =
   let cvar_of_ovar vd =
-    let ty =
-      if vd.v_mutable
-      then pointer_type vd.v_type
-      else const_reference_type vd.v_type
-    in
-    name vd.v_ident, ty
+    name vd.v_ident, inputtype_of_type vd.v_mutable vd.v_type
   in
   List.map cvar_of_ovar vl
+
 
 (** @return the unaliased version of a type. *)
 let rec unalias_ctype cty = match cty with
@@ -912,7 +915,8 @@ let mem_decls_defs_of_class_def cd =
       end;
       let inputs =
         let arg_to_cvar a =
-          let ty = ctype_of_otype a.a_type in
+          let is_mutable = Linearity.is_linear a.a_linearity in
+          let ty = inputtype_of_type is_mutable a.a_type in
           let n = match a.a_name with
           | None -> Idents.name (Idents.gen_var "Cgen" "__unnamed_arg__")
           | Some(n) -> n
