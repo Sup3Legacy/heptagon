@@ -1,0 +1,27 @@
+open Utils
+open Iostream
+open Htime
+
+const decouple : int = 20
+const nb_thread : int = 2
+const stuff : int = 1000000
+
+
+node sum(x :int) = (y :int)
+var z :int;
+let
+  z = Do.stuff(stuff);
+  y = (0 fby y) + x;
+(*  () = printf("in : %d  date : %l\n", x, get_um_time());*)
+tel
+
+unsafe node main () = (y : int)
+var ay : future int; c : bool; x :int;
+let
+  x = 1 fby (x+1);
+  c = period<<decouple>> ();
+  reset
+    ay = async <<decouple,nb_thread>> sum(x);
+  every c;
+  y = !(async 0 fby<<decouple>> ay);
+tel

@@ -1,0 +1,73 @@
+
+(** Misc *)
+
+node nat () = (y : int)
+let
+  y = 0 fby (y + 1)
+tel
+
+node sum (x :int) = (y :int)
+let
+  y = x + (0 fby y)
+tel
+
+node plusnat(x :int) = (y :int)
+let 
+  y = nat() + x
+tel
+
+node double(x :int) = (y :int)
+let
+  y = 2*x
+tel
+
+node period << n :int | n > 0 >> () returns (c :bool)
+var cpt, next_cpt :int;
+let
+  next_cpt = if (cpt = n) then 1 else (cpt + 1);
+  cpt = 1 fby next_cpt;
+  c = (cpt = 1);
+(*%  () = Iostream.printf(" next_cpt : %d\n cpt : %d\n",next_cpt,cpt);*)
+tel
+
+
+(** share_fg computes f(g(x)) and g(f(x) alternatively. It uses LHO to hide internal latency, but give the result with one delay :
+    share_fg<< plusnat, double>> ( 3 ) 
+gives
+    0
+    6  = (3+0)*2
+    7  = 3*2+1
+    10 = (3+2)*2
+    9  = 3*2+3 ...
+*)
+
+
+unsafe node share_fg<<node f(int)=(int); node g(int)=(int);>> (x :int) = (y :int)
+var inout, nin1, nin2, in1, in2, cf : bool; y1, y2, prev_y1, prev_y2 :int;
+let
+  inout = period<<2>>();
+  in1 = period<<2>>();
+  nin1 = not period<<2>>();
+  in2 = not period<<2>>();
+  nin2 = period<<2>>();
+  cf = true fby false fby false fby true fby cf;
+  y1 = f((merge inout (merge in1 (x when in1) 0) (merge nin1 (prev_y2 whenot inout when nin1) 0)) when cf);
+  y2 = g((merge inout (merge in2 (x when in2) 0) (merge nin2 (prev_y1 whenot inout when nin2) 0)) whenot cf);
+  prev_y1 = 0 fby (merge cf y1 (prev_y1 whenot cf));
+  prev_y2 = 0 fby (merge cf (prev_y2 when cf) y2);
+  y = (0 fby (merge cf y1 y2)) when inout; 
+(* () = Iostream.printf("y1 : %d\n", y1);
+ () = Iostream.printf("y2 : %d\n", y2);
+ () = Iostream.printf("prev_y1 : %d\n", prev_y1);
+ () = Iostream.printf("prev_y2 : %d\n", prev_y2);
+ () = Iostream.printf("cf : %b\n", cf);
+ () = Iostream.printf("in1 : %b\n", in1);
+ () = Iostream.printf("in2 : %b\n", in2);
+*)
+tel
+
+unsafe node main (x:int) = (y:int)
+let
+  y = share_fg<<plusnat, double>>(x);
+tel
+
