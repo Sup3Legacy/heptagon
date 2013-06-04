@@ -139,6 +139,11 @@ struct
     | Efby (_, _, _, _) -> true
     | _ -> false
 
+  let rec get_fby e = match e.e_desc with
+    | Ewhen (e, _, _) -> get_fby e
+    | Efby _ -> e
+    | _ -> raise Not_found
+
   let antidep { eq_rhs = e } = is_fby e
 
   let clock eq = eq.eq_base_ck

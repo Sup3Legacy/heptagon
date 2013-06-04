@@ -47,7 +47,7 @@ and exp = {
   e_level_ck        : ck; (*when no data dep, execute the exp on this clock (set by [switch] *)
   mutable e_ct      : ct;
   e_ty              : ty;
-  e_linearity : linearity;
+  e_linearity       : linearity;
   e_loc             : location }
 
 and edesc =
