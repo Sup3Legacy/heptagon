@@ -2,19 +2,19 @@
     names by qualified names *)
 
 
-(* [local_const] is the environnement with local constant variables,
+(* [local_const] is the environment with local constant variables,
   that is for now only the statics node parameters.
   It is built with [build_const].
   When qualifying a constant var,
   it is first check in the local_const env, so qualified with [local_qn]
   if not found we try to qualify it with the global env. *)
 
-(* The global environement is initialized by the scoping pass.
+(* The global environment is initialized by the scoping pass.
    This allow at the same time
    to qualify types, constants, constructors, fields and node calls,
    according to the current module definitions and opened modules. *)
 
-(* [env] of type Rename.t is the renaming environnement
+(* [env] of type Rename.t is the renaming environment
    used to map a var name to a var ident.
    It is initialized at node declaration level with the inputs and outputs,
    and then appended with the local var declarations at each block level
@@ -47,6 +47,7 @@ struct
     | Enot_last of name
     | Evariable_already_defined of name
     | Econst_variable_already_defined of name
+    | Evariable_already_defined_as_const of name
     | Estatic_exp_expected
     | Eredefinition of qualname
     | Elinear_type_no_memalloc
@@ -76,6 +77,10 @@ struct
             name
       | Econst_variable_already_defined name ->
           eprintf "%aThe const variable %s is already defined.@."
+            print_location loc
+            name
+      | Evariable_already_defined_as_const name ->
+          eprintf "%aThe variable %s is already defined as a constant.@."
             print_location loc
             name
       | Estatic_exp_expected ->

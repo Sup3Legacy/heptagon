@@ -126,11 +126,24 @@ let const_dec funs local_const cd =
   Hept_scoping.safe_add cd.c_loc add_const c_name (Signature.dummy_const Signature.Tinvalid);
   cd, local_const
 
+let block funs local_const b =
+  let check_fresh vd =
+    try  (* try to qualify it (as a const), it shouldn't succeed *)
+      let _ = qualify_var local_const vd.v_name in
+      Hept_scoping.Error.message vd.v_loc
+             (Hept_scoping.Error.Evariable_already_defined_as_const vd.v_name)
+    with Not_found -> ()
+  in
+  List.iter check_fresh b.b_local;
+  Hept_parsetree_mapfold.block funs local_const b
+
+
 let program p =
   let funs = { Hept_parsetree_mapfold.defaults with
                 node_dec = node_dec;
                 exp = exp;
                 app = app;
+                block = block;
                 const_dec = const_dec }
   in
   List.iter open_module p.p_opened;
