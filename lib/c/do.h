@@ -4,4 +4,6 @@
 
 void Do__stuff_step(long long coeff, int* r);
 
+void Do__stuffi_step(long long coeff);
+
 #endif

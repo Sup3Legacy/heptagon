@@ -34,6 +34,4 @@ install: all
 clean :
 	rm -f $(OBJS)
 	rm -f $(COMPILED_HEADERS)
-
-clean_all: clean
 	rm -f $(C_STDLIB_STATIC)
