@@ -1,10 +1,3 @@
-/*
- * stock.h
- *
- *  Created on: 19 aožt 2012
- *      Author: lgerard
- */
-
 #ifndef __DECADES_STOCK_H_
 #define __DECADES_STOCK_H_
 
@@ -13,11 +6,9 @@
  */
 //#define STOCK_EMPTYWHITES
 
+#include <assert.h> //TODO assert c++ ?
 #include "utils.h"
-#include <assert.h>
-
 #include "futures.h"
-
 
 template <typename T, int size>
 class stock {
@@ -25,7 +16,6 @@ class stock {
   typedef future<T>* ext_n;
   struct node {
     future<T> v;
-
     node * prev;
     node * next;
     int ref_count;
@@ -33,19 +23,14 @@ class stock {
   typedef node* n;
 
   /**
-   * There is a mapping between [all] and the queues.
+   * There is a mapping between [all] and the lists.
    * - [whites] stores the nodes which are not alive in the program.
-   * - [grays] stores the nodes which are alive in the stack of the program.
    * - [blacks] stores the nodes which are alive in the memory of the program.
-   * White and gray nodes are tagged as [unset].
-   * Black nodes are tagged as:
-   *   - [old] if they were stored before the last [tick()]
-   *   - [fresh] if they were stored during the current tick.
+   * - [grays] stores all other nodes.
+   * Black nodes use the ref_count to count black references.
    */
   node all[size];
-  n whites;
-  n grays;
-  n blacks;
+  n whites, grays, blacks;
 
   inline void move(n &from, n x, n &dest) {
     //remove x from its list
@@ -129,7 +114,7 @@ class stock {
   }
 
   inline n find_free() {
-    assert(whites); //The white queue should never be empty
+    assert(whites); //The white queue should not be empty here
     n current = whites;
     int i = 0;
     while(current->v.is_not_ready()) {
@@ -152,8 +137,8 @@ public :
       all[i].v.release(); //set all futures as ready
     }
     whites = &all[0];
-    grays = 0;
-    blacks = 0;
+    grays = nullptr;
+    blacks = nullptr;
   }
   stock(const stock& ) = delete;
 
@@ -161,35 +146,38 @@ public :
   ext_n get_free() {
     n x = find_free();
     move_from_whites(x,grays);
-    x->v.reset();
-    return (reinterpret_cast<ext_n>(reinterpret_cast<future<T>*>(x)));
+    return (reinterpret_cast<ext_n>(x));
   }
 
 
   /**
    * Sets the store [ext_x] to [o].
    * If the given black is null, it is initialized.
+   * Only here for convenience
    */
-  void reset_store(ext_n &ext_x, T o) {
+  void reset_store(ext_n &ext_x, const T& o) {
     if (!ext_x) {
       ext_x = get_free_and_store();
     }
-    ext_x->set(o);
+    (*ext_x->to_set()) = o;
+    ext_x->release();
   }
+
+  /**
+   * Only here for speed,
+   * from white to black without passing in gray
+   */
   inline ext_n get_free_and_store() {
     n x = find_free();
     move_from_whites(x,blacks);
     x->ref_count = 1;
-    x->v.reset();
     return (reinterpret_cast<ext_n>(x));
   }
 
   /**
-   * [oldx] should already be black (previously stored),
-   *   it'll be set as ready (white) if it is not a fresh store.
-   * [newx] will be set as stored and marked as a fresh store.
-   *   it must be alive: either black or gray.
-   * The freshness is reset by the tick function.
+   * [oldx] is unstored.
+   * [newx] is stored.
+   * Only here for convenience (and speed)
    */
   void store_in(ext_n ext_newx, ext_n &ext_oldx) {
     if (ext_newx == ext_oldx)
@@ -200,6 +188,8 @@ public :
       ext_oldx = ext_newx;
     }
   }
+
+
   inline void store(ext_n ext_newx) {
     n newx = reinterpret_cast<n>(ext_newx);
     if (newx->ref_count == 0) {// It is gray
@@ -216,16 +206,10 @@ public :
       move(blacks, oldx, grays);
   }
 
-  /**
-   * Remove the freshness of black nodes
-   * and move grays to white.
-   */
+  //Move gray to white.
   void tick() {
-    //move gray to white
     move_all_to_whites(grays);
   }
 };
-
-
 
 #endif /* STOCK_H_ */

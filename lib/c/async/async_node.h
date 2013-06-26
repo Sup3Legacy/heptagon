@@ -30,19 +30,15 @@ struct wrapnode {
     typedef queue<work_closure,queue_size> work_queue;
 
     work_queue queues[queue_nb];
-    thread **workers;
     int current_queue;
     bool need_reset;
 
   public:
 
     async():current_queue(0),need_reset(true) {
-      workers = new thread*[queue_nb];
       for(int i = 0; i<queue_nb; i++) {
-        workers[i] = new std::thread (
+       (new std::thread (
           [](work_queue *q) {
-//            signal(SIGINT,[](int i){pthread_exit(0);});
-//            signal(SIGTERM,[](int i){pthread_exit(0);});
             Mem m;
             f_reset(&m);
             while (true) {
@@ -53,22 +49,12 @@ struct wrapnode {
               q->remove();
             }
           }
-          , &queues[i]);
+          , &queues[i]))->detach();
       }
     }
 
     //Prevent copy constructor, since it should never happen
     async(const async&) = delete;
-
-    ~async() {
-//      for(int i = 0; i<queue_nb; i++)
-//        pthread_kill(workers[i]->native_handle(),SIGTERM);
-//      for(int i = 0; i<queue_nb; i++) {
-//        workers[i]->join();
-//        delete(workers[i]);
-//      }
-//      delete[](workers);
-    }
 
     /** Push in the current queue and reset the [need_reset] flag.
      */
@@ -94,7 +80,24 @@ struct wrapnode {
     }
 
   };
+  template<void(*f_step)(Inputs..., Output*, Mem*),
+      void(*f_reset)(Mem*),
+      int queue_size>
+  class async<f_step, f_reset, queue_size, 0> {
+	  Mem m;
+  public:
+    async():m() { }
+    void step(Inputs... i, future<Output>* o) {
+    	f_step(i..., o->to_set(), &m);
+    	o->release();
+    }
+    void reset() {
+    	f_reset(&m);
+    }
+  };
 };
+
+
 
 
 #endif /* ASYNCNODE_H_ */

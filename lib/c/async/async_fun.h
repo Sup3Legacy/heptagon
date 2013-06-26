@@ -28,19 +28,15 @@ struct wrapfun {
     typedef queue<work_closure,queue_size> work_queue;
 
     work_queue queues[queue_nb];
-    thread **workers;
     int current_queue;
 
   public:
 
     async():current_queue(0) {
-      workers = new thread*[queue_nb];
       for(int i = 0; i<queue_nb; i++) {
     	queues[i].attach_productor(); //Proactif !!
-        workers[i] = new std::thread (
+        (new std::thread (
           [](work_queue *q) {
-//            setsignal(SIGINT,[](int i){pthread_exit(0);});
-//            setsignal(SIGTERM,[](int i){pthread_exit(0);});
             while (true) {
               work_closure* r = q->get();
               r->ff(r->fo->to_set());
@@ -48,36 +44,17 @@ struct wrapfun {
               q->remove();
             }
           }
-          , &queues[i]);
+          , &queues[i]))->detach();
       }
     }
 
     //Prevent copy constructor, since it should never happen
     async(const async&) = delete;
 
-    ~async() {
-//      for(int i = 0; i<queue_nb; i++) {
-//    	int r = pthread_kill(workers[i]->native_handle(),SIGTERM);
-//    	if (r==0) {
-//    		printf("killed %d\n",i);
-//    		fflush(stdout);
-//    	} else {
-//    		printf("killed failed %d\n",i);
-//    		fflush(stdout);
-//    	}
-//      }
-//      for(int i = 0; i<queue_nb; i++) {
-//        workers[i]->join();
-//        printf("joined %d\n",i);
-//        fflush(stdout);
-//        delete(workers[i]);
-//      }
-//      delete[](workers);
-    }
-
     /** Push in the current queue and reset the [need_reset] flag.
      */
     void step(Inputs... i, future<Output>* o) {
+      o->reset();
       //create closure
       *queues[current_queue].to_fill() =
       {std::bind(f_step,i...,placeholders::_1),o};
@@ -93,6 +70,21 @@ struct wrapfun {
     }
 
   };
+
+  template<void(*f_step)(Inputs..., Output*),
+        int queue_size>
+    class async<f_step, queue_size, 0> {
+    public:
+      async(){ }
+      void step(Inputs... i, future<Output>* o) {
+    	o->reset();
+      	f_step(i..., o->to_set());
+      	o->release();
+      }
+      void reset() {
+      }
+    };
+
 };
 
 
