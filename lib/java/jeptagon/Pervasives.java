@@ -7,7 +7,9 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
+import java.util.concurrent.FutureTask;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 public class Pervasives {
 
@@ -32,6 +34,13 @@ public class Pervasives {
 		return i!=0;
 	}
 	
+	public static float float_of_int(int i) {
+		return i;
+	}
+
+	public static int float_of_int(float f) {
+		return (int)f;
+	}
 
 	public static final ExecutorService executor_cached = Executors.newCachedThreadPool();
 	public static final int max_tasks = 25;
@@ -171,16 +180,26 @@ public class Pervasives {
 			return "(" + genToString(c0) + ", " + genToString(c1) + ")";
 		}
 	}
-	
+
 	public static Tuple2 at_to_ta2 ( final Future<Tuple2> at) {
-		Future<?> t0 = executor_cached.submit(new Callable<Object> () {
-			public Object call() throws Exception {
+		Future<Object> t0 = new Future<Object>() {
+			public Object get() throws InterruptedException, ExecutionException {
 				return at.get().c0;
-			} });
-		Future<?> t1 = executor_cached.submit(new Callable<Object> () {
-			public Object call() throws Exception {
+			}
+			public boolean cancel(boolean mayInterruptIfRunning) {return at.cancel(mayInterruptIfRunning);}
+			public boolean isCancelled() {return at.isCancelled();}
+			public boolean isDone() {return at.isDone();}
+			public Object get(long timeout, TimeUnit unit) throws InterruptedException, ExecutionException, TimeoutException {return at.get(timeout, unit);}
+		};
+		Future<Object> t1 = new Future<Object>() {
+			public Object get() throws InterruptedException, ExecutionException {
 				return at.get().c1;
-			} });
+			}
+			public boolean cancel(boolean mayInterruptIfRunning) {return at.cancel(mayInterruptIfRunning);}
+			public boolean isCancelled() {return at.isCancelled();}
+			public boolean isDone() {return at.isDone();}
+			public Object get(long timeout, TimeUnit unit) throws InterruptedException, ExecutionException, TimeoutException {return at.get(timeout, unit);}
+		};
 		return new Tuple2(t0,t1);
 	}
 
@@ -199,18 +218,33 @@ public class Pervasives {
 	}
 
 	public static Tuple3 at_to_ta3 ( final Future<Tuple3> at) {
-		Future<?> t0 = executor_cached.submit(new Callable<Object> () {
-			public Object call() throws Exception {
+		Future<Object> t0 = new Future<Object>() {
+			public Object get() throws InterruptedException, ExecutionException {
 				return at.get().c0;
-			} });
-		Future<?> t1 = executor_cached.submit(new Callable<Object> () {
-			public Object call() throws Exception {
+			}
+			public boolean cancel(boolean mayInterruptIfRunning) {return at.cancel(mayInterruptIfRunning);}
+			public boolean isCancelled() {return at.isCancelled();}
+			public boolean isDone() {return at.isDone();}
+			public Object get(long timeout, TimeUnit unit) throws InterruptedException, ExecutionException, TimeoutException {return at.get(timeout, unit);}
+		};
+		Future<Object> t1 = new Future<Object>() {
+			public Object get() throws InterruptedException, ExecutionException {
 				return at.get().c1;
-			} });
-		Future<?> t2 = executor_cached.submit(new Callable<Object> () {
-			public Object call() throws Exception {
+			}
+			public boolean cancel(boolean mayInterruptIfRunning) {return at.cancel(mayInterruptIfRunning);}
+			public boolean isCancelled() {return at.isCancelled();}
+			public boolean isDone() {return at.isDone();}
+			public Object get(long timeout, TimeUnit unit) throws InterruptedException, ExecutionException, TimeoutException {return at.get(timeout, unit);}
+		};
+		Future<Object> t2 = new Future<Object>() {
+			public Object get() throws InterruptedException, ExecutionException {
 				return at.get().c2;
-			} });
+			}
+			public boolean cancel(boolean mayInterruptIfRunning) {return at.cancel(mayInterruptIfRunning);}
+			public boolean isCancelled() {return at.isCancelled();}
+			public boolean isDone() {return at.isDone();}
+			public Object get(long timeout, TimeUnit unit) throws InterruptedException, ExecutionException, TimeoutException {return at.get(timeout, unit);}
+		};
 		return new Tuple3(t0,t1,t2);
 	}
 
@@ -349,8 +383,16 @@ public class Pervasives {
 		}
 	}
 
-	public static void main(String[] args) {
+	@SuppressWarnings("unchecked")
+	public static void main(String[] args) throws InterruptedException, ExecutionException {
 		int[][] t = (int[][]) fillNd(new int[3][2],2);
+		Callable<Tuple2> task = new Callable<Tuple2>(){
+			public Tuple2 call() {return new Tuple2(42,7);}
+		};
+		FutureTask<Tuple2> f = new FutureTask<Tuple2> (task);
+		Tuple2 tuple = at_to_ta2(f);
+		f.run();
+		((Future<Integer>) tuple.c0).get();
 		java.lang.System.out.println(genToString(t));
 	}
 }

@@ -20,6 +20,15 @@ static inline bool bool_of_int(int i)
   return i;
 }
 
+static inline int int_of_float(float i)
+{
+  return (float)i;
+}
+
+static inline float float_of_int(int i)
+{
+  return (int)i;
+}	
 
 #include <stdlib.h>
 static inline int random(int i)

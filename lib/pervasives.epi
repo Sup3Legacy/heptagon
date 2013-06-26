@@ -42,6 +42,8 @@ external val fun min(int;int) returns (int)
 external val fun between(int;int) returns (int)
 external val fun int_of_bool(bool) returns (int)
 external val fun bool_of_int(int) returns (bool)
+external val fun float_of_int(int) returns (float)
+external val fun int_of_float(float) returns (int)
 
 external val fun random(int) returns(int)
 
