@@ -274,6 +274,17 @@ let typ_of_name h x =
   with
       Not_found -> error (Eundefined(name x))
 
+let typ_of_pointeau h x =
+  let rec unasyncify t = match t with
+  | Tfuture (_,t) -> unasyncify t
+  | _ -> t
+  in
+  try
+    let {vd = vd} = Env.find x h in
+    unasyncify vd.v_type
+  with
+    Not_found -> error (Eundefined(name x))
+
 let typ_of_qual x = (Modules.find_const x).Signature.c_type
 
 let sig_of_qual f = Modules.find_value f
@@ -709,7 +720,7 @@ and unify_se_l se_l =
 let rec typing_ck h ck = match ck with
   | Clocks.Cbase | Clocks.Cvar _ -> ck
   | Clocks.Con (ck', sv, v) ->
-      let t = typ_of_name h v in
+      let t = typ_of_pointeau h v in
       let sv = expect_se t sv in
       let ck' = typing_ck h ck' in
       Clocks.Con (ck', sv, v)
@@ -816,7 +827,7 @@ and typing h e =
       | Ewhen (e, c, x) ->
           let typed_e, t = typing h e in
           let typed_c, tn_expected = typing_static_exp c in
-          let tn_actual = typ_of_name h x in
+          let tn_actual = typ_of_pointeau h x in
           let _ = expect tn_expected tn_actual in
           Ewhen (typed_e, typed_c, x), t
 
@@ -830,15 +841,15 @@ and typing h e =
           if not unic then message e.e_loc Emerge_uniq;
           if not comp then message e.e_loc Emerge_missing_constrs;
           (* check x *)
-          (try expect t_c (typ_of_name h x)
-           with _ -> message e.e_loc (Emerge_bad_sampler (t_c, typ_of_name h x)));
+          (try expect t_c (typ_of_pointeau h x)
+           with _ -> message e.e_loc (Emerge_bad_sampler (t_c, typ_of_pointeau h x)));
           (* type *)
           let e_l, t = unify_e_l h e_l in
           let c_e_list = List.combine typed_c_l e_l in
           Emerge (x, c_e_list), t
 
       | Esplit(c, _, e2) ->
-          let ty_c = typ_of_name h c in
+          let ty_c = typ_of_pointeau h c in
           let typed_e2, ty = typing h e2 in
           let cl =
             try type_enumerate ty_c

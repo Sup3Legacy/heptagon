@@ -151,7 +151,7 @@ and print_exp_desc ff = function
           print_every reset
   | Eiterator _ -> assert false
   | Ewhen (e, c, x) ->
-      fprintf ff "@[<2>(%a@ when %a(%a))@]"
+      fprintf ff "@[<2>(%a@ when (%a=%a))@]"
         print_exp e print_static_exp c print_ident x
   | Emerge (x, tag_e_list) ->
       fprintf ff "@[<2>merge %a@ %a@]"

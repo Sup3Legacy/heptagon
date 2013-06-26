@@ -304,11 +304,13 @@ on_ck:
   | x=IDENT
       { Con(Cbase, mk_static_exp_exp (Sbool true) (Loc($startpos,$endpos)), x) }
   | c=sampling_value LPAREN x=IDENT RPAREN            { Con(Cbase,c,x) }
+  | LPAREN c=sampling_value EQUAL x=IDENT RPAREN      { Con(Cbase,c,x) }
   | b=ck ON x=IDENT
       { Con(b, mk_static_exp_exp (Sbool true) (Loc($startpos,$endpos)), x) }
   | b=ck ONOT x=IDENT
       { Con(b, mk_static_exp_exp (Sbool false) (Loc($startpos,$endpos)), x) }
   | b=ck ON c=sampling_value LPAREN x=IDENT RPAREN    { Con(b,c,x) }
+  | b=ck ON LPAREN c=sampling_value EQUAL x=IDENT RPAREN   { Con(b,c,x) }
 
 
 equs:
@@ -496,13 +498,17 @@ _exp:
       { mk_op_call $2 [$1; $3] }
   | exp INFIX2 exp
       { mk_op_call $2 [$1; $3] }
-  | e=exp WHEN c=sampling_value LPAREN ce=IDENT RPAREN
+  | e=exp WHEN c=sampling_value LPAREN BANG? ce=IDENT RPAREN
       { Ewhen (e, c, ce) }
-  | e=exp WHEN ce=IDENT
+  | e=exp WHEN LPAREN c=sampling_value EQUAL BANG? ce=IDENT RPAREN
+      { Ewhen (e, c, ce) }
+  | e=exp WHEN BANG? ce=IDENT
       { Ewhen (e, mk_bool_exp true (Loc($startpos,$endpos)), ce) }
-  | e=exp WHENOT ce=IDENT
+  | e=exp WHENOT BANG? ce=IDENT
       { Ewhen (e, mk_bool_exp false (Loc($startpos,$endpos)), ce) }
-  | MERGE n=IDENT hs=merge_handlers
+  | e=exp WHEN NOT BANG? ce=IDENT
+      { Ewhen (e, mk_bool_exp false (Loc($startpos,$endpos)), ce) }
+  | MERGE BANG? n=IDENT hs=merge_handlers
       { Emerge (n, hs) }
   | exp INFIX1 exp
       { mk_op_call $2 [$1; $3] }

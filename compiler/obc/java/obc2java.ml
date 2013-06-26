@@ -353,7 +353,7 @@ let rec act_list param_env act_l acts =
         let _c_b (c,b) = static_exp param_env c, block param_env b in
         let c_b_l = List.map _c_b c_b_l in
         let c = exp param_env e in
-        if e.e_ty = Initial.tbool then (* cosmetic : if instead of cases *)
+        if e.e_ty = Initial.tbool then (* needed : if instead of cases *)
           (match c_b_l with
            | [Sbool true, cte; Sbool false, cfe]
            | [Sbool false, cfe; Sbool true, cte] ->
