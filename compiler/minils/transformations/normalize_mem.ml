@@ -6,8 +6,9 @@ open Mls_utils
 (**
   o = v fby e every r
   becomes
+  o = v fbyread mem_o every r;
   mem_o = v fby e every r;
-  o = v fbyread mem_o every r
+
 *)
 
 let rec replace_fby e x_mem = match e.e_desc with
