@@ -52,6 +52,9 @@ and exp_compare e1 e2 =
             list_compare compare_fne fnel1 fnel2
       | Earray el1, Earray el2 ->
           list_compare exp_compare el1 el2
+      
+      | Ebang e1, Ebang e2 ->
+         exp_compare e1 e2
 
       | Eextvalue _, _ -> 1
 
