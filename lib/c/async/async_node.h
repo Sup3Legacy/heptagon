@@ -59,6 +59,7 @@ struct wrapnode {
     /** Push in the current queue and reset the [need_reset] flag.
      */
     void step(Inputs... i, future<Output>* o) {
+      o->reset();
       //create closure
       *queues[current_queue].to_fill() =
       {std::bind(f_step,i...,placeholders::_1,placeholders::_2),
@@ -88,6 +89,7 @@ struct wrapnode {
   public:
     async():m() { }
     void step(Inputs... i, future<Output>* o) {
+    	o->reset();
     	f_step(i..., o->to_set(), &m);
     	o->release();
     }
