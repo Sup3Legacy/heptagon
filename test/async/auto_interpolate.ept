@@ -1,0 +1,14 @@
+
+node auto_rl (x :int) = (y :int)
+var last speed : int; last pos : int
+let
+  automaton
+  state Precise do
+    (pos, speed) = 0 fby slow(x);
+  done
+  state Interpolate do
+    pos = last pos + last speed;
+  until 
+  end;
+  y = pos;
+tel

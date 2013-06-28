@@ -1,0 +1,12 @@
+(* Always return 0, but this call will never be optimized or constant propagated *)
+fun i() = (o:int)
+
+(* Always return 0^n *) 
+fun ti240() = (o : int^240)
+fun ti24() = (o : int^24)
+fun ti530() = (o : int^530)
+fun ti85() = (o : int^85)
+fun ti90() = (o : int^90)
+fun ti65() = (o : int^65)
+fun ti2400() = (o : int^2400)
+fun ti24000() = (o : int^24000)

@@ -1,0 +1,23 @@
+
+const taille : int = 1000
+const threads : int = 0
+
+fun ran() = (o : int)
+let
+  o = 42;
+tel
+
+
+fun f () = (t :int^taille)
+let t = 42^taille;
+tel
+
+node main() = (o :int)
+var c :bool; t,r : future int^taille;
+let
+  t = async<<1,threads>> f();
+  c = (!t)[0] > -1;
+  r = (async (0^taille)) fby (merge c (t when c) (r whenot c));
+  o = (!r)[>42<];
+tel
+

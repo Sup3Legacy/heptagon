@@ -1,0 +1,16 @@
+const n : int = 100
+
+node f() = (y : int^n)
+let
+  y = 42^n;
+tel
+
+node main() = (o : int; c : bool)
+var y, z : future (int^n);
+let
+  c = false fby true;
+  y = async (0^n) fby async<<0,0>> f();
+  z = async (0^n) fby (y when c);
+  o = (!z)[0];
+tel
+

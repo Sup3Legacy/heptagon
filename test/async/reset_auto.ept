@@ -1,0 +1,17 @@
+
+node f(x : int) = ( y :int)
+let y = x tel
+
+node data_auto (x : int; r : bool) = (y : int)
+var ay : future int;
+let
+  automaton
+  state A do
+    ay = async f(x)
+  until r then B
+  state B do
+    ay = async f(x)
+  until r then A
+  end;
+  y = !(async 0 fby<<2>> ay);
+tel

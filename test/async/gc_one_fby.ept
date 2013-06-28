@@ -1,0 +1,18 @@
+const n : int = 100 
+
+node f(x : int) = (y : int^n)
+var v : int;
+let
+  v = Unopt.i();
+  y = v^n;
+tel
+
+node main(x : int) = (o : int)
+var y, z : future (int^n); (*o : int;*) c : bool; 
+let
+  y = async<<21,1>> Unopt.ti100();
+  c = (!y)[0] = 0;
+  z = async (0^n) fby (y when c);
+  o = merge c ((!z)[1]) 42;
+tel
+
