@@ -7,6 +7,7 @@
 #include <condition_variable>
 #include <iostream>
 #include <thread>
+#include <cassert>
 
 #include "utils.h"
 
@@ -39,6 +40,7 @@ class queue {
 
 public:
   queue():_size(size+1),wake_up(),m(),p(),c(){
+	assert(_size>=2);
     data_array = new T[_size];
   }
   //Prevent copy constructor, since it should never happen

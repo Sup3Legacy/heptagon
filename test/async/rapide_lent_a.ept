@@ -1,29 +1,39 @@
+const stuff : int = 20
+const n : int = 3
 
-node lent<<n :int>>() returns (y :int)
+node mod_counter<<n :int>>() = (cpt :int)
 let
-  () = Do.stuff(n*20);
-  y = 1 fby (y + 1);
+  reset
+    cpt = 0 fby (cpt + 1)
+  every (false fby (cpt = n-1))
+tel
+
+node lent() returns (y :int)
+var t :int;
+let
+  t = Do.stuffi((n-1)*stuff);
+  y = 1 fby (y + 1 + t);
 tel
 
 
-node rapide<<n :int>>() returns (last z : int = 0; cpt : int)
-var big_step :bool;
+node rapide() returns (cpt : int)
+var big_step :bool; last z : int = 0;
 let
-  cpt = Std.mod_counter<<n>>();
+  cpt = inlined mod_counter<<n>>();
   big_step = (cpt = 0);
   switch big_step
   | true
     var r : future int;
     do
-      r = async lent<<n>>();
+      r = async<<10>> lent();
       z = !(async 0 fby r);
   | false do
-      () = Do.stuff(20);
-  end
+      z = last z + Do.stuffi(stuff);
+  end;
 tel
 
 
-node main() returns(r,c :int)
+node main() returns(c : int)
 let
-  (r,c) = rapide<<5>>();
+  c = rapide();
 tel

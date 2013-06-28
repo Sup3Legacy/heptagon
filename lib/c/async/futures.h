@@ -30,8 +30,13 @@ public :
 
   const T& get() const {
     // active wait on the read condition of the future
+//	int i = 0;
     while (is_not_ready()) {
-      std::this_thread::yield();
+//      i++;
+//      if(i > 300) {
+//    	  i = 0;
+//    	  std::this_thread::yield();
+//      }
     }
     return o;
   }

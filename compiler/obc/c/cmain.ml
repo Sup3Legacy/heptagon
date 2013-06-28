@@ -304,8 +304,9 @@ let main_skel var_list prologue body =
           )
         (* while (!max_step || step_c < max_step) *)
         @ (let cond =
-            Cbop ("||", Cuop ("!", Cvar max_step)
-                      , Cbop ("<", Cvar step_counter, Cvar max_step))
+            (*Cbop ("||", Cuop ("!", Cvar max_step),*)
+            Cbop ("<", Cvar step_counter, Cvar max_step)
+            (*)*)
            in
            let updt = (* step_counter = step_counter + 1; *)
              Caffect (CLvar step_counter

@@ -8,6 +8,7 @@
 
 /* Begin PBXFileReference section */
 		B1162702176CB07A00C97400 /* liblibdecades.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = liblibdecades.a; sourceTree = BUILT_PRODUCTS_DIR; };
+		B1DAAE6B176CB752008475CB /* async */ = {isa = PBXFileReference; lastKnownFileType = folder; name = async; path = ../async; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -24,6 +25,7 @@
 		B11626F9176CB07A00C97400 = {
 			isa = PBXGroup;
 			children = (
+				B1DAAE6B176CB752008475CB /* async */,
 				B1162703176CB07A00C97400 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -195,6 +197,7 @@
 				B1162708176CB07A00C97400 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
 	};

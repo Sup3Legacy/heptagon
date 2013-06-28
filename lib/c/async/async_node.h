@@ -7,7 +7,7 @@
 #ifndef __DECADES_ASYNCNODE_H_
 #define __DECADES_ASYNCNODE_H_
 
-#include <Thread>
+#include <thread>
 #include <functional>
 
 #include "utils.h"

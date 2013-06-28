@@ -1,12 +1,33 @@
-node counter(res: bool; tick: bool) returns (o: int)
+open Iostream
+
+node f() returns (c : bool; x : int on c)
 let
-  o = if res then 0 else if tick then 1 -> pre o + 1 else 0 -> pre o;
+  c = true;
+  x = 0;
 tel
 
-node counter2() returns (b: bool)
-var t : future int;
+unsafe node force1() returns ()
+var ayy, ay : future int;
+    ac : future bool;
 let
-  t = async 0 fby async counter(false,true);
-  b = counter(false,true) -1 = !t;
+  ayy = async 0 fby ay;
+  (ac, ay) = async f();
+  () = printf("%d", !ayy);
 tel
 
+node force2() returns (am : future int; ac : future bool)
+var ay : future int;
+let
+  am = async 0 fby ay;
+  (ac, ay) = async f();
+tel
+
+
+node mix() returns (y : int)
+var ayy, ay : future int;
+    ac : future bool;
+let
+  ayy = async 0 fby ay;
+  (ac, ay) = async f();
+  y = merge ac (!ayy) 42;
+tel

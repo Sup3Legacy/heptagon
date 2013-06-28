@@ -8,7 +8,7 @@ libdir=${exec_prefix}/lib
 INSTALL="/opt/local/libexec/gnubin//install -c"
 
 CXX=g++-mp-4.7
-CXXFLAGS="-std=c++11 -O2"
+CXXFLAGS="-std=c++11 -O2 -g"
 
 BUILD=_build
 COMPILER=heptc

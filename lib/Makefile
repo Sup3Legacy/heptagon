@@ -1,6 +1,6 @@
 include ../config
 
-STDLIB_INTERFACES=do.epi image.epi iostream.epi math_utils.epi pervasives.epi htime.epi
+STDLIB_INTERFACES=unopt.epi do.epi image.epi iostream.epi math_utils.epi pervasives.epi htime.epi
 STDLIB_OBJS=$(STDLIB_INTERFACES:.epi=.epci)
 
 C_DIR=c
