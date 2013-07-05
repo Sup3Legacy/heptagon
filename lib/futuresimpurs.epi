@@ -1,0 +1,2 @@
+val fun is_ready(future int) = (bool)
+

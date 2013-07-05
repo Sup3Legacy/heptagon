@@ -27,16 +27,19 @@ public :
   bool is_not_ready() const {
     return (not_ready.load(std::memory_order_acquire));
   }
+  bool is_ready() const {
+    return ! is_not_ready();
+  }
 
   const T& get() const {
     // active wait on the read condition of the future
-//	int i = 0;
+	int i = 0;
     while (is_not_ready()) {
-//      i++;
-//      if(i > 300) {
-//    	  i = 0;
-//    	  std::this_thread::yield();
-//      }
+      i++;
+      if(i > 300) {
+    	  i = 0;
+    	  std::this_thread::yield();
+      }
     }
     return o;
   }

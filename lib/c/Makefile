@@ -1,7 +1,7 @@
 include ../../config
 ASYNC_HEADERS= async/async_fun.h async/async_macros.h async/async_node.h async/futures.h async/spsc_bounded_fifo.h async/stock.h async/utils.h
-HEADERS=pervasives.h async.h do.h htime.h unopt.h
-SRC=do.cpp htime.cpp unopt.cpp
+HEADERS=pervasives.h async.h do.h htime.h unopt.h futuresimpurs.h
+SRC=htime.cpp unopt.cpp
 
 COMPILED_HEADERS=$(HEADERS:.h=.h.gch)
 
