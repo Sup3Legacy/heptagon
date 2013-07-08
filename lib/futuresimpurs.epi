@@ -1,2 +1,3 @@
-val fun is_ready(future int) = (bool)
 
+val fun is_ready_i(future int) = (bool)
+val fun is_ready_b(future bool) = (bool)

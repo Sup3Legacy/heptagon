@@ -27,7 +27,8 @@ struct wrapnode {
       bool nreset;
       future<Output>* fo;
     } work_closure;
-    typedef queue<work_closure,queue_size> work_queue;
+    //We work in place in the queue so one more place needed
+    typedef queue<work_closure,queue_size+1> work_queue;
 
     work_queue queues[queue_nb];
     int current_queue;

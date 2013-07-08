@@ -19,5 +19,6 @@ _build
 *.epci
 *.epo
 *.dot
+*.h.gch
 test/**/java
 test/_check_builds

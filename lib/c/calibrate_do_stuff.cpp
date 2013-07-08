@@ -3,7 +3,7 @@
 #include <cstdio>
 using namespace std;
 
-//Sur mon mac cela fait 53,7 secondes pour 10^11
+//Sur mon mac cela fait 65,2  secondes pour 10^11
 
 int main() {
 	int x;

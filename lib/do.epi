@@ -1,5 +1,9 @@
-(* Should be calibrated to be around 100ns *)
+
 external unsafe fun stuff(int) returns ()
 
 (* Same as stuff, but return always 0 *)
 external fun stuffi(int) returns (int)
+
+(* Should never return well compute so much *)
+external fun neverend(int) returns (int)
+
