@@ -57,7 +57,7 @@ public :
     release();
   }
 
-  future<T> set2(const T& v) {
+  future<T>* set2(const T& v) {
     set(v);
     return this;
   }
