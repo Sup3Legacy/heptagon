@@ -103,14 +103,19 @@ and print_exp_desc ff = function
         (print_list_r print_static_exp "<<"", "">>") p
         print_extvalue w
         print_every c
-  | Efby (None, p, w, c) ->
-      fprintf ff "@[<2>pre%a@ %a%a@]"
+  | Efby (None, p, w, _) ->
+      fprintf ff "@[<2>pre%a@ %a@]"
         (print_list_r print_static_exp "<<"", "">>") p
         print_extvalue w
-        print_every c
-  | Efbyread (x,_,_) ->
-      fprintf ff "@[rrmem %a@]"
+
+  | Efbyread (x,None,_) ->
+      fprintf ff "@[readmem %a@]"
         print_ident x
+  | Efbyread (x,Some v,c) ->
+      fprintf ff "@[readmem %a reset to %a%a@]"
+        print_ident x
+        print_static_exp v
+        print_every c
   | Eapp (app, args, reset) ->
       fprintf ff "@[<2>%a@,%a@]" print_app (app, args) print_every reset
   | Emerge (x, tag_w_list) ->
