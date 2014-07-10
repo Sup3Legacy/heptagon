@@ -187,7 +187,7 @@ and doc_no_pervasives = "\tDo not load the pervasives module"
 and doc_flatten = "\t\tInline everything."
 and doc_target =
   "<lang>\tGenerate code in language <lang>\n\t\t\t(with <lang>=c,"
-  ^ " java or z3z)"
+  ^ " java, z3z or lopht)"
 and doc_full_type_info = "\t\t\tPrint full type information"
 and doc_stateful_info = "\t\tPrint stateful information"
 and doc_full_name = "\t\tPrint full variable name information"
