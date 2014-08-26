@@ -141,6 +141,7 @@ let main () =
         "-nopervasives", Arg.Unit set_no_pervasives, doc_no_pervasives;
         "-target", Arg.String add_target_language, doc_target;
         "-targetpath", Arg.String set_target_path, doc_target_path;
+        "-targetnode", Arg.Set_string target_node, doc_target_node;
         "-nocaus", Arg.Clear causality, doc_nocaus;
         "-noinit", Arg.Clear init, doc_noinit;
         "-fti", Arg.Set full_type_info, doc_full_type_info;

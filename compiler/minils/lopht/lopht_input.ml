@@ -14,7 +14,7 @@ and func = {
   fun_id : lopht_id;
   fun_inputs : (lopht_id * ty) list;
   fun_outputs : (lopht_id * ty) list;
-  (* TODO: ensures ? *)
+  (* TODO: fun_ensures ? *)
 }
 
 (* Constant which can be used for block input *)
@@ -30,7 +30,7 @@ and variable = {
   var_index : int;
   var_type : ty;
   var_source_port : lopht_id * block;
-  var_allocation : unit option;  
+  var_allocation : unit option;
 }
 
 (* Clock on which blocks are executed or variable transmited *)
@@ -92,8 +92,8 @@ and block = {
   block_index : int;
   block_id : lopht_id option;
   block_clk : clk;
-  block_inputs : input_port list;
-  block_outputs : output_port list;
+  mutable block_inputs : input_port list;
+  mutable block_outputs : output_port list;
   block_function : block_function;
   block_preemptible : bool option;
   block_offset : int option;
@@ -120,12 +120,12 @@ and output_port = {
 and deadline = Finite of int * int | Infinite
 
 type clocked_graph = {
-  types : ty list; (* Must not be empty *)
-  functions : func list; (* Must not be empty *)
-  constants : const list;
-  variables : variable list; (* Must not be empty *)
-  clocks : clk list; (* Must not be empty *)
-  relations : rel list;
-  partitions : partition list; (* Optional *)
-  blocks : block list; (* Must not be empty *)
+  mutable types : ty list; (* Must not be empty *)
+  mutable functions : func list; (* Must not be empty *)
+  mutable constants : const list;
+  mutable variables : variable list; (* Must not be empty *)
+  mutable clocks : clk list; (* Must not be empty *)
+  mutable relations : rel list;
+  mutable partitions : partition list; (* Optional *)
+  mutable blocks : block list; (* Must not be empty *)
 }
