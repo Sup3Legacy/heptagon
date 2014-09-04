@@ -1,3 +1,9 @@
+(*******************************************************************************
+ * Fiabilité et Sûreté de Fonctionnement
+ * Copyright (c) 2013, 2014 Institut de Recherche Technologique SystemX
+ * All rights reserved.
+ *******************************************************************************)
+
 type lopht_id = string
 
 (* Types of variables and functions inputs/outputs *) 
@@ -79,7 +85,7 @@ and rel = {
   rel_kind : rel_kind;
   rel_clocks : clk list; (* Must not be empty *)
 }
-and rel_kind = EqualClocks | EclusiveClocks | LowerOrEqualClocks
+and rel_kind = EqualClocks | ExclusiveClocks | LowerOrEqualClocks
 
 (* Partition of the system *)
 and partition = {
@@ -91,7 +97,7 @@ and partition = {
 and block = {
   block_index : int;
   block_id : lopht_id option;
-  block_clk : clk;
+  mutable block_clk : clk;
   mutable block_inputs : input_port list;
   mutable block_outputs : output_port list;
   block_function : block_function;

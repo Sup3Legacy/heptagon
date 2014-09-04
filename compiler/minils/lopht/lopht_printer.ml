@@ -1,9 +1,19 @@
+(*******************************************************************************
+ * Fiabilité et Sûreté de Fonctionnement
+ * Copyright (c) 2013, 2014 Institut de Recherche Technologique SystemX
+ * All rights reserved.
+ *******************************************************************************)
+
 open Lopht_input
 
 exception Not_implemented
 
 
-let print_list f = Pp_tools.print_list f "" " " ""
+let print_list f fmt = function
+  | [] -> ()
+  | x :: l ->
+      f fmt x ;
+      List.iter (Format.fprintf fmt " %a" f) l
 
 let print_id = Format.pp_print_string
 
@@ -15,10 +25,15 @@ let print_comment (fmt : Format.formatter) (comment : string) =
 
 let pretty_print_head1 (fmt : Format.formatter) (head : string) =
   let n = String.length head in
+  let s = String.make (n + 8) '=' in
+  Format.fprintf fmt "/*%s*/\n/**/  %s  /**/\n/*%s*/" s head s
+
+let pretty_print_head2 (fmt : Format.formatter) (head : string) =
+  let n = String.length head in
   let s = String.make (n + 8) '-' in
   Format.fprintf fmt "\n\n/*%s*/\n/**/  %s  /**/\n/*%s*/" s head s
 
-let pretty_print_head2 (fmt : Format.formatter) (head : string) =
+let pretty_print_head3 (fmt : Format.formatter) (head : string) =
   let n = String.length head in
   let s = String.make n '-' in
   Format.fprintf fmt "\n\n   %s   \n/* %s */\n\n" head s
@@ -77,7 +92,7 @@ let rec print_bool_exp fmt exp = match exp with
   | Greater (v,e)
   | GreaterEqual (v,e) ->
       let operator = match exp with
-        | Equal _ -> "-"
+        | Equal _ -> "="
         | NotEqual _ -> "#"
         | LowerEqual _ -> "<="
         | Lower _ -> "<"
@@ -204,7 +219,7 @@ let print_clk_def fmt clock_def =
 let print_rel_def fmt rel =
   let operator = match rel.rel_kind with
     | EqualClocks -> "="
-    | EclusiveClocks -> raise Not_implemented
+    | ExclusiveClocks -> raise Not_implemented
     | LowerOrEqualClocks -> "<="
   in
   Format.fprintf fmt "%a\t%s(%a)\n"
@@ -276,25 +291,25 @@ let print_block_def fmt block =
 let print_clocked_graph (fmt : Format.formatter) (cg : clocked_graph) =
   pretty_print_head1 fmt "ClockedGraph" ;
   (* Global definitions *)
-  pretty_print_head1 fmt "Global definitions" ;
-  pretty_print_head2 fmt "Type Table" ;
+  pretty_print_head2 fmt "Global definitions" ;
+  pretty_print_head3 fmt "Type Table" ;
   List.iter (print_type_def fmt) cg.types ;
-  pretty_print_head2 fmt "Function Table" ;
+  pretty_print_head3 fmt "Function Table" ;
   List.iter (print_fun_def fmt) cg.functions ;
-  pretty_print_head2 fmt "Const Table" ;
+  pretty_print_head3 fmt "Const Table" ;
   List.iter (print_const_def fmt) cg.constants ;
-  pretty_print_head2 fmt "Functional specification" ;
-  pretty_print_head2 fmt "Variable Table" ;
+  pretty_print_head3 fmt "Functional specification" ;
+  pretty_print_head3 fmt "Variable Table" ;
   List.iter (print_var_def fmt) cg.variables ;
-  pretty_print_head2 fmt "Clock Table" ;
+  pretty_print_head3 fmt "Clock Table" ;
   List.iter (print_clk_def fmt) cg.clocks ;
-  pretty_print_head2 fmt "Rel Table" ;
+  pretty_print_head3 fmt "Rel Table" ;
   List.iter (print_rel_def fmt) cg.relations ;
   if cg.partitions <> [] then (
-    pretty_print_head2 fmt "Partition Table" ;
+    pretty_print_head3 fmt "Partition Table" ;
     List.iter (print_partition_def fmt) cg.partitions) ;
-  pretty_print_head2 fmt "Block Table" ;
+  pretty_print_head3 fmt "Block Table" ;
   List.iter (print_block_def fmt) cg.blocks ;
   (* Architecture *)
-  pretty_print_head1 fmt "Architecture"
+  pretty_print_head2 fmt "Architecture"
 
