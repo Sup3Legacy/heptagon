@@ -208,6 +208,14 @@ let translate_eq henv genv { eq_lhs ; eq_rhs ; eq_base_ck } =
 
 (* Second pass, bind input parameters and clocks *)
 
+let rec evaluate_var_in_ck var_ident = function
+  | Clocks.Cbase -> None
+  | Clocks.Cvar _ -> raise Not_implemented
+  | Clocks.Con (base_ck, constructor_name, var_ident') ->
+      if var_ident' = var_ident
+      then Some constructor_name
+      else evaluate_var_in_ck var_ident base_ck
+
 let rec translate_clock genv ck =
   try
     ClEnv.find ck genv.clock_bindings  
@@ -241,7 +249,14 @@ and resolve_binding genv ck binding =
         resolve ck r binding
     | Merge (ident, l) ->
         let merge r (constructor_name, binding) =
-          resolve (Clocks.Con (ck, constructor_name, ident)) r binding
+          match evaluate_var_in_ck ident ck with
+            | Some constructor_name' ->
+                if constructor_name' = constructor_name then
+                  resolve ck r binding
+                else
+                  r
+            | None ->
+                resolve (Clocks.Con (ck, constructor_name, ident)) r binding
         in
         List.fold_left merge r l 
     | Lopht_Variable var ->
