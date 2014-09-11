@@ -42,8 +42,9 @@ type hept_environment = {
 type variable_binding = Alias of Idents.var_ident | Merge of Idents.var_ident * (Names.constructor_name * variable_binding) list   | Lopht_Variable of variable
 
 type cg_environment = {
-  mutable function_bindings : func QualEnv.t;
   mutable type_bindings : ty TyEnv.t;
+  mutable constant_bindings : const QualEnv.t;
+  mutable function_bindings : func QualEnv.t;
   mutable clock_bindings : clk ClEnv.t;
   mutable variable_bindings : variable_binding VarEnv.t;
   mutable input_bindings : (block * Clocks.ck * variable_binding list) list;
@@ -68,6 +69,20 @@ let add_clock cg clk_desc clk_dependencies =
   in
   cg.clocks <- gclock :: cg.clocks;
   gclock
+
+let add_constant cg cst_id cst_desc =
+  let cst_index = match cg.constants with
+    | { cst_index } :: _ -> cst_index + 1
+    | [] -> 0
+  in
+  let gconst = {
+    cst_index;
+    cst_id;
+    cst_desc;
+  }
+  in
+  cg.constants <- gconst :: cg.constants;
+  gconst
 
 let add_function cg fun_id fun_inputs fun_outputs =
   let fun_index = match cg.functions with
@@ -124,16 +139,60 @@ let add_variable cg var_type port_id gblock =
 
 (* First pass, don't bind input parameters nor clocks *)
 
+let build_block genv ck block_fun input_bindings fun_outputs =
+  let block_clock = genv.primitive_clock in
+  let gblock = add_block genv.cg block_clock block_fun in
+  let bind_output (port_id,var_type) =
+    let gvar = add_variable genv.cg var_type port_id gblock
+    in Lopht_Variable gvar, {
+      output_port_name = port_id;
+      output_port_var = gvar;
+    }
+  in
+  let targets, block_outputs = List.split (List.map bind_output fun_outputs) in 
+  gblock.block_outputs <- block_outputs;
+  genv.input_bindings <- (gblock, ck, input_bindings) :: genv.input_bindings;
+  targets
+
+
 let translate_ty henv genv ty =
   try
     TyEnv.find ty genv.type_bindings
   with
     Not_found -> raise Not_implemented
 
-let rec translate_extvalue henv genv { w_desc } =
-  match w_desc with
-  | Wconst static_exp -> raise Not_implemented
-  (* VarEnv.add dest env.variable_bindings *)
+let translate_static_exp henv genv static_exp =
+  match static_exp.Types.se_desc with
+  | Types.Svar const_name ->
+      let const = try
+        QualEnv.find const_name genv.constant_bindings
+      with Not_found ->
+        let gconst = add_constant genv.cg (qualname_to_lopht_id const_name) ExternalConst in
+        genv.constant_bindings <- QualEnv.add const_name gconst genv.constant_bindings ;
+        gconst
+      in
+        NamedConst const
+  | Types.Sint i -> Integer i
+  | Types.Sfloat f -> Float f
+  | Types.Sbool b -> Boolean b
+  | Types.Sstring s -> String s
+  | Types.Sconstructor _e -> raise Not_implemented
+  | Types.Sfield _field_name -> raise Not_implemented 
+  | Types.Stuple _l -> raise Not_implemented
+  | Types.Sarray_power (_, _) 
+  | Types.Sarray _
+  | Types.Srecord _ -> raise Not_implemented
+  | Types.Sop (fun_name, parameters) -> raise Not_implemented
+
+let rec translate_extvalue henv genv extvalue =
+  match extvalue.w_desc with
+  | Wconst static_exp ->
+      let gconst = translate_static_exp henv genv static_exp in
+      let block_fun = ConstBlock gconst  in
+      begin match build_block genv extvalue.w_ck block_fun [] [("c", translate_ty henv genv extvalue.w_ty)] with
+        | [ b ] -> b
+        | _ -> assert false
+      end
   | Wvar var_ident -> Alias var_ident
   | Wfield (_extvalue, _field_name) -> raise Not_implemented (* Build a selector block *)
   | Wwhen (extvalue, _constructor_name, _var_ident) -> translate_extvalue henv genv extvalue 
@@ -160,23 +219,12 @@ let translate_call henv genv ck call_name fun_name static_params inputs =
     raise Not_implemented;
   let hnode = QualEnv.find fun_name henv.hnodes in
   let gfunc = translate_node henv genv hnode in
-  let block_fun = FunBlock gfunc
-  and block_clock = List.hd genv.cg.clocks in
-  let gblock = add_block genv.cg block_clock block_fun in
-  let bind_output (port_id,var_type) =
-    let gvar = add_variable genv.cg var_type port_id gblock
-    in Lopht_Variable gvar, {
-      output_port_name = port_id;
-      output_port_var = gvar;
-    }
-  in
-  let targets, block_outputs = List.split (List.map bind_output gfunc.fun_outputs) in 
-  gblock.block_outputs <- block_outputs;
+  let block_fun = FunBlock gfunc in
   let input_bindings = List.map (translate_extvalue henv genv) inputs in
-  genv.input_bindings <- (gblock, ck, input_bindings) :: genv.input_bindings;
-  targets
+  build_block genv ck block_fun input_bindings gfunc.fun_outputs
 
-let translate_exp henv genv exp =
+
+let rec translate_exp henv genv exp =
   match exp.e_desc with
   | Eextvalue extvalue -> [ translate_extvalue henv genv extvalue ]
   | Efby (Some static_exp, extvalue) -> raise Not_implemented (* fby *)
@@ -189,7 +237,7 @@ let translate_exp henv genv exp =
         | _ -> raise Not_implemented
       end
   | Eapp (app, extvalue_list, Some _var_ident) -> raise Not_implemented
-  | Ewhen (exp, _constructor_name, _var_ident) -> raise Not_implemented
+  | Ewhen (exp, _constructor_name, _var_ident) -> translate_exp henv genv exp
   | Emerge (var_ident, l) -> [ Merge (var_ident, List.map (fun (n, e) -> n, translate_extvalue henv genv e) l) ]     
   | Estruct _ -> raise Not_implemented
   | Eiterator (_, _, _, _, _, _) -> raise Not_implemented
@@ -310,9 +358,10 @@ let build_environement { p_desc } =
   let type_list = [ (qualname_int, ty_int) ; (qualname_bool, ty_bool) ] in
   let genv = {
     type_bindings = List.fold_left (fun env (n, t) -> TyEnv.add (Types.Tid n) t env) TyEnv.empty type_list;
+    constant_bindings = QualEnv.empty;
+    function_bindings = QualEnv.empty;
     clock_bindings = ClEnv.empty;
     variable_bindings = VarEnv.empty;
-    function_bindings = QualEnv.empty;
     input_bindings = [];
     primitive_clock;
     cg = {
