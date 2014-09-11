@@ -26,6 +26,7 @@ let name_to_lopht_id = C.cname_of_name
 let ident_to_lopht_id ident = C.cname_of_name (Idents.name ident)
 
 
+module StringSet = Set.Make (struct type t = string let compare = Pervasives.compare end)
 module TyEnv = Map.Make (struct type t = Types.ty let compare = Pervasives.compare end)
 module ClEnv = Map.Make (struct type t = Clocks.ck let compare = Pervasives.compare end)
 module QualEnv = Names.QualEnv
@@ -197,8 +198,8 @@ let translate_eq henv genv { eq_lhs ; eq_rhs ; eq_base_ck } =
   let sources = translate_exp henv genv eq_rhs in
   let destinations = match eq_lhs with
     | Evarpat var_ident -> [ var_ident ]
-    | Etuplepat [] -> []
-    | Etuplepat _pat_list -> raise Not_implemented
+    | Etuplepat l ->
+        List.map (function Evarpat var_ident -> var_ident | Etuplepat _ -> raise Not_implemented) l
   in
   let add_binding dest source =
     genv.variable_bindings <- VarEnv.add dest source genv.variable_bindings
