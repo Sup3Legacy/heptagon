@@ -99,14 +99,14 @@ let add_function cg fun_id fun_inputs fun_outputs =
   cg.functions <- gfunc :: cg.functions;
   gfunc
 
-let add_block cg block_clk block_function =
+let add_block cg block_clk block_id block_function =
   let block_index = match cg.blocks with
     | { block_index } :: _ -> block_index + 1
     | [] -> 0
   in
   let gblock = {
     block_index;
-    block_id = None;
+    block_id;
     block_clk;
     block_inputs = [];
     block_outputs = [];
@@ -139,9 +139,9 @@ let add_variable cg var_type port_id gblock =
 
 (* First pass, don't bind input parameters nor clocks *)
 
-let build_block genv ck block_fun input_bindings fun_outputs =
+let build_block genv ck block_id block_fun input_bindings fun_outputs =
   let block_clock = genv.primitive_clock in
-  let gblock = add_block genv.cg block_clock block_fun in
+  let gblock = add_block genv.cg block_clock block_id block_fun in
   let bind_output (port_id,var_type) =
     let gvar = add_variable genv.cg var_type port_id gblock
     in Lopht_Variable gvar, {
@@ -188,8 +188,13 @@ let rec translate_extvalue henv genv extvalue =
   match extvalue.w_desc with
   | Wconst static_exp ->
       let gconst = translate_static_exp henv genv static_exp in
-      let block_fun = ConstBlock gconst  in
-      begin match build_block genv extvalue.w_ck block_fun [] [("c", translate_ty henv genv extvalue.w_ty)] with
+      let block_id = match gconst with
+        | NamedConst const -> Some const.cst_id
+        | _ -> None
+      and block_fun = ConstBlock gconst
+      and block_inputs = []
+      and block_outputs = [("c", translate_ty henv genv extvalue.w_ty)] in
+      begin match build_block genv extvalue.w_ck block_id block_fun block_inputs block_outputs  with
         | [ b ] -> b
         | _ -> assert false
       end
@@ -219,9 +224,11 @@ let translate_call henv genv ck call_name fun_name static_params inputs =
     raise Not_implemented;
   let hnode = QualEnv.find fun_name henv.hnodes in
   let gfunc = translate_node henv genv hnode in
-  let block_fun = FunBlock gfunc in
-  let input_bindings = List.map (translate_extvalue henv genv) inputs in
-  build_block genv ck block_fun input_bindings gfunc.fun_outputs
+  let block_fun = FunBlock gfunc
+  and block_id = Some gfunc.fun_id 
+  and block_inputs = List.map (translate_extvalue henv genv) inputs
+  and block_outputs =gfunc.fun_outputs in
+  build_block genv ck block_id block_fun block_inputs block_outputs 
 
 
 let rec translate_exp henv genv exp =
