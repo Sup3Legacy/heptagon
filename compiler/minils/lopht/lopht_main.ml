@@ -280,21 +280,25 @@ let rec translate_clock genv ck =
       | Clocks.Cbase -> genv.primitive_clock
       | Clocks.Cvar _ -> raise Not_implemented
       | Clocks.Con (base_ck, constructor_name, var_ident) ->
-          let base = translate_clock genv base_ck in
+          (* Find the binding for the tested variable(s) *)
           let binding = VarEnv.find var_ident genv.variable_bindings in
-          let var = match resolve_binding genv base_ck binding with
-            | [ (var, _) ] -> var 
-            | _ -> raise Not_implemented
-          in 
+          let vars = resolve_binding genv base_ck binding in (* It can be bound to several variables, depending on some disjoint clocks *)
+          (* Test the value against a constructor *)
           let value = match constructor_name with 
             | { Names.qual = Names.Pervasives; name = "false" } -> Boolean false
             | { Names.qual = Names.Pervasives; name = "true" } -> Boolean true
             | _ -> raise Not_implemented
           in 
-          let clk_desc = Derived (Test (BaseClock base, Equal (var, Const value)))
-          and clk_dependencies = [ (var,base) ]
+          let build_clk_term var clock =
+            Test (BaseClock clock, Equal (var, Const value))
           in
-          let gclock = add_clock genv.cg clk_desc clk_dependencies in
+          let rec build_clk_exp = function
+            | [] -> assert false
+            | [(var,clock)] -> build_clk_term var clock
+            | (var,clock) :: l -> Union (build_clk_term var clock, build_clk_exp l)
+          in
+          let clk_desc = Derived (build_clk_exp vars) in
+          let gclock = add_clock genv.cg clk_desc vars in
           genv.clock_bindings <- ClEnv.add ck gclock genv.clock_bindings;
           gclock
 
