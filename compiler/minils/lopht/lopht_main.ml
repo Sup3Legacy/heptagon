@@ -194,7 +194,7 @@ let rec translate_extvalue henv genv extvalue =
       and block_fun = ConstBlock gconst
       and block_inputs = []
       and block_outputs = [("c", translate_ty henv genv extvalue.w_ty)] in
-      begin match build_block genv extvalue.w_ck block_id block_fun block_inputs block_outputs  with
+      begin match build_block genv extvalue.w_ck block_id block_fun block_inputs block_outputs with
         | [ b ] -> b
         | _ -> assert false
       end
@@ -219,7 +219,14 @@ let translate_node henv genv hnode =
     genv.function_bindings <- QualEnv.add hnode.n_name gfunc genv.function_bindings;
     gfunc
 
-let translate_call henv genv ck call_name fun_name static_params inputs =
+let translate_app henv genv ck app inputs =
+  let call_name = app.a_id
+  and static_params = app.a_params
+  and fun_name = match app.a_op with
+    | Efun fun_name
+    | Enode fun_name -> fun_name
+    | _ -> raise Not_implemented
+  in
   if static_params <> [] then
     raise Not_implemented;
   let hnode = QualEnv.find fun_name henv.hnodes in
@@ -227,22 +234,34 @@ let translate_call henv genv ck call_name fun_name static_params inputs =
   let block_fun = FunBlock gfunc
   and block_id = Some gfunc.fun_id 
   and block_inputs = List.map (translate_extvalue henv genv) inputs
-  and block_outputs =gfunc.fun_outputs in
-  build_block genv ck block_id block_fun block_inputs block_outputs 
+  and block_outputs = gfunc.fun_outputs in
+  build_block genv ck block_id block_fun block_inputs block_outputs
 
+let translate_fby henv genv ck init extvalue =
+  let delay_ty = translate_ty henv genv extvalue.w_ty in
+  let init_const = match init with
+    | Some static_exp ->  translate_static_exp henv genv static_exp
+    | None -> raise Not_implemented
+  in
+  let gdelay = {
+    delay_ty;
+    delay_depth = 1;
+    delay_init = [ init_const ];
+  }
+  in
+  let block_fun = DelayBlock gdelay
+  and block_id = None
+  and block_inputs = [translate_extvalue henv genv extvalue]
+  and block_outputs = [("o", delay_ty)]  
+  in
+  build_block genv ck block_id block_fun block_inputs block_outputs
 
 let rec translate_exp henv genv exp =
+  let ck = exp.e_level_ck in
   match exp.e_desc with
   | Eextvalue extvalue -> [ translate_extvalue henv genv extvalue ]
-  | Efby (Some static_exp, extvalue) -> raise Not_implemented (* fby *)
-  | Efby (None, extvalue) -> raise Not_implemented (* pre *)
-  | Eapp (app, extvalue_list, None) ->
-      begin match app.a_op with
-        | Eequal -> raise Not_implemented
-        | Efun fun_name
-        | Enode fun_name -> translate_call henv genv exp.e_level_ck app.a_id fun_name app.a_params extvalue_list
-        | _ -> raise Not_implemented
-      end
+  | Efby (static_exp_opt, extvalue) -> translate_fby henv genv ck static_exp_opt extvalue
+  | Eapp (app, extvalue_list, None) -> translate_app henv genv ck app extvalue_list
   | Eapp (app, extvalue_list, Some _var_ident) -> raise Not_implemented
   | Ewhen (exp, _constructor_name, _var_ident) -> translate_exp henv genv exp
   | Emerge (var_ident, l) -> [ Merge (var_ident, List.map (fun (n, e) -> n, translate_extvalue henv genv e) l) ]     
@@ -333,7 +352,7 @@ let bind_input genv ck (input_port_name, _ty) binding =
 
 let bind_inputs genv (block, ck, bindings) =
   let fun_inputs = match block.block_function with
-    | DelayBlock _delay -> raise Not_implemented
+    | DelayBlock delay -> [("i", delay.delay_ty)]
     | FunBlock func -> func.fun_inputs
     | ConstBlock const_exp -> []
   in
