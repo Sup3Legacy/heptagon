@@ -13,7 +13,7 @@
    generate dummy symbols (function, variable, etc. since these table must
    not be empty) or raise exceptions.
    4/ check int, float and string coding
-   5/ check clock for function call and clock dependencies *)
+   *)
 
 
 open Minils
@@ -28,29 +28,68 @@ let ident_to_lopht_id ident = C.cname_of_name (Idents.name ident)
 
 module StringSet = Set.Make (struct type t = string let compare = Pervasives.compare end)
 module TyEnv = Map.Make (struct type t = Types.ty let compare = Pervasives.compare end)
-module ClEnv = Map.Make (struct type t = Clocks.ck let compare = Pervasives.compare end)
 module QualEnv = Names.QualEnv
 module VarEnv = Idents.Env
 
-type hept_environment = {
-  mutable hnodes : node_dec QualEnv.t;
-  mutable hconsts : const_dec QualEnv.t;
-  mutable htypes : type_dec QualEnv.t;
-  mutable hvars : var_dec VarEnv.t;
+(* Intermediate representation of variables between the first and the second pass *)
+type intermediate_variable = {
+  iv_ident : Idents.var_ident;
+  mutable iv_binding : variable_binding;
 }
+and variable_binding =
+  | Unbound
+  | Alias of intermediate_variable
+  | Merge of intermediate_variable * (Names.constructor_name * variable_binding) list
+  | Lopht_Variable of variable
 
-type variable_binding = Alias of Idents.var_ident | Merge of Idents.var_ident * (Names.constructor_name * variable_binding) list   | Lopht_Variable of variable
+(* Local environments associating an intermediate variable to each heptagon local variable and input and output parameter *)
+type local_environment = intermediate_variable VarEnv.t
+
+(* Intermediate representation of clocks *)
+type clock_binding =
+  | PrimitiveClock
+  | DerivedClock of clock_binding * Names.constructor_name * intermediate_variable
+
+
+module ClEnv = Map.Make (struct
+    type t = clk_exp
+    let lex_compare f1 f2 (a1,a2) (b1,b2) =
+      let c = f1 a1 b1 in
+      if c = 0 then f2 a2 b2 else c
+  
+    let compare_var v1 v2 =
+      v2.var_index - v1.var_index 
+   
+    let compare_clk c1 c2 =
+      c2.clk_index - c1.clk_index 
+   
+    let rec compare e1 e2 = match e1, e2 with
+      | BaseClock c1, BaseClock c2 -> compare_clk c1 c2
+      | BaseClock _, _ -> 1
+      | _, BaseClock _ -> -1
+      | Union (e1,f1), Union (e2,f2) -> lex_compare compare compare (e1,f1) (e2,f2)
+      | Union _, _ -> 1
+      | _, Union _ -> -1
+      | Test (c1, Equal (v1,b1)), Test (c2, Equal (v2,b2)) -> lex_compare compare (lex_compare compare_var Pervasives.compare) (c1, (v1,b1)) (c2, (v2,b2)) 
+      | _, _ -> assert false (* Any other case is not used in the current implementation *)
+  end)
+
 
 type cg_environment = {
+  (* Association of Heptagon type expression and symbols to lopht equivalent *)
   mutable type_bindings : ty TyEnv.t;
   mutable constant_bindings : const QualEnv.t;
   mutable function_bindings : func QualEnv.t;
-  mutable clock_bindings : clk ClEnv.t;
-  mutable variable_bindings : variable_binding VarEnv.t;
-  mutable input_bindings : (block * Clocks.ck * variable_binding list) list;
+  (* Bindings produced at the end of the first pass which must be resolved *)
+  mutable input_bindings : (block * clock_binding * variable_binding list) list;
+  (* Associate lopht clock expressions to lopht clocks to detects double definitions *)
+  mutable clock_definitions : clk ClEnv.t;
+  (* Primitive Lopht Clock *) 
   primitive_clock : clk;
-  cg : clocked_graph; (* with all lists reversed *)
+  (* Clocked graph being produced (with all lists reversed) *)
+  cg : clocked_graph; 
 }
+
 
 
 (* Clocked Graph building *)
@@ -139,7 +178,7 @@ let add_variable cg var_type port_id gblock =
 
 (* First pass, don't bind input parameters nor clocks *)
 
-let build_block genv ck block_id block_fun input_bindings fun_outputs =
+let build_block genv clkb block_id block_fun input_bindings fun_outputs =
   let block_clock = genv.primitive_clock in
   let gblock = add_block genv.cg block_clock block_id block_fun in
   let bind_output (port_id,var_type) =
@@ -151,17 +190,17 @@ let build_block genv ck block_id block_fun input_bindings fun_outputs =
   in
   let targets, block_outputs = List.split (List.map bind_output fun_outputs) in 
   gblock.block_outputs <- block_outputs;
-  genv.input_bindings <- (gblock, ck, input_bindings) :: genv.input_bindings;
+  genv.input_bindings <- (gblock, clkb, input_bindings) :: genv.input_bindings;
   targets
 
 
-let translate_ty henv genv ty =
+let translate_ty genv ty =
   try
     TyEnv.find ty genv.type_bindings
   with
     Not_found -> raise Not_implemented
 
-let translate_static_exp henv genv static_exp =
+let translate_static_exp genv static_exp =
   match static_exp.Types.se_desc with
   | Types.Svar const_name ->
       let const = try
@@ -184,63 +223,65 @@ let translate_static_exp henv genv static_exp =
   | Types.Srecord _ -> raise Not_implemented
   | Types.Sop (fun_name, parameters) -> raise Not_implemented
 
-let rec translate_extvalue henv genv extvalue =
+let translate_const genv lenv static_exp =
+  let gconst = translate_static_exp genv static_exp in
+  let block_id = match gconst with
+    | NamedConst const -> Some const.cst_id
+    | _ -> None
+  and block_fun = ConstBlock gconst
+  and block_inputs = []
+  and block_outputs = [("c", translate_ty genv static_exp.Types.se_ty)]
+  in
+  begin match build_block genv PrimitiveClock block_id block_fun block_inputs block_outputs with
+    | [ b ] -> b
+    | _ -> assert false (* Only one output port is specified *)
+  end
+
+let translate_var lenv var_ident =
+   VarEnv.find var_ident lenv
+
+let rec translate_ck lenv = function
+  | Clocks.Cbase -> PrimitiveClock
+  | Clocks.Cvar _ -> raise Not_implemented
+  | Clocks.Con (base_ck, constructor_name, var_ident) ->
+      DerivedClock (translate_ck lenv base_ck, constructor_name, translate_var lenv var_ident)
+
+let rec translate_extvalue genv lenv extvalue =
   match extvalue.w_desc with
-  | Wconst static_exp ->
-      let gconst = translate_static_exp henv genv static_exp in
-      let block_id = match gconst with
-        | NamedConst const -> Some const.cst_id
-        | _ -> None
-      and block_fun = ConstBlock gconst
-      and block_inputs = []
-      and block_outputs = [("c", translate_ty henv genv extvalue.w_ty)] in
-      begin match build_block genv extvalue.w_ck block_id block_fun block_inputs block_outputs with
-        | [ b ] -> b
-        | _ -> assert false
-      end
-  | Wvar var_ident -> Alias var_ident
-  | Wfield (_extvalue, _field_name) -> raise Not_implemented (* Build a selector block *)
-  | Wwhen (extvalue, _constructor_name, _var_ident) -> translate_extvalue henv genv extvalue 
-  | Wreinit (_extvalue1, _extvalue2) -> raise Not_implemented
+    | Wconst static_exp -> translate_const genv lenv static_exp
+    | Wvar var_ident -> Alias (translate_var lenv var_ident )
+    | Wfield (_extvalue, _field_name) -> raise Not_implemented (* Build a selector block *)
+    | Wwhen (extvalue, _constructor_name, _var_ident) -> translate_extvalue genv lenv extvalue 
+    | Wreinit (_extvalue1, _extvalue2) -> raise Not_implemented
 
-let translate_parameter henv genv param =
-  if param.v_linearity <> Linearity.Ltop || param.v_clock <> Clocks.Cbase then
+let translate_arg genv param =
+  let open Signature in
+  if param.a_linearity <> Linearity.Ltop || param.a_clock <> Cbase then
     raise Not_implemented;
-  ident_to_lopht_id param.v_ident, translate_ty henv genv param.v_type
+  let name = match param.a_name with
+    | Some name -> name
+    | None -> assert false
+  in
+  name_to_lopht_id name, translate_ty genv param.a_type
 
-let translate_node henv genv hnode =
+let translate_function genv name hnode =
   try
-    QualEnv.find hnode.n_name genv.function_bindings
+    QualEnv.find name genv.function_bindings
   with Not_found ->
-    let fun_id = qualname_to_lopht_id hnode.n_name
-    and fun_inputs = List.map (translate_parameter henv genv) hnode.n_input
-    and fun_outputs = List.map (translate_parameter henv genv) hnode.n_output in
+    let open Signature in
+    let fun_id = qualname_to_lopht_id name
+    and fun_inputs = List.map (translate_arg genv) hnode.node_inputs
+    and fun_outputs = List.map (translate_arg genv) hnode.node_outputs in
     let gfunc = add_function genv.cg fun_id fun_inputs fun_outputs in
-    genv.function_bindings <- QualEnv.add hnode.n_name gfunc genv.function_bindings;
+    genv.function_bindings <- QualEnv.add name gfunc genv.function_bindings;
     gfunc
 
-let translate_app henv genv ck app inputs =
-  let call_name = app.a_id
-  and static_params = app.a_params
-  and fun_name = match app.a_op with
-    | Efun fun_name
-    | Enode fun_name -> fun_name
-    | _ -> raise Not_implemented
-  in
-  if static_params <> [] then
-    raise Not_implemented;
-  let hnode = QualEnv.find fun_name henv.hnodes in
-  let gfunc = translate_node henv genv hnode in
-  let block_fun = FunBlock gfunc
-  and block_id = Some gfunc.fun_id 
-  and block_inputs = List.map (translate_extvalue henv genv) inputs
-  and block_outputs = gfunc.fun_outputs in
-  build_block genv ck block_id block_fun block_inputs block_outputs
 
-let translate_fby henv genv ck init extvalue =
-  let delay_ty = translate_ty henv genv extvalue.w_ty in
+
+let translate_fby genv lenv ck init extvalue =
+  let delay_ty = translate_ty genv extvalue.w_ty in
   let init_const = match init with
-    | Some static_exp ->  translate_static_exp henv genv static_exp
+    | Some static_exp ->  translate_static_exp genv static_exp
     | None -> raise Not_implemented
   in
   let gdelay = {
@@ -251,97 +292,143 @@ let translate_fby henv genv ck init extvalue =
   in
   let block_fun = DelayBlock gdelay
   and block_id = None
-  and block_inputs = [translate_extvalue henv genv extvalue]
-  and block_outputs = [("o", delay_ty)]  
+  and block_inputs = [translate_extvalue genv lenv extvalue]
+  and block_outputs = [("o", delay_ty)]
+  and clkb = translate_ck lenv ck
   in
-  build_block genv ck block_id block_fun block_inputs block_outputs
+  build_block genv clkb block_id block_fun block_inputs block_outputs
 
-let rec translate_exp henv genv exp =
-  let ck = exp.e_level_ck in
+let translate_merge genv lenv var_ident l =
+  let var = translate_var lenv var_ident
+  and l' = List.map (fun (n, e) -> n, translate_extvalue genv lenv e) l
+  in [ Merge (var, l') ]
+
+let rec translate_app genv lenv ck app inputs =
+  let call_name = app.a_id
+  and static_params = app.a_params
+  and fun_name = match app.a_op with
+    | Efun fun_name
+    | Enode fun_name -> fun_name
+    | _ -> raise Not_implemented
+  and input_bindings = List.map (translate_extvalue genv lenv) inputs
+  in
+  if app.a_inlined then begin
+    let hnode = Callgraph.node_by_longname fun_name in
+    translate_node genv hnode input_bindings
+  end else begin
+    if static_params <> [] then
+      raise Not_implemented;
+    let hnode = Modules.find_value fun_name in
+    let gfunc = translate_function genv fun_name hnode in
+    let block_fun = FunBlock gfunc
+    and block_id = Some gfunc.fun_id 
+    and block_inputs = input_bindings
+    and block_outputs = gfunc.fun_outputs
+    and clkb = translate_ck lenv ck
+    in
+    build_block genv clkb block_id block_fun block_inputs block_outputs
+  end
+
+and translate_exp genv lenv exp =
   match exp.e_desc with
-  | Eextvalue extvalue -> [ translate_extvalue henv genv extvalue ]
-  | Efby (static_exp_opt, extvalue) -> translate_fby henv genv ck static_exp_opt extvalue
-  | Eapp (app, extvalue_list, None) -> translate_app henv genv ck app extvalue_list
+  | Eextvalue extvalue -> [ translate_extvalue genv lenv extvalue ]
+  | Efby (static_exp_opt, extvalue) -> translate_fby genv lenv exp.e_level_ck static_exp_opt extvalue
+  | Eapp (app, extvalue_list, None) -> translate_app genv lenv exp.e_level_ck app extvalue_list
   | Eapp (app, extvalue_list, Some _var_ident) -> raise Not_implemented
-  | Ewhen (exp, _constructor_name, _var_ident) -> translate_exp henv genv exp
-  | Emerge (var_ident, l) -> [ Merge (var_ident, List.map (fun (n, e) -> n, translate_extvalue henv genv e) l) ]     
+  | Ewhen (exp, _constructor_name, _var_ident) -> translate_exp genv lenv exp
+  | Emerge (var_ident, l) -> translate_merge genv lenv var_ident l
   | Estruct _ -> raise Not_implemented
   | Eiterator (_, _, _, _, _, _) -> raise Not_implemented
 
-let translate_eq henv genv { eq_lhs ; eq_rhs ; eq_base_ck } =
-  let sources = translate_exp henv genv eq_rhs in
-  let destinations = match eq_lhs with
+and translate_eq genv lenv eq =
+  let destinations = match eq.eq_lhs with
     | Evarpat var_ident -> [ var_ident ]
     | Etuplepat l ->
         List.map (function Evarpat var_ident -> var_ident | Etuplepat _ -> raise Not_implemented) l
+  and sources = translate_exp genv lenv eq.eq_rhs
   in
   let add_binding dest source =
-    genv.variable_bindings <- VarEnv.add dest source genv.variable_bindings
+    (VarEnv.find dest lenv).iv_binding <- source
   in
   List.iter2 add_binding destinations sources 
+
+and translate_node genv hnode input_bindings =
+  let add_var_to_lenv binding var_dec lenv =
+    let iv_ident = var_dec.v_ident in
+    VarEnv.add iv_ident { iv_ident; iv_binding = binding } lenv
+  in
+  let extract_var_from_lenv lenv var_dec =
+    (VarEnv.find var_dec.v_ident lenv).iv_binding
+  in
+  let lenv = VarEnv.empty in
+  let lenv = List.fold_right2 add_var_to_lenv input_bindings hnode.n_input lenv in 
+  let lenv = List.fold_right (add_var_to_lenv Unbound) hnode.n_local lenv in
+  let lenv = List.fold_right (add_var_to_lenv Unbound) hnode.n_output lenv in
+  List.iter (translate_eq genv lenv) hnode.n_equs ;
+  List.map (extract_var_from_lenv lenv) hnode.n_output
+  
 
 
 (* Second pass, bind input parameters and clocks *)
 
-let rec evaluate_var_in_ck var_ident = function
-  | Clocks.Cbase -> None
-  | Clocks.Cvar _ -> raise Not_implemented
-  | Clocks.Con (base_ck, constructor_name, var_ident') ->
-      if var_ident' = var_ident
+let rec evaluate_ivar_in_cklb ivar = function
+  | PrimitiveClock -> None
+  | DerivedClock (base_clkb, constructor_name, ivar') ->
+      if ivar' == ivar
       then Some constructor_name
-      else evaluate_var_in_ck var_ident base_ck
+      else evaluate_ivar_in_cklb ivar base_clkb
 
-let rec translate_clock genv ck =
-  try
-    ClEnv.find ck genv.clock_bindings  
-  with Not_found ->
-    match ck with 
-      | Clocks.Cbase -> genv.primitive_clock
-      | Clocks.Cvar _ -> raise Not_implemented
-      | Clocks.Con (base_ck, constructor_name, var_ident) ->
-          (* Find the binding for the tested variable(s) *)
-          let binding = VarEnv.find var_ident genv.variable_bindings in
-          let vars = resolve_binding genv base_ck binding in (* It can be bound to several variables, depending on some disjoint clocks *)
-          (* Test the value against a constructor *)
-          let value = match constructor_name with 
-            | { Names.qual = Names.Pervasives; name = "false" } -> Boolean false
-            | { Names.qual = Names.Pervasives; name = "true" } -> Boolean true
-            | _ -> raise Not_implemented
-          in 
-          let build_clk_term var clock =
-            Test (BaseClock clock, Equal (var, Const value))
-          in
-          let rec build_clk_exp = function
-            | [] -> assert false
-            | [(var,clock)] -> build_clk_term var clock
-            | (var,clock) :: l -> Union (build_clk_term var clock, build_clk_exp l)
-          in
-          let clk_desc = Derived (build_clk_exp vars) in
-          let gclock = add_clock genv.cg clk_desc vars in
-          genv.clock_bindings <- ClEnv.add ck gclock genv.clock_bindings;
+let rec resolve_clock genv clkb =
+  match clkb with 
+    | PrimitiveClock -> genv.primitive_clock
+    | DerivedClock (base_clkb, constructor_name, ivar) ->
+        (* Find the tested variable bindings *)
+        let clk_dependencies = resolve_binding genv base_clkb ivar.iv_binding in
+        (* Test the value against a constructor *)
+        let value = match constructor_name with 
+          | { Names.qual = Names.Pervasives; name = "false" } -> Boolean false
+          | { Names.qual = Names.Pervasives; name = "true" } -> Boolean true
+          | _ -> raise Not_implemented
+        in
+        (* Build the clock expression *)
+        let build_clk_term var clock =
+          Test (BaseClock clock, Equal (var, Const value))
+        in
+        let rec build_clk_exp = function
+          | [] -> assert false
+          | [(var,clock)] -> build_clk_term var clock
+          | (var,clock) :: l -> Union (build_clk_term var clock, build_clk_exp l)
+        in
+        let clk_exp = build_clk_exp clk_dependencies in
+        (* Look if this clk desc is already defined, or build a new one *)
+        try
+          ClEnv.find clk_exp genv.clock_definitions
+        with Not_found ->
+          let gclock = add_clock genv.cg (Derived clk_exp) clk_dependencies in
+          genv.clock_definitions <- ClEnv.add clk_exp gclock genv.clock_definitions;
           gclock
 
-and resolve_binding genv ck binding =
-  let rec resolve ck r = function
-    | Alias ident ->
-        let binding = VarEnv.find ident genv.variable_bindings in
-        resolve ck r binding
-    | Merge (ident, l) ->
+and resolve_binding genv clkb binding =
+  let rec resolve clkb r = function
+    | Unbound -> assert false
+    | Alias (ivar) ->
+        resolve clkb r ivar.iv_binding
+    | Merge (ivar, l) ->
         let merge r (constructor_name, binding) =
-          match evaluate_var_in_ck ident ck with
+          match evaluate_ivar_in_cklb ivar clkb with
             | Some constructor_name' ->
                 if constructor_name' = constructor_name then
-                  resolve ck r binding
+                  resolve clkb r binding
                 else
                   r
             | None ->
-                resolve (Clocks.Con (ck, constructor_name, ident)) r binding
+                resolve (DerivedClock (clkb, constructor_name, ivar)) r binding
         in
         List.fold_left merge r l 
     | Lopht_Variable var ->
-        (var, translate_clock genv ck) :: r
+        (var, resolve_clock genv clkb) :: r
   in
-  resolve ck [] binding
+  resolve clkb [] binding
 
 
 let bind_input genv ck (input_port_name, _ty) binding =
@@ -350,49 +437,31 @@ let bind_input genv ck (input_port_name, _ty) binding =
     input_port_arcs;
   }
 
-let bind_inputs genv (block, ck, bindings) =
+let bind_inputs genv (block, clkb, bindings) =
   let fun_inputs = match block.block_function with
     | DelayBlock delay -> [("i", delay.delay_ty)]
     | FunBlock func -> func.fun_inputs
     | ConstBlock const_exp -> []
   in
-  block.block_clk <- translate_clock genv ck;
-  block.block_inputs <- List.map2 (bind_input genv ck) fun_inputs bindings
-
-
-(* Target node handling *)
-
-let translate_node henv genv hnode =
-  if hnode.n_input <> [] then
-    begin
-      Format.eprintf "The top-level node must not have inputs.@.";
-      raise Errors.Error
-    end;
-  let add_var_to_env var_dec =
-    henv.hvars <- VarEnv.add var_dec.v_ident var_dec henv.hvars
-  in
-  List.iter add_var_to_env hnode.n_output;
-  List.iter add_var_to_env hnode.n_local;
-  List.iter (translate_eq henv genv) hnode.n_equs;
-  List.iter (bind_inputs genv) genv.input_bindings
+  block.block_clk <- resolve_clock genv clkb;
+  block.block_inputs <- List.map2 (bind_input genv clkb) fun_inputs bindings
 
 
 (* Initial environment *) 
 
-let build_environement { p_desc } =
+let build_predef_genv () =
+  (* Predefined clocks and types *)
   let primitive_clock = { clk_index = 0 ; clk_id = None ; clk_desc = Primitive ; clk_dependencies = []}
-  and ty_int = { Lopht_input.ty_index = 0 ; ty_id = "int" ; ty_desc = Lopht_input.PredefinedType }
-  and ty_bool = { Lopht_input.ty_index = 1 ; ty_id = "bool" ; ty_desc = Lopht_input.PredefinedType }
-  and qualname_int = { Names.qual = Names.Pervasives ; name = "int" }
-  and qualname_bool = { Names.qual = Names.Pervasives ; name = "bool" } in
-  let type_list = [ (qualname_int, ty_int) ; (qualname_bool, ty_bool) ] in
-  let genv = {
+  and ty_bool = { Lopht_input.ty_index = 0 ; ty_id = "bool" ; ty_desc = Lopht_input.PredefinedType }
+  and ty_int = { Lopht_input.ty_index = 1 ; ty_id = "int" ; ty_desc = Lopht_input.PredefinedType }
+  and qualname_bool = { Names.qual = Names.Pervasives ; name = "bool" }
+  and qualname_int = { Names.qual = Names.Pervasives ; name = "int" } in
+  let type_list = [ (qualname_int, ty_int) ; (qualname_bool, ty_bool) ] in {
     type_bindings = List.fold_left (fun env (n, t) -> TyEnv.add (Types.Tid n) t env) TyEnv.empty type_list;
     constant_bindings = QualEnv.empty;
     function_bindings = QualEnv.empty;
-    clock_bindings = ClEnv.empty;
-    variable_bindings = VarEnv.empty;
     input_bindings = [];
+    clock_definitions = ClEnv.empty;
     primitive_clock;
     cg = {
       types = List.map snd type_list ;
@@ -405,19 +474,23 @@ let build_environement { p_desc } =
       blocks = [];
     };
   }
-  and henv = {
-    hnodes = QualEnv.empty;
-    hconsts = QualEnv.empty;
-    htypes = QualEnv.empty;
-    hvars = VarEnv.empty;
-  }
-  in let add_dec = function
-    | Pnode node_dec -> henv.hnodes <- QualEnv.add node_dec.n_name node_dec henv.hnodes
-    | Pconst const_dec -> henv.hconsts <- QualEnv.add const_dec.c_name const_dec henv.hconsts
-    | Ptype type_dec -> henv.htypes <- QualEnv.add type_dec.t_name type_dec henv.htypes
-  in
-  List.iter add_dec p_desc;
-  (henv, genv)
+
+
+(* Extraction of the clocked graph from environment *)
+ 
+let extract_cg genv = {
+  types = List.rev genv.cg.types ;
+  functions = List.rev genv.cg.functions ;
+  constants = List.rev genv.cg.constants ;
+  variables = List.rev genv.cg.variables ;
+  clocks = List.rev genv.cg.clocks ;
+  relations = List.rev genv.cg.relations ;
+  partitions = List.rev genv.cg.partitions ;
+  blocks = List.rev genv.cg.blocks ;
+}
+
+
+(* Find target node *)
 
 let find_target_node { p_desc } =
   let name = !Compiler_options.target_node in
@@ -438,29 +511,31 @@ let find_target_node { p_desc } =
   node
 
 
-(* Extraction of the clocked graph from environment *)
- 
-let extract_cg genv = {
-  types = List.rev genv.cg.types ;
-  functions = List.rev genv.cg.functions ;
-  constants = List.rev genv.cg.constants ;
-  variables = List.rev genv.cg.variables ;
-  clocks = List.rev genv.cg.clocks ;
-  relations = List.rev genv.cg.relations ;
-  partitions = List.rev genv.cg.partitions ;
-  blocks = List.rev genv.cg.blocks ;
-}
-
-
 (* Entry point of the translation *)
 
-let program ({ p_modname; p_opened; p_desc } as program) =
-  let filename = Compiler_utils.filename_of_name (Names.modul_to_string p_modname) ^ ".gc" in
+let program p =
+  (* Find the target node *)
+  let target_node = find_target_node p in
+  if target_node.n_input <> [] then
+    begin
+      Format.eprintf "The top-level node have no inputs.@.";
+      raise Errors.Error
+    end;
+
+  (* Init callgrpah environement for module opening *)
+  Callgraph.info.Callgraph.opened <- Names.ModulEnv.add p.p_modname p Names.ModulEnv.empty;
+
+  (* Build the clocked graph *)
+  let genv = build_predef_genv () in
+  ignore (translate_node genv target_node []) ;
+  List.iter (bind_inputs genv) genv.input_bindings ;
+  let cg = extract_cg genv in
+
+  (* Open output file *)
+  let filename = Compiler_utils.filename_of_name (Names.modul_to_string p.p_modname) ^ ".gc" in
   let out = open_out filename in
   let fmt = Format.formatter_of_out_channel out in
-  let (henv, genv) = build_environement program in
-  let target_node = find_target_node program in
-  translate_node henv genv target_node ;
-  let cg = extract_cg genv in
+
+  (* Print results *)
   Lopht_printer.print_clocked_graph fmt cg
 

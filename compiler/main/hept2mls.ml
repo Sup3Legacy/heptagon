@@ -106,6 +106,7 @@ let translate_app app =
   mk_app ~params:app.Heptagon.a_params
     ~unsafe:app.Heptagon.a_unsafe
     ~id:(Some (fresh app.Heptagon.a_op))
+    ~inlined:app.Heptagon.a_inlined
     (translate_op app.Heptagon.a_op)
 
 let mk_extvalue e w =
