@@ -81,7 +81,7 @@ type cg_environment = {
   mutable constant_bindings : const QualEnv.t;
   mutable function_bindings : func QualEnv.t;
   (* Bindings produced at the end of the first pass which must be resolved *)
-  mutable input_bindings : (block * clock_binding * variable_binding list) list;
+  mutable input_bindings : (block * clock_binding * arg_list * variable_binding list) list;
   (* Associate lopht clock expressions to lopht clocks to detects double definitions *)
   mutable clock_definitions : clk ClEnv.t;
   (* Primitive Lopht Clock *) 
@@ -178,7 +178,7 @@ let add_variable cg var_type port_id gblock =
 
 (* First pass, don't bind input parameters nor clocks *)
 
-let build_block genv clkb block_id block_fun input_bindings fun_outputs =
+let build_block genv clkb block_id block_fun fun_inputs fun_outputs input_bindings =
   let block_clock = genv.primitive_clock in
   let gblock = add_block genv.cg block_clock block_id block_fun in
   let bind_output (port_id,var_type) =
@@ -190,7 +190,7 @@ let build_block genv clkb block_id block_fun input_bindings fun_outputs =
   in
   let targets, block_outputs = List.split (List.map bind_output fun_outputs) in 
   gblock.block_outputs <- block_outputs;
-  genv.input_bindings <- (gblock, clkb, input_bindings) :: genv.input_bindings;
+  genv.input_bindings <- (gblock, clkb, fun_inputs, input_bindings) :: genv.input_bindings;
   targets
 
 
@@ -229,10 +229,11 @@ let translate_const genv lenv static_exp =
     | NamedConst const -> Some const.cst_id
     | _ -> None
   and block_fun = ConstBlock gconst
-  and block_inputs = []
-  and block_outputs = [("c", translate_ty genv static_exp.Types.se_ty)]
+  and fun_inputs = []
+  and fun_outputs = [("c", translate_ty genv static_exp.Types.se_ty)]
+  and input_bindings = []
   in
-  begin match build_block genv PrimitiveClock block_id block_fun block_inputs block_outputs with
+  begin match build_block genv PrimitiveClock block_id block_fun fun_inputs fun_outputs input_bindings with
     | [ b ] -> b
     | _ -> assert false (* Only one output port is specified *)
   end
@@ -292,11 +293,12 @@ let translate_fby genv lenv ck init extvalue =
   in
   let block_fun = DelayBlock gdelay
   and block_id = None
-  and block_inputs = [translate_extvalue genv lenv extvalue]
-  and block_outputs = [("o", delay_ty)]
+  and fun_inputs = [("i", delay_ty)] 
+  and fun_outputs = [("o", delay_ty)]
+  and input_bindings = [translate_extvalue genv lenv extvalue]
   and clkb = translate_ck lenv ck
   in
-  build_block genv clkb block_id block_fun block_inputs block_outputs
+  build_block genv clkb block_id block_fun fun_inputs fun_outputs input_bindings
 
 let translate_merge genv lenv var_ident l =
   let var = translate_var lenv var_ident
@@ -322,11 +324,11 @@ let rec translate_app genv lenv ck app inputs =
     let gfunc = translate_function genv fun_name hnode in
     let block_fun = FunBlock gfunc
     and block_id = Some gfunc.fun_id 
-    and block_inputs = input_bindings
-    and block_outputs = gfunc.fun_outputs
+    and fun_outputs = gfunc.fun_outputs
+    and fun_inputs = gfunc.fun_inputs
     and clkb = translate_ck lenv ck
     in
-    build_block genv clkb block_id block_fun block_inputs block_outputs
+    build_block genv clkb block_id block_fun fun_inputs fun_outputs input_bindings
   end
 
 and translate_exp genv lenv exp =
@@ -437,12 +439,7 @@ let bind_input genv ck (input_port_name, _ty) binding =
     input_port_arcs;
   }
 
-let bind_inputs genv (block, clkb, bindings) =
-  let fun_inputs = match block.block_function with
-    | DelayBlock delay -> [("i", delay.delay_ty)]
-    | FunBlock func -> func.fun_inputs
-    | ConstBlock const_exp -> []
-  in
+let bind_inputs genv (block, clkb, fun_inputs, bindings) =
   block.block_clk <- resolve_clock genv clkb;
   block.block_inputs <- List.map2 (bind_input genv clkb) fun_inputs bindings
 

@@ -18,10 +18,11 @@ and ty_desc = PredefinedType | SimpleType | EnumeratedType of lopht_id list
 and func = {
   fun_index : int;
   fun_id : lopht_id;
-  fun_inputs : (lopht_id * ty) list;
-  fun_outputs : (lopht_id * ty) list;
+  fun_inputs : arg_list;
+  fun_outputs : arg_list;
   (* TODO: fun_ensures ? *)
 }
+and arg_list = (lopht_id * ty) list
 
 (* Constant which can be used for block input *)
 and const = {
