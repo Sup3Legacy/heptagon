@@ -27,6 +27,7 @@ let ident_to_lopht_id ident = C.cname_of_name (Idents.name ident)
 
 
 module StringSet = Set.Make (struct type t = string let compare = Pervasives.compare end)
+module StringMap = Map.Make (struct type t = string let compare = Pervasives.compare end)
 module TyEnv = Map.Make (struct type t = Types.ty let compare = Pervasives.compare end)
 module QualEnv = Names.QualEnv
 module VarEnv = Idents.Env
@@ -84,6 +85,10 @@ type cg_environment = {
   mutable input_bindings : (block * clock_binding * arg_list * variable_binding list) list;
   (* Associate lopht clock expressions to lopht clocks to detects double definitions *)
   mutable clock_definitions : clk ClEnv.t;
+  (* Generated C functions for Heptagon operators *)
+  mutable operators : func StringMap.t;
+  (* Index used to generate unique name for constants *)
+  mutable last_constant_index : int;
   (* Primitive Lopht Clock *) 
   primitive_clock : clk;
   (* Clocked graph being produced (with all lists reversed) *)
@@ -93,6 +98,20 @@ type cg_environment = {
 
 
 (* Clocked Graph building *)
+
+let add_ty cg ty_id ty_desc =
+  let ty_index = match cg.types with
+    | { ty_index } :: _ -> ty_index + 1
+    | [] -> 0
+  in
+  let gty = {
+    ty_index;
+    ty_id;
+    ty_desc;
+  }
+  in
+  cg.types <- gty :: cg.types;
+  gty
 
 let add_clock cg clk_desc clk_dependencies =
   let clk_index = match cg.clocks with
@@ -109,13 +128,14 @@ let add_clock cg clk_desc clk_dependencies =
   cg.clocks <- gclock :: cg.clocks;
   gclock
 
-let add_constant cg cst_id cst_desc =
+let add_constant cg cst_id cst_ty cst_desc =
   let cst_index = match cg.constants with
     | { cst_index } :: _ -> cst_index + 1
     | [] -> 0
   in
   let gconst = {
     cst_index;
+    cst_ty;
     cst_id;
     cst_desc;
   }
@@ -178,6 +198,126 @@ let add_variable cg var_type port_id gblock =
 
 (* First pass, don't bind input parameters nor clocks *)
 
+
+let int_of_static_exp se = Static.int_of_static_exp QualEnv.empty se 
+
+let rec translate_typename = function
+  | Types.Tid type_name ->
+      qualname_to_lopht_id type_name
+  | Types.Tarray (base_ty,size_exp) ->
+      let size = int_of_static_exp size_exp in
+      "array_" ^ translate_typename base_ty ^ "_" ^ (string_of_int size)  
+  | Types.Tprod _ ->
+      raise Not_implemented
+  | Types.Tinvalid ->
+      assert false
+
+
+let translate_ty genv ty =
+  let ty = Static.simplify_type QualEnv.empty ty in
+  try
+    TyEnv.find ty genv.type_bindings
+  with Not_found ->
+    let gty = add_ty genv.cg (translate_typename ty) SimpleType in
+    genv.type_bindings <- TyEnv.add ty gty genv.type_bindings ;
+    gty
+
+
+let build_operator genv op_name fun_inputs fun_outputs = 
+  try
+    StringMap.find op_name genv.operators
+  with Not_found ->
+    let gfunc = add_function genv.cg op_name fun_inputs fun_outputs in
+    genv.operators <- StringMap.add op_name gfunc genv.operators ;
+    gfunc
+
+
+let rec find_structure_def = function
+  | Types.Tid qn ->
+      begin match Modules.find_type qn with
+      | Signature.Talias ty -> find_structure_def ty
+      | Signature.Tstruct structure -> structure
+      | _ -> raise Not_found
+      end
+  | _ -> raise Not_found 
+
+let add_anonymous_constant genv cst_ty cst_def =
+  genv.last_constant_index <- genv.last_constant_index + 1;
+  let cst_name = "const_" ^ string_of_int genv.last_constant_index in
+  add_constant genv.cg cst_name cst_ty cst_def
+
+
+let rec translate_static_exp genv static_exp =
+  match static_exp.Types.se_desc with
+  | Types.Svar const_name ->
+      let const = try
+        QualEnv.find const_name genv.constant_bindings
+      with Not_found ->
+        let cst_ty = translate_ty genv static_exp.Types.se_ty
+        and cst_id = (qualname_to_lopht_id const_name) in
+        let gconst = add_constant genv.cg cst_id cst_ty ExternalConst in
+        genv.constant_bindings <- QualEnv.add const_name gconst genv.constant_bindings ;
+        gconst
+      in
+        NamedConst const
+  | Types.Sint i -> Integer i
+  | Types.Sfloat f -> Float f
+  | Types.Sbool b -> Boolean b
+  | Types.Sstring s -> String s
+
+  | Types.Sconstructor _e -> raise Not_implemented
+  | Types.Sfield _field_name -> raise Not_implemented 
+  | Types.Stuple _l -> raise Not_implemented
+  | Types.Sop (_fun_name, _parameters) -> raise Not_implemented
+
+  | Types.Sarray_power (value, _sizes) ->
+      let ty_out = static_exp.Types.se_ty and ty_in = value.Types.se_ty in  
+      let op_name = ("fill_" ^ translate_typename ty_out)
+      and fun_inputs = [("i", translate_ty genv ty_in)] 
+      and fun_outputs = [("o", translate_ty genv ty_out)]
+      and inputs = [ translate_static_exp genv value ] in 
+      let gfunc = build_operator genv op_name fun_inputs fun_outputs in
+      let cst_desc = InitFunctionConst (gfunc, inputs)
+      and cst_ty = snd (List.hd fun_outputs) in
+      NamedConst (add_anonymous_constant genv cst_ty cst_desc) 
+
+  | Types.Sarray values ->
+      let ty_out = static_exp.Types.se_ty in
+      let ty_elt,size = match ty_out with
+        | Types.Tarray (ty,size) -> ty, int_of_static_exp size
+        | _ -> assert false
+      in
+      let rec build_args r = function
+        | 0 -> r
+        | i -> build_args (("i" ^ string_of_int i, translate_ty genv ty_elt) :: r) (i-1)
+      in
+      let op_name = ("construct_" ^ translate_typename ty_out)
+      and fun_inputs = build_args [] size 
+      and fun_outputs = [("o", translate_ty genv ty_out)]
+      and inputs = List.map (translate_static_exp genv) values in 
+      let gfunc = build_operator genv op_name fun_inputs fun_outputs in
+      let cst_desc = InitFunctionConst (gfunc, inputs)
+      and cst_ty = snd (List.hd fun_outputs) in
+      NamedConst (add_anonymous_constant genv cst_ty cst_desc) 
+
+  | Types.Srecord l ->
+      let ty_out = static_exp.Types.se_ty in
+      let fields,values = List.split l in
+      let values = List.map (translate_static_exp genv) values in
+      let definition = List.fold_right2 QualEnv.add fields values QualEnv.empty in    
+      let structure_def = find_structure_def ty_out in
+      let field_to_arg {Signature.f_name ; f_type} = qualname_to_lopht_id f_name, translate_ty genv f_type in
+      let field_to_input {Signature.f_name} = QualEnv.find f_name definition in
+      let op_name = ("construct_" ^ translate_typename ty_out)
+      and fun_inputs = List.map field_to_arg structure_def
+      and fun_outputs = [("o", translate_ty genv ty_out)]
+      and inputs = List.map field_to_input structure_def in
+      let gfunc = build_operator genv op_name fun_inputs fun_outputs in
+      let cst_desc = InitFunctionConst (gfunc, inputs)
+      and cst_ty = snd (List.hd fun_outputs) in
+      NamedConst (add_anonymous_constant genv cst_ty cst_desc) 
+    
+
 let build_block genv clkb block_id block_fun fun_inputs fun_outputs input_bindings =
   let block_clock = genv.primitive_clock in
   let gblock = add_block genv.cg block_clock block_id block_fun in
@@ -194,36 +334,7 @@ let build_block genv clkb block_id block_fun fun_inputs fun_outputs input_bindin
   targets
 
 
-let translate_ty genv ty =
-  try
-    TyEnv.find ty genv.type_bindings
-  with
-    Not_found -> raise Not_implemented
-
-let translate_static_exp genv static_exp =
-  match static_exp.Types.se_desc with
-  | Types.Svar const_name ->
-      let const = try
-        QualEnv.find const_name genv.constant_bindings
-      with Not_found ->
-        let gconst = add_constant genv.cg (qualname_to_lopht_id const_name) ExternalConst in
-        genv.constant_bindings <- QualEnv.add const_name gconst genv.constant_bindings ;
-        gconst
-      in
-        NamedConst const
-  | Types.Sint i -> Integer i
-  | Types.Sfloat f -> Float f
-  | Types.Sbool b -> Boolean b
-  | Types.Sstring s -> String s
-  | Types.Sconstructor _e -> raise Not_implemented
-  | Types.Sfield _field_name -> raise Not_implemented 
-  | Types.Stuple _l -> raise Not_implemented
-  | Types.Sarray_power (_, _) 
-  | Types.Sarray _
-  | Types.Srecord _ -> raise Not_implemented
-  | Types.Sop (fun_name, parameters) -> raise Not_implemented
-
-let translate_const genv lenv static_exp =
+let translate_const genv static_exp =
   let gconst = translate_static_exp genv static_exp in
   let block_id = match gconst with
     | NamedConst const -> Some const.cst_id
@@ -249,7 +360,7 @@ let rec translate_ck lenv = function
 
 let rec translate_extvalue genv lenv extvalue =
   match extvalue.w_desc with
-    | Wconst static_exp -> translate_const genv lenv static_exp
+    | Wconst static_exp -> translate_const genv static_exp
     | Wvar var_ident -> Alias (translate_var lenv var_ident )
     | Wfield (_extvalue, _field_name) -> raise Not_implemented (* Build a selector block *)
     | Wwhen (extvalue, _constructor_name, _var_ident) -> translate_extvalue genv lenv extvalue 
@@ -306,8 +417,7 @@ let translate_merge genv lenv var_ident l =
   in [ Merge (var, l') ]
 
 let rec translate_app genv lenv ck app inputs =
-  let call_name = app.a_id
-  and static_params = app.a_params
+  let static_params = app.a_params
   and fun_name = match app.a_op with
     | Efun fun_name
     | Enode fun_name -> fun_name
@@ -336,7 +446,7 @@ and translate_exp genv lenv exp =
   | Eextvalue extvalue -> [ translate_extvalue genv lenv extvalue ]
   | Efby (static_exp_opt, extvalue) -> translate_fby genv lenv exp.e_level_ck static_exp_opt extvalue
   | Eapp (app, extvalue_list, None) -> translate_app genv lenv exp.e_level_ck app extvalue_list
-  | Eapp (app, extvalue_list, Some _var_ident) -> raise Not_implemented
+  | Eapp (_app, _extvalue_list, Some _var_ident) -> raise Not_implemented
   | Ewhen (exp, _constructor_name, _var_ident) -> translate_exp genv lenv exp
   | Emerge (var_ident, l) -> translate_merge genv lenv var_ident l
   | Estruct _ -> raise Not_implemented
@@ -459,6 +569,8 @@ let build_predef_genv () =
     function_bindings = QualEnv.empty;
     input_bindings = [];
     clock_definitions = ClEnv.empty;
+    operators = StringMap.empty;
+    last_constant_index = 0;
     primitive_clock;
     cg = {
       types = List.map snd type_list ;

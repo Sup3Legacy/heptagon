@@ -147,7 +147,6 @@ let rec print_clk_exp fmt clk = match clk with
         print_clk_exp c
         print_bool_exp f
 
-
 let print_type_def fmt ty_def =
   Format.fprintf fmt "%a\t%a\t"
     print_ty_idx ty_def
@@ -172,9 +171,10 @@ let print_fun_def fmt fun_def =
     (print_list print_arg) fun_def.fun_outputs
 
 let print_const_def fmt cst_def =
-  Format.fprintf fmt "%a\t%a\t"
+  Format.fprintf fmt "%a\t%a\t%a\t"
     print_const_idx cst_def
-    print_id cst_def.cst_id ;
+    print_id cst_def.cst_id
+    print_ty_idx cst_def.cst_ty ;
   begin match cst_def.cst_desc with
     | ExternalConst ->
         Format.fprintf fmt "External"

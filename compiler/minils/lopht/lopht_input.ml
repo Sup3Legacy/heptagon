@@ -28,6 +28,7 @@ and arg_list = (lopht_id * ty) list
 and const = {
   cst_index : int;
   cst_id : lopht_id;
+  cst_ty : ty;
   cst_desc : cst_desc;
 }
 and cst_desc = ExternalConst | InitFunctionConst of func * const_exp list
