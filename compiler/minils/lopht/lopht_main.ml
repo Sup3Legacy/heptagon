@@ -96,6 +96,20 @@ type cg_environment = {
 }
 
 
+(* Module handling through callgraph *)
+
+(* .epo files can be handled by mls/callgraph. We don't need the full callgraph though.
+   We'll just use the i/o functions and the database of loaded modules. For static
+   parameters, we'll probably need a full callgraph anyway, so... it's only temporary  *)
+
+
+let get_node_by_qname qname =
+  let hnode = Callgraph.node_by_longname qname in
+  (* Callgraph doesn't open all used interface, but in our case, we have to *)
+  let p = Names.ModulEnv.find qname.Names.qual Callgraph.info.Callgraph.opened in 
+  List.iter Modules.open_module p.p_opened;
+  hnode
+
 
 (* Clocked Graph building *)
 
@@ -196,8 +210,7 @@ let add_variable cg var_type port_id gblock =
   gvar
 
 
-(* First pass, don't bind input parameters nor clocks *)
-
+(* First pass, neither bind input parameters nor clocks *)
 
 let int_of_static_exp se = Static.int_of_static_exp QualEnv.empty se 
 
@@ -425,7 +438,7 @@ let rec translate_app genv lenv ck app inputs =
   and input_bindings = List.map (translate_extvalue genv lenv) inputs
   in
   if app.a_inlined then begin
-    let hnode = Callgraph.node_by_longname fun_name in
+    let hnode = get_node_by_qname fun_name in
     translate_node genv hnode input_bindings
   end else begin
     if static_params <> [] then
@@ -479,7 +492,6 @@ and translate_node genv hnode input_bindings =
   List.iter (translate_eq genv lenv) hnode.n_equs ;
   List.map (extract_var_from_lenv lenv) hnode.n_output
   
-
 
 (* Second pass, bind input parameters and clocks *)
 
@@ -604,7 +616,7 @@ let extract_cg genv = {
 let find_target_node { p_desc } =
   let name = !Compiler_options.target_node in
   if name = "" then begin
-    Format.eprintf "A top level node with no argument must be given.@.";
+    Format.eprintf "A top level node with no input arguments must be given.@.";
     raise Errors.Error
   end;
   let node =
