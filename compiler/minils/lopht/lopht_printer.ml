@@ -67,8 +67,8 @@ let print_block_idx fmt b =
 let print_const_exp fmt = function
   | NamedConst cst -> print_const_idx fmt cst
   | Integer i -> Format.pp_print_int fmt i
-  | Boolean (true) -> Format.pp_print_string fmt "true"
-  | Boolean (false) -> Format.pp_print_string fmt "false"
+  | Boolean (true) -> Format.pp_print_string fmt "True"
+  | Boolean (false) -> Format.pp_print_string fmt "False"
   | Float f -> Format.pp_print_float fmt f
   | String s -> Format.fprintf fmt "\"%s\"" s
 

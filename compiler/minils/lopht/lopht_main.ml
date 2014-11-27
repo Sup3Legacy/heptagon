@@ -18,6 +18,8 @@
 
 open Minils
 open Lopht_input
+open Lopht_cwrapper
+
 
 exception Not_implemented
 
@@ -54,7 +56,7 @@ type clock_binding =
 
 module ClEnv = Map.Make (struct
     type t = clk_exp
-    let lex_compare f1 f2 (a1,a2) (b1,b2) =
+    let lex_compare f1 f2 (a1, a2) (b1, b2) =
       let c = f1 a1 b1 in
       if c = 0 then f2 a2 b2 else c
   
@@ -68,10 +70,10 @@ module ClEnv = Map.Make (struct
       | BaseClock c1, BaseClock c2 -> compare_clk c1 c2
       | BaseClock _, _ -> 1
       | _, BaseClock _ -> -1
-      | Union (e1,f1), Union (e2,f2) -> lex_compare compare compare (e1,f1) (e2,f2)
+      | Union (e1, f1), Union (e2, f2) -> lex_compare compare compare (e1, f1) (e2, f2)
       | Union _, _ -> 1
       | _, Union _ -> -1
-      | Test (c1, Equal (v1,b1)), Test (c2, Equal (v2,b2)) -> lex_compare compare (lex_compare compare_var Pervasives.compare) (c1, (v1,b1)) (c2, (v2,b2)) 
+      | Test (c1, e1), Test (c2, e2) -> lex_compare compare Pervasives.compare (c1, e1) (c2, e2)  
       | _, _ -> assert false (* Any other case is not used in the current implementation *)
   end)
 
@@ -85,11 +87,11 @@ type cg_environment = {
   mutable input_bindings : (block * clock_binding * arg_list * variable_binding list) list;
   (* Associate lopht clock expressions to lopht clocks to detects double definitions *)
   mutable clock_definitions : clk ClEnv.t;
-  (* Generated C functions for Heptagon operators *)
+  (* Generated C functions *)
   mutable operators : func StringMap.t;
   (* Index used to generate unique name for constants *)
   mutable last_constant_index : int;
-  (* Primitive Lopht Clock *) 
+  (* Primitive Lopht Clock *)
   primitive_clock : clk;
   (* Clocked graph being produced (with all lists reversed) *)
   cg : clocked_graph; 
@@ -107,6 +109,7 @@ type cg_environment = {
    parameters, we'll probably need a full callgraph anyway, so... it's only temporary  *)
 
 
+
 let get_node_by_qname qname =
   let hnode = Callgraph.node_by_longname qname in
   (* Callgraph doesn't open all used interface, but in our case, we have to *)
@@ -115,7 +118,7 @@ let get_node_by_qname qname =
   hnode
 
 
-(* Output of C file, mostly like C.output_cfile but without dir  *)
+(* Output of C file, mostly like C.output_cfile but without dir *)
 
 let output_cfile filename cfile_desc =
   if !Compiler_options.verbose then
@@ -243,9 +246,9 @@ let rec find_structure_def = function
 let rec translate_typename = function
   | Types.Tid type_name ->
       qualname_to_lopht_id type_name
-  | Types.Tarray (base_ty,size_exp) ->
+  | Types.Tarray (base_ty, size_exp) ->
       let size = int_of_static_exp size_exp in
-      "array_" ^ translate_typename base_ty ^ "_" ^ (string_of_int size)  
+      "array_" ^ translate_typename base_ty ^ "_" ^ (string_of_int size) 
   | Types.Tprod _ ->
       raise Not_implemented
   | Types.Tinvalid ->
@@ -271,6 +274,9 @@ let translate_const_ref genv const_name ty =
     genv.constant_bindings <- QualEnv.add const_name gconst genv.constant_bindings ;
     gconst
 
+let add_cdef genv cdef =
+  genv.csource <- cdef :: genv.csource ;
+  genv.cheader <- (C.cdecl_of_cfundef cdef) :: genv.cheader
 
 let build_operator genv op_name fun_inputs fun_outputs cdef = 
   try
@@ -278,93 +284,44 @@ let build_operator genv op_name fun_inputs fun_outputs cdef =
   with Not_found ->
     let gfunc = add_function genv.cg op_name fun_inputs fun_outputs in
     genv.operators <- StringMap.add op_name gfunc genv.operators ;
-    genv.csource <- cdef :: genv.csource ;
-    genv.cheader <- (C.cdecl_of_cfundef cdef) :: genv.cheader ;
+    add_cdef genv cdef ;
     gfunc
 
-let build_array_power genv ty_out =
-  let ty_in,size = match ty_out with
-  | Types.Tarray (ty, size) -> ty, int_of_static_exp size
+let build_array_power genv ty =
+  let ty_elt, size = match ty with
+  | Types.Tarray (ty_elt, size) -> ty_elt, int_of_static_exp size
   | _ -> assert false
   in 
-  let op_name = ("fill_" ^ translate_typename ty_out)
-  and fun_inputs = [("src", translate_ty genv ty_in)] 
-  and fun_outputs = [("dest", translate_ty genv ty_out)] in
-  let open C in
-  let src = "src" and dest = "dest" in
-  let cargs = [(src, Cgen.ctype_of_otype ty_in) ; (dest, Cgen.ctype_of_otype ty_out)] in 
-  let cdef = 
-    Cfundef {
-      f_name = op_name;
-      f_retty = Cty_void;
-      f_args = cargs;
-      f_body =  
-        {
-          var_decls = [];
-          block_body =
-            let i = "i" in 
-            [Cfor(i, Cconst (Ccint 0), Cconst (Ccint size),
-              [Caffect (CLarray (CLvar dest, Cvar i), Cvar src)]
-            )];
-        };
-    } in
+  let op_name = ("fill_" ^ translate_typename ty)
+  and fun_inputs = [("src", translate_ty genv ty_elt)] 
+  and fun_outputs = [("dest", translate_ty genv ty)] in 
+  let cdef = build_c_array_power ty ty_elt size op_name in
   let gfunc = build_operator genv op_name fun_inputs fun_outputs cdef in
   gfunc
 
-let build_array_constructor genv ty_out =
-  let ty_elt,size = match ty_out with
-    | Types.Tarray (ty,size) -> ty, int_of_static_exp size
+let build_array_constructor genv ty =
+  let ty_elt, size = match ty with
+    | Types.Tarray (ty, size) -> ty, int_of_static_exp size
     | _ -> assert false
   in
   let rec build_args r = function
     | 0 -> r
-    | i -> build_args (("i" ^ string_of_int i, translate_ty genv ty_elt) :: r) (i-1)
+    | i -> build_args (("i" ^ string_of_int i, translate_ty genv ty_elt) :: r) (i -1)
   in
-  let op_name = ("construct_" ^ translate_typename ty_out)
+  let op_name = ("construct_" ^ translate_typename ty)
   and fun_inputs = build_args [] size 
-  and fun_outputs = [("o", translate_ty genv ty_out)] in
-  raise Not_implemented ; (* Need to generated array initialisation in C *)
-  let open C in
-  let cdef =
-    Cfundef {
-      f_name = op_name;
-      f_retty = Cty_void;
-      f_args = [];
-      f_body =  
-        {
-          var_decls = [];
-          block_body = [];
-        };
-    } in
+  and fun_outputs = [("o", translate_ty genv ty)] in
+  let cdef = build_c_array_constructor ty ty_elt size op_name in
   let gfunc = build_operator genv op_name fun_inputs fun_outputs cdef in
-  gfunc
+  raise Not_implemented (* Need to generated array initialisation in C *)
 
-let build_struct_constructor genv ty_out =
-  let structure_def = find_structure_def ty_out in
-  let field_to_arg {Signature.f_name ; f_type} = qualname_to_lopht_id f_name, translate_ty genv f_type
-  and field_to_carg {Signature.f_name ; f_type} = C.cname_of_name f_name.Names.name , Cgen.ctype_of_otype f_type
-  and field_to_cparam {Signature.f_name} = C.Cvar (C.cname_of_name f_name.Names.name) in
-  let op_name = ("construct_" ^ translate_typename ty_out)
+let build_struct_constructor genv ty =
+  let structure_def = find_structure_def ty in
+  let field_to_arg { Signature.f_name ; f_type } = qualname_to_lopht_id f_name, translate_ty genv f_type in
+  let op_name = ("construct_" ^ translate_typename ty)
   and fun_inputs = List.map field_to_arg structure_def
-  and fun_outputs = [("o", translate_ty genv ty_out)] in
-  let open C in
-  let src = "src" and dest = "dest" in
-  let csname = 
-    match Modules.unalias_type ty_out with
-      | Types.Tid n -> cname_of_qn n
-      | _ -> assert false
-  in
-  let cdef =
-    Cfundef {
-      f_name = op_name;
-      f_retty = Cty_void;
-      f_args = List.map field_to_carg structure_def ;
-      f_body =  
-        {
-          var_decls = [];
-          block_body = [Caffect (CLvar dest, Cstructlit (csname, List.map field_to_cparam structure_def))];
-        };
-    } in
+  and fun_outputs = [("o", translate_ty genv ty)] in
+  let cdef = build_c_struct_constructor ty structure_def op_name in
   let gfunc = build_operator genv op_name fun_inputs fun_outputs cdef in
   gfunc
 
@@ -394,7 +351,7 @@ let rec translate_static_exp genv static_exp =
       and inputs = [ translate_static_exp genv value ] in
       let cst_desc = InitFunctionConst (gfunc, inputs)
       and cst_ty = snd (List.hd gfunc.fun_outputs) in
-      NamedConst (add_anonymous_constant genv cst_ty cst_desc)     
+      NamedConst (add_anonymous_constant genv cst_ty cst_desc) 
 
   | Types.Sarray values ->
       let gfunc = build_array_constructor genv ty
@@ -405,10 +362,10 @@ let rec translate_static_exp genv static_exp =
 
   | Types.Srecord l ->
       let structure_def = find_structure_def ty in
-      let fields,values = List.split l in
+      let fields, values = List.split l in
       let values = List.map (translate_static_exp genv) values in
       let definition = List.fold_right2 QualEnv.add fields values QualEnv.empty in
-      let field_to_input {Signature.f_name} = QualEnv.find f_name definition in
+      let field_to_input { Signature.f_name } = QualEnv.find f_name definition in
       let inputs = List.map field_to_input structure_def
       and gfunc = build_struct_constructor genv ty in
       let cst_desc = InitFunctionConst (gfunc, inputs)
@@ -419,7 +376,7 @@ let rec translate_static_exp genv static_exp =
 let build_block genv clkb block_id block_fun fun_inputs fun_outputs input_bindings =
   let block_clock = genv.primitive_clock in
   let gblock = add_block genv.cg block_clock block_id block_fun in
-  let bind_output (port_id,var_type) =
+  let bind_output (port_id, var_type) =
     let gvar = add_variable genv.cg var_type port_id gblock
     in Lopht_Variable gvar, {
       output_port_name = port_id;
@@ -484,14 +441,15 @@ let translate_function genv name hnode =
     and fun_outputs = List.map (translate_arg genv) hnode.node_outputs in
     let gfunc = add_function genv.cg fun_id fun_inputs fun_outputs in
     genv.function_bindings <- QualEnv.add name gfunc genv.function_bindings;
+    let cdefs = build_c_wrappers (fun_id ^ "_wstep") (fun_id ^ "_wreset") name hnode in 
+    List.map (add_cdef genv) cdefs ;
     gfunc
-
 
 
 let translate_fby genv lenv ck init extvalue =
   let delay_ty = translate_ty genv extvalue.w_ty in
   let init_const = match init with
-    | Some static_exp ->  translate_static_exp genv static_exp
+    | Some static_exp -> translate_static_exp genv static_exp
     | None -> raise Not_implemented
   in
   let gdelay = {
@@ -593,20 +551,19 @@ let rec resolve_clock genv clkb =
     | DerivedClock (base_clkb, constructor_name, ivar) ->
         (* Find the tested variable bindings *)
         let clk_dependencies = resolve_binding genv base_clkb ivar.iv_binding in
-        (* Test the value against a constructor *)
-        let value = match constructor_name with 
-          | { Names.qual = Names.Pervasives; name = "false" } -> Boolean false
-          | { Names.qual = Names.Pervasives; name = "true" } -> Boolean true
-          | _ -> raise Not_implemented
-        in
         (* Build the clock expression *)
         let build_clk_term var clock =
-          Test (BaseClock clock, Equal (var, Const value))
+          let predicate = match constructor_name with  (* Test the value against a constructor *) 
+          | { Names.qual = Names.Pervasives; name = "false" } -> Predicate (Variable var)
+          | { Names.qual = Names.Pervasives; name = "true" } -> Not (Predicate (Variable var))
+          | _ -> raise Not_implemented
+          in
+          Test (BaseClock clock, predicate)
         in
         let rec build_clk_exp = function
           | [] -> assert false
-          | [(var,clock)] -> build_clk_term var clock
-          | (var,clock) :: l -> Union (build_clk_term var clock, build_clk_exp l)
+          | [(var, clock)] -> build_clk_term var clock
+          | (var, clock) :: l -> Union (build_clk_term var clock, build_clk_exp l)
         in
         let clk_exp = build_clk_exp clk_dependencies in
         (* Look if this clk desc is already defined, or build a new one *)
@@ -651,7 +608,7 @@ let bind_inputs genv (block, clkb, fun_inputs, bindings) =
   block.block_inputs <- List.map2 (bind_input genv clkb) fun_inputs bindings
 
 
-(* Initial environment *) 
+(* Initial environment *)
 
 let build_predef_genv () =
   (* Predefined clocks and types *)
