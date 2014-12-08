@@ -4,30 +4,30 @@
  * All rights reserved.
  *******************************************************************************)
 
-type lopht_id = string
+type id = string
 
 (* Types of variables and functions inputs/outputs *) 
 type ty = {
   ty_index : int;
-  ty_id : lopht_id;
+  ty_id : id;
   ty_desc : ty_desc
 }
-and ty_desc = PredefinedType | SimpleType | EnumeratedType of lopht_id list
+and ty_desc = PredefinedType | SimpleType | EnumeratedType of id list
 
 (* Functions which can be instanciated in blocks *)
 and func = {
   fun_index : int;
-  fun_id : lopht_id;
+  fun_id : id;
   fun_inputs : arg_list;
   fun_outputs : arg_list;
   (* TODO: fun_ensures ? *)
 }
-and arg_list = (lopht_id * ty) list
+and arg_list = (id * ty) list
 
 (* Constant which can be used for block input *)
 and const = {
   cst_index : int;
-  cst_id : lopht_id;
+  cst_id : id;
   cst_ty : ty;
   cst_desc : cst_desc;
 }
@@ -37,14 +37,14 @@ and cst_desc = ExternalConst | InitFunctionConst of func * const_exp list
 and variable = {
   var_index : int;
   var_type : ty;
-  var_source_port : lopht_id * block;
+  var_source_port : id * block;
   var_allocation : unit option;
 }
 
 (* Clock on which blocks are executed or variable transmited *)
 and clk = {
   clk_index : int;
-  clk_id : lopht_id option;
+  clk_id : id option;
   clk_desc : clk_desc;
   clk_dependencies : clock_dependency list
 }
@@ -65,7 +65,7 @@ and bool_exp =
   | Lower of variable * val_exp
   | GreaterEqual of variable * val_exp
   | Greater of variable * val_exp
-  | In of variable * lopht_id list
+  | In of variable * id list
   | And of bool_exp * bool_exp
   | Or of bool_exp * bool_exp
   | Diff of bool_exp * bool_exp
@@ -92,13 +92,13 @@ and rel_kind = EqualClocks | ExclusiveClocks | LowerOrEqualClocks
 (* Partition of the system *)
 and partition = {
   part_index : int;
-  part_id : lopht_id;
+  part_id : id;
 }
 
 (* Instance of functions which are executed on some clock and linked with other blocks with variables *)
 and block = {
   block_index : int;
-  block_id : lopht_id option;
+  block_id : id option;
   mutable block_clk : clk;
   mutable block_inputs : input_port list;
   mutable block_outputs : output_port list;
@@ -118,11 +118,11 @@ and delay = {
 and schedule = unit
 
 and input_port = {
-  input_port_name: lopht_id;
+  input_port_name: id;
   input_port_arcs: clock_dependency list;
 }
 and output_port = {
-  output_port_name: lopht_id;
+  output_port_name: id;
   output_port_var: variable;
 }
 and deadline = Finite of int * int | Infinite

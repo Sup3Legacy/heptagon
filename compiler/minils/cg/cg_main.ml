@@ -17,15 +17,15 @@
 
 
 open Minils
-open Lopht_input
-open Lopht_cwrapper
+open Cg
+open Cg_cwrapper
 
 
 exception Not_implemented
 
-let qualname_to_lopht_id = C.cname_of_qn
-let name_to_lopht_id = C.cname_of_name
-let ident_to_lopht_id ident = C.cname_of_name (Idents.name ident)
+let qualname_to_id = C.cname_of_qn
+let name_to_id = C.cname_of_name
+let ident_to_id ident = C.cname_of_name (Idents.name ident)
 
 
 module StringSet = Set.Make (struct type t = string let compare = Pervasives.compare end)
@@ -43,7 +43,7 @@ and variable_binding =
   | Unbound
   | Alias of intermediate_variable
   | Merge of intermediate_variable * (Names.constructor_name * variable_binding) list
-  | Lopht_Variable of variable
+  | Defined_Variable of Cg.variable
 
 (* Local environments associating an intermediate variable to each heptagon local variable and input and output parameter *)
 type local_environment = intermediate_variable VarEnv.t
@@ -79,19 +79,19 @@ module ClEnv = Map.Make (struct
 
 
 type cg_environment = {
-  (* Association of Heptagon type expression and symbols to lopht equivalent *)
+  (* Association of Heptagon type expression and symbols to cg equivalent *)
   mutable type_bindings : ty TyEnv.t;
   mutable constant_bindings : const QualEnv.t;
   mutable function_bindings : func QualEnv.t;
   (* Bindings produced at the end of the first pass which must be resolved *)
   mutable input_bindings : (block * clock_binding * arg_list * variable_binding list) list;
-  (* Associate lopht clock expressions to lopht clocks to detects double definitions *)
+  (* Associate cg clock expressions to cg clocks to detects double definitions *)
   mutable clock_definitions : clk ClEnv.t;
   (* Generated C functions *)
   mutable operators : func StringMap.t;
   (* Index used to generate unique name for constants *)
   mutable last_constant_index : int;
-  (* Primitive Lopht Clock *)
+  (* Primitive Clock *)
   primitive_clock : clk;
   (* Clocked graph being produced (with all lists reversed) *)
   cg : clocked_graph; 
@@ -245,7 +245,7 @@ let rec find_structure_def = function
 
 let rec translate_typename = function
   | Types.Tid type_name ->
-      qualname_to_lopht_id type_name
+      qualname_to_id type_name
   | Types.Tarray (base_ty, size_exp) ->
       let size = int_of_static_exp size_exp in
       "array_" ^ translate_typename base_ty ^ "_" ^ (string_of_int size) 
@@ -269,7 +269,7 @@ let translate_const_ref genv const_name ty =
     QualEnv.find const_name genv.constant_bindings
   with Not_found ->
     let cst_ty = translate_ty genv ty
-    and cst_id = (qualname_to_lopht_id const_name) in
+    and cst_id = (qualname_to_id const_name) in
     let gconst = add_constant genv.cg cst_id cst_ty ExternalConst in
     genv.constant_bindings <- QualEnv.add const_name gconst genv.constant_bindings ;
     gconst
@@ -317,7 +317,7 @@ let build_array_constructor genv ty =
 
 let build_struct_constructor genv ty =
   let structure_def = find_structure_def ty in
-  let field_to_arg { Signature.f_name ; f_type } = qualname_to_lopht_id f_name, translate_ty genv f_type in
+  let field_to_arg { Signature.f_name ; f_type } = qualname_to_id f_name, translate_ty genv f_type in
   let op_name = ("construct_" ^ translate_typename ty)
   and fun_inputs = List.map field_to_arg structure_def
   and fun_outputs = [("o", translate_ty genv ty)] in
@@ -378,7 +378,7 @@ let build_block genv clkb block_id block_fun fun_inputs fun_outputs input_bindin
   let gblock = add_block genv.cg block_clock block_id block_fun in
   let bind_output (port_id, var_type) =
     let gvar = add_variable genv.cg var_type port_id gblock
-    in Lopht_Variable gvar, {
+    in Defined_Variable gvar, {
       output_port_name = port_id;
       output_port_var = gvar;
     }
@@ -429,14 +429,14 @@ let translate_arg genv param =
     | Some name -> name
     | None -> assert false
   in
-  name_to_lopht_id name, translate_ty genv param.a_type
+  name_to_id name, translate_ty genv param.a_type
 
 let translate_function genv name hnode =
   try
     QualEnv.find name genv.function_bindings
   with Not_found ->
     let open Signature in
-    let fun_id = qualname_to_lopht_id name
+    let fun_id = qualname_to_id name
     and fun_inputs = List.map (translate_arg genv) hnode.node_inputs
     and fun_outputs = List.map (translate_arg genv) hnode.node_outputs in
     let gfunc = add_function genv.cg fun_id fun_inputs fun_outputs in
@@ -591,7 +591,7 @@ and resolve_binding genv clkb binding =
                 resolve (DerivedClock (clkb, constructor_name, ivar)) r binding
         in
         List.fold_left merge r l 
-    | Lopht_Variable var ->
+    | Defined_Variable var ->
         (var, resolve_clock genv clkb) :: r
   in
   resolve clkb [] binding
@@ -613,8 +613,8 @@ let bind_inputs genv (block, clkb, fun_inputs, bindings) =
 let build_predef_genv () =
   (* Predefined clocks and types *)
   let primitive_clock = { clk_index = 0 ; clk_id = None ; clk_desc = Primitive ; clk_dependencies = []}
-  and ty_bool = { Lopht_input.ty_index = 0 ; ty_id = "bool" ; ty_desc = Lopht_input.PredefinedType }
-  and ty_int = { Lopht_input.ty_index = 1 ; ty_id = "int" ; ty_desc = Lopht_input.PredefinedType }
+  and ty_bool = { ty_index = 0 ; ty_id = "bool" ; ty_desc = PredefinedType }
+  and ty_int = { ty_index = 1 ; ty_id = "int" ; ty_desc = PredefinedType }
   and qualname_bool = { Names.qual = Names.Pervasives ; name = "bool" }
   and qualname_int = { Names.qual = Names.Pervasives ; name = "int" } in
   let type_list = [ (qualname_int, ty_int) ; (qualname_bool, ty_bool) ] in {
@@ -703,7 +703,7 @@ let program p =
   let fmt = Format.formatter_of_out_channel out in
 
   (* Print results *)
-  Lopht_printer.print_clocked_graph fmt cg ;
+  Cg_printer.print_clocked_graph fmt cg ;
 
   (* Output C glue *)
   output_cfile (basename ^ ".h") (C.Cheader (genv.cdependencies, genv.cheader)) ;

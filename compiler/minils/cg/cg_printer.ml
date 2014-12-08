@@ -4,7 +4,7 @@
  * All rights reserved.
  *******************************************************************************)
 
-open Lopht_input
+open Cg
 
 exception Not_implemented
 

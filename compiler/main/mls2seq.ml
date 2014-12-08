@@ -87,7 +87,7 @@ let targets =
     mk_target "obc" (Obc write_obc_file);
     mk_target "obc_np" (Obc_no_params write_obc_file);
     mk_target "epo" (Minils write_object_file);
-    mk_target "lopht" (Minils Lopht_main.program);]
+    mk_target "lopht" (Minils Cg_main.program);]
 
 let find_target s =
   try

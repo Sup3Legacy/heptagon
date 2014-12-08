@@ -58,7 +58,7 @@ let build_c_struct_constructor ty structure_def op_name =
         };
     }
 
-let build_c_wrappers id_wstep id_wreset  node_name ({node_stateful} as node) =
+let build_c_wrappers id_wstep id_wreset node_name ({node_stateful} as node) =
   (* let id_wstep = fun_id ^ "_wstep"
   and id_wreset = fun_id ^ "_wreset" *)
   let id_step = (C.cname_of_qn node_name) ^ "_step"
