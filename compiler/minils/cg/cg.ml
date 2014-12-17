@@ -137,3 +137,102 @@ type clocked_graph = {
   mutable partitions : partition list; (* Optional *)
   mutable blocks : block list; (* Must not be empty *)
 }
+
+
+(* Basic functions to add new things to a clocked graph *)
+
+let add_ty cg ty_id ty_desc =
+  let ty_index = match cg.types with
+    | { ty_index } :: _ -> ty_index + 1
+    | [] -> 0
+  in
+  let gty = {
+    ty_index;
+    ty_id;
+    ty_desc;
+  }
+  in
+  cg.types <- gty :: cg.types;
+  gty
+
+let add_clock cg clk_desc clk_dependencies =
+  let clk_index = match cg.clocks with
+    | { clk_index } :: _ -> clk_index + 1
+    | [] -> 0
+  in
+  let gclock = {
+    clk_index;
+    clk_id = None;
+    clk_desc;
+    clk_dependencies;
+  }
+  in
+  cg.clocks <- gclock :: cg.clocks;
+  gclock
+
+let add_constant cg cst_id cst_ty cst_desc =
+  let cst_index = match cg.constants with
+    | { cst_index } :: _ -> cst_index + 1
+    | [] -> 0
+  in
+  let gconst = {
+    cst_index;
+    cst_ty;
+    cst_id;
+    cst_desc;
+  }
+  in
+  cg.constants <- gconst :: cg.constants;
+  gconst
+
+let add_function cg fun_id fun_inputs fun_outputs =
+  let fun_index = match cg.functions with
+    | { fun_index } :: _ -> fun_index + 1
+    | [] -> 0
+  in
+  let gfunc = {
+    fun_index;
+    fun_id;
+    fun_inputs;
+    fun_outputs;
+  }
+  in
+  cg.functions <- gfunc :: cg.functions;
+  gfunc
+
+let add_block cg block_clk block_id block_function =
+  let block_index = match cg.blocks with
+    | { block_index } :: _ -> block_index + 1
+    | [] -> 0
+  in
+  let gblock = {
+    block_index;
+    block_id;
+    block_clk;
+    block_inputs = [];
+    block_outputs = [];
+    block_function;
+    block_preemptible = None;
+    block_offset = None;
+    block_deadline = None;
+    block_partitions = [];
+    block_schedule = None;
+  }
+  in
+  cg.blocks <- gblock :: cg.blocks;
+  gblock
+
+let add_variable cg var_type port_id gblock =
+  let var_index = match cg.variables with
+    | { var_index } :: _ -> var_index + 1
+    | [] -> 0
+  in
+  let gvar = {
+    var_index;
+    var_type;
+    var_source_port = (port_id, gblock);
+    var_allocation = None;
+  }
+  in
+  cg.variables <- gvar :: cg.variables;
+  gvar

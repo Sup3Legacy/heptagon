@@ -88,18 +88,17 @@ let build_c_wrappers id_wstep id_wreset node_name ({node_stateful} as node) =
       Cgen.create_affect_stm lhs rhs ty
   in
 
-  (*  *)
-
   let in_args = List.map input_cvar_of_arg node.node_inputs
   and out_args = List.map output_cvar_of_arg node.node_outputs 
   in
   let source_args =
-    in_args @ out_args
-  @ if node_stateful then [("_mem", cty_mem) ; ("dummy", Cty_int)] else [] 
+    in_args
+  @ if node_stateful then [("_mem", Cty_ptr cty_mem) ; ("_dummy", Cty_int)] else []
+  @ out_args 
   and dest_args =
     List.map (fun (id,_ty) -> Cvar id) in_args
   @ [Caddrof (Cvar "_out")] 
-  @ (if node_stateful then [Caddrof (Cvar "mem")] else [])
+  @ (if node_stateful then [(Cvar "_mem")] else [])
   in
   let f_step_def = Cfundef {
     f_name = id_wstep;
@@ -117,11 +116,11 @@ let build_c_wrappers id_wstep id_wreset node_name ({node_stateful} as node) =
   let f_reset_def = Cfundef {
     f_name = id_wreset;
     f_retty = Cty_void;
-    f_args = [];
+    f_args = [("_mem", Cty_ptr cty_mem) ; ("_dummy", Cty_ptr Cty_int)];
     f_body = {
       var_decls = [];
       block_body = [
-        Csexpr (Cfun_call (id_reset, [Caddrof (Cvar "_mem")]))]
+        Csexpr (Cfun_call (id_reset, [(Cvar "_mem")]))]
     }
   } in
 

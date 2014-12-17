@@ -16,6 +16,48 @@
    *)
 
 
+(* Overall description of the compilation from MiniLS to CG (Clocked Graphs)
+ * 
+ * This algorithm translate a MiniLS program to CG. One node without inputs
+ * must be given as the root of the program. We could generate some function
+ * to fetch input, but it's probably best to let the programmer choose how
+ * these inputs are provided. This way, the program can be run and not
+ * necessarily simulated with user inputs.
+ *
+ * There is no annotation yet to choose which nodes are the tasks to be
+ * scheduled. (I hope there will be one some day) We inline all node calls
+ * where there is the "inlined" key word. These may have already been
+ * inlined in the heptagon pass, but not if they come from different
+ * files. (Cross file inlining is not supported right now) At the end, the
+ * remaining non-inlined calls are the tasks we keep. For each call, we
+ * build a cg "block", and the cg "function" it instanciate. (If there are
+ * two calls to the same function, we generate it only once) We also extract
+ * the dataflow graph between these tasks, with all the clock information.
+ * 
+ * The compilation is separated in two passes. During the first pass, we
+ * convert the MiniLS program to its CG equivalent, but without binding
+ * inputs to the block, or assigning clocks. Instead, we collect a set of
+ * variable "bindings" which are structures with a mutable field telling
+ * to which variable each input port or clock expression is bound.
+ * Initially, all those bindings have the value "Unbound". At the end
+ * of the first pass, all the bindings must have changed to either
+ * Alias, Merge or Defined_variable. This forms a DAG which will be
+ * traversed during the second pass. To build this, we use a
+ * "local environnement" which associate heptagon local variables and
+ * parameters to a binding. 
+ *
+ * The second pass will resolve input and clock bindings. (i.e. It will
+ * complete the clock graph such that each block has the appropriate
+ * input variables and clocks. All the complexity is concentrated in the
+ * two functions "resolve_clock" and "resolve_binding". These two function
+ * are mutually recursive. The first one takes a "clock binding" and
+ * resolves it, creating the corresponding lopht clock expression and adding
+ * it to the clocked graph if necessary. The second function takes a
+ * "variable binging" and resolves it and the associated clock.
+ *)
+
+
+
 open Minils
 open Cg
 open Cg_cwrapper
@@ -128,105 +170,6 @@ let output_cfile filename cfile_desc =
   C.pp_cfile_desc fmt filename cfile_desc;
   Format.pp_print_flush fmt ();
   close_out out
-
-
-(* Clocked Graph building *)
-
-let add_ty cg ty_id ty_desc =
-  let ty_index = match cg.types with
-    | { ty_index } :: _ -> ty_index + 1
-    | [] -> 0
-  in
-  let gty = {
-    ty_index;
-    ty_id;
-    ty_desc;
-  }
-  in
-  cg.types <- gty :: cg.types;
-  gty
-
-let add_clock cg clk_desc clk_dependencies =
-  let clk_index = match cg.clocks with
-    | { clk_index } :: _ -> clk_index + 1
-    | [] -> 0
-  in
-  let gclock = {
-    clk_index;
-    clk_id = None;
-    clk_desc;
-    clk_dependencies;
-  }
-  in
-  cg.clocks <- gclock :: cg.clocks;
-  gclock
-
-let add_constant cg cst_id cst_ty cst_desc =
-  let cst_index = match cg.constants with
-    | { cst_index } :: _ -> cst_index + 1
-    | [] -> 0
-  in
-  let gconst = {
-    cst_index;
-    cst_ty;
-    cst_id;
-    cst_desc;
-  }
-  in
-  cg.constants <- gconst :: cg.constants;
-  gconst
-
-let add_function cg fun_id fun_inputs fun_outputs =
-  let fun_index = match cg.functions with
-    | { fun_index } :: _ -> fun_index + 1
-    | [] -> 0
-  in
-  let gfunc = {
-    fun_index;
-    fun_id;
-    fun_inputs;
-    fun_outputs;
-  }
-  in
-  cg.functions <- gfunc :: cg.functions;
-  gfunc
-
-let add_block cg block_clk block_id block_function =
-  let block_index = match cg.blocks with
-    | { block_index } :: _ -> block_index + 1
-    | [] -> 0
-  in
-  let gblock = {
-    block_index;
-    block_id;
-    block_clk;
-    block_inputs = [];
-    block_outputs = [];
-    block_function;
-    block_preemptible = None;
-    block_offset = None;
-    block_deadline = None;
-    block_partitions = [];
-    block_schedule = None;
-  }
-  in
-  cg.blocks <- gblock :: cg.blocks;
-  gblock
-
-let add_variable cg var_type port_id gblock =
-  let var_index = match cg.variables with
-    | { var_index } :: _ -> var_index + 1
-    | [] -> 0
-  in
-  let gvar = {
-    var_index;
-    var_type;
-    var_source_port = (port_id, gblock);
-    var_allocation = None;
-  }
-  in
-  cg.variables <- gvar :: cg.variables;
-  gvar
 
 
 (* First pass, neither bind input parameters nor clocks *)
@@ -598,9 +541,9 @@ and resolve_binding genv clkb binding =
 
 
 let bind_input genv ck (input_port_name, _ty) binding =
-  let input_port_arcs = resolve_binding genv ck binding in {
+  {
     input_port_name;
-    input_port_arcs;
+    input_port_arcs = resolve_binding genv ck binding;
   }
 
 let bind_inputs genv (block, clkb, fun_inputs, bindings) =
@@ -684,7 +627,7 @@ let program p =
   let target_node = find_target_node p in
   if target_node.n_input <> [] then
     begin
-      Format.eprintf "The top-level node have no inputs.@.";
+      Format.eprintf "The top-level node must not have inputs.@.";
       raise Errors.Error
     end;
 
