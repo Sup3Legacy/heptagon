@@ -65,7 +65,7 @@ open Cg_cwrapper
 
 exception Not_implemented
 
-let qualname_to_id = C.cname_of_qn
+let qname_to_id = C.cname_of_qn
 let name_to_id = C.cname_of_name
 let ident_to_id ident = C.cname_of_name (Idents.name ident)
 
@@ -124,7 +124,7 @@ type cg_environment = {
   (* Association of Heptagon type expression and symbols to cg equivalent *)
   mutable type_bindings : ty TyEnv.t;
   mutable constant_bindings : const QualEnv.t;
-  mutable function_bindings : func QualEnv.t;
+  mutable function_bindings : (func*func) QualEnv.t;
   (* Bindings produced at the end of the first pass which must be resolved *)
   mutable input_bindings : (block * clock_binding * arg_list * variable_binding list) list;
   (* Associate cg clock expressions to cg clocks to detects double definitions *)
@@ -188,7 +188,7 @@ let rec find_structure_def = function
 
 let rec translate_typename = function
   | Types.Tid type_name ->
-      qualname_to_id type_name
+      qname_to_id type_name
   | Types.Tarray (base_ty, size_exp) ->
       let size = int_of_static_exp size_exp in
       "array_" ^ translate_typename base_ty ^ "_" ^ (string_of_int size) 
@@ -212,7 +212,7 @@ let translate_const_ref genv const_name ty =
     QualEnv.find const_name genv.constant_bindings
   with Not_found ->
     let cst_ty = translate_ty genv ty
-    and cst_id = (qualname_to_id const_name) in
+    and cst_id = (qname_to_id const_name) in
     let gconst = add_constant genv.cg cst_id cst_ty ExternalConst in
     genv.constant_bindings <- QualEnv.add const_name gconst genv.constant_bindings ;
     gconst
@@ -260,7 +260,7 @@ let build_array_constructor genv ty =
 
 let build_struct_constructor genv ty =
   let structure_def = find_structure_def ty in
-  let field_to_arg { Signature.f_name ; f_type } = qualname_to_id f_name, translate_ty genv f_type in
+  let field_to_arg { Signature.f_name ; f_type } = qname_to_id f_name, translate_ty genv f_type in
   let op_name = ("construct_" ^ translate_typename ty)
   and fun_inputs = List.map field_to_arg structure_def
   and fun_outputs = [("o", translate_ty genv ty)] in
@@ -331,6 +331,13 @@ let build_block genv clkb block_id block_fun fun_inputs fun_outputs input_bindin
   genv.input_bindings <- (gblock, clkb, fun_inputs, input_bindings) :: genv.input_bindings;
   targets
 
+let build_block_from_func gfunc genv clkb input_bindings =
+    let block_fun = FunBlock gfunc
+    and block_id = Some gfunc.fun_id
+    and fun_outputs = gfunc.fun_outputs
+    and fun_inputs = gfunc.fun_inputs in
+    build_block genv clkb block_id block_fun fun_inputs fun_outputs input_bindings
+
 
 let translate_const genv static_exp =
   let gconst = translate_static_exp genv static_exp in
@@ -379,14 +386,18 @@ let translate_function genv name hnode =
     QualEnv.find name genv.function_bindings
   with Not_found ->
     let open Signature in
-    let fun_id = qualname_to_id name
+    let fun_id = qname_to_id name
+    and dummy_parameter = ("dummy", translate_ty genv (Types.Tid Initial.pint))
     and fun_inputs = List.map (translate_arg genv) hnode.node_inputs
     and fun_outputs = List.map (translate_arg genv) hnode.node_outputs in
-    let gfunc = add_function genv.cg fun_id fun_inputs fun_outputs in
-    genv.function_bindings <- QualEnv.add name gfunc genv.function_bindings;
-    let cdefs = build_c_wrappers (fun_id ^ "_wstep") (fun_id ^ "_wreset") name hnode in 
+    let fun_step_id = fun_id ^ "_wstep"
+    and fun_reset_id = fun_id ^ "_wreset" in
+    let gfunc_step = add_function genv.cg fun_step_id (fun_inputs @ [dummy_parameter]) fun_outputs
+    and gfunc_reset = add_function genv.cg fun_reset_id [] [dummy_parameter] in
+    genv.function_bindings <- QualEnv.add name (gfunc_step, gfunc_reset) genv.function_bindings;
+    let cdefs = build_c_wrappers fun_step_id fun_reset_id name hnode in
     List.map (add_cdef genv) cdefs ;
-    gfunc
+    (gfunc_step, gfunc_reset)
 
 
 let translate_fby genv lenv ck init extvalue =
@@ -430,14 +441,11 @@ let rec translate_app genv lenv ck app inputs =
     if static_params <> [] then
       raise Not_implemented;
     let hnode = Modules.find_value fun_name in
-    let gfunc = translate_function genv fun_name hnode in
-    let block_fun = FunBlock gfunc
-    and block_id = Some gfunc.fun_id 
-    and fun_outputs = gfunc.fun_outputs
-    and fun_inputs = gfunc.fun_inputs
-    and clkb = translate_ck lenv ck
-    in
-    build_block genv clkb block_id block_fun fun_inputs fun_outputs input_bindings
+    let gfunc_step, gfunc_reset = translate_function genv fun_name hnode
+    and clkb = translate_ck lenv ck in
+    let reset_target =
+       build_block_from_func gfunc_reset genv clkb [] in
+       build_block_from_func gfunc_step genv clkb (input_bindings @ reset_target)
   end
 
 and translate_exp genv lenv exp =
@@ -557,10 +565,8 @@ let build_predef_genv () =
   (* Predefined clocks and types *)
   let primitive_clock = { clk_index = 0 ; clk_id = None ; clk_desc = Primitive ; clk_dependencies = []}
   and ty_bool = { ty_index = 0 ; ty_id = "bool" ; ty_desc = PredefinedType }
-  and ty_int = { ty_index = 1 ; ty_id = "int" ; ty_desc = PredefinedType }
-  and qualname_bool = { Names.qual = Names.Pervasives ; name = "bool" }
-  and qualname_int = { Names.qual = Names.Pervasives ; name = "int" } in
-  let type_list = [ (qualname_int, ty_int) ; (qualname_bool, ty_bool) ] in {
+  and ty_int = { ty_index = 1 ; ty_id = "int" ; ty_desc = PredefinedType } in
+  let type_list = [ (Initial.pint, ty_int) ; (Initial.pbool, ty_bool) ] in {
     type_bindings = List.fold_left (fun env (n, t) -> TyEnv.add (Types.Tid n) t env) TyEnv.empty type_list;
     constant_bindings = QualEnv.empty;
     function_bindings = QualEnv.empty;
