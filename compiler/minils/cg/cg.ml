@@ -236,3 +236,13 @@ let add_variable cg var_type port_id gblock =
   in
   cg.variables <- gvar :: cg.variables;
   gvar
+
+
+(* Expression building *)
+
+let mk_union (l : clk_exp list) : clk_exp =
+  Misc.fold_left_1 (fun e1 e2 -> Union (e1, e2)) l
+
+let mk_inter (l : clk_exp list) : clk_exp =
+  Misc.fold_left_1 (fun e1 e2 -> Intersection (e1, e2)) l
+
