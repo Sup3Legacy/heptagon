@@ -172,6 +172,7 @@ and var_dec =
   { v_name  : var_name;
     v_type  : ty;
     v_linearity : Linearity.linearity;
+    v_unpunctual : bool;
     v_clock : ck option;
     v_last  : last;
     v_loc   : location; }
@@ -200,6 +201,8 @@ type contract =
 type node_dec =
   { n_name        : dec_name;
     n_stateful    : bool;
+    n_task        : bool;
+    n_unpunctual  : bool;
     n_unsafe      : bool;
     n_input       : var_dec list;
     n_output      : var_dec list;
@@ -237,6 +240,8 @@ type signature =
   { sig_name              : dec_name;
     sig_inputs            : arg list;
     sig_stateful          : bool;
+    sig_task              : bool;
+    sig_unpunctual        : bool;
     sig_unsafe            : bool;
     sig_outputs           : arg list;
     sig_params            : var_dec list;
@@ -286,8 +291,8 @@ let mk_type_dec name desc loc =
 let mk_equation desc loc =
   { eq_desc = desc; eq_loc = loc }
 
-let mk_var_dec ?(linearity=Linearity.Ltop) name ty ck last loc =
-  { v_name = name; v_type = ty; v_linearity = linearity;
+let mk_var_dec ?(linearity=Linearity.Ltop) ?(unpunctual=false) name ty ck last loc =
+  { v_name = name; v_type = ty; v_linearity = linearity; v_unpunctual = unpunctual;
     v_clock =ck; v_last = last; v_loc = loc }
 
 let mk_block locals eqs loc =

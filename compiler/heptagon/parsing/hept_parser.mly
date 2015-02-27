@@ -48,6 +48,7 @@ open Hept_parsetree
 %token <string> STRING
 %token <string * string> PRAGMA
 %token TYPE FUN NODE RETURNS VAR VAL OPEN END CONST UNSAFE EXTERNAL
+%token UNPUNCTUAL TASK ONTIME
 %token FBY PRE SWITCH EVERY
 %token OR STAR NOT
 %token AMPERSAND
@@ -108,7 +109,7 @@ open Hept_parsetree
 %right PRE
 %left POWER
 %right PREFIX
-
+%right ONTIME
 
 
 %start program
@@ -200,11 +201,14 @@ returns: RETURNS | EQUAL {}
 ;
 
 node_dec:
-  | u=unsafe n=node_or_fun f=ident pc=node_params LPAREN i=in_params RPAREN
+  | u=unsafe r=node_or_fun f=ident pc=node_params LPAREN i=in_params RPAREN
     returns LPAREN o=out_params RPAREN
     c=contract b=block(LET) TEL
-      {{ n_name = f;
-         n_stateful = n;
+      { let (s,t,up) = r in
+        { n_name = f;
+         n_stateful = s;
+         n_task = t;
+         n_unpunctual = up;
          n_unsafe = u;
          n_input  = i;
          n_output = o;
@@ -216,8 +220,10 @@ node_dec:
 ;
 
 node_or_fun:
-  | NODE { true }
-  | FUN { false }
+  | NODE { true, false, false }
+  | FUN { false, false, false }
+  | TASK { true, true, false }
+  | UNPUNCTUAL TASK { true, true, true }
 ;
 
 in_params:
@@ -239,6 +245,12 @@ param:
   | idl=ident_list COLON ty_lin=located_ty_ident ck=ck_annot
       { List.map (fun id -> mk_var_dec ~linearity:(snd ty_lin)
         id (fst ty_lin) ck Var (Loc($startpos,$endpos))) idl }
+  | UNPUNCTUAL id=IDENT COLON ty_lin=located_ty_ident ck=ck_annot EQUAL e=exp
+      { [ mk_var_dec ~linearity:(snd ty_lin) ~unpunctual:true id (fst ty_lin)
+            ck Var (Loc($startpos,$endpos)) ] }
+  | UNPUNCTUAL id=IDENT COLON ty_lin=located_ty_ident ck=ck_annot
+      { [ mk_var_dec ~linearity:(snd ty_lin) ~unpunctual:true id (fst ty_lin)
+            ck Var (Loc($startpos,$endpos)) ] }
 ;
 
 out_params:
@@ -313,6 +325,12 @@ var_last:
   | LAST id=IDENT COLON ty_lin=located_ty_ident ck=ck_annot
       { [ mk_var_dec ~linearity:(snd ty_lin) id (fst ty_lin)
             ck (Last(None)) (Loc($startpos,$endpos)) ] }
+  | UNPUNCTUAL id=IDENT COLON ty_lin=located_ty_ident ck=ck_annot EQUAL e=exp
+      { [ mk_var_dec ~linearity:(snd ty_lin) ~unpunctual:true id (fst ty_lin)
+            ck Var (Loc($startpos,$endpos)) ] }
+  | UNPUNCTUAL id=IDENT COLON ty_lin=located_ty_ident ck=ck_annot
+      { [ mk_var_dec ~linearity:(snd ty_lin) ~unpunctual:true id (fst ty_lin)
+            ck Var (Loc($startpos,$endpos)) ] }
 ;
 
 ident_list:
@@ -532,6 +550,8 @@ _exp:
       { mk_call Ereinit [e1; e2] }
   | NOT exp
       { mk_op_call "not" [$2] }
+  | ONTIME exp
+      { mk_op_call "ontime" [$2] }
   | exp INFIX4 exp
       { mk_op_call $2 [$1; $3] }
   | exp INFIX3 exp
@@ -718,9 +738,12 @@ interface_desc:
   | const_dec        { Iconstdef $1 }
   | e=extern u=unsafe val_or_empty n=node_or_fun f=ident pc=node_params LPAREN i=params_signature RPAREN
     returns LPAREN o=params_signature RPAREN
-    { Isignature({ sig_name = f;
+    { let (s,t,up) = n in
+      Isignature({ sig_name = f;
                    sig_inputs = i;
-                   sig_stateful = n;
+                   sig_stateful = s;
+                   sig_task = t;
+                   sig_unpunctual = up;
                    sig_unsafe = u;
                    sig_outputs = o;
                    sig_params = fst pc;
