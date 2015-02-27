@@ -432,6 +432,7 @@ and translate_var_dec env vd =
     { Heptagon.v_ident = Rename.var vd.v_loc env vd.v_name;
       Heptagon.v_type = translate_type vd.v_loc vd.v_type;
       Heptagon.v_linearity = Linearity.check_linearity vd.v_linearity;
+      Heptagon.v_unpunctual = vd.v_unpunctual;
       Heptagon.v_last = translate_last vd.v_last;
       Heptagon.v_clock = translate_some_clock vd.v_loc env vd.v_clock;
       Heptagon.v_loc = vd.v_loc }
@@ -498,6 +499,8 @@ let translate_node node =
   (* add the node signature to the environment *)
   let nnode = { Heptagon.n_name = n;
                Heptagon.n_stateful = node.n_stateful;
+               Heptagon.n_task = node.n_task;
+               Heptagon.n_unpunctual = node.n_unpunctual;
                Heptagon.n_unsafe = node.n_unsafe;
                Heptagon.n_input = inputs;
                Heptagon.n_output = outputs;

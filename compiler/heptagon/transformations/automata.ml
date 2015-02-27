@@ -130,9 +130,9 @@ let translate_automaton v eq_list handlers =
   in
 
   let strong { s_state = n; s_unless = su } =
-    let rst_vd = mk_var_dec resetname (Tid Initial.pbool) Linearity.Ltop in
+    let rst_vd = mk_var_dec resetname (Tid Initial.pbool) in
     let defnames = Env.add resetname rst_vd Env.empty in
-    let state_vd = mk_var_dec statename tstatetype Linearity.Ltop in
+    let state_vd = mk_var_dec statename tstatetype in
     let defnames = Env.add statename state_vd defnames in
     let st_eq = mk_simple_equation
       (Etuplepat[Evarpat(statename); Evarpat(resetname)])
@@ -142,9 +142,9 @@ let translate_automaton v eq_list handlers =
   in
 
   let weak { s_state = n; s_block = b; s_until = su } =
-    let nextrst_vd = mk_var_dec next_resetname (Tid Initial.pbool) Linearity.Ltop in
+    let nextrst_vd = mk_var_dec next_resetname (Tid Initial.pbool) in
     let defnames = Env.add next_resetname nextrst_vd b.b_defnames in
-    let nextstate_vd = mk_var_dec next_statename tstatetype Linearity.Ltop in
+    let nextstate_vd = mk_var_dec next_statename tstatetype in
     let defnames = Env.add next_statename nextstate_vd defnames in
     let ns_eq = mk_simple_equation
       (Etuplepat[Evarpat(next_statename); Evarpat(next_resetname)])

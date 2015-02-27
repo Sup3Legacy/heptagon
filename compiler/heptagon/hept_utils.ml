@@ -61,8 +61,8 @@ let mk_equation ?(loc=no_location) desc =
     eq_inits = Lno_init;
     eq_loc = loc; }
 
-let mk_var_dec ?(last = Var) ?(clock = fresh_clock()) name ty ~linearity =
-  { v_ident = name; v_type = ty; v_linearity = linearity; v_clock = clock;
+let mk_var_dec ?(last = Var) ?(clock = fresh_clock()) ?(linearity = Linearity.Ltop) ?(unpunctual = false) name ty  =
+  { v_ident = name; v_type = ty; v_linearity = linearity; v_unpunctual = unpunctual; v_clock = clock;
     v_last = last; v_loc = no_location }
 
 let mk_block ?(stateful = true) ?(defnames = Env.empty) ?(locals = []) eqs =
@@ -95,10 +95,12 @@ let mk_signature name ~extern ins outs stateful params constraints loc =
 
 let mk_node
     ?(input = []) ?(output = []) ?(contract = None)
-    ?(stateful = true) ?(unsafe = false) ?(loc = no_location) ?(param = []) ?(constraints = [])
+    ?(stateful = true) ?(task = false) ?(unpunctual = false) ?(unsafe = false) ?(loc = no_location) ?(param = []) ?(constraints = [])
     name block =
   { n_name = name;
     n_stateful = stateful;
+    n_task = task;
+    n_unpunctual = unpunctual;
     n_unsafe = unsafe;
     n_input = input;
     n_output = output;

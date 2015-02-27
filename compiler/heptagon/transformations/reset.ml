@@ -48,7 +48,7 @@ let fresh = Idents.gen_fresh "reset" ~reset:true (fun () -> "r")
 let reset_var_from_exp e =
   let r = fresh() in
   { e with e_desc = Evar r },
-  mk_var_dec r (Tid Initial.pbool) ~linearity:Linearity.Ltop,
+  mk_var_dec r (Tid Initial.pbool),
   mk_equation (Eeq(Evarpat r, e))
 
 (** Merge two reset conditions *)

@@ -95,7 +95,7 @@ let tuple_of_vd_list l =
     mk_exp (Eapp (mk_app Etuple, el, None)) ty ~linearity:lin
 
 let vd_of_arg ad =
-    mk_var_dec (fresh_vd_of_arg ad) ad.a_type ad.a_linearity
+    mk_var_dec ~linearity:ad.a_linearity (fresh_vd_of_arg ad) ad.a_type 
 
 (** @return the lists of inputs and outputs (as var_dec) of
     an app object. *)
@@ -150,7 +150,7 @@ let edesc funs acc ed =
               let new_inp, e, acc_eq_list = mk_call g acc_eq_list in
               new_inp @ inp, acc_eq_list, e::largs, local_args @ args, true
           | _ ->
-              let vd = mk_var_dec (fresh_var ()) e.e_ty e.e_linearity in
+              let vd = mk_var_dec ~linearity:e.e_linearity (fresh_var ()) e.e_ty in
               vd::inp, acc_eq_list, (exp_of_vd vd)::largs, e::args, b
         in
 

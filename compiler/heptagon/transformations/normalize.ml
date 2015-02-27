@@ -86,7 +86,7 @@ let flatten_e_list l =
 let equation (d_list, eq_list) e =
   let add_one_var ty lin d_list =
     let n = Idents.gen_var "normalize" "v" in
-    let d_list = (mk_var_dec n ty lin) :: d_list in
+    let d_list = (mk_var_dec ~linearity:lin n ty) :: d_list in
       n, d_list
   in
     match e.e_ty with

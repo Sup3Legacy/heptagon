@@ -35,6 +35,9 @@ open Global_printer
 let pp p = if !verbose then Hept_printer.print stdout p
 
 let compile_program p =
+  (* Unpunctual *)
+  let p = pass "Punctuality abstraction" true Punctuality.program p pp in
+
   (* Typing *)
   let p = silent_pass "Statefulness check" true Stateful.program p in
   let p = silent_pass "Unsafe check" true Unsafe.program p in
@@ -94,5 +97,7 @@ let compile_program p =
 
 
 let compile_interface i =
+  let p = silent_pass "Punctuality abstraction" true Punctuality.interface i in
   let i = silent_pass "Typing" true Typing.interface i in
   i
+

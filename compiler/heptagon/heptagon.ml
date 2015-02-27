@@ -144,6 +144,7 @@ and var_dec = {
   v_ident : var_ident;
   v_type  : ty;
   v_linearity : linearity;
+  v_unpunctual : bool;
   v_clock : ck;
   v_last  : last;
   v_loc   : location }
@@ -172,6 +173,8 @@ type contract = {
 type node_dec = {
   n_name               : qualname;
   n_stateful           : bool;
+  n_task        : bool;
+  n_unpunctual  : bool;
   n_unsafe             : bool;
   n_input              : var_dec list;
   n_output             : var_dec list;

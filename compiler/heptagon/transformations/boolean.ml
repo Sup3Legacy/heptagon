@@ -742,6 +742,7 @@ let var_dec_list (acc_vd,acc_loc,acc_eq) var_from n =
         let acc_loc = { v_ident = id;
                         v_type = ty_bool;
                         v_linearity = var_from.v_linearity;
+                        v_unpunctual = var_from.v_unpunctual;
                         v_clock = ck;
                         v_last = Var;
                         v_loc = no_location } :: acc_loc in
