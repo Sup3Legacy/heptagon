@@ -711,6 +711,8 @@ let rec typing cenv h e =
               | Tprod _ -> message e.e_loc (Esplit_tuple ty)
               | _ -> ());
             Esplit(typed_c, typed_e2), Tprod (repeat_list ty n)
+
+      | Eontime _ -> assert false
     in
       { e with e_desc = typed_desc; e_ty = ty; }, ty
   with

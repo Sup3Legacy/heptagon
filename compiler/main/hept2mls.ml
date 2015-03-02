@@ -165,7 +165,7 @@ let rec translate ({ Heptagon.e_desc = desc; Heptagon.e_ty = ty;
                    List.map translate_extvalue e_list,
                    translate_reset reset)
     | Heptagon.Efby _ | Heptagon.Esplit _
-    | Heptagon.Elast _ ->
+    | Heptagon.Elast _ | Heptagon.Eontime _ ->
         Error.message loc Error.Eunsupported_language_construct
     | Heptagon.Emerge (x, c_e_list) ->
         Emerge (x, List.map (fun (c,e)-> c, translate_extvalue e) c_e_list)

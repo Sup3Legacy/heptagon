@@ -168,7 +168,7 @@ let rec typing h pat e =
               ct
         in
         ct, base_ck
-    | Esplit _ | Elast _ -> assert false
+    | Esplit _ | Elast _ | Eontime _ -> assert false
   in
   begin match e.e_ct_annot with
     None -> ()

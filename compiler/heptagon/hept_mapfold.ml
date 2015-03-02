@@ -117,6 +117,9 @@ and edesc funs acc ed = match ed with
   | Elast v ->
       let v, acc = var_ident_it funs.global_funs acc v in
       Elast v, acc
+  | Eontime v ->
+      let v, acc = var_ident_it funs.global_funs acc v in
+      Elast v, acc
   | Epre (se, e) ->
       let se, acc = optional_wacc (static_exp_it funs.global_funs) acc se in
       let e, acc = exp_it funs acc e in

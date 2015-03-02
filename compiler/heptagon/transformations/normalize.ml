@@ -200,7 +200,7 @@ let rec translate kind context e =
                   | _ -> Misc.internal_error "normalize split")
             | _ -> Misc.internal_error "normalize split")
 
-    | Elast _ | Efby _ ->
+    | Elast _ | Eontime _ | Efby _ ->
         Error.message e.e_loc Error.Eunsupported_language_construct
   in add context kind e'
 

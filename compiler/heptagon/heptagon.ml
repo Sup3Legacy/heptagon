@@ -59,6 +59,7 @@ and desc =
   | Econst of static_exp
   | Evar of var_ident
   | Elast of var_ident
+  | Eontime of var_ident
   (* the static_exp purpose is the initialization of the mem_var *)
   | Epre of static_exp option * exp
   | Efby of exp * exp

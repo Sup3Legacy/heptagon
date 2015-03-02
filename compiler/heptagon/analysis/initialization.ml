@@ -283,6 +283,7 @@ let rec typing h e =
     | Esplit (c, e2) ->
         let i = imax (itype (typing h c)) (itype (typing h e2)) in
           skeleton i e.e_ty
+    | Eontime _ -> assert false
 
 (** Typing an application *)
 and apply h app e_list =

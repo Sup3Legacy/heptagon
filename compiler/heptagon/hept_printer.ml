@@ -137,6 +137,7 @@ and print_exp ff e =
 and print_exp_desc ff = function
   | Evar x -> print_ident ff x
   | Elast x -> fprintf ff "last %a" print_ident x
+  | Eontime x -> fprintf ff "ontime %a" print_ident x
   | Econst c -> print_static_exp ff c
   | Epre(None, e) -> fprintf ff "pre %a" print_exp e
   | Epre(Some c, e) ->

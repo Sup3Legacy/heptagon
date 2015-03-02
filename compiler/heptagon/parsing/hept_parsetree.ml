@@ -99,6 +99,7 @@ and edesc =
   | Econst of static_exp
   | Evar of var_name (* can be a constant_name *)
   | Elast of var_name
+  | Eontime of var_name
   | Epre of exp option * exp
   | Efby of exp * exp
   | Estruct of (qualname * exp) list

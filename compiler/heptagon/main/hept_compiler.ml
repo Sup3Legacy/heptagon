@@ -97,7 +97,6 @@ let compile_program p =
 
 
 let compile_interface i =
-  let p = silent_pass "Punctuality abstraction" true Punctuality.interface i in
   let i = silent_pass "Typing" true Typing.interface i in
   i
 

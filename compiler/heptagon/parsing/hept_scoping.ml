@@ -169,6 +169,9 @@ struct
       let id, last = find n env in
       if not last then message loc (Enot_last n) else id
     with Not_found -> message loc (Evar_unbound n)
+  let ontime loc env n =
+    try fst (find n env)
+    with Not_found -> message loc (Evar_unbound n)
   (** Adds a name to the list of used names and idents. *)
   let add_used_name env n =
     add n (ident_of_name n, false) env
@@ -300,6 +303,7 @@ and translate_desc loc env = function
   | Econst c -> Heptagon.Econst (translate_static_exp c)
   | Evar x -> Heptagon.Evar (Rename.var loc env x)
   | Elast x -> Heptagon.Elast (Rename.last loc env x)
+  | Eontime x -> Heptagon.Eontime (Rename.ontime loc env x)
   | Epre (None, e) -> Heptagon.Epre (None, translate_exp env e)
   | Epre (Some c, e) ->
       Heptagon.Epre (Some (expect_static_exp c),

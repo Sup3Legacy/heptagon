@@ -550,8 +550,6 @@ _exp:
       { mk_call Ereinit [e1; e2] }
   | NOT exp
       { mk_op_call "not" [$2] }
-  | ONTIME exp
-      { mk_op_call "ontime" [$2] }
   | exp INFIX4 exp
       { mk_op_call $2 [$1; $3] }
   | exp INFIX3 exp
@@ -593,6 +591,8 @@ _exp:
       { mk_call Earrow [$1; $3] }
   | LAST IDENT
       { Elast $2 }
+  | ONTIME IDENT
+      { Eontime $2 }
 /*Array operations*/
   | exp POWER separated_nonempty_list(POWER, simple_exp)
       { mk_call ~params:$3 Earray_fill [$1] }

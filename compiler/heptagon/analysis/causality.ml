@@ -124,6 +124,7 @@ let rec typing e =
           | Lat _ -> linread x
           | _ -> read x)
     | Elast(x) -> lastread x
+    | Eontime _ -> assert false
     | Epre (_, e) -> pre (typing e)
     | Efby (e1, e2) ->
         let t1 = typing e1 in

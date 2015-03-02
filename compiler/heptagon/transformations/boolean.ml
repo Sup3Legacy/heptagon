@@ -636,6 +636,7 @@ let rec translate env context ({e_desc = desc; e_ty = ty; e_ct_annot = ct} as e)
         context,Eiterator(it,app,se,pe_list,e_list,r)
     | Elast _ ->
         failwith("Boolean: not supported expression (abstract tree should be normalized)")
+    | Eontime _ -> assert false
   in
   context,{ e with
               e_level_ck = translate_ck env e.e_level_ck;
