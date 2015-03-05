@@ -578,7 +578,8 @@ let translate_signature s =
     | Con(ck,c,x) -> Signature.Con(translate_clock ck, qualify_constrs c, x)
   and translate_arg a =
     Signature.mk_arg a.a_name (translate_type s.sig_loc a.a_type)
-      a.a_linearity (translate_some_clock a.a_clock)
+      ~linearity:a.a_linearity ~unpunctual:a.a_unpunctual
+      (translate_some_clock a.a_clock)
   in
   let n = current_qual s.sig_name in
   let i = List.map translate_arg s.sig_inputs in
@@ -587,7 +588,8 @@ let translate_signature s =
   let c = List.map translate_constrnt s.sig_param_constraints in
   let sig_node =
     Signature.mk_node 
-      ~extern:s.sig_external s.sig_loc i o s.sig_stateful s.sig_unsafe p in
+      ~extern:s.sig_external ~task:s.sig_task ~unpunctual:s.sig_unpunctual
+      s.sig_loc i o s.sig_stateful s.sig_unsafe p in
   Check_signature.check_signature sig_node;
   safe_add s.sig_loc add_value n sig_node;
   mk_signature n i o s.sig_stateful p c s.sig_loc ~extern:s.sig_external

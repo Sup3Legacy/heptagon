@@ -36,7 +36,7 @@ let pp p = if !verbose then Hept_printer.print stdout p
 
 let compile_program p =
   (* Unpunctual *)
-  let p = pass "Punctuality abstraction" true Punctuality.program p pp in
+  let p = pass "Punctuality abstraction" true Punctuality.main p pp in
 
   (* Typing *)
   let p = silent_pass "Statefulness check" true Stateful.program p in

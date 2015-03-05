@@ -490,20 +490,20 @@ let translate_node
 	  let ctrlr_inputs =
 	    (List.map
 	       (fun v ->
-		  Signature.mk_arg (Some v) Initial.tbool Linearity.Ltop Signature.Cbase)
+		  Signature.mk_arg (Some v) Initial.tbool Signature.Cbase)
 	       (sig_inputs@sig_states))
 	    @ (List.map
 		 (fun v ->
 		    Signature.mk_arg
-		      (Some ("p_" ^ v)) Initial.tbool Linearity.Ltop Signature.Cbase)
+		      (Some ("p_" ^ v)) Initial.tbool Signature.Cbase)
 		 sig_ctrl) in
 	  let ctrlr_outputs =
 	    List.map
 	      (fun v ->
-		 Signature.mk_arg (Some v) Initial.tbool Linearity.Ltop Signature.Cbase)
+		 Signature.mk_arg (Some v) Initial.tbool Signature.Cbase)
 	      sig_ctrl in
 	  let ctrlr_signature =
-	    Signature.mk_node Location.no_location ~extern:false
+	    Signature.mk_node Location.no_location ~extern:false ~task:false ~unpunctual:false
 	      ctrlr_inputs ctrlr_outputs false false [] in
 	  (* Add controller into modules *)
 	  Modules.add_value ctrlr_fun_name ctrlr_signature;

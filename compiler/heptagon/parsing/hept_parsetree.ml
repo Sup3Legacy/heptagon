@@ -235,6 +235,7 @@ type arg =
   { a_type  : ty;
     a_clock : ck option;
     a_linearity : Linearity.linearity;
+    a_unpunctual : bool;
     a_name  : var_name option }
 
 type signature =
@@ -304,7 +305,7 @@ let mk_const_dec id ty e loc =
   { c_name = id; c_type = ty; c_value = e; c_loc = loc }
 
 let mk_arg name (ty,lin) ck =
-  { a_type = ty; a_linearity = lin; a_name = name; a_clock = ck }
+  { a_type = ty; a_linearity = lin; a_unpunctual = false; a_name = name; a_clock = ck }
 
 let ptrue = Q Initial.ptrue
 let pfalse = Q Initial.pfalse

@@ -340,9 +340,9 @@ ident_list:
 
 located_ty_ident:
   | ty_ident
-      { $1, Ltop }
+      { ($1, Ltop) }
   | ty_ident AT IDENT
-      { $1, Lat $3 }
+      { ($1, Lat $3) }
 ;
 
 ty_ident:

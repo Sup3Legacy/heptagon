@@ -46,6 +46,7 @@ type arg = {
   a_type  : ty;
   a_clock : ck; (** [a_clock] set to [Cbase] means at the node activation clock *)
   a_linearity : linearity;
+  a_unpunctual : bool;
 }
 
 (** Node static parameters *)
@@ -59,6 +60,8 @@ type node = {
   node_inputs             : arg list;
   node_outputs            : arg list;
   node_stateful           : bool;
+  node_task               : bool;
+  node_unpunctual         : bool;
   node_unsafe             : bool;
   node_params             : param list;
   node_param_constraints  : constrnt list;
@@ -95,8 +98,8 @@ let types_of_param_list l = List.map (fun p -> p.p_type) l
 
 let linearities_of_arg_list l = List.map (fun ad -> ad.a_linearity) l
 
-let mk_arg name ty linearity ck =
-  { a_type = ty; a_linearity = linearity; a_name = name; a_clock = ck }
+let mk_arg name ty ?(linearity=Linearity.Ltop) ?(unpunctual=false) ck =
+  { a_type = ty; a_linearity = linearity; a_name = name; a_clock = ck; a_unpunctual = unpunctual }
 
 let mk_param name ty = { p_name = name; p_type = ty }
 
@@ -105,10 +108,12 @@ let mk_field n ty = { f_name = n; f_type = ty }
 let mk_const_def ty value =
   { c_type = ty; c_value = value }
 
-let mk_node ?(constraints = []) loc ~extern ins outs stateful unsafe params =
+let mk_node ?(constraints = []) loc ~extern ~task ~unpunctual ins outs stateful unsafe params =
   { node_inputs = ins;
     node_outputs  = outs;
     node_stateful = stateful;
+    node_task = task;
+    node_unpunctual = unpunctual;
     node_unsafe = unsafe;
     node_params = params;
     node_param_constraints = constraints;

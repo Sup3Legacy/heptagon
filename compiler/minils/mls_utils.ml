@@ -274,14 +274,16 @@ let remove_eqs_from_node nd ids =
 
 let args_of_var_decs =
  List.map
-   (fun vd -> Signature.mk_arg (Some (Idents.source_name vd.v_ident))
-                               vd.v_type (Linearity.check_linearity vd.v_linearity)
+   (fun vd -> Signature.mk_arg (Some (Idents.source_name vd.v_ident)) vd.v_type
+                               ~linearity:(Linearity.check_linearity vd.v_linearity)
                                (ck_to_sck (Clocks.ck_repr vd.v_clock)))
 
 let signature_of_node n =
   { node_inputs = args_of_var_decs n.n_input;
     node_outputs  = args_of_var_decs n.n_output;
     node_stateful = n.n_stateful;
+    node_task = false;
+    node_unpunctual = false;
     node_unsafe = n.n_unsafe;
     node_params = n.n_params;
     node_param_constraints = n.n_param_constraints;
