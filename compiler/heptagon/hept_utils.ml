@@ -41,7 +41,7 @@ open Heptagon
 
 (* Helper functions to create AST. *)
 (* TODO : After switch, all mk_exp should take care of level_ck *)
-let mk_exp desc ?(level_ck = Cbase) ?(ct_annot = None) ?(loc = no_location) ty ~linearity =
+let mk_exp desc ?(level_ck = Cbase) ?(ct_annot = None) ?(loc = no_location) ?(linearity = Ltop) ty  =
   { e_desc = desc; e_ty = ty; e_ct_annot = ct_annot; e_linearity = linearity;
     e_level_ck = level_ck; e_loc = loc; }
 
@@ -61,8 +61,8 @@ let mk_equation ?(loc=no_location) desc =
     eq_inits = Lno_init;
     eq_loc = loc; }
 
-let mk_var_dec ?(last = Var) ?(clock = fresh_clock()) ?(linearity = Linearity.Ltop) ?(unpunctual = false) name ty  =
-  { v_ident = name; v_type = ty; v_linearity = linearity; v_unpunctual = unpunctual; v_clock = clock;
+let mk_var_dec ?(last = Var) ?(clock = fresh_clock()) ?(linearity = Linearity.Ltop) ?(punctuality = Punctual) name ty  =
+  { v_ident = name; v_type = ty; v_linearity = linearity; v_punctuality = punctuality; v_clock = clock;
     v_last = last; v_loc = no_location }
 
 let mk_block ?(stateful = true) ?(defnames = Env.empty) ?(locals = []) eqs =
@@ -70,9 +70,9 @@ let mk_block ?(stateful = true) ?(defnames = Env.empty) ?(locals = []) eqs =
     b_stateful = stateful; b_loc = no_location; }
 
 let dfalse =
-  mk_exp (Econst (mk_static_bool false)) (Tid Initial.pbool) ~linearity:Ltop
+  mk_exp (Econst (mk_static_bool false)) (Tid Initial.pbool)
 let dtrue =
-  mk_exp (Econst (mk_static_bool true)) (Tid Initial.pbool) ~linearity:Ltop
+  mk_exp (Econst (mk_static_bool true)) (Tid Initial.pbool)
 
 let mk_ifthenelse e1 e2 e3 =
   { e3 with e_desc = mk_op_app Eifthenelse [e1; e2; e3] }
@@ -131,7 +131,7 @@ let args_of_var_decs =
  List.map
    (fun vd -> Signature.mk_arg (Some (Idents.source_name vd.v_ident)) vd.v_type
                                ~linearity:(Linearity.check_linearity vd.v_linearity)
-                               ~unpunctual:vd.v_unpunctual Signature.Cbase)
+                               ~unpunctual:(vd.v_punctuality <> Punctual) Signature.Cbase)
 
 let signature_of_node n =
     { node_inputs = args_of_var_decs n.n_input;

@@ -173,12 +173,15 @@ and var_dec =
   { v_name  : var_name;
     v_type  : ty;
     v_linearity : Linearity.linearity;
-    v_unpunctual : bool;
+    v_punctuality : punctuality;
     v_clock : ck option;
     v_last  : last;
     v_loc   : location; }
 
 and last = Var | Last of exp option
+
+and punctuality = Punctual | Unpunctual of exp option
+
 
 type type_dec =
   { t_name : dec_name;
@@ -293,8 +296,8 @@ let mk_type_dec name desc loc =
 let mk_equation desc loc =
   { eq_desc = desc; eq_loc = loc }
 
-let mk_var_dec ?(linearity=Linearity.Ltop) ?(unpunctual=false) name ty ck last loc =
-  { v_name = name; v_type = ty; v_linearity = linearity; v_unpunctual = unpunctual;
+let mk_var_dec ?(linearity=Linearity.Ltop) ?(punctuality=Punctual) name ty ck last loc =
+  { v_name = name; v_type = ty; v_linearity = linearity; v_punctuality = punctuality;
     v_clock =ck; v_last = last; v_loc = loc }
 
 let mk_block locals eqs loc =

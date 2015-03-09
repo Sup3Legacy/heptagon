@@ -67,7 +67,7 @@ let funs_collect =
 (* adds an equation [x = last(x)] for every partially defined variable *)
 (* in a control structure *)
 let complete_with_last defined_names local_defined_names eq_list =
-  let last n vd = mk_exp (Elast n) vd.v_type Linearity.Ltop in
+  let last n vd = mk_exp (Elast n) vd.v_type in
   let equation n vd eq_list =
     (mk_equation (Eeq(Evarpat n, last n vd)))::eq_list in
   let d = Env.diff defined_names local_defined_names in

@@ -102,7 +102,7 @@ let equation (d_list, eq_list) e =
           let pat_list = List.map (fun n -> Evarpat n) var_list in
           let eq_list = (mk_equation (Eeq (Etuplepat pat_list, e))) :: eq_list in
           let e_list = Misc.map3
-            (fun n ty lin -> mk_exp (Evar n) ty lin) var_list ty_list lin_list in
+            (fun n ty lin -> mk_exp ~linearity:lin (Evar n) ty) var_list ty_list lin_list in
           let e = Eapp(mk_app Etuple, e_list, None) in
             (d_list, eq_list), e
       | _ ->

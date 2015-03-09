@@ -260,7 +260,7 @@ and translate_static_exp_desc loc ed =
 
 let expect_static_exp e = match e.e_desc with
   | Econst se -> translate_static_exp se
-  | _ ->  message e.e_loc Estatic_exp_expected
+  | _ -> message e.e_loc Estatic_exp_expected
 
 let rec translate_type loc ty =
   try
@@ -436,7 +436,7 @@ and translate_var_dec env vd =
     { Heptagon.v_ident = Rename.var vd.v_loc env vd.v_name;
       Heptagon.v_type = translate_type vd.v_loc vd.v_type;
       Heptagon.v_linearity = Linearity.check_linearity vd.v_linearity;
-      Heptagon.v_unpunctual = vd.v_unpunctual;
+      Heptagon.v_punctuality = translate_punctuality env vd.v_punctuality;
       Heptagon.v_last = translate_last vd.v_last;
       Heptagon.v_clock = translate_some_clock vd.v_loc env vd.v_clock;
       Heptagon.v_loc = vd.v_loc }
@@ -449,6 +449,11 @@ and translate_last = function
   | Var -> Heptagon.Var
   | Last (None) -> Heptagon.Last None
   | Last (Some e) -> Heptagon.Last (Some (expect_static_exp e))
+
+and translate_punctuality env = function
+  | Punctual -> Heptagon.Punctual
+  | Unpunctual (None) -> Heptagon.Unpunctual None
+  | Unpunctual (Some e) -> Heptagon.Unpunctual (Some (translate_exp env e))
 
 let translate_contract env opt_ct =
   match opt_ct with

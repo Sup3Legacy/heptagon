@@ -246,10 +246,10 @@ param:
       { List.map (fun id -> mk_var_dec ~linearity:(snd ty_lin)
         id (fst ty_lin) ck Var (Loc($startpos,$endpos))) idl }
   | UNPUNCTUAL id=IDENT COLON ty_lin=located_ty_ident ck=ck_annot EQUAL e=exp
-      { [ mk_var_dec ~linearity:(snd ty_lin) ~unpunctual:true id (fst ty_lin)
+      { [ mk_var_dec ~linearity:(snd ty_lin) ~punctuality:(Unpunctual (Some e)) id (fst ty_lin)
             ck Var (Loc($startpos,$endpos)) ] }
   | UNPUNCTUAL id=IDENT COLON ty_lin=located_ty_ident ck=ck_annot
-      { [ mk_var_dec ~linearity:(snd ty_lin) ~unpunctual:true id (fst ty_lin)
+      { [ mk_var_dec ~linearity:(snd ty_lin) ~punctuality:(Unpunctual None) id (fst ty_lin)
             ck Var (Loc($startpos,$endpos)) ] }
 ;
 
@@ -326,10 +326,10 @@ var_last:
       { [ mk_var_dec ~linearity:(snd ty_lin) id (fst ty_lin)
             ck (Last(None)) (Loc($startpos,$endpos)) ] }
   | UNPUNCTUAL id=IDENT COLON ty_lin=located_ty_ident ck=ck_annot EQUAL e=exp
-      { [ mk_var_dec ~linearity:(snd ty_lin) ~unpunctual:true id (fst ty_lin)
+      { [ mk_var_dec ~linearity:(snd ty_lin) ~punctuality:(Unpunctual (Some e)) id (fst ty_lin)
             ck Var (Loc($startpos,$endpos)) ] }
   | UNPUNCTUAL id=IDENT COLON ty_lin=located_ty_ident ck=ck_annot
-      { [ mk_var_dec ~linearity:(snd ty_lin) ~unpunctual:true id (fst ty_lin)
+      { [ mk_var_dec ~linearity:(snd ty_lin) ~punctuality:(Unpunctual None) id (fst ty_lin)
             ck Var (Loc($startpos,$endpos)) ] }
 ;
 

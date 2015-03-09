@@ -162,7 +162,7 @@ let edesc funs acc ed =
           let _, outp = get_node_inp_outp f in
           let f_out_type = type_of_vd_list outp in
           let f_out_lin = linearity_of_vd_list outp in
-          let call = mk_exp (Eapp(f, largs, None)) f_out_type f_out_lin in
+          let call = mk_exp ~linearity:f_out_lin (Eapp(f, largs, None)) f_out_type in
           let eq = mk_equation (Eeq(pat_of_vd_list outp, call)) in
           (* create the lambda *)
           let anon = mk_app

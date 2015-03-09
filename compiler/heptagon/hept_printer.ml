@@ -301,7 +301,7 @@ and print_escape_list unless ff esc_list = match esc_list with
 and print_switch_handler_list ff tag_act_list =
   print_list
     (fun ff sh ->
-       fprintf ff "@[<v 2>| %a @ %a@]"
+       fprintf ff "@[<v 2>| %a do@ %a@]"
          print_qualname sh.w_name
          (print_block " do ") sh.w_block)
     "" "" "" ff tag_act_list

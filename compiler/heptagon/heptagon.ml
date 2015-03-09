@@ -145,12 +145,15 @@ and var_dec = {
   v_ident : var_ident;
   v_type  : ty;
   v_linearity : linearity;
-  v_unpunctual : bool;
+  v_punctuality : punctuality;
   v_clock : ck;
   v_last  : last;
   v_loc   : location }
 
 and last = Var | Last of static_exp option
+
+and punctuality = Punctual | Unpunctual of exp option
+
 
 type type_dec = {
   t_name : qualname;

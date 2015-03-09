@@ -45,8 +45,8 @@ let last (eq_list, env, v) { v_ident = n; v_type = t; v_linearity = lin; v_last 
         let lastn = fresh n in
         let eq =
           mk_equation (Eeq (Evarpat lastn,
-                            mk_exp (Epre (default,
-                                          mk_exp (Evar n) t Linearity.Ltop)) t lin)) in
+                            mk_exp ~linearity:lin (Epre (default,
+                                          mk_exp (Evar n) t)) t)) in
         eq:: eq_list,
         Env.add n lastn env,
         (mk_var_dec ~linearity:lin lastn t ) :: v
