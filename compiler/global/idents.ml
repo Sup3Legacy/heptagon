@@ -50,7 +50,6 @@ let num = ref 0
 
 let ident_compare id1 id2 = compare id1.num id2.num
 
-(* used only for debuging *)
 let name id =
   if id.is_generated then
     id.source ^ "_" ^ (string_of_int id.num)
