@@ -95,15 +95,15 @@ let node_pred file (node: Minils.node_dec) =
 
   (* Print inputs *)
   let inputs = List.map (string_of_vardec true) node.Minils.n_input in
-  Printf.fprintf file "  %s = init;\n" (String.concat ", " inputs);
+  Printf.fprintf file "  %s = init\n" (String.concat ", " inputs);
 
   (* Print equations *)
   let equations = List.map (string_of_eq) node.Minils.n_equs in
-  Printf.fprintf file "  %s;\n" (String.concat ";\n  " equations);
+  Printf.fprintf file "  %s\n" (String.concat "\n  " equations);
 
   (* Print outputs *)
   let outputs = List.map (string_of_vardec false) node.Minils.n_output in
-  Printf.fprintf file "  exit %s;\n" (String.concat ", " outputs);
+  Printf.fprintf file "  exit %s\n" (String.concat ", " outputs);
 
   (* Print end of node *)
   Printf.fprintf file "}\n"
