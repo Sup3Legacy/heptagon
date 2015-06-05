@@ -1,10 +1,14 @@
-let fresh_name =
+let _aux_fresh index prefix hint =
+  index := !index + 1;
+  Printf.sprintf "%s%s__%d" prefix hint !index
+
+let fresh_var =
   let index = ref 0 in
-  let aux () = (
-    index := !index + 1;
-    Printf.sprintf "%%TMP__%d" !index
-  ) in
-  aux
+  _aux_fresh index "%TMP"
+
+let fresh_clk =
+  let index = ref 0 in
+  _aux_fresh index "?TMP"
 
 (* List.map and List.fold_left in a single pass. *)
 let mapfold (pred: 'a -> 'b -> ('a * 'c)) (start: 'a) (l: 'b list) =
@@ -12,7 +16,9 @@ let mapfold (pred: 'a -> 'b -> ('a * 'c)) (start: 'a) (l: 'b list) =
     let (folded, mapped) = acc in
     let (new_folded, new_mapped) = (pred folded item) in
     (new_folded, new_mapped :: mapped)
-  ) in List.fold_left aux (start, []) l
+  ) in
+  let (folded, mapped) = (List.fold_left aux (start, []) l) in
+  (folded, List.rev mapped)
 
 let string_of_modul (modul: Names.modul) =
   let rec aux stack = function
@@ -22,7 +28,14 @@ let string_of_modul (modul: Names.modul) =
         | "-" -> "sub" :: (List.tl stack)
         | "*" -> "mul" :: (List.tl stack)
         | "/" -> "div" :: (List.tl stack)
-        (* TODO: binary operators *)
+        | ">" -> "cmp gt" :: (List.tl stack)
+        | ">=" -> "cmp ge" :: (List.tl stack)
+        | "<" -> "cmp lt" :: (List.tl stack)
+        | "<=" -> "cmp le" :: (List.tl stack)
+        | "=" -> "cmp eq" :: (List.tl stack)
+        | "<>" -> "cmp ne" :: (List.tl stack)
+        | "not" -> "not" :: (List.tl stack)
+        (* TODO: boolean operators *)
         | _ -> "PERVASIVES" :: stack
       )
     | Names.LocalModule -> "LOCALMODULE" :: stack
@@ -49,7 +62,7 @@ let rec push_static_exp acc (sexp: Types.static_exp) =
 and push_static_exp_desc acc = function
   | Types.Svar name -> (acc, string_of_qualname name)
   | Types.Sint i ->
-      let tmpvar = (fresh_name ()) in
+      let tmpvar = (fresh_var "imm") in
       let loader = (Printf.sprintf "i64 %s = li %d" tmpvar i) in
       (loader :: acc, tmpvar)
   | _ -> (acc, "<static_exp_desc constructor not handled>") (* TODO *)
@@ -68,22 +81,36 @@ and push_edesc acc = function
   | Minils.Eextvalue ev -> push_extvalue acc ev
   | Minils.Eapp (app, evs, None) ->
       let (acc, params) = (mapfold push_extvalue acc evs) in
-      (acc, Printf.sprintf "%s %s"
-          (string_of_app app)
-          (String.concat ", " params))
-  | Minils.Eapp (app, evs, Some varident) ->
-      let (acc, params) = (mapfold push_extvalue acc evs) in
-      (acc,
-      Printf.sprintf "%s %s(%s)"
-          (string_of_app app)
-          (String.concat ", " params)
-          (string_of_varident varident))
+      push_app acc params app
   | _ -> (acc, "<edesc constructor not handled>") (* TODO *)
 
-and string_of_app (app: Minils.app) =
+and push_app acc (params: string list) (app: Minils.app) =
   match app.Minils.a_op with
-  | Minils.Efun f -> string_of_qualname f
-  | _ -> "<op constructor not handled>" (* TODO *)
+  | Minils.Efun f -> (acc,
+      String.concat " " [string_of_qualname f; (String.concat ", " params)])
+  | Minils.Eifthenelse -> (
+      match params with [cond; iftrue; iffalse] -> (
+        let notcond = fresh_var "not" in
+        let tmptrue = fresh_var "iftrue" in
+        let tmpfalse = fresh_var "iffalse" in
+        let clktrue = fresh_clk "true" in
+        let clkfalse = fresh_clk "false" in
+        let eqnclktrue = Printf.sprintf "%s is %s" clktrue cond in
+        let eqnclkfalse = Printf.sprintf "%s is %s" clkfalse notcond in
+        let eqnclkrel = Printf.sprintf "?top <=> %s | %s" clkfalse clktrue in (* Redundant relatio *)
+        let instrnot = Printf.sprintf "i1 %s = not %s"
+            notcond cond in
+        let instrsampletrue = Printf.sprintf "i64 %s = sample %s when %s"
+            tmptrue iftrue clkfalse in
+        let instrsamplefalse = Printf.sprintf "i64 %s = sample %s when %s"
+            tmpfalse iffalse clkfalse in
+        (instrnot :: instrsampletrue :: instrsamplefalse ::
+          eqnclktrue :: eqnclkfalse :: eqnclkrel :: acc,
+        Printf.sprintf "phi %s, %s" tmptrue tmpfalse)
+      )
+      | _ -> failwith "bad list of params"
+  )
+  | _ -> (acc, "<op constructor not handled>") (* TODO *)
 
 and push_extvalue acc (ev: Minils.extvalue) =
   push_extvaluedesc acc ev.Minils.w_desc
