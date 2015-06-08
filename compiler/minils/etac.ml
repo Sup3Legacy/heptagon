@@ -10,6 +10,21 @@ let fresh_clk =
   let index = ref 0 in
   _aux_fresh index "?TMP"
 
+
+let int_of_constructor =
+  let tbl = Hashtbl.create 1024 in
+  let index = ref 0 in
+  let aux (name: Names.constructor_name) =
+    if Hashtbl.mem tbl name then
+      Hashtbl.find tbl name
+    else (
+      index := !index + 1;
+      Hashtbl.add tbl name !index;
+      !index
+    )
+  in aux
+
+
 (* List.map and List.fold_left in a single pass. *)
 let mapfold (pred: 'a -> 'b -> ('a * 'c)) (start: 'a) (l: 'b list) =
   let aux (acc: ('a * 'c list)) (item: 'b) = (
@@ -127,22 +142,28 @@ and push_extvaluedesc acc = function
   | Minils.Wconst sexp -> push_static_exp acc sexp
   | _ -> (acc, "<extvaluedesc constructor not handled>") (* TODO *)
 
-let rec string_of_ck = function
-  | Clocks.Cbase -> "?top"
-  | Clocks.Cvar link -> string_of_link !link
-  | Clocks.Con _ -> "<Clocks.Con not handled>" (* TODO *)
+let rec push_ck acc = function
+  (* FIXME: not tail-recursive *)
+  | Clocks.Cbase -> (acc, "?top")
+  | Clocks.Cvar link -> push_link acc !link
+  | Clocks.Con (ck, constructor, var) ->
+      let (acc, ck) = push_ck acc ck in
+      let tmpvar = (fresh_var (Printf.sprintf "%s_%s" (string_of_qualname constructor) (string_of_varident var))) in
+      let tmpclk = (fresh_clk (Printf.sprintf "%s_%s" (string_of_qualname constructor) (string_of_varident var))) in
+      let vareqn = Printf.sprintf "i1 %s = cmp eq %s %d" tmpvar (string_of_varident var) (int_of_constructor constructor) in
+      let clkeqn = Printf.sprintf "%s is %s" tmpclk tmpvar in
+      (vareqn :: clkeqn :: acc, Printf.sprintf "%s, %s" ck tmpclk)
 
-and string_of_link = function
-  | Clocks.Cindex i -> Printf.sprintf "?%d" i
-  | Clocks.Clink ck -> string_of_ck ck (* XXX: Is it right? *)
+and push_link acc = function
+  | Clocks.Cindex i -> (acc, Printf.sprintf "?%d" i)
+  | Clocks.Clink ck -> push_ck acc ck (* XXX: Is it right? *)
 
 let push_eq acc (eq: Minils.eq) =
   (* TODO: handle types *)
   let (acc, s) = push_exp acc eq.Minils.eq_rhs in
+  let (acc, ck) = (push_ck acc eq.Minils.eq_base_ck) in
   let inst = Printf.sprintf "%s = %s when %s"
-      (string_of_pat eq.Minils.eq_lhs)
-      s
-      (string_of_ck eq.Minils.eq_base_ck)
+      (string_of_pat eq.Minils.eq_lhs) s ck
   in inst :: acc
 
 let node_pred file (node: Minils.node_dec) =
