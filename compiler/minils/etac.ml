@@ -98,6 +98,22 @@ let rec string_of_pat = function
   | Minils.Etuplepat pats ->
       Printf.sprintf "%s" (String.concat ", " (List.map string_of_pat pats))
 
+let rec push_enum_switch eqn_acc clk_acc var_name (constructor: Names.constructor_name) constructors =
+  match constructors with
+  | [] -> (eqn_acc, clk_acc, fresh_clk "")
+  | hd :: tl ->
+    let tmpvar = (fresh_var (Printf.sprintf "%s_%s" (string_of_qualname hd) var_name)) in
+    let tmpclk = (fresh_clk (Printf.sprintf "%s_%s" (string_of_qualname hd) var_name)) in
+    let vareqn = Printf.sprintf "i1 %s = cmp eq %s %d" tmpvar var_name (int_of_constructor constructor) in
+    let clkeqn = Printf.sprintf "%s is %s" tmpclk tmpvar in
+    let eqn_acc = vareqn :: clkeqn :: eqn_acc in
+    let clk_acc = tmpclk :: clk_acc in
+    if (hd = constructor) then (* Should be true exactly once *)
+      let (eqn_acc, clk_acc, _) = push_enum_switch eqn_acc clk_acc var_name constructor tl in
+      (eqn_acc, clk_acc, tmpclk)
+    else
+      push_enum_switch eqn_acc clk_acc var_name constructor tl
+
 let rec push_exp acc(exp: Minils.exp)  =
   push_edesc acc exp.Minils.e_desc
 
@@ -106,6 +122,16 @@ and push_edesc acc = function
   | Minils.Eapp (app, evs, None) ->
       let (acc, params) = (mapfold push_extvalue acc evs) in
       push_app acc params app
+  | Minils.Ewhen (exp, constructor, var) ->
+      let (acc, exp) = push_exp acc exp in
+      let (acc, clks, clk) = (match (Hashtbl.find types_tbl (Hashtbl.find constructors_tbl constructor)) with
+      | Minils.Type_enum l ->
+        push_enum_switch acc [] (string_of_varident var) constructor l
+      | _ -> failwith "Constructor of non-enum"
+      ) in
+      let unioneqn = Printf.sprintf "?top = %s" (String.concat " | " clks) in
+      (* XXX: Should it actually be ?top ? *)
+      (unioneqn :: acc, Printf.sprintf "%s when %s" exp clk)
   | _ -> (acc, "<edesc constructor not handled>") (* TODO *)
 
 and push_app acc (params: string list) (app: Minils.app) =
@@ -143,22 +169,6 @@ and push_extvaluedesc acc = function
   | Minils.Wvar varident -> (acc, string_of_varident varident)
   | Minils.Wconst sexp -> push_static_exp acc sexp
   | _ -> (acc, "<extvaluedesc constructor not handled>") (* TODO *)
-
-let rec push_enum_switch eqn_acc clk_acc var_name (constructor: Names.constructor_name) constructors =
-  match constructors with
-  | [] -> (eqn_acc, clk_acc, fresh_clk "")
-  | hd :: tl ->
-    let tmpvar = (fresh_var (Printf.sprintf "%s_%s" (string_of_qualname hd) var_name)) in
-    let tmpclk = (fresh_clk (Printf.sprintf "%s_%s" (string_of_qualname hd) var_name)) in
-    let vareqn = Printf.sprintf "i1 %s = cmp eq %s %d" tmpvar var_name (int_of_constructor constructor) in
-    let clkeqn = Printf.sprintf "%s is %s" tmpclk tmpvar in
-    let eqn_acc = vareqn :: clkeqn :: eqn_acc in
-    let clk_acc = tmpclk :: clk_acc in
-    if (hd = constructor) then (* Should be true exactly once *)
-      let (eqn_acc, clk_acc, _) = push_enum_switch eqn_acc clk_acc var_name constructor tl in
-      (eqn_acc, clk_acc, tmpclk)
-    else
-      push_enum_switch eqn_acc clk_acc var_name constructor tl
 
 let rec push_ck acc = function
   (* FIXME: not tail-recursive *)
