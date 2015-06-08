@@ -25,6 +25,7 @@ let string_of_modul (modul: Names.modul) =
     | Names.Pervasives -> (
         match (List.hd stack) with
         | "+" -> "add" :: (List.tl stack)
+        | "~-" -> "sub 0" :: (List.tl stack)
         | "-" -> "sub" :: (List.tl stack)
         | "*" -> "mul" :: (List.tl stack)
         | "/" -> "div" :: (List.tl stack)
