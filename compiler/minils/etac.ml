@@ -65,6 +65,12 @@ and push_static_exp_desc acc = function
       let tmpvar = (fresh_var "imm") in
       let loader = (Printf.sprintf "i64 %s = li %d" tmpvar i) in
       (loader :: acc, tmpvar)
+  | Types.Sop (f_name, args) ->
+      let (acc, args) = mapfold push_static_exp acc args in
+      let args = (String.concat ", " args) in
+      let tmpvar = (fresh_var "sexp") in
+      let loader = (Printf.sprintf "i64 %s = %s %s" tmpvar (string_of_qualname f_name) args) in
+      (loader :: acc, tmpvar)
   | _ -> (acc, "<static_exp_desc constructor not handled>") (* TODO *)
 
 let rec string_of_pat = function
