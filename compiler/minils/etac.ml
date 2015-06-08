@@ -11,18 +11,20 @@ let fresh_clk =
   _aux_fresh index "?TMP"
 
 
-let int_of_constructor =
-  let tbl = Hashtbl.create 1024 in
-  let index = ref 0 in
-  let aux (name: Names.constructor_name) =
-    if Hashtbl.mem tbl name then
-      Hashtbl.find tbl name
-    else (
-      index := !index + 1;
-      Hashtbl.add tbl name !index;
-      !index
-    )
-  in aux
+let types_tbl = Hashtbl.create 256
+let constructors_tbl = Hashtbl.create 1024
+
+let int_of_constructor (name: Names.constructor_name) =
+  let t = Hashtbl.find constructors_tbl name in
+  match (Hashtbl.find types_tbl t) with
+  | Minils.Type_enum l ->
+      let rec find (i: int) = function
+        | [] -> failwith "invalid constructor"
+        | name2 :: _ when name = name2 -> i
+        | _ :: tl -> find (i+1) tl
+      in find 0 l
+  | _ -> failwith "Constructor of non-enum."
+
 
 
 (* List.map and List.fold_left in a single pass. *)
@@ -192,7 +194,13 @@ let node_pred file (node: Minils.node_dec) =
 let program_pred file (p: Minils.program_desc) = match p with
   | Minils.Pnode node -> node_pred file node
   | Minils.Pconst _ -> Printf.printf "const not supported\n"
-  | Minils.Ptype _ -> Printf.printf "type not supported\n"
+  | Minils.Ptype t -> (
+      match t.Minils.t_desc with
+      | Minils.Type_enum l -> ignore (
+          List.map (fun c -> Hashtbl.add constructors_tbl c t.Minils.t_name) l)
+      | _ -> failwith "Unsupported type"
+      );
+      Hashtbl.add types_tbl t.Minils.t_name t.Minils.t_desc
 
 let program (p: Minils.program) =
   let filename = (String.uncapitalize (Names.modul_to_string p.Minils.p_modname)) ^".etac" in
