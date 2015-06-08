@@ -144,17 +144,36 @@ and push_extvaluedesc acc = function
   | Minils.Wconst sexp -> push_static_exp acc sexp
   | _ -> (acc, "<extvaluedesc constructor not handled>") (* TODO *)
 
+let rec push_enum_switch eqn_acc clk_acc var_name (constructor: Names.constructor_name) constructors =
+  match constructors with
+  | [] -> (eqn_acc, clk_acc, fresh_clk "")
+  | hd :: tl ->
+    let tmpvar = (fresh_var (Printf.sprintf "%s_%s" (string_of_qualname hd) var_name)) in
+    let tmpclk = (fresh_clk (Printf.sprintf "%s_%s" (string_of_qualname hd) var_name)) in
+    let vareqn = Printf.sprintf "i1 %s = cmp eq %s %d" tmpvar var_name (int_of_constructor constructor) in
+    let clkeqn = Printf.sprintf "%s is %s" tmpclk tmpvar in
+    let eqn_acc = vareqn :: clkeqn :: eqn_acc in
+    let clk_acc = tmpclk :: clk_acc in
+    if (hd = constructor) then (* Should be true exactly once *)
+      let (eqn_acc, clk_acc, _) = push_enum_switch eqn_acc clk_acc var_name constructor tl in
+      (eqn_acc, clk_acc, tmpclk)
+    else
+      push_enum_switch eqn_acc clk_acc var_name constructor tl
+
 let rec push_ck acc = function
   (* FIXME: not tail-recursive *)
   | Clocks.Cbase -> (acc, "?top")
   | Clocks.Cvar link -> push_link acc !link
   | Clocks.Con (ck, constructor, var) ->
       let (acc, ck) = push_ck acc ck in
-      let tmpvar = (fresh_var (Printf.sprintf "%s_%s" (string_of_qualname constructor) (string_of_varident var))) in
-      let tmpclk = (fresh_clk (Printf.sprintf "%s_%s" (string_of_qualname constructor) (string_of_varident var))) in
-      let vareqn = Printf.sprintf "i1 %s = cmp eq %s %d" tmpvar (string_of_varident var) (int_of_constructor constructor) in
-      let clkeqn = Printf.sprintf "%s is %s" tmpclk tmpvar in
-      (vareqn :: clkeqn :: acc, Printf.sprintf "%s, %s" ck tmpclk)
+      let (acc, clks, clk) = (match (Hashtbl.find types_tbl (Hashtbl.find constructors_tbl constructor)) with
+      | Minils.Type_enum l ->
+        push_enum_switch acc [] (string_of_varident var) constructor l
+      | _ -> failwith "Constructor of non-enum"
+      ) in
+      let unioneqn = Printf.sprintf "%s = %s" ck (String.concat " | " clks) in
+      (* XXX: Is ck the right base clock? *)
+      (unioneqn :: acc, Printf.sprintf "%s, %s" ck clk)
 
 and push_link acc = function
   | Clocks.Cindex i -> (acc, Printf.sprintf "?%d" i)
