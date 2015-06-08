@@ -151,8 +151,10 @@ let node_pred file (node: Minils.node_dec) =
       node.Minils.n_name.Names.name;
 
   (* Print inputs *)
-  let inputs = List.map (string_of_vardec true) node.Minils.n_input in
-  Printf.fprintf file "  %s = init\n" (String.concat ", " inputs);
+  (match List.map (string_of_vardec true) node.Minils.n_input with
+  | [] -> Printf.fprintf file "  init\n"
+  | inputs -> Printf.fprintf file "  %s = init\n" (String.concat ", " inputs)
+  );
 
   (* Print equations *)
   let equations = List.fold_left (push_eq) [] node.Minils.n_equs in
