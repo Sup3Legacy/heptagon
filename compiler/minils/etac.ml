@@ -4,11 +4,11 @@ let _aux_fresh index prefix hint =
 
 let fresh_var =
   let index = ref 0 in
-  _aux_fresh index "%TMP"
+  _aux_fresh index "TMP"
 
 let fresh_clk =
   let index = ref 0 in
-  _aux_fresh index "?TMP"
+  _aux_fresh index "TMP"
 
 
 let types_tbl = Hashtbl.create 256
@@ -87,12 +87,12 @@ let string_of_qualname (qualname: Names.qualname) =
   string_of_modul (Names.QualModule qualname)
 
 let string_of_varident (varident: Idents.var_ident) =
-  Printf.sprintf "%%%s" (Idents.name varident)
+  Printf.sprintf "%s" (Idents.name varident)
 
 let string_of_vardec (with_type: bool) (vardec: Minils.var_dec) =
   (* TODO: handle types *)
   if with_type then
-    String.concat " " ["i64"; string_of_varident vardec.Minils.v_ident]
+    String.concat "" ["i64 %"; string_of_varident vardec.Minils.v_ident]
   else
     string_of_varident vardec.Minils.v_ident
 
@@ -103,114 +103,51 @@ and push_static_exp_desc acc = function
   | Types.Svar name -> (acc, string_of_qualname name)
   | Types.Sint i ->
       let tmpvar = (fresh_var "imm") in
-      let loader = (Printf.sprintf "i64 %s = li %d" tmpvar i) in
+      let loader = (Printf.sprintf "i64 %%%s = li %d" tmpvar i) in
       (loader :: acc, tmpvar)
   | Types.Sop (f_name, args) ->
       let (acc, args) = mapfold push_static_exp acc args in
-      let args = (String.concat ", " args) in
+      let args = (String.concat ", %%" args) in
       let tmpvar = (fresh_var "sexp") in
-      let loader = (Printf.sprintf "i64 %s = %s %s" tmpvar (string_of_qualname f_name) args) in
+      let loader = (Printf.sprintf "i64 %%%s = %s %%%s" tmpvar (string_of_qualname f_name) args) in
       (loader :: acc, tmpvar)
   | _ -> (acc, "<static_exp_desc constructor not handled>") (* TODO *)
 
 let rec string_of_pat = function
   (* FIXME: not tail-recursive *)
   | Minils.Evarpat var_ident ->
-      String.concat " " ["i64"; string_of_varident var_ident]
+      String.concat "" ["i64 %"; string_of_varident var_ident]
   | Minils.Etuplepat pats ->
-      Printf.sprintf "%s" (String.concat ", " (List.map string_of_pat pats))
-
-let rec push_enum_switch eqn_acc clk_acc var_name (constructor: Names.constructor_name) constructors =
-  match constructors with
-  | [] -> (eqn_acc, clk_acc, fresh_clk "")
-  | hd :: tl ->
-    let tmpvar = (fresh_var (Printf.sprintf "clk_%s_%s" (string_of_qualname hd) var_name)) in
-    let tmpclk = (fresh_clk (Printf.sprintf "%s_%s" (string_of_qualname hd) var_name)) in
-    let tmpimm = (fresh_var "imm") in
-    let immeqn = Printf.sprintf "i64 %s = li %d" tmpimm (int_of_constructor constructor) in
-    let vareqn = Printf.sprintf "i1 %s = cmp eq %%%s, %s" tmpvar var_name tmpimm in
-    let clkeqn = Printf.sprintf "%s is %s" tmpclk tmpvar in
-    let eqn_acc = immeqn :: vareqn :: clkeqn :: eqn_acc in
-    let clk_acc = tmpclk :: clk_acc in
-    if (hd = constructor) then (* Should be true exactly once *)
-      let (eqn_acc, clk_acc, _) = push_enum_switch eqn_acc clk_acc var_name constructor tl in
-      (eqn_acc, clk_acc, tmpclk)
-    else
-      push_enum_switch eqn_acc clk_acc var_name constructor tl
-
-let rec push_merge eqn_acc clk_acc var_acc var_name pairs =
-  match pairs with
-  | [] -> (eqn_acc, clk_acc, var_acc)
-  | (constructor, exp) :: tl ->
-    let tmpclkvar = (fresh_var (Printf.sprintf "clk_%s_%s" (string_of_qualname constructor) var_name)) in
-    let tmpclk = (fresh_clk (Printf.sprintf "%s_%s" (string_of_qualname constructor) var_name)) in
-    let tmpimm = (fresh_var "imm") in
-    let immeqn = Printf.sprintf "i64 %s = li %d" tmpimm (int_of_constructor constructor) in
-    let clkvareqn = Printf.sprintf "i1 %s = cmp eq %%%s, %s" tmpclkvar var_name tmpimm in
-    let clkeqn = Printf.sprintf "%s is %s" tmpclk tmpclkvar in
-    let clk_acc = tmpclk :: clk_acc in
-    let tmpvar = (fresh_var (Printf.sprintf "%s_%s" (string_of_qualname constructor) var_name)) in
-    let (eqn_acc, value) = push_extvalue eqn_acc exp in
-    let var_eqn = Printf.sprintf "i64 %s = sample %s when %s" tmpvar value tmpclk in
-    let eqn_acc = immeqn :: var_eqn :: clkvareqn :: clkeqn :: eqn_acc in
-    push_merge eqn_acc clk_acc (tmpvar :: var_acc) var_name tl
+      Printf.sprintf "%%%s" (String.concat ", %" (List.map string_of_pat pats))
 
 and push_exp acc clk (exp: Minils.exp)  =
   push_edesc acc clk exp.Minils.e_desc
 
-and push_edesc acc base_clk = function
+and push_edesc acc _ = function
   | Minils.Eextvalue ev -> push_extvalue acc ev
   | Minils.Eapp (app, evs, None) ->
       let (acc, params) = (mapfold push_extvalue acc evs) in
       push_app acc params app
-  | Minils.Ewhen (exp, constructor, var) ->
-      let (acc, exp) = push_exp acc base_clk exp in
-      let var_name = string_of_varident var in
-      let var_name = String.sub var_name 1 ((String.length var_name) - 1) in
-      let (acc, clks, clk) = (match (Hashtbl.find types_tbl (get_type_of_constructor constructor)) with
-      | Minils.Type_enum l ->
-        push_enum_switch acc [] var_name constructor l
-      | _ -> failwith "Constructor of non-enum"
-      ) in
-      let unioneqn = Printf.sprintf "%s <=> %s" base_clk (String.concat " | " clks) in
-      (unioneqn :: acc, Printf.sprintf "sample %s when %s" exp clk)
-  | Minils.Emerge (var, l) ->
-      let (first_constructor, _) = (List.hd l) in (* TODO: empty enums? *)
-      let t = get_type_of_constructor first_constructor in
-      let var_name = string_of_varident var in
-      let var_name = String.sub var_name 1 ((String.length var_name) - 1) in
-      let (acc, clks, variables) = (match (Hashtbl.find types_tbl t) with
-      | Minils.Type_enum _ ->
-        push_merge acc [] [] var_name l
-      | _ -> failwith "Constructor of non-enum"
-      ) in
-      let unioneqn = Printf.sprintf "%s <=> %s" base_clk (String.concat " | " clks) in
-      (unioneqn :: acc, Printf.sprintf "phi %s when %s" (String.concat ", " variables) base_clk)
+  | Minils.Ewhen _ ->
+      (acc, "<Ewhen not handled>")
+  | Minils.Emerge _ ->
+      (acc, "<Emerge not handled>")
   | _ -> (acc, "<edesc constructor not handled>") (* TODO *)
 
 and push_app acc (params: string list) (app: Minils.app) =
   match app.Minils.a_op with
   | Minils.Efun f -> (acc,
-      String.concat " " [string_of_qualname f; (String.concat ", " params)])
+      String.concat " %" [string_of_qualname f; (String.concat ", %" params)])
   | Minils.Eifthenelse -> (
       match params with [cond; iftrue; iffalse] -> (
-        let notcond = fresh_var "not" in
         let tmptrue = fresh_var "iftrue" in
         let tmpfalse = fresh_var "iffalse" in
-        let clktrue = fresh_clk "true" in
-        let clkfalse = fresh_clk "false" in
-        let eqnclktrue = Printf.sprintf "%s is %s" clktrue cond in
-        let eqnclkfalse = Printf.sprintf "%s is %s" clkfalse notcond in
-        let eqnclkrel = Printf.sprintf "?top <=> %s | %s" clkfalse clktrue in
-        let instrnot = Printf.sprintf "i1 %s = not %s"
-            notcond cond in
-        let instrsampletrue = Printf.sprintf "i64 %s = sample %s when %s"
-            tmptrue iftrue clkfalse in
-        let instrsamplefalse = Printf.sprintf "i64 %s = sample %s when %s"
-            tmpfalse iffalse clkfalse in
-        (instrnot :: instrsampletrue :: instrsamplefalse ::
-          eqnclktrue :: eqnclkfalse :: eqnclkrel :: acc,
-        Printf.sprintf "phi %s, %s" tmptrue tmpfalse)
+        let instrsampletrue = Printf.sprintf "i64 %%%s = sample %%%s when ?%s_true_clk"
+            tmptrue iftrue cond in
+        let instrsamplefalse = Printf.sprintf "i64 %%%s = sample %%%s when ?%s_false_clk"
+            tmpfalse iffalse cond in
+        (instrsampletrue :: instrsamplefalse :: acc,
+        Printf.sprintf "phi %%%s, %%%s" tmptrue tmpfalse)
       )
       | _ -> failwith "bad list of params"
   )
@@ -220,28 +157,19 @@ and push_extvalue acc (ev: Minils.extvalue) =
   push_extvaluedesc acc ev.Minils.w_desc
 
 and push_extvaluedesc acc = function
-  | Minils.Wvar varident -> (acc, string_of_varident varident)
+  | Minils.Wvar varident -> (acc, Printf.sprintf "%s" (string_of_varident varident))
   | Minils.Wconst sexp -> push_static_exp acc sexp
   | _ -> (acc, "<extvaluedesc constructor not handled>") (* TODO *)
 
 let rec push_ck acc = function
   (* FIXME: not tail-recursive *)
-  | Clocks.Cbase -> (acc, "?top")
+  | Clocks.Cbase -> (acc, "top")
   | Clocks.Cvar link -> push_link acc !link
-  | Clocks.Con (base_ck, constructor, var) ->
-      let var_name = string_of_varident var in
-      let var_name = String.sub var_name 1 ((String.length var_name) - 1) in
-      let (acc, base_ck) = push_ck acc base_ck in
-      let (acc, clks, clk) = (match (Hashtbl.find types_tbl (get_type_of_constructor constructor)) with
-      | Minils.Type_enum l ->
-        push_enum_switch acc [] var_name constructor l
-      | _ -> failwith "Constructor of non-enum"
-      ) in
-      let unioneqn = Printf.sprintf "%s <=> %s" base_ck (String.concat " | " clks) in
-      (unioneqn :: acc, clk)
+  | Clocks.Con _ ->
+      failwith "Clocks.Con not handled."
 
 and push_link acc = function
-  | Clocks.Cindex i -> (acc, Printf.sprintf "?%d" i)
+  | Clocks.Cindex i -> (acc, Printf.sprintf "%d" i)
   | Clocks.Clink ck -> push_ck acc ck (* XXX: Is it right? *)
 
 let push_eq acc (eq: Minils.eq) =
@@ -252,11 +180,30 @@ let push_eq acc (eq: Minils.eq) =
       (string_of_pat eq.Minils.eq_lhs) s
   in inst :: acc
 
+let push_var_init acc (var: Minils.var_dec) =
+  let varname =  (string_of_varident var.Minils.v_ident) in
+  let (acc, base_clk) = (push_ck acc var.Minils.v_clock) in
+  match var.Minils.v_type with
+  | Types.Tid {Names.qual=Names.Pervasives; Names.name="bool"} ->
+      let trueclk = Printf.sprintf "%s_true_clk" varname in
+      let falsevarname = Printf.sprintf "%s_false" varname in
+      let falseclk = Printf.sprintf "%s_false_clk" varname in
+      let noteqn = Printf.sprintf "i1 %%%s = not %%%s when ?%s" falsevarname varname base_clk in
+      let trueeqn = Printf.sprintf "?%s is %%%s" trueclk varname in
+      let falseeqn = Printf.sprintf "?%s is %%%s" falseclk falsevarname in
+      let unioneqn = Printf.sprintf "?%s <=> ?%s | ?%s" base_clk trueclk falseclk in
+      noteqn :: trueeqn :: falseeqn :: unioneqn :: acc
+  | Types.Tid {Names.qual=Names.Pervasives; Names.name="float"} -> acc
+  | Types.Tid {Names.qual=Names.Pervasives; Names.name="int"} -> acc
+  | _ -> failwith "Unsupported type."
+
 let node_pred file (node: Minils.node_dec) =
   (* Print node name *)
   Printf.fprintf file "node @%s__%s {\n"
       (string_of_modul node.Minils.n_name.Names.qual)
       node.Minils.n_name.Names.name;
+
+  Printf.fprintf file "  %s\n" (String.concat "\n  " (List.fold_left push_var_init [] (node.Minils.n_output @ node.Minils.n_input @ node.Minils.n_local)));
 
   (* Print inputs *)
   (match List.map (string_of_vardec true) node.Minils.n_input with
@@ -270,7 +217,7 @@ let node_pred file (node: Minils.node_dec) =
 
   (* Print outputs *)
   let outputs = List.map (string_of_vardec false) node.Minils.n_output in
-  Printf.fprintf file "  exit %s\n" (String.concat ", " outputs);
+  Printf.fprintf file "  exit %%%s\n" (String.concat ", %" outputs);
 
   (* Print end of node *)
   Printf.fprintf file "}\n"
