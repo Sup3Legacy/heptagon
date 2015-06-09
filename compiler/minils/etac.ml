@@ -126,9 +126,11 @@ let rec push_enum_switch eqn_acc clk_acc var_name (constructor: Names.constructo
   | hd :: tl ->
     let tmpvar = (fresh_var (Printf.sprintf "clk_%s_%s" (string_of_qualname hd) var_name)) in
     let tmpclk = (fresh_clk (Printf.sprintf "%s_%s" (string_of_qualname hd) var_name)) in
-    let vareqn = Printf.sprintf "i1 %s = cmp eq %s %d" tmpvar var_name (int_of_constructor constructor) in
+    let tmpimm = (fresh_var "imm") in
+    let immeqn = Printf.sprintf "i64 %s = li %d" tmpimm (int_of_constructor constructor) in
+    let vareqn = Printf.sprintf "i1 %s = cmp eq %%%s, %s" tmpvar var_name tmpimm in
     let clkeqn = Printf.sprintf "%s is %s" tmpclk tmpvar in
-    let eqn_acc = vareqn :: clkeqn :: eqn_acc in
+    let eqn_acc = immeqn :: vareqn :: clkeqn :: eqn_acc in
     let clk_acc = tmpclk :: clk_acc in
     if (hd = constructor) then (* Should be true exactly once *)
       let (eqn_acc, clk_acc, _) = push_enum_switch eqn_acc clk_acc var_name constructor tl in
@@ -142,44 +144,48 @@ let rec push_merge eqn_acc clk_acc var_acc var_name pairs =
   | (constructor, exp) :: tl ->
     let tmpclkvar = (fresh_var (Printf.sprintf "clk_%s_%s" (string_of_qualname constructor) var_name)) in
     let tmpclk = (fresh_clk (Printf.sprintf "%s_%s" (string_of_qualname constructor) var_name)) in
-    let clkvareqn = Printf.sprintf "i1 %s = cmp eq %s %d" tmpclkvar var_name (int_of_constructor constructor) in
+    let tmpimm = (fresh_var "imm") in
+    let immeqn = Printf.sprintf "i64 %s = li %d" tmpimm (int_of_constructor constructor) in
+    let clkvareqn = Printf.sprintf "i1 %s = cmp eq %%%s, %s" tmpclkvar var_name tmpimm in
     let clkeqn = Printf.sprintf "%s is %s" tmpclk tmpclkvar in
     let clk_acc = tmpclk :: clk_acc in
     let tmpvar = (fresh_var (Printf.sprintf "%s_%s" (string_of_qualname constructor) var_name)) in
     let (eqn_acc, value) = push_extvalue eqn_acc exp in
-    let var_eqn = Printf.sprintf "%s = sample %s when %s" tmpvar value tmpclkvar in
-    let eqn_acc = var_eqn :: clkvareqn :: clkeqn :: eqn_acc in
-    push_merge eqn_acc (tmpvar :: var_acc) clk_acc var_name tl
+    let var_eqn = Printf.sprintf "i64 %s = sample %s when %s" tmpvar value tmpclk in
+    let eqn_acc = immeqn :: var_eqn :: clkvareqn :: clkeqn :: eqn_acc in
+    push_merge eqn_acc clk_acc (tmpvar :: var_acc) var_name tl
 
-and push_exp acc(exp: Minils.exp)  =
-  push_edesc acc exp.Minils.e_desc
+and push_exp acc clk (exp: Minils.exp)  =
+  push_edesc acc clk exp.Minils.e_desc
 
-and push_edesc acc = function
+and push_edesc acc base_clk = function
   | Minils.Eextvalue ev -> push_extvalue acc ev
   | Minils.Eapp (app, evs, None) ->
       let (acc, params) = (mapfold push_extvalue acc evs) in
       push_app acc params app
   | Minils.Ewhen (exp, constructor, var) ->
-      let (acc, exp) = push_exp acc exp in
+      let (acc, exp) = push_exp acc base_clk exp in
+      let var_name = string_of_varident var in
+      let var_name = String.sub var_name 1 ((String.length var_name) - 1) in
       let (acc, clks, clk) = (match (Hashtbl.find types_tbl (get_type_of_constructor constructor)) with
       | Minils.Type_enum l ->
-        push_enum_switch acc [] (string_of_varident var) constructor l
+        push_enum_switch acc [] var_name constructor l
       | _ -> failwith "Constructor of non-enum"
       ) in
-      let unioneqn = Printf.sprintf "?top = %s" (String.concat " | " clks) in
-      (* XXX: Should it actually be ?top ? *)
-      (unioneqn :: acc, Printf.sprintf "%s when %s" exp clk)
+      let unioneqn = Printf.sprintf "%s <=> %s" base_clk (String.concat " | " clks) in
+      (unioneqn :: acc, Printf.sprintf "sample %s when %s" exp clk)
   | Minils.Emerge (var, l) ->
-      let (first_constructor, _) = (List.hd l) in
+      let (first_constructor, _) = (List.hd l) in (* TODO: empty enums? *)
       let t = get_type_of_constructor first_constructor in
-      let (acc, variables, clks) = (match (Hashtbl.find types_tbl t) with (* TODO: empty enums? *)
+      let var_name = string_of_varident var in
+      let var_name = String.sub var_name 1 ((String.length var_name) - 1) in
+      let (acc, clks, variables) = (match (Hashtbl.find types_tbl t) with
       | Minils.Type_enum _ ->
-        push_merge acc [] [] (string_of_varident var) l
+        push_merge acc [] [] var_name l
       | _ -> failwith "Constructor of non-enum"
       ) in
-      let unioneqn = Printf.sprintf "?top = %s" (String.concat " | " clks) in
-      (* XXX: Should it actually be ?top ? *)
-      (unioneqn :: acc, Printf.sprintf "phi %s" (String.concat ", " variables))
+      let unioneqn = Printf.sprintf "%s <=> %s" base_clk (String.concat " | " clks) in
+      (unioneqn :: acc, Printf.sprintf "phi %s when %s" (String.concat ", " variables) base_clk)
   | _ -> (acc, "<edesc constructor not handled>") (* TODO *)
 
 and push_app acc (params: string list) (app: Minils.app) =
@@ -195,7 +201,7 @@ and push_app acc (params: string list) (app: Minils.app) =
         let clkfalse = fresh_clk "false" in
         let eqnclktrue = Printf.sprintf "%s is %s" clktrue cond in
         let eqnclkfalse = Printf.sprintf "%s is %s" clkfalse notcond in
-        let eqnclkrel = Printf.sprintf "?top <=> %s | %s" clkfalse clktrue in (* Redundant relatio *)
+        let eqnclkrel = Printf.sprintf "?top <=> %s | %s" clkfalse clktrue in
         let instrnot = Printf.sprintf "i1 %s = not %s"
             notcond cond in
         let instrsampletrue = Printf.sprintf "i64 %s = sample %s when %s"
@@ -222,16 +228,17 @@ let rec push_ck acc = function
   (* FIXME: not tail-recursive *)
   | Clocks.Cbase -> (acc, "?top")
   | Clocks.Cvar link -> push_link acc !link
-  | Clocks.Con (ck, constructor, var) ->
-      let (acc, ck) = push_ck acc ck in
+  | Clocks.Con (base_ck, constructor, var) ->
+      let var_name = string_of_varident var in
+      let var_name = String.sub var_name 1 ((String.length var_name) - 1) in
+      let (acc, base_ck) = push_ck acc base_ck in
       let (acc, clks, clk) = (match (Hashtbl.find types_tbl (get_type_of_constructor constructor)) with
       | Minils.Type_enum l ->
-        push_enum_switch acc [] (string_of_varident var) constructor l
+        push_enum_switch acc [] var_name constructor l
       | _ -> failwith "Constructor of non-enum"
       ) in
-      let unioneqn = Printf.sprintf "%s = %s" ck (String.concat " | " clks) in
-      (* XXX: Is ck the right base clock? *)
-      (unioneqn :: acc, Printf.sprintf "%s, %s" ck clk)
+      let unioneqn = Printf.sprintf "%s <=> %s" base_ck (String.concat " | " clks) in
+      (unioneqn :: acc, clk)
 
 and push_link acc = function
   | Clocks.Cindex i -> (acc, Printf.sprintf "?%d" i)
@@ -239,10 +246,10 @@ and push_link acc = function
 
 let push_eq acc (eq: Minils.eq) =
   (* TODO: handle types *)
-  let (acc, s) = push_exp acc eq.Minils.eq_rhs in
   let (acc, ck) = (push_ck acc eq.Minils.eq_base_ck) in
-  let inst = Printf.sprintf "%s = %s when %s"
-      (string_of_pat eq.Minils.eq_lhs) s ck
+  let (acc, s) = push_exp acc ck eq.Minils.eq_rhs in
+  let inst = Printf.sprintf "%s = %s"
+      (string_of_pat eq.Minils.eq_lhs) s
   in inst :: acc
 
 let node_pred file (node: Minils.node_dec) =
