@@ -48,7 +48,7 @@ let _ =
 let _ =
   add_constructor_type pervasives_false pervasives_bool
 let _ =
-  Hashtbl.add types_tbl pervasives_bool (Minils.Type_enum [pervasives_true; pervasives_false])
+  Hashtbl.add types_tbl pervasives_bool (Minils.Type_enum [pervasives_false; pervasives_true])
 
 
 let int_of_constructor (name: Names.constructor_name) =
