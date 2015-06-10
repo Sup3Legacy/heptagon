@@ -194,7 +194,7 @@ and push_exp (state: state_t) base_clk (lhs: string) (exp: Minils.exp) =
 and push_app (state: state_t) (lhs: string) (params: Idents.ident list) (app: Minils.app) =
   match app.Minils.a_op with
   | Minils.Efun f ->
-      Printf.fprintf state.channel "%s = %s %%%s" lhs (string_of_qualname f) (String.concat ", %" (List.map string_of_varident params));
+      Printf.fprintf state.channel "  %s = %s %%%s\n" lhs (string_of_qualname f) (String.concat ", %" (List.map string_of_varident params));
       state
   | Minils.Eifthenelse -> (
       match params with [cond; iftrue; iffalse] -> (
