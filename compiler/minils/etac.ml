@@ -12,13 +12,8 @@ let fresh_clk =
 
 module ClockDisjonction =
   struct
-    type t = string * string
-    let compare (x_base, x_var) (y_base, y_var) =
-      let x = String.compare x_base y_base in
-      if x = 0 then
-        x
-      else
-        String.compare x_var y_var
+    type t = string * Idents.var_ident
+    let compare = Pervasives.compare
   end;;
 
 module VarIdent =
@@ -130,7 +125,7 @@ let ck_name_from_constructor state (base_ck: string) (constructor: Names.qualnam
     Printf.sprintf "%s___%s_%s" base_ck (string_of_qualname cstr) (string_of_varident var)
   in
   let new_state = (
-    if ClockDisjonctionSet.mem (base_ck, string_of_varident var.Minils.v_ident) state.written_clocks then
+    if ClockDisjonctionSet.mem (base_ck, var.Minils.v_ident) state.written_clocks then
       state
     else (
       let tname = Hashtbl.find constructors_tbl constructor in
@@ -146,11 +141,10 @@ let ck_name_from_constructor state (base_ck: string) (constructor: Names.qualnam
             (i+1, name)
           ) in
           let (_, clocks) = mapfold pred 0 constructors in
-          Printf.fprintf state.channel "  ?%s <=> ?%s\n" base_ck (String.concat " | ?" clocks)
+          Printf.fprintf state.channel "  ?%s <=> ?%s\n" base_ck (String.concat " | ?" clocks);
+          { state with written_clocks=ClockDisjonctionSet.add (base_ck, var.Minils.v_ident) state.written_clocks }
       | _ -> failwith "Unsupported type"
-      );
-      let name = (formatter constructor var.Minils.v_ident) in
-      { state with written_clocks=add_disjonction state.written_clocks base_ck var }
+      )
     )
   ) in
   (new_state, formatter constructor (var.Minils.v_ident))
@@ -260,17 +254,11 @@ let push_var_init state (var: Minils.var_dec) =
   let (state, base_clk) = (push_ck state var.Minils.v_clock) in
   let state = { state with var_dec = Idents.Env.add var.Minils.v_ident var state.var_dec } in
   match var.Minils.v_type with
-  | Types.Tid {Names.qual=Names.Pervasives; Names.name="bool"} ->
-      let trueclk = Printf.sprintf "%s_true_clk" varname in
-      let falsevarname = Printf.sprintf "%s_not" varname in
-      let falseclk = Printf.sprintf "%s_false_clk" varname in
-      Printf.fprintf state.channel "  i1 %%%s = not %%%s when ?%s\n" falsevarname varname base_clk;
-      Printf.fprintf state.channel "  ?%s is %%%s\n" trueclk varname;
-      Printf.fprintf state.channel "  ?%s is %%%s\n" falseclk falsevarname;
-      Printf.fprintf state.channel "  ?%s <=> ?%s | ?%s\n" base_clk trueclk falseclk;
-      state
-  | Types.Tid {Names.qual=Names.Pervasives; Names.name="float"} -> state
+  | Types.Tid {Names.qual=Names.Pervasives; Names.name="float"}
+  | Types.Tid {Names.qual=Names.Pervasives; Names.name="bool"}
   | Types.Tid {Names.qual=Names.Pervasives; Names.name="int"} -> state
+  | Types.Tid t when Hashtbl.mem types_tbl t -> state (* Will be initialized when needed *)
+  | Types.Tid t  -> failwith (Printf.sprintf "Undefined type %s." (string_of_qualname t))
   | _ -> failwith "Unsupported type."
 
 let node_pred file (node: Minils.node_dec) =
