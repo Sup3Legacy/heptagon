@@ -44,20 +44,16 @@ let get_type_of_constructor (constructor: Names.constructor_name) =
 let add_constructor_type (c: Names.constructor_name) (t: Names.qualname) =
   Hashtbl.add constructors_tbl c t
 
-let bool_type = {Names.qual= Names.Pervasives; Names.name= "bool"}
+let pervasives_bool = {Names.qual=Names.Pervasives; Names.name="bool"}
+let pervasives_true = {Names.qual=Names.Pervasives; Names.name="true"}
+let pervasives_false = {Names.qual=Names.Pervasives; Names.name="false"}
 
 let _ =
-  add_constructor_type
-    {Names.qual= Names.Pervasives; Names.name= "true"}
-    bool_type
+  add_constructor_type pervasives_true pervasives_bool
 let _ =
-  add_constructor_type
-    {Names.qual= Names.Pervasives; Names.name= "false"}
-    bool_type
+  add_constructor_type pervasives_false pervasives_bool
 let _ =
-  Hashtbl.add types_tbl bool_type (Minils.Type_enum [
-    {Names.qual= Names.Pervasives; Names.name= "true"};
-    {Names.qual= Names.Pervasives; Names.name= "false"}])
+  Hashtbl.add types_tbl pervasives_bool (Minils.Type_enum [pervasives_true; pervasives_false])
 
 
 let int_of_constructor (name: Names.constructor_name) =
@@ -101,7 +97,7 @@ let string_of_modul (modul: Names.modul) =
         (* TODO: boolean operators *)
         | _ -> "PERVASIVES" :: stack
       )
-    | Names.LocalModule -> "LOCALMODULE" :: stack
+    | Names.LocalModule -> stack
     | Names.Module name -> name :: stack
     | Names.QualModule name -> aux (name.Names.name :: stack) name.Names.qual
   in String.concat "__" (aux [] modul)
@@ -121,6 +117,7 @@ let string_of_vardec (with_type: bool) (vardec: Minils.var_dec) =
 
 let add_disjonction state base_ck var =
   match var.Minils.v_type with
+  | Types.Tid t when t = pervasives_bool -> state
   | Types.Tid t -> (
       let t = Hashtbl.find types_tbl t in
       match t with
@@ -129,31 +126,51 @@ let add_disjonction state base_ck var =
   | _ -> failwith "Unsupported type constructor"
 
 let ck_name_from_constructor state (base_ck: string) (constructor: Names.qualname) (var: Minils.var_dec) =
+  let formatter cstr var =
+    Printf.sprintf "%s___%s_%s" base_ck (string_of_qualname cstr) (string_of_varident var)
+  in
   let new_state = (
     if ClockDisjonctionSet.mem (base_ck, string_of_varident var.Minils.v_ident) state.written_clocks then
       state
-    else
-      {channel=state.channel; written_clocks=add_disjonction state.written_clocks base_ck var;
-      var_dec=state.var_dec}
+    else (
+      let tname = Hashtbl.find constructors_tbl constructor in
+      let t = Hashtbl.find types_tbl tname in (
+      match t with
+      | Minils.Type_enum constructors ->
+          let pred i cstr = (
+            let name = (formatter cstr var.Minils.v_ident) in
+            let tmpimm = fresh_var "imm" in
+            Printf.fprintf state.channel "  i64 %%%s = li %d when ?%s\n" tmpimm i base_ck;
+            Printf.fprintf state.channel "  i1 %%%s = cmp eq %%%s, %%%s when ?%s\n" name (string_of_vardec false var) tmpimm base_ck;
+            Printf.fprintf state.channel "  ?%s is %%%s\n" name name;
+            (i+1, name)
+          ) in
+          let (_, clocks) = mapfold pred 0 constructors in
+          Printf.fprintf state.channel "  ?%s <=> ?%s\n" base_ck (String.concat " | ?" clocks)
+      | _ -> failwith "Unsupported type"
+      );
+      let name = (formatter constructor var.Minils.v_ident) in
+      { state with written_clocks=add_disjonction state.written_clocks base_ck var }
+    )
   ) in
-  (new_state, Printf.sprintf "%s___%s_%s" base_ck (string_of_qualname constructor) (string_of_varident var.Minils.v_ident))
+  (new_state, formatter constructor (var.Minils.v_ident))
 
 let rec push_static_exp state (sexp: Types.static_exp) =
   push_static_exp_desc state sexp.Types.se_desc
 
 and push_static_exp_desc state = function
-  | Types.Svar name -> (state, string_of_qualname name)
+  | Types.Svar name -> (state, name)
   | Types.Sint i ->
       let tmpvar = (fresh_var "imm") in
       Printf.fprintf state.channel "  i64 %%%s = li %d\n" tmpvar i;
-      (state, tmpvar)
+      (state, {Names.qual=Names.LocalModule; Names.name=tmpvar})
   | Types.Sop (f_name, args) ->
       let (state, args) = mapfold push_static_exp state args in
-      let args = (String.concat ", %%" args) in
+      let args = (String.concat ", %%" (List.map string_of_qualname args)) in
       let tmpvar = (fresh_var "sexp") in
       Printf.fprintf state.channel "  i64 %%%s = %s %%%s\n" tmpvar (string_of_qualname f_name) args;
-      (state, tmpvar)
-  | _ -> (state, "<static_exp_desc constructor not handled>") (* TODO *)
+      (state, {Names.qual=Names.LocalModule; Names.name=tmpvar})
+  | _ -> failwith "static_exp_desc constructor not handled" (* TODO *)
 
 let rec string_of_pat = function
   (* FIXME: not tail-recursive *)
@@ -162,48 +179,62 @@ let rec string_of_pat = function
   | Minils.Etuplepat pats ->
       Printf.sprintf "%%%s" (String.concat ", %" (List.map string_of_pat pats))
 
-and push_exp state clk (exp: Minils.exp)  =
-  push_edesc state clk exp.Minils.e_desc
+and push_eq (state: state_t) base_clk (eq: Minils.eq) =
+  push_exp state base_clk (string_of_pat eq.Minils.eq_lhs) eq.Minils.eq_rhs
 
-and push_edesc state base_clk = function
-  | Minils.Eextvalue ev -> push_extvalue state ev
+and push_exp (state: state_t) base_clk (lhs: string) (exp: Minils.exp) =
+  match exp.Minils.e_desc with
+  | Minils.Eextvalue ev ->
+      let (state, res) = push_extvalue state ev in
+      Printf.fprintf state.channel "  i64 %%%s = sample %%%s when ?%s\n" lhs (string_of_varident res) base_clk;
+      state
   | Minils.Eapp (app, evs, None) ->
       let (state, params) = (mapfold push_extvalue state evs) in
-      push_app state params app
+      push_app state lhs params app
   | Minils.Ewhen (exp, constructor, varident) ->
-      let (state, exp_res) = push_exp state base_clk exp in
+      let exp_res = fresh_var "res" in
+      let state = push_exp state base_clk exp_res exp in
       let var = Idents.Env.find varident state.var_dec in
       let (state, clk) = (ck_name_from_constructor state base_clk constructor var) in
-      (state, Printf.sprintf "sample %s when ?%s" exp_res clk)
+      Printf.fprintf state.channel "  %s = sample %%%s when ?%s\n" lhs exp_res clk;
+      state
   | Minils.Emerge _ ->
-      (state, "<Emerge not handled>")
-  | _ -> (state, "<edesc constructor not handled>") (* TODO *)
+      Printf.fprintf state.channel "<Emerge not handled>\n"; (* TODO *)
+      state
+  | _ -> failwith "edesc constructor not handled" (* TODO *)
 
-and push_app state (params: string list) (app: Minils.app) =
+and push_app (state: state_t) (lhs: string) (params: Idents.ident list) (app: Minils.app) =
   match app.Minils.a_op with
-  | Minils.Efun f -> (state,
-      String.concat " %" [string_of_qualname f; (String.concat ", %" params)])
+  | Minils.Efun f ->
+      Printf.fprintf state.channel "%s = %s %%%s" lhs (string_of_qualname f) (String.concat ", %" (List.map string_of_varident params));
+      state
   | Minils.Eifthenelse -> (
       match params with [cond; iftrue; iffalse] -> (
         let tmptrue = fresh_var "iftrue" in
         let tmpfalse = fresh_var "iffalse" in
-        Printf.fprintf state.channel "  i64 %%%s = sample %%%s when ?%s_true_clk\n"
-            tmptrue iftrue cond;
-        Printf.fprintf state.channel "  i64 %%%s = sample %%%s when ?%s_false_clk\n"
-            tmpfalse iffalse cond;
-        (state, Printf.sprintf "phi %%%s, %%%s" tmptrue tmpfalse)
+        let conddec = Idents.Env.find cond state.var_dec in
+        let (state, trueclk) = ck_name_from_constructor state "?top" pervasives_true conddec in
+        let (state, falseclk) = ck_name_from_constructor state "?top" pervasives_false conddec in
+        Printf.fprintf state.channel "  i64 %%%s = sample %%%s when ?%s\n"
+            tmptrue (string_of_varident iftrue) trueclk;
+        Printf.fprintf state.channel "  i64 %%%s = sample %%%s when ?%s\n"
+            tmpfalse (string_of_varident iffalse) falseclk;
+        Printf.fprintf state.channel "  i64 %%%s = phi %%%s, %%%s\n" lhs tmptrue tmpfalse;
+        state
       )
       | _ -> failwith "bad list of params"
   )
-  | _ -> (state, "<op constructor not handled>") (* TODO *)
+  | _ -> failwith "op constructor not handled>" (* TODO *)
 
 and push_extvalue state (ev: Minils.extvalue) =
   push_extvaluedesc state ev.Minils.w_desc
 
 and push_extvaluedesc state = function
-  | Minils.Wvar varident -> (state, Printf.sprintf "%s" (string_of_varident varident))
-  | Minils.Wconst sexp -> push_static_exp state sexp
-  | _ -> (state, "<extvaluedesc constructor not handled>") (* TODO *)
+  | Minils.Wvar varident -> (state, varident)
+  | Minils.Wconst sexp ->
+      let (state, name) = push_static_exp state sexp in
+      (state, Idents.ident_of_name (string_of_qualname name))
+  | _ -> failwith "extvaluedesc constructor not handled" (* TODO *)
 
 let rec push_ck state = function
   (* FIXME: not tail-recursive *)
@@ -221,8 +252,7 @@ and push_link state = function
 let push_eq state (eq: Minils.eq) =
   (* TODO: handle types *)
   let (state, ck) = (push_ck state eq.Minils.eq_base_ck) in
-  let (state, s) = push_exp state ck eq.Minils.eq_rhs in
-  Printf.fprintf state.channel "  %s = %s\n" (string_of_pat eq.Minils.eq_lhs) s;
+  let state = push_eq state ck eq in
   state
 
 let push_var_init state (var: Minils.var_dec) =
