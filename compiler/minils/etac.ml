@@ -228,6 +228,7 @@ let push_eq state (eq: Minils.eq) =
 let push_var_init state (var: Minils.var_dec) =
   let varname =  (string_of_varident var.Minils.v_ident) in
   let (state, base_clk) = (push_ck state var.Minils.v_clock) in
+  let state = { state with var_dec = Idents.Env.add var.Minils.v_ident var state.var_dec } in
   match var.Minils.v_type with
   | Types.Tid {Names.qual=Names.Pervasives; Names.name="bool"} ->
       let trueclk = Printf.sprintf "%s_true_clk" varname in
