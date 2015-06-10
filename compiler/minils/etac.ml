@@ -175,11 +175,10 @@ and push_exp (state: state_t) base_clk (lhs: string) (exp: Minils.exp) =
   | Minils.Eapp (app, evs, None) ->
       let (state, params) = (mapfold (fun state arg -> push_extvalue state base_clk arg) state evs) in
       push_app state lhs params app
-  | Minils.Ewhen (exp, constructor, varident) ->
+  | Minils.Ewhen (exp, _, _) ->
       let exp_res = fresh_var "res" in
       let state = push_exp state base_clk exp_res exp in
-      let var = Idents.Env.find varident state.var_dec in
-      let (state, clk) = (ck_name_from_constructor state base_clk constructor var) in
+      let clk = base_clk in (* Heptagon already uses the sub-clock as base clock *)
       Printf.fprintf state.channel "  %s = sample %%%s when ?%s\n" lhs exp_res clk;
       state
   | Minils.Emerge (var, l) ->
@@ -272,7 +271,7 @@ let node_pred file (node: Minils.node_dec) =
   );
 
   (* Print equations *)
-  ignore (List.fold_left (push_eq) state node.Minils.n_equs);
+  ignore (List.fold_left push_eq state node.Minils.n_equs);
 
   (* Print outputs *)
   let outputs = List.map (string_of_vardec false) node.Minils.n_output in
