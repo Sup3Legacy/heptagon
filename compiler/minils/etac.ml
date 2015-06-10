@@ -110,16 +110,6 @@ let string_of_vardec (with_type: bool) (vardec: Minils.var_dec) =
   else
     string_of_varident vardec.Minils.v_ident
 
-let add_disjonction state base_ck var =
-  match var.Minils.v_type with
-  | Types.Tid t when t = pervasives_bool -> state
-  | Types.Tid t -> (
-      let t = Hashtbl.find types_tbl t in
-      match t with
-      | _ -> failwith "foo" (* TODO *)
-  )
-  | _ -> failwith "Unsupported type constructor"
-
 let ck_name_from_constructor state (base_ck: string) (constructor: Names.qualname) (var: Minils.var_dec) =
   let formatter cstr var =
     Printf.sprintf "%s___%s_%s" base_ck (string_of_qualname cstr) (string_of_varident var)
@@ -149,20 +139,20 @@ let ck_name_from_constructor state (base_ck: string) (constructor: Names.qualnam
   ) in
   (new_state, formatter constructor (var.Minils.v_ident))
 
-let rec push_static_exp state (sexp: Types.static_exp) =
-  push_static_exp_desc state sexp.Types.se_desc
+let rec push_static_exp state ck (sexp: Types.static_exp) =
+  push_static_exp_desc state ck sexp.Types.se_desc
 
-and push_static_exp_desc state = function
+and push_static_exp_desc state ck = function
   | Types.Svar name -> (state, name)
   | Types.Sint i ->
       let tmpvar = (fresh_var "imm") in
-      Printf.fprintf state.channel "  i64 %%%s = li %d\n" tmpvar i;
+      Printf.fprintf state.channel "  i64 %%%s = li %d when ?%s\n" tmpvar i ck;
       (state, {Names.qual=Names.LocalModule; Names.name=tmpvar})
   | Types.Sop (f_name, args) ->
-      let (state, args) = mapfold push_static_exp state args in
+      let (state, args) = mapfold (fun state arg -> push_static_exp state ck arg) state args in
       let args = (String.concat ", %%" (List.map string_of_qualname args)) in
       let tmpvar = (fresh_var "sexp") in
-      Printf.fprintf state.channel "  i64 %%%s = %s %%%s\n" tmpvar (string_of_qualname f_name) args;
+      Printf.fprintf state.channel "  i64 %%%s = %s %%%s when ?%s\n" tmpvar (string_of_qualname f_name) args ck;
       (state, {Names.qual=Names.LocalModule; Names.name=tmpvar})
   | _ -> failwith "static_exp_desc constructor not handled" (* TODO *)
 
@@ -179,11 +169,11 @@ and push_eq (state: state_t) base_clk (eq: Minils.eq) =
 and push_exp (state: state_t) base_clk (lhs: string) (exp: Minils.exp) =
   match exp.Minils.e_desc with
   | Minils.Eextvalue ev ->
-      let (state, res) = push_extvalue state ev in
+      let (state, res) = push_extvalue state base_clk ev in
       Printf.fprintf state.channel "  i64 %%%s = sample %%%s when ?%s\n" lhs (string_of_varident res) base_clk;
       state
   | Minils.Eapp (app, evs, None) ->
-      let (state, params) = (mapfold push_extvalue state evs) in
+      let (state, params) = (mapfold (fun state arg -> push_extvalue state base_clk arg) state evs) in
       push_app state lhs params app
   | Minils.Ewhen (exp, constructor, varident) ->
       let exp_res = fresh_var "res" in
@@ -192,8 +182,13 @@ and push_exp (state: state_t) base_clk (lhs: string) (exp: Minils.exp) =
       let (state, clk) = (ck_name_from_constructor state base_clk constructor var) in
       Printf.fprintf state.channel "  %s = sample %%%s when ?%s\n" lhs exp_res clk;
       state
-  | Minils.Emerge _ ->
-      Printf.fprintf state.channel "<Emerge not handled>\n"; (* TODO *)
+  | Minils.Emerge (var, l) ->
+      let pred state (cstr, exp) = (
+        let (state, clk) = ck_name_from_constructor state base_clk cstr (Idents.Env.find var state.var_dec) in
+        push_extvalue state clk exp
+      ) in
+      let (state, variables) = mapfold pred state l in
+      Printf.fprintf state.channel "  %s = phi %%%s when ?%s\n" lhs (String.concat ", %" (List.map string_of_varident variables)) base_clk;
       state
   | _ -> failwith "edesc constructor not handled" (* TODO *)
 
@@ -220,13 +215,13 @@ and push_app (state: state_t) (lhs: string) (params: Idents.ident list) (app: Mi
   )
   | _ -> failwith "op constructor not handled>" (* TODO *)
 
-and push_extvalue state (ev: Minils.extvalue) =
-  push_extvaluedesc state ev.Minils.w_desc
+and push_extvalue state ck (ev: Minils.extvalue) =
+  push_extvaluedesc state ck ev.Minils.w_desc
 
-and push_extvaluedesc state = function
+and push_extvaluedesc state ck = function
   | Minils.Wvar varident -> (state, varident)
   | Minils.Wconst sexp ->
-      let (state, name) = push_static_exp state sexp in
+      let (state, name) = push_static_exp state ck sexp in
       (state, Idents.ident_of_name (string_of_qualname name))
   | _ -> failwith "extvaluedesc constructor not handled" (* TODO *)
 
@@ -250,8 +245,6 @@ let push_eq state (eq: Minils.eq) =
   state
 
 let push_var_init state (var: Minils.var_dec) =
-  let varname =  (string_of_varident var.Minils.v_ident) in
-  let (state, base_clk) = (push_ck state var.Minils.v_clock) in
   let state = { state with var_dec = Idents.Env.add var.Minils.v_ident var state.var_dec } in
   match var.Minils.v_type with
   | Types.Tid {Names.qual=Names.Pervasives; Names.name="float"}
