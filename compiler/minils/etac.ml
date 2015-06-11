@@ -150,7 +150,7 @@ and push_static_exp_desc state ck = function
       (state, {Names.qual=Names.LocalModule; Names.name=tmpvar})
   | Types.Sop (f_name, args) ->
       let (state, args) = mapfold (fun state arg -> push_static_exp state ck arg) state args in
-      let args = (String.concat ", %%" (List.map string_of_qualname args)) in
+      let args = (String.concat ", %" (List.map string_of_qualname args)) in
       let tmpvar = (fresh_var "sexp") in
       Printf.fprintf state.channel "  i64 %%%s = %s %%%s when ?%s\n" tmpvar (string_of_qualname f_name) args ck;
       (state, {Names.qual=Names.LocalModule; Names.name=tmpvar})
