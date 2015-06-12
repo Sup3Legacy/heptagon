@@ -177,7 +177,7 @@ and push_exp (state: state_t) base_clk (lhs: string) (exp: Minils.exp) =
       push_app state lhs params app
   | Minils.Ewhen (exp, _, _) ->
       let exp_res = fresh_var "res" in
-      let state = push_exp state base_clk exp_res exp in
+      let state = push_exp state base_clk (Printf.sprintf "i32 %%%s" exp_res) exp in
       let clk = base_clk in (* Heptagon already uses the sub-clock as base clock *)
       Printf.fprintf state.channel "  %s = sample %%%s when ?%s\n" lhs exp_res clk;
       state
