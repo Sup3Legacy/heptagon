@@ -78,7 +78,7 @@ let string_of_modul (modul: Names.modul) =
     | Names.Pervasives -> (
         match (List.hd stack) with
         | "+" -> "add" :: (List.tl stack)
-        | "~-" -> "sub 0" :: (List.tl stack)
+        | "~-" -> "sub %ZERO," :: (List.tl stack)
         | "-" -> "sub" :: (List.tl stack)
         | "*" -> "mul" :: (List.tl stack)
         | "/" -> "div" :: (List.tl stack)
@@ -170,7 +170,7 @@ and push_exp (state: state_t) base_clk (lhs: string) (exp: Minils.exp) =
   match exp.Minils.e_desc with
   | Minils.Eextvalue ev ->
       let (state, res) = push_extvalue state base_clk ev in
-      Printf.fprintf state.channel "  i64 %%%s = sample %%%s when ?%s\n" lhs (string_of_varident res) base_clk;
+      Printf.fprintf state.channel "  %s = sample %%%s when ?%s\n" lhs (string_of_varident res) base_clk;
       state
   | Minils.Eapp (app, evs, None) ->
       let (state, params) = (mapfold (fun state arg -> push_extvalue state base_clk arg) state evs) in
@@ -269,6 +269,7 @@ let node_pred file (node: Minils.node_dec) =
   | [] -> Printf.fprintf file "  init\n"
   | inputs -> Printf.fprintf file "  %s = init\n" (String.concat ", " inputs)
   );
+  Printf.fprintf file "  i64 %%ZERO = li 0;\n";
 
   (* Print equations *)
   ignore (List.fold_left push_eq state node.Minils.n_equs);
