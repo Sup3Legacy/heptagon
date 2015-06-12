@@ -106,7 +106,7 @@ let string_of_varident (varident: Idents.var_ident) =
 let string_of_vardec (with_type: bool) (vardec: Minils.var_dec) =
   (* TODO: handle types *)
   if with_type then
-    String.concat "" ["i64 %"; string_of_varident vardec.Minils.v_ident]
+    String.concat "" ["i32 %"; string_of_varident vardec.Minils.v_ident]
   else
     string_of_varident vardec.Minils.v_ident
 
@@ -125,7 +125,7 @@ let ck_name_from_constructor state (base_ck: string) (constructor: Names.qualnam
           let pred i cstr = (
             let name = (formatter cstr var.Minils.v_ident) in
             let tmpimm = fresh_var "imm" in
-            Printf.fprintf state.channel "  i64 %%%s = li %d when ?%s\n" tmpimm i base_ck;
+            Printf.fprintf state.channel "  i32 %%%s = li %d when ?%s\n" tmpimm i base_ck;
             Printf.fprintf state.channel "  i1 %%%s = cmp eq %%%s, %%%s when ?%s\n" name (string_of_vardec false var) tmpimm base_ck;
             Printf.fprintf state.channel "  ?%s is %%%s\n" name name;
             (i+1, name)
@@ -146,20 +146,20 @@ and push_static_exp_desc state ck = function
   | Types.Svar name -> (state, name)
   | Types.Sint i ->
       let tmpvar = (fresh_var "imm") in
-      Printf.fprintf state.channel "  i64 %%%s = li %d when ?%s\n" tmpvar i ck;
+      Printf.fprintf state.channel "  i32 %%%s = li %d when ?%s\n" tmpvar i ck;
       (state, {Names.qual=Names.LocalModule; Names.name=tmpvar})
   | Types.Sop (f_name, args) ->
       let (state, args) = mapfold (fun state arg -> push_static_exp state ck arg) state args in
       let args = (String.concat ", %" (List.map string_of_qualname args)) in
       let tmpvar = (fresh_var "sexp") in
-      Printf.fprintf state.channel "  i64 %%%s = %s %%%s when ?%s\n" tmpvar (string_of_qualname f_name) args ck;
+      Printf.fprintf state.channel "  i32 %%%s = %s %%%s when ?%s\n" tmpvar (string_of_qualname f_name) args ck;
       (state, {Names.qual=Names.LocalModule; Names.name=tmpvar})
   | _ -> failwith "static_exp_desc constructor not handled" (* TODO *)
 
 let rec string_of_pat = function
   (* FIXME: not tail-recursive *)
   | Minils.Evarpat var_ident ->
-      String.concat "" ["i64 %"; string_of_varident var_ident]
+      String.concat "" ["i32 %"; string_of_varident var_ident]
   | Minils.Etuplepat pats ->
       Printf.sprintf "%%%s" (String.concat ", %" (List.map string_of_pat pats))
 
@@ -203,11 +203,11 @@ and push_app (state: state_t) (lhs: string) (params: Idents.ident list) (app: Mi
         let conddec = Idents.Env.find cond state.var_dec in
         let (state, trueclk) = ck_name_from_constructor state "?top" pervasives_true conddec in
         let (state, falseclk) = ck_name_from_constructor state "?top" pervasives_false conddec in
-        Printf.fprintf state.channel "  i64 %%%s = sample %%%s when ?%s\n"
+        Printf.fprintf state.channel "  i32 %%%s = sample %%%s when ?%s\n"
             tmptrue (string_of_varident iftrue) trueclk;
-        Printf.fprintf state.channel "  i64 %%%s = sample %%%s when ?%s\n"
+        Printf.fprintf state.channel "  i32 %%%s = sample %%%s when ?%s\n"
             tmpfalse (string_of_varident iffalse) falseclk;
-        Printf.fprintf state.channel "  i64 %%%s = phi %%%s, %%%s\n" lhs tmptrue tmpfalse;
+        Printf.fprintf state.channel "  i32 %%%s = phi %%%s, %%%s\n" lhs tmptrue tmpfalse;
         state
       )
       | _ -> failwith "bad list of params"
@@ -269,7 +269,7 @@ let node_pred file (node: Minils.node_dec) =
   | [] -> Printf.fprintf file "  init\n"
   | inputs -> Printf.fprintf file "  %s = init\n" (String.concat ", " inputs)
   );
-  Printf.fprintf file "  i64 %%ZERO = li 0;\n";
+  Printf.fprintf file "  i32 %%ZERO = li 0;\n";
 
   (* Print equations *)
   ignore (List.fold_left push_eq state node.Minils.n_equs);
