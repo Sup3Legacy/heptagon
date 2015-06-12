@@ -296,7 +296,8 @@ and pp_clhs fmt clhs = match clhs with
         pp_cexpr e
 
 and pp_cconst fmt cconst = match cconst with
-  | Ccint i -> fprintf fmt "%d" i
+  | Ccint i when i > 0 -> fprintf fmt "%d" i
+  | Ccint i -> fprintf fmt "(%d)" i
   | Ccfloat f -> fprintf fmt "%f" f
   | Ctag t -> pp_string fmt t
   | Cstrlit t -> fprintf fmt "\"%s\"" (String.escaped t)
