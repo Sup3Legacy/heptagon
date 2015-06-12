@@ -174,7 +174,7 @@ and push_exp (state: state_t) base_clk (lhs: string) (exp: Minils.exp) =
       state
   | Minils.Eapp (app, evs, None) ->
       let (state, params) = (mapfold (fun state arg -> push_extvalue state base_clk arg) state evs) in
-      push_app state lhs params app
+      push_app state base_clk lhs params app
   | Minils.Ewhen (exp, _, _) ->
       let exp_res = fresh_var "res" in
       let state = push_exp state base_clk (Printf.sprintf "i32 %%%s" exp_res) exp in
@@ -191,18 +191,18 @@ and push_exp (state: state_t) base_clk (lhs: string) (exp: Minils.exp) =
       state
   | _ -> failwith "edesc constructor not handled" (* TODO *)
 
-and push_app (state: state_t) (lhs: string) (params: Idents.ident list) (app: Minils.app) =
+and push_app (state: state_t) base_clk (lhs: string) (params: Idents.ident list) (app: Minils.app) =
   match app.Minils.a_op with
   | Minils.Efun f ->
-      Printf.fprintf state.channel "  %s = %s %%%s\n" lhs (string_of_qualname f) (String.concat ", %" (List.map string_of_varident params));
+      Printf.fprintf state.channel "  %s = %s %%%s when ?%s\n" lhs (string_of_qualname f) (String.concat ", %" (List.map string_of_varident params)) base_clk;
       state
   | Minils.Eifthenelse -> (
       match params with [cond; iftrue; iffalse] -> (
         let tmptrue = fresh_var "iftrue" in
         let tmpfalse = fresh_var "iffalse" in
         let conddec = Idents.Env.find cond state.var_dec in
-        let (state, trueclk) = ck_name_from_constructor state "?top" pervasives_true conddec in
-        let (state, falseclk) = ck_name_from_constructor state "?top" pervasives_false conddec in
+        let (state, trueclk) = ck_name_from_constructor state base_clk pervasives_true conddec in
+        let (state, falseclk) = ck_name_from_constructor state base_clk pervasives_false conddec in
         Printf.fprintf state.channel "  i32 %%%s = sample %%%s when ?%s\n"
             tmptrue (string_of_varident iftrue) trueclk;
         Printf.fprintf state.channel "  i32 %%%s = sample %%%s when ?%s\n"
