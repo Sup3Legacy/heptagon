@@ -311,7 +311,7 @@ let node_pred file (node: Minils.node_dec) =
       node.Minils.n_name.Names.name in
 
   (* Print node name *)
-  Printf.fprintf file "node @%s {\n" node_name;
+  Printf.fprintf file "node @%s_step {\n" node_name;
 
   let past_type = Printf.sprintf "PAST__%s" node_name in
 
@@ -352,7 +352,7 @@ let node_pred file (node: Minils.node_dec) =
   if (not (ExtvalueMap.is_empty state.saved_values)) then (
     let fields = ExtvalueMap.fold (fun _ (_, type_) acc -> type_ :: "i1" :: acc) state.saved_values [] in
     Printf.fprintf file "type !%s = { %s }\n\n" past_type (String.concat ", " (List.rev fields));
-    Printf.fprintf file "node @%s__init {\n" node_name;
+    Printf.fprintf file "node @%s_reset {\n" node_name;
     Printf.fprintf file "  !%s* %%__PAST = init\n" past_type;
     Printf.fprintf file "  i32 %%ZERO32 = li 0\n";
     Printf.fprintf file "  i1 %%ZERO1 = cmp ne %%ZERO32, %%ZERO32\n";
