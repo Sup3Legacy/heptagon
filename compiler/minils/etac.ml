@@ -349,9 +349,23 @@ let node_pred file (node: Minils.node_dec) =
   Printf.fprintf file "}\n\n";
 
   (* Print remembrance struct type *)
-  if (not (ExtvalueMap.is_empty state.saved_values)) then
+  if (not (ExtvalueMap.is_empty state.saved_values)) then (
     let fields = ExtvalueMap.fold (fun _ (_, type_) acc -> type_ :: "i1" :: acc) state.saved_values [] in
-    Printf.fprintf file "type !%s = { %s }\n" past_type (String.concat ", " (List.rev fields))
+    Printf.fprintf file "type !%s = { %s }\n\n" past_type (String.concat ", " (List.rev fields));
+    Printf.fprintf file "node @%s__init {\n" node_name;
+    Printf.fprintf file "  !%s* %%__PAST = init\n" past_type;
+    Printf.fprintf file "  i32 %%ZERO32 = li 0\n";
+    Printf.fprintf file "  i1 %%ZERO1 = cmp ne %%ZERO32, %%ZERO32\n";
+    ignore (ExtvalueMap.fold (fun _ _ (is_bool, i) ->
+      if is_bool then (
+        Printf.fprintf file "  i1* %%ptr%d = getptr %%__PAST, %d\n" i i;
+        Printf.fprintf file "  store %%ptr%d, %%ZERO1\n" i
+      )
+      else
+        ();
+      (not is_bool, i+1)) state.saved_values (true, 0));
+    Printf.fprintf file "  exit\n}\n"
+  )
   else
     ()
 
