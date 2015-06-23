@@ -321,7 +321,7 @@ let node_pred file (node: Minils.node_dec) =
   let state = List.fold_left push_var_init state all_var_dec in
 
   Printf.fprintf file "  i32 %%ZERO32 = li 0;\n";
-  Printf.fprintf file "  i1 %%ZERO1 = li 0;\n";
+  Printf.fprintf file "  i1 %%ZERO1 = cmp ne %%ZERO32, %%ZERO32;\n";
 
   (* Print equations *)
   let state = (List.fold_left push_eq state node.Minils.n_equs) in
