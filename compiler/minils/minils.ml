@@ -36,6 +36,7 @@ open Signature
 open Types
 open Linearity
 open Clocks
+open Sites
 
 (** Warning: Whenever Minils ast is modified,
     minils_format_version should be incremented. *)
@@ -78,7 +79,8 @@ and exp = {
   e_level_ck        : Clocks.ck; (*when no data dep, execute the exp on this clock (set by [switch] *)
   mutable e_ct      : ct;
   e_ty              : ty;
-  e_linearity : linearity;
+  e_linearity       : linearity;
+  e_site            : tsite;
   e_loc             : location }
 
 and edesc =
@@ -118,6 +120,11 @@ and op =
   | Eselect_trunc      (** [arg1[>arg_2 ...<]]*)
   | Eupdate            (** [[ arg1 with arg3..arg_n = arg2 ]] *)
   | Econcat            (** [arg1\@\@arg2] *)
+  | Ecomm of comm        (** [[dst <- src](arg1)] *)
+
+and comm =
+  { c_src : name;
+    c_dst : name }
 
 type pat =
   | Etuplepat of pat list
@@ -135,6 +142,7 @@ type var_dec = {
   v_type      : ty;
   v_linearity : linearity;
   v_clock     : Clocks.ck;
+  v_site      : site;
   v_loc       : location }
 
 type objective_kind =
@@ -165,6 +173,7 @@ type node_dec = {
   n_local    : var_dec list;
   n_equs     : eq list;
   n_loc      : location;
+  n_sites    : name list;
   n_params   : param list;
   n_param_constraints : constrnt list;
   n_mem_alloc : (ty * Interference_graph.ivar list) list; }
@@ -226,12 +235,12 @@ let mk_vd_extvalue vd =
               ~clock:vd.v_clock ~loc:vd.v_loc (Wvar vd.v_ident)
 
 let mk_exp level_ck ty ~linearity
-    ?(ct = fresh_ct ty) ?(loc = no_location) desc =
+    ?(ct = fresh_ct ty) ?(tsite = fresh_tsite ty) ?(loc = no_location) desc =
   { e_desc = desc; e_ty = ty; e_linearity = linearity;
-    e_level_ck = level_ck; e_ct = ct; e_loc = loc }
+    e_level_ck = level_ck; e_ct = ct; e_site = tsite; e_loc = loc }
 
-let mk_var_dec ?(loc = no_location) ident ty linearity ck =
-  { v_ident = ident; v_type = ty; v_linearity = linearity;  v_clock = ck; v_loc = loc }
+let mk_var_dec ?(loc = no_location) ident ty linearity ck site =
+  { v_ident = ident; v_type = ty; v_linearity = linearity;  v_clock = ck; v_site = site; v_loc = loc }
 
 let mk_extvalue_exp ?(clock = fresh_clock())
     ?(loc = no_location) level_ck ty ~linearity desc =
@@ -245,6 +254,7 @@ let mk_node
     ?(input = []) ?(output = []) ?(contract = None)
     ?(local = []) ?(eq = [])
     ?(stateful = true) ~unsafe ?(loc = no_location) ?(param = []) ?(constraints = [])
+    ?(sites = [])
     ?(mem_alloc=[])
     name =
   { n_name = name;
@@ -256,6 +266,7 @@ let mk_node
     n_local = local;
     n_equs = eq;
     n_loc = loc;
+    n_sites = sites;
     n_params = param;
     n_param_constraints = constraints;
     n_mem_alloc = mem_alloc }

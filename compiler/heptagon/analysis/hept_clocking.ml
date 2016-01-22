@@ -188,6 +188,7 @@ and expect h pat expected_ct e =
    with Unify -> error_message e.e_loc (Etypeclash (actual_ct, expected_ct)))
 
 and typing_app h base pat op e_list = match op with
+  | Ecomm _
   | Etuple (* to relax ? *)
   | Earrow
   | Earray_fill | Eselect | Eselect_dyn | Eselect_trunc | Eupdate

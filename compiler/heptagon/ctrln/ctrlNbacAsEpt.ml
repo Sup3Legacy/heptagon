@@ -106,6 +106,7 @@ let mkb = mkp Initial.tbool
 let mk_app op =
   {
     a_op = op;
+    a_sites = [];
     a_params = [];
     a_unsafe = false;                                                  (* ??? *)
     a_inlined = true;                                                  (* ??? *)
@@ -303,6 +304,7 @@ let decl_var' gd v id t =
     v_type = t;
     v_linearity = Linearity.Ltop;
     v_clock = Clocks.Cbase;
+    v_site = Sites.Scentralized;
     v_last = Var;
     v_loc = Location.no_location;
   } in
@@ -388,6 +390,7 @@ let node_of_func gd ?node_sig n_name func =
     n_contract = None;                                    (* <- TODO: assume? *)
     n_block = block;
     n_loc = Location.no_location;
+    n_sites = [];
     n_params = [];
     n_param_constraints = [];
   }

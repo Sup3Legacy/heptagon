@@ -423,7 +423,7 @@ let translate_contract ~pref gd
          let sink_expr = mk_bref' & pref & mk_symb & name sink in
          let ok = `Bexp (mk_bcond' gd.init_cond tt ok) in
          (add_state_var ~pref gd sink Initial.tbool ok None, sink_expr,
-          mk_var_dec sink Initial.tbool Linearity.Ltop Clocks.Cbase :: locals)
+          mk_var_dec sink Initial.tbool Linearity.Ltop Clocks.Cbase Sites.Scentralized :: locals)
   in
 
   let gd = { gd with
@@ -501,7 +501,7 @@ let var_exp v ty =
   mk_extvalue ~ty ~clock:Clocks.Cbase ~linearity:Linearity.Ltop (Wvar v)
 
 let decl_arg (v, t) =
-  mk_arg (Some (name v)) t Linearity.Ltop Signature.Cbase
+  mk_arg (Some (name v)) t Linearity.Ltop Signature.Cbase Signature.Scentralized
 
 let gen_ctrlf_calls ~requal_types gd node_name equs =
 

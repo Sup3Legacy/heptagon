@@ -284,7 +284,7 @@ let rec translate map e =
                                 |Minils.Eupdate|Minils.Eselect_dyn
                                 |Minils.Eselect_trunc|Minils.Eselect_slice
                                 |Minils.Earray_fill|Minils.Efield_update
-                                |Minils.Eifthenelse)}, _, _) ->
+                                |Minils.Eifthenelse|Minils.Ecomm _)}, _, _) ->
         internal_error "mls2obc"
   in
     mk_exp e.Minils.e_ty desc

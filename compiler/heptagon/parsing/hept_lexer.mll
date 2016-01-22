@@ -178,6 +178,7 @@ rule token = parse
   | "||"            {BARBAR}
   | ","             {COMMA}
   | "->"            {ARROW}
+  | "<-"            {LARROW}
   | "|"             {BAR}
   | "-"             {SUBTRACTIVE "-"}
   | "-."            {SUBTRACTIVE "-."}

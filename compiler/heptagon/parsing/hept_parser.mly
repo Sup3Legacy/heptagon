@@ -80,6 +80,7 @@ open Hept_parsetree
 %token MAP MAPI FOLD FOLDI MAPFOLD
 %token AT INIT SPLIT REINIT
 %token THREE_DOTS
+%token LARROW
 %token <string> PREFIX
 %token <string> INFIX0
 %token <string> INFIX1
@@ -200,7 +201,7 @@ returns: RETURNS | EQUAL {}
 ;
 
 node_dec:
-  | u=unsafe n=node_or_fun f=ident pc=node_params LPAREN i=in_params RPAREN
+  | u=unsafe n=node_or_fun f=ident s=node_sites pc=node_params LPAREN i=in_params RPAREN
     returns LPAREN o=out_params RPAREN
     c=contract b=block(LET) TEL
       {{ n_name = f;
@@ -211,6 +212,7 @@ node_dec:
          n_contract = c;
          n_block = b;
          n_params = fst pc;
+	 n_sites = s;
          n_constraints = snd pc;
          n_loc = (Loc($startpos,$endpos)) }}
 ;
@@ -236,9 +238,9 @@ nonmt_params:
 ;
 
 param:
-  | idl=ident_list COLON ty_lin=located_ty_ident ck=ck_annot
+  | idl=ident_list COLON ty_lin=located_ty_ident ck=ck_annot s=site_annot
       { List.map (fun id -> mk_var_dec ~linearity:(snd ty_lin)
-        id (fst ty_lin) ck Var (Loc($startpos,$endpos))) idl }
+        id (fst ty_lin) ck s Var (Loc($startpos,$endpos))) idl }
 ;
 
 out_params:
@@ -259,6 +261,11 @@ constraints:
 node_params:
   | /* empty */ { [],[] }
   | DOUBLE_LESS p=nonmt_params c=constraints DOUBLE_GREATER { p,c }
+;
+
+node_sites:
+  | /* empty */ { [] }
+  | LBRACKET s=snlist(COMMA, IDENT) RBRACKET { s }
 ;
 
 contract:
@@ -314,15 +321,15 @@ loc_params:
 
 
 var_last:
-  | idl=ident_list COLON ty_lin=located_ty_ident ck=ck_annot
+  | idl=ident_list COLON ty_lin=located_ty_ident ck=ck_annot s=site_annot
       { List.map (fun id -> mk_var_dec ~linearity:(snd ty_lin) id (fst ty_lin)
-        ck Var (Loc($startpos,$endpos))) idl }
-  | LAST id=IDENT COLON ty_lin=located_ty_ident ck=ck_annot EQUAL e=exp
+        ck s Var (Loc($startpos,$endpos))) idl }
+  | LAST id=IDENT COLON ty_lin=located_ty_ident ck=ck_annot s=site_annot EQUAL e=exp
       { [ mk_var_dec ~linearity:(snd ty_lin) id (fst ty_lin)
-            ck (Last(Some(e))) (Loc($startpos,$endpos)) ] }
-  | LAST id=IDENT COLON ty_lin=located_ty_ident ck=ck_annot
+            ck s (Last(Some(e))) (Loc($startpos,$endpos)) ] }
+  | LAST id=IDENT COLON ty_lin=located_ty_ident ck=ck_annot s=site_annot
       { [ mk_var_dec ~linearity:(snd ty_lin) id (fst ty_lin)
-            ck (Last(None)) (Loc($startpos,$endpos)) ] }
+            ck s (Last(None)) (Loc($startpos,$endpos)) ] }
 ;
 
 ident_list:
@@ -367,6 +374,9 @@ on_ck:
   | b=ck ONOT x=IDENT                                      { Con(b,Q Initial.pfalse,x) }
   | b=ck ON c=constructor_or_bool LPAREN x=IDENT RPAREN    { Con(b,c,x) }
 
+site_annot:
+  | /* empty */ { None }
+  | AROBASE site=IDENT { Some site }
 
 equs:
   | /* empty */                      { [] }
@@ -516,8 +526,10 @@ _simple_exp:
 ;
 
 node_name:
-  | q=qualname c=call_params { mk_app (Enode q) c false }
-  | INLINED q=qualname c=call_params { mk_app (Enode q) c true }
+  | q=qualname s=site_params c=call_params
+       { mk_app (Enode q) s c false }
+  | INLINED q=qualname s=site_params c=call_params
+       { mk_app (Enode q) s c true }
 
 merge_handlers:
   | hs=nonempty_list(merge_handler) { hs }
@@ -525,6 +537,15 @@ merge_handlers:
 merge_handler:
   | LPAREN c=constructor_or_bool ARROW e=exp RPAREN { (c,e) }
 
+/* Communication [a1 to b1,...,an to bn] */
+to_list:
+  | tl=snlist(COMMA,comm) { tl }
+;
+
+comm:
+  | dst=IDENT LARROW src=IDENT { { c_src = src; c_dst = dst } }
+;
+  
 exp:
   | e=simple_exp { e }
   | e=_exp { mk_exp e (Loc($startpos,$endpos)) }
@@ -540,6 +561,9 @@ _exp:
       { Esplit(n, e) }
   | REINIT LPAREN e1=exp COMMA e2=exp RPAREN
       { mk_call Ereinit [e1; e2] }
+  /* communication */
+  | LBRACKET tl=to_list RBRACKET LPAREN e=exps RPAREN
+      { mk_call (Ecomm tl) e }
   | NOT exp
       { mk_op_call "not" [$2] }
   | exp INFIX4 exp
@@ -602,18 +626,22 @@ _exp:
   | it=iterator DOUBLE_LESS n=separated_nonempty_list(COMMA, simple_exp) DOUBLE_GREATER q=qualname
       pargs=delim_slist(COMMA, LESS_LPAREN, RPAREN_GREATER, exp)
       LPAREN args=exps RPAREN
-      { mk_iterator_call it q [] n pargs args }
+      { mk_iterator_call it q [] [] n pargs args }
   | it=iterator DOUBLE_LESS n=separated_nonempty_list(COMMA, simple_exp) DOUBLE_GREATER
       LPAREN q=qualname DOUBLE_LESS sa=array_exp_list DOUBLE_GREATER RPAREN
       pargs=delim_slist(COMMA, LESS_LPAREN, RPAREN_GREATER, exp)
       LPAREN args=exps RPAREN
-      { mk_iterator_call it q sa n pargs args }
+      { mk_iterator_call it q [] sa n pargs args }
 /*Records operators */
   | LBRACE simple_exp WITH DOT c=qualname EQUAL exp RBRACE
       { mk_call ~params:[mk_field_exp c (Loc($startpos(c),$endpos(c)))]
                 Efield_update [$2; $7] }
 ;
 
+site_params:
+  | /* empty */ { [] }
+  | LBRACKET l=snlist(COMMA,IDENT) RBRACKET { l }
+  
 call_params:
   | /* empty */ { [] }
   | DOUBLE_LESS array_exp_list DOUBLE_GREATER { $2 }
@@ -750,9 +778,12 @@ nonmt_params_signature:
 ;
 
 param_signature:
-  | IDENT COLON located_ty_ident ck=ck_annot { mk_arg (Some $1) $3 ck }
-  | located_ty_ident ck=ck_annot { mk_arg None $1 ck }
-  | THREE_DOTS ck=ck_annot { mk_arg None (Tinvalid, Linearity.Ltop) ck }
+  | IDENT COLON located_ty_ident ck=ck_annot s=site_annot
+     { mk_arg (Some $1) $3 ck s }
+  | located_ty_ident ck=ck_annot s=site_annot
+     { mk_arg None $1 ck s }
+  | THREE_DOTS ck=ck_annot s=site_annot
+     { mk_arg None (Tinvalid, Linearity.Ltop) ck s }
 ;
 
 %%

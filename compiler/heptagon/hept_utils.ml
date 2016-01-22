@@ -33,20 +33,34 @@ open Signature
 open Types
 open Linearity
 open Clocks
+open Sites
 open Initial
 open Heptagon
 
 (* Helper functions to create AST. *)
 (* TODO : After switch, all mk_exp should take care of level_ck *)
 let mk_exp desc ?(level_ck = Clocks.Cbase) ?(ct_annot = None) ?(loc = no_location) ty ~linearity =
-  { e_desc = desc; e_ty = ty; e_ct_annot = ct_annot; e_linearity = linearity;
-    e_level_ck = level_ck; e_loc = loc; }
+  { e_desc = desc;
+    e_ty = ty;
+    e_ct_annot = ct_annot;
+    e_linearity = linearity;
+    e_level_ck = level_ck;
+    e_loc = loc; }
 
-let mk_app ?(params=[]) ?(unsafe=false) ?(inlined=false) op =
-  { a_op = op; a_params = params; a_unsafe = unsafe; a_inlined = inlined }
+let mk_app ?(sites=[]) ?(params=[]) ?(unsafe=false) ?(inlined=false) op =
+  { a_op = op;
+    a_sites = sites;
+    a_params = params;
+    a_unsafe = unsafe;
+    a_inlined = inlined }
 
-let mk_op_app ?(params=[]) ?(unsafe=false) ?(reset=None) op args =
-  Eapp(mk_app ~params:params ~unsafe:unsafe op, args, reset)
+let mk_op_app ?(sites=[]) ?(params=[]) ?(unsafe=false) ?(reset=None) op args =
+  Eapp(mk_app ~sites:sites
+	      ~params:params
+	      ~unsafe:unsafe
+	      op,
+       args,
+       reset)
 
 let mk_type_dec name desc =
   { t_name = name; t_desc = desc; t_loc = no_location; }
@@ -58,8 +72,8 @@ let mk_equation ?(loc=no_location) desc =
     eq_inits = Lno_init;
     eq_loc = loc; }
 
-let mk_var_dec ?(last = Var) ?(clock = fresh_clock()) name ty ~linearity =
-  { v_ident = name; v_type = ty; v_linearity = linearity; v_clock = clock;
+let mk_var_dec ?(last = Var) ?(clock = fresh_clock()) ?(site = fresh_site()) name ty ~linearity =
+  { v_ident = name; v_type = ty; v_linearity = linearity; v_clock = clock; v_site = site;
     v_last = last; v_loc = no_location }
 
 let mk_block ?(stateful = true) ?(defnames = Env.empty) ?(locals = []) eqs =
@@ -92,7 +106,7 @@ let mk_signature name ~extern ins outs stateful params constraints loc =
 
 let mk_node
     ?(input = []) ?(output = []) ?(contract = None)
-    ?(stateful = true) ?(unsafe = false) ?(loc = no_location) ?(param = []) ?(constraints = [])
+    ?(stateful = true) ?(unsafe = false) ?(loc = no_location) ?(sites = []) ?(param = []) ?(constraints = [])
     name block =
   { n_name = name;
     n_stateful = stateful;
@@ -102,6 +116,7 @@ let mk_node
     n_contract = contract;
     n_block = block;
     n_loc = loc;
+    n_sites = sites;
     n_params = param;
     n_param_constraints = constraints }
 
@@ -125,13 +140,14 @@ let args_of_var_decs =
   (* before the clocking the clock is wrong in the signature *)
  List.map
    (fun vd -> Signature.mk_arg (Some (Idents.source_name vd.v_ident))
-                               vd.v_type (Linearity.check_linearity vd.v_linearity) Signature.Cbase)
+                               vd.v_type (Linearity.check_linearity vd.v_linearity) Signature.Cbase Signature.Scentralized)
 
 let signature_of_node n =
     { node_inputs = args_of_var_decs n.n_input;
       node_outputs  = args_of_var_decs n.n_output;
       node_stateful = n.n_stateful;
       node_unsafe = n.n_unsafe;
+      node_sites = n.n_sites;
       node_params = n.n_params;
       node_param_constraints = n.n_param_constraints;
       node_external = false;

@@ -149,10 +149,11 @@ struct
       let cr = match app1.a_op, app2.a_op with
         | Efun ln1, Efun ln2 -> compare ln1 ln2
         | x, y when x = y -> 0 (* all constructors can be compared with P.compare *)
-        | (Eequal | Efun _ | Enode _ | Eifthenelse
+	| Ecomm c1, Ecomm c2 -> compare c1 c2
+        | (Eequal | Efun _ | Enode _ | Eifthenelse | Ecomm _
               | Efield_update), _ -> -1
         | (Earray | Earray_fill | Eselect | Eselect_slice | Eselect_dyn
-              | Eselect_trunc | Eupdate | Econcat ), _ -> 1
+              | Eselect_trunc | Eupdate | Econcat), _ -> 1
       in
       if cr <> 0 then cr
       else list_compare Global_compare.static_exp_compare app1.a_params app2.a_params

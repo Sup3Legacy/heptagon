@@ -590,7 +590,7 @@ and typing_app env op e_list = match op with
     let e = assert_1 e_list in
     let env = safe_expect env Ltop e in
       Ltop, env
-  | Eifthenelse | Efun _ | Enode _ | Etuple
+  | Eifthenelse | Efun _ | Enode _ | Etuple | Ecomm _
   | Eupdate | Efield_update | Ereinit -> assert false (*already done in expect_app*)
 
 (** Check that the application of op to e_list can have the linearity
@@ -841,7 +841,7 @@ and expect env lin e =
         let env = safe_expect env (List.hd l) e in
           lin, env
 
-    | Eapp ({ a_op = Etuple }, e_list, _) ->
+    | Eapp ({ a_op = Etuple | Ecomm _ }, e_list, _) ->
       let lin_list = linearity_list_of_linearity lin in
         (try
             let l, env = mapfold2 expect env lin_list e_list in

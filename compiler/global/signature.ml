@@ -40,11 +40,16 @@ type ck =
   | Cbase
   | Con of ck * constructor_name * name
 
+type site =
+  | Scentralized
+  | Slocalized of name
+				     
 (** Node argument : inputs and outputs *)
 type arg = {
   a_name  : name option;
   a_type  : ty;
   a_clock : ck; (** [a_clock] set to [Cbase] means at the node activation clock *)
+  a_site  : site;
   a_linearity : linearity;
 }
 
@@ -60,6 +65,7 @@ type node = {
   node_outputs            : arg list;
   node_stateful           : bool;
   node_unsafe             : bool;
+  node_sites              : name list;
   node_params             : param list;
   node_param_constraints  : constrnt list;
   node_external           : bool;
@@ -86,6 +92,12 @@ let rec ck_to_sck ck =
     | Clocks.Con (ck,c,x) -> Con(ck_to_sck ck, c, Idents.source_name x)
     | _ -> Misc.internal_error "Signature couldn't translate ck"
 
+let site_to_ssite s =
+  let s = Sites.site_repr s in
+  match s with
+  | Sites.Scentralized -> Scentralized
+  | Sites.Slocalized n -> Slocalized (Idents.source_name n)
+  | _ -> Misc.internal_error "Signature couldn't translate site s"
 
 let names_of_arg_list l = List.map (fun ad -> ad.a_name) l
 
@@ -95,8 +107,12 @@ let types_of_param_list l = List.map (fun p -> p.p_type) l
 
 let linearities_of_arg_list l = List.map (fun ad -> ad.a_linearity) l
 
-let mk_arg name ty linearity ck =
-  { a_type = ty; a_linearity = linearity; a_name = name; a_clock = ck }
+let mk_arg name ty linearity ck site =
+  { a_type = ty;
+    a_linearity = linearity;
+    a_name = name;
+    a_clock = ck;
+    a_site = site; }
 
 let mk_param name ty = { p_name = name; p_type = ty }
 
@@ -105,11 +121,12 @@ let mk_field n ty = { f_name = n; f_type = ty }
 let mk_const_def ty value =
   { c_type = ty; c_value = value }
 
-let mk_node ?(constraints = []) loc ~extern ins outs stateful unsafe params =
+let mk_node ?(sites = []) ?(constraints = []) loc ~extern ins outs stateful unsafe params =
   { node_inputs = ins;
     node_outputs  = outs;
     node_stateful = stateful;
     node_unsafe = unsafe;
+    node_sites = sites;
     node_params = params;
     node_param_constraints = constraints;
     node_external = extern;

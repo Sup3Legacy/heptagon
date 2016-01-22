@@ -157,42 +157,50 @@ module Rename =
 struct
   include
     (Map.Make (struct type t = string let compare = String.compare end))
+
   (** Rename a var *)
   let var loc env n =
     try fst (find n env)
     with Not_found -> Error.message loc (Evar_unbound n)
+
   (** Rename a last *)
   let last loc env n =
     try
       let id, last = find n env in
       if not last then Error.message loc (Enot_last n) else id
     with Not_found -> Error.message loc (Evar_unbound n)
+
   (** Adds a name to the list of used names and idents. *)
   let add_used_name env n =
     add n (ident_of_name n, false) env
+
   (** Add a var *)
   let add_var loc env n =
     if mem n env then Error.message loc (Evariable_already_defined n)
     else
         add n (ident_of_name n, false) env
+
   (** Add a last *)
   let add_last loc env n =
     if mem n env then Error.message loc (Evariable_already_defined n)
     else
         add n (ident_of_name n, true) env
+
   (** Add a var dec *)
   let add env vd =
     let add = match vd.v_last with
       | Var -> add_var
       | Last _ -> add_last in
     add vd.v_loc env vd.v_name
+
   (** Append a list of var dec *)
   let append env vd_list = List.fold_left add env vd_list
 end
 
 
-let mk_app ?(params=[]) ?(unsafe=false) ?(inlined = false) op =
+let mk_app ?(sites=[]) ?(params=[]) ?(unsafe=false) ?(inlined = false) op =
   { Heptagon.a_op = op;
+    Heptagon.a_sites = [];
     Heptagon.a_params = params;
     Heptagon.a_unsafe = unsafe;
     Heptagon.a_inlined = inlined }
@@ -283,6 +291,13 @@ let rec translate_ct loc env ct = match ct with
   | Ck ck -> Clocks.Ck (translate_clock loc env ck)
   | Cprod c_l -> Clocks.Cprod (List.map (translate_ct loc env) c_l)
 
+let translate_some_site loc env s = match s with
+  | None -> Sites.fresh_site()
+  | Some s -> Sites.Slocalized (Rename.var loc env s)
+			      
+let translate_comm c =
+  { Heptagon.c_src = c.c_src;
+    Heptagon.c_dst = c.c_dst }
 
 let rec translate_exp env e =
   try
@@ -359,6 +374,7 @@ and translate_op = function
   | Efun ln -> Heptagon.Efun (qualify_value ln)
   | Enode ln -> Heptagon.Enode (qualify_value ln)
   | Ereinit -> Heptagon.Ereinit
+  | Ecomm l -> Heptagon.Ecomm (List.map translate_comm l)
 
 and translate_pat loc env = function
   | Evarpat x -> Heptagon.Evarpat (Rename.var loc env x)
@@ -432,6 +448,7 @@ and translate_var_dec env vd =
       Heptagon.v_linearity = Linearity.check_linearity vd.v_linearity;
       Heptagon.v_last = translate_last vd.v_last;
       Heptagon.v_clock = translate_some_clock vd.v_loc env vd.v_clock;
+      Heptagon.v_site = translate_some_site vd.v_loc env vd.v_site;
       Heptagon.v_loc = vd.v_loc }
 
 (** [env] should contain the declared variables prior to this translation *)
@@ -490,10 +507,15 @@ let args_of_var_decs =
     List.map arg_of_vd
 *)
 
+let add_sites env sites =
+  let add_env env s = Rename.add_used_name env s in 
+  List.fold_left add_env env sites
+					     
 let translate_node node =
   let n = current_qual node.n_name in
   Idents.enter_node n;
   let params, env = params_of_var_decs Rename.empty node.n_params in
+  let env = add_sites env node.n_sites in
   let constraints = List.map translate_constrnt node.n_constraints in
   let env = Rename.append env (node.n_input) in
   (* inputs should refer only to inputs *)
@@ -513,6 +535,7 @@ let translate_node node =
                Heptagon.n_contract = contract;
                Heptagon.n_block = b;
                Heptagon.n_loc = node.n_loc;
+	       Heptagon.n_sites = node.n_sites;
                Heptagon.n_params = params;
                Heptagon.n_param_constraints = constraints; }
   in
@@ -578,9 +601,19 @@ let translate_signature s =
   and translate_clock ck = match ck with
     | Cbase -> Signature.Cbase
     | Con(ck,c,x) -> Signature.Con(translate_clock ck, qualify_constrs c, x)
-  and translate_arg a =
-    Signature.mk_arg a.a_name (translate_type s.sig_loc a.a_type)
-      a.a_linearity (translate_some_clock a.a_clock)
+  in
+
+  let translate_some_site s = match s with
+    | None -> Signature.Scentralized
+    | Some s -> Signature.Slocalized s
+  in
+    
+  let translate_arg a =
+    Signature.mk_arg a.a_name
+		     (translate_type s.sig_loc a.a_type)
+		     a.a_linearity
+		     (translate_some_clock a.a_clock)
+		     (translate_some_site a.a_site)
   in
   let n = current_qual s.sig_name in
   let i = List.map translate_arg s.sig_inputs in

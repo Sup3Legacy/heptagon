@@ -786,6 +786,11 @@ and typing_app cenv h app e_list =
           List.split (List.map (typing cenv h) e_list) in
          prod ty_list, app, typed_e_list
 
+    | Ecomm _ -> (* TODO check site names *)
+        let typed_e_list,ty_list =
+          List.split (List.map (typing cenv h) e_list) in
+         prod ty_list, app, typed_e_list
+
     | Earray ->
         let exp, e_list = assert_1min e_list in
         let typed_exp, t1 = typing cenv h exp in

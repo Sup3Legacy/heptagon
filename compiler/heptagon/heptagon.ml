@@ -34,7 +34,8 @@ open Signature
 open Types
 open Linearity
 open Clocks
-
+open Sites
+       
 type state_name = name
 
 type iterator_type =
@@ -71,6 +72,7 @@ and desc =
 
 and app = {
   a_op     : op;
+  a_sites : name list;
   a_params : static_exp list;
   a_unsafe : bool;
   a_inlined : bool }
@@ -92,7 +94,12 @@ and op =
   | Eupdate
   | Econcat
   | Ereinit
+  | Ecomm of comm list
 
+and comm =
+  { c_src : name;
+    c_dst : name }
+		
 and pat =
   | Etuplepat of pat list
   | Evarpat of var_ident
@@ -142,6 +149,7 @@ and var_dec = {
   v_type  : ty;
   v_linearity : linearity;
   v_clock : Clocks.ck;
+  v_site  : site;
   v_last  : last;
   v_loc   : location }
 
@@ -184,6 +192,7 @@ type node_dec = {
   n_contract           : contract option;
   n_block              : block;
   n_loc                : location;
+  n_sites              : name list;
   n_params             : param list;
   n_param_constraints  : constrnt list }
 

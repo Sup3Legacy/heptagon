@@ -87,6 +87,12 @@ let print_const_dec ff c =
     fprintf ff "const %a = %a@."
       print_qualname c.c_name print_static_exp c.c_value
 
+let print_comm ff { c_src = s; c_dst = d } =
+  fprintf ff "%a <- %a" print_name d print_name s
+      
+let print_comms ff l =
+  print_list_r print_comm "" "," "" ff l
+      
 let print_ct_annot ff = function
   | None -> ()
   | Some ct -> fprintf ff " :: %a" print_ct ct
@@ -247,7 +253,9 @@ and print_app ff (app, args) =
         fprintf ff "@[<2>%a ->@ %a@]" print_exp e1  print_exp e2
     | Ereinit ->
         fprintf ff "@[split@,%a@]" print_exp_tuple args
-
+    | Ecomm l ->
+       fprintf ff "@[<2>[%a]@,%a@]" print_comms l print_exp_tuple args
+		
 let rec print_eq ff eq =
   print_stateful ff eq.eq_stateful;
   match eq.eq_desc with

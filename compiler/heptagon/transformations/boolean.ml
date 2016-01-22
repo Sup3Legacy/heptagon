@@ -743,6 +743,7 @@ let var_dec_list (acc_vd,acc_loc,acc_eq) var_from n =
                         v_type = ty_bool;
                         v_linearity = var_from.v_linearity;
                         v_clock = ck;
+			v_site = Sites.Scentralized;
                         v_last = Var;
                         v_loc = no_location } :: acc_loc in
         (* vi_... = vi when ... when (True|False)(v1) *)

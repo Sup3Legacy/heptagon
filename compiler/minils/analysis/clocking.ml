@@ -121,7 +121,7 @@ let rec typing_pat h = function
 
 
 let typing_app h base pat op w_list = match op with
-  | Earray_fill | Eselect | Eselect_dyn | Eselect_trunc | Eupdate | Eequal
+  | Earray_fill | Eselect | Eselect_dyn | Eselect_trunc | Eupdate | Eequal | Ecomm _
   | Eselect_slice | Econcat | Earray | Efield_update | Eifthenelse ->
       List.iter (expect_extvalue h base) w_list;
       Ck base

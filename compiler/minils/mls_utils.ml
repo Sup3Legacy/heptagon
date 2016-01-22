@@ -274,7 +274,8 @@ let args_of_var_decs =
  List.map
    (fun vd -> Signature.mk_arg (Some (Idents.source_name vd.v_ident))
                                vd.v_type (Linearity.check_linearity vd.v_linearity)
-                               (ck_to_sck (Clocks.ck_repr vd.v_clock)))
+                               (ck_to_sck (Clocks.ck_repr vd.v_clock))
+			       (site_to_ssite vd.v_site))
 
 let signature_of_node n =
   { node_inputs = args_of_var_decs n.n_input;
@@ -283,5 +284,6 @@ let signature_of_node n =
     node_unsafe = n.n_unsafe;
     node_params = n.n_params;
     node_param_constraints = n.n_param_constraints;
+    node_sites = n.n_sites;
     node_external = false;
     node_loc = n.n_loc }

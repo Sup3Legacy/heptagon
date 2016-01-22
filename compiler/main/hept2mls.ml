@@ -65,9 +65,13 @@ let fresh = Idents.gen_fresh "hept2mls"
   (function Heptagon.Enode f -> (shortname f)
     | _ -> "n")
 
-let translate_var { Heptagon.v_ident = n; Heptagon.v_type = ty; Heptagon.v_linearity = linearity;
-                    Heptagon.v_loc = loc; Heptagon.v_clock = ck } =
-  mk_var_dec ~loc:loc n ty linearity ck
+let translate_var { Heptagon.v_ident = n;
+		    Heptagon.v_type = ty;
+		    Heptagon.v_linearity = linearity;
+		    Heptagon.v_site = site;
+		    Heptagon.v_loc = loc;
+		    Heptagon.v_clock = ck } =
+  mk_var_dec ~loc:loc n ty linearity ck site
 
 let translate_reset = function
   | Some { Heptagon.e_desc = Heptagon.Evar n } -> Some n
@@ -80,6 +84,10 @@ let translate_iterator_type = function
   | Heptagon.Ifold -> Ifold
   | Heptagon.Ifoldi -> Ifoldi
   | Heptagon.Imapfold -> Imapfold
+
+let translate_comm { Heptagon.c_src = src; Heptagon.c_dst = dst } =
+  { c_src = src;
+    c_dst = dst }
 
 let translate_op = function
   | Heptagon.Eifthenelse -> Eifthenelse
@@ -98,6 +106,7 @@ let translate_op = function
   | Heptagon.Etuple -> Misc.internal_error "hept2mls Etuple"
   | Heptagon.Earrow -> assert false
   | Heptagon.Ereinit -> assert false
+  | Heptagon.Ecomm l -> Ecomm (translate_comm (assert_1 l))
 
 let translate_app app =
   mk_app ~params:app.Heptagon.a_params
@@ -228,6 +237,7 @@ let node n =
     n_local = List.map translate_var n.Heptagon.n_block.Heptagon.b_local;
     n_equs = List.map translate_eq n.Heptagon.n_block.Heptagon.b_equs;
     n_loc = n.Heptagon.n_loc ;
+    n_sites = n.Heptagon.n_sites;
     n_params = n.Heptagon.n_params;
     n_param_constraints = n.Heptagon.n_param_constraints;
     n_mem_alloc = [] }

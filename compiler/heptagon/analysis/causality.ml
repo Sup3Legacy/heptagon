@@ -164,7 +164,7 @@ and apply op e_list =
         let i3 = typing e3 in
         ctuplelist [t1; i2; i3]
     | ( Efun _| Enode _ | Econcat | Eselect_slice
-      | Eselect_dyn | Eselect_trunc | Eselect | Earray_fill | Ereinit) ->
+      | Eselect_dyn | Eselect_trunc | Eselect | Earray_fill | Ereinit | Ecomm _) ->
         ctuplelist (List.map typing e_list)
     | (Earray | Etuple) ->
         candlist (List.map typing e_list)

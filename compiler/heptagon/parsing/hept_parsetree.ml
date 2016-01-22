@@ -41,7 +41,9 @@ type module_name = Names.modul
 (** state_names, [automata] translate them in constructors with a fresh type. *)
 type state_name = Names.name
 
-
+(** site_names will be names *)
+type site_name = Names.name
+		    
 type qualname =
   | Q of Names.qualname (* already qualified name *)
   | ToQ of Names.name (* name to qualify in the scoping process *)
@@ -89,6 +91,8 @@ and ct =
   | Ck of ck
   | Cprod of ct list
 
+and site = site_name
+		
 and exp =
   { e_desc     : edesc;
     e_ct_annot : ct option ;
@@ -107,7 +111,11 @@ and edesc =
   | Emerge of var_name * (constructor_name * exp) list
   | Esplit of var_name * exp
 
-and app = { a_op: op; a_params: exp list; a_inlined: bool }
+and app =
+  { a_op: op;
+    a_sites: site_name list;
+    a_params: exp list;
+    a_inlined: bool }
 
 and op =
   | Etuple
@@ -126,7 +134,12 @@ and op =
   | Eupdate
   | Econcat
   | Ereinit
+  | Ecomm of comm list
 
+and comm =
+  { c_src : site_name;
+    c_dst : site_name }
+  
 and pat =
   | Etuplepat of pat list
   | Evarpat of var_name
@@ -172,6 +185,7 @@ and var_dec =
     v_type  : ty;
     v_linearity : Linearity.linearity;
     v_clock : ck option;
+    v_site  : site option;
     v_last  : last;
     v_loc   : location; }
 
@@ -214,6 +228,7 @@ type node_dec =
     n_contract    : contract option;
     n_block       : block;
     n_loc         : location;
+    n_sites       : site_name list;
     n_params      : var_dec list;
     n_constraints : exp list; }
 
@@ -238,6 +253,7 @@ and program_desc =
 type arg =
   { a_type  : ty;
     a_clock : ck option;
+    a_site : site option;
     a_linearity : Linearity.linearity;
     a_name  : var_name option }
 
@@ -267,17 +283,17 @@ and interface_desc =
 let mk_exp desc ?(ct_annot = None) loc =
   { e_desc = desc; e_ct_annot = ct_annot; e_loc = loc }
 
-let mk_app op params inlined =
-  { a_op = op; a_params = params; a_inlined = inlined }
+let mk_app op sites params inlined =
+  { a_op = op; a_sites = sites; a_params = params; a_inlined = inlined }
 
-let mk_call ?(params=[]) ?(inlined=false) op exps =
-  Eapp (mk_app op params inlined, exps)
+let mk_call ?(sites=[]) ?(params=[]) ?(inlined=false) op exps =
+  Eapp (mk_app op sites params inlined, exps)
 
 let mk_op_call ?(params=[]) s exps =
   mk_call ~params:params (Enode (ToQ s)) exps
 
-let mk_iterator_call it ln params n_list pexps exps =
-  Eiterator (it, mk_app (Enode ln) params false, n_list, pexps, exps)
+let mk_iterator_call it ln sites params n_list pexps exps =
+  Eiterator (it, mk_app (Enode ln) sites params false, n_list, pexps, exps)
 
 let mk_static_exp desc loc =
   { se_desc = desc; se_loc = loc }
@@ -294,9 +310,9 @@ let mk_type_dec name desc loc =
 let mk_equation desc loc =
   { eq_desc = desc; eq_loc = loc }
 
-let mk_var_dec ?(linearity=Linearity.Ltop) name ty ck last loc =
+let mk_var_dec ?(linearity=Linearity.Ltop) name ty ck s last loc =
   { v_name = name; v_type = ty; v_linearity = linearity;
-    v_clock =ck; v_last = last; v_loc = loc }
+    v_clock =ck; v_site=s; v_last = last; v_loc = loc }
 
 let mk_block locals eqs loc =
   { b_local = locals; b_equs = eqs;
@@ -308,8 +324,8 @@ let mk_objective kind exp =
 let mk_const_dec id ty e loc =
   { c_name = id; c_type = ty; c_value = e; c_loc = loc }
 
-let mk_arg name (ty,lin) ck =
-  { a_type = ty; a_linearity = lin; a_name = name; a_clock = ck }
+let mk_arg name (ty,lin) ck s =
+  { a_type = ty; a_linearity = lin; a_name = name; a_clock = ck; a_site = s }
 
 let ptrue = Q Initial.ptrue
 let pfalse = Q Initial.pfalse

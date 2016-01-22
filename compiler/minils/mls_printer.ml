@@ -198,7 +198,11 @@ and print_app ff (app, args) =
             print_extvalue e1 print_dyn_index idx print_extvalue e2
     | Econcat ->
       let e1, e2 = assert_2 args in
-        fprintf ff "@[<2>%a@ @@ %a@]" print_extvalue e1  print_extvalue e2
+      fprintf ff "@[<2>%a@ @@ %a@]" print_extvalue e1  print_extvalue e2
+    | Ecomm { c_src = s; c_dst = d } ->
+       let e = assert_1 args in
+       fprintf ff "@[<2>[%a <- %a]@,(%a)@]"
+	       print_name d print_name s print_extvalue e
 
 and print_handler ff c =
   fprintf ff "@[<2>%a@]" (print_couple print_qualname print_extvalue "("" -> "")") c
