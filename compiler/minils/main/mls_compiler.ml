@@ -99,6 +99,9 @@ let compile_program p =
   (* Normalize memories*)
   let p = pass "Normalize memories" true Normalize_mem.program p pp in
 
+  (* Handle communications *)
+  let p = pass "Communications" true Communications.program p pp in
+  
   (* Scheduling *)
   let p =
     if not !Compiler_options.use_old_scheduler then
