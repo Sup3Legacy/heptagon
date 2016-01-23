@@ -175,6 +175,8 @@ let rec translate kind context e =
         merge context e n tag_e_list
     | Eapp({ a_op = Eifthenelse }, [e1; e2; e3], _) ->
         ifthenelse context e e1 e2 e3
+    | Eapp({ a_op = Ecomm c_list }, e_list, _) ->
+       comm context e c_list e_list
     (* XXX Huge hack to avoid comparing tuples... (temporary, until this is
        fixed where it should be) *)
     | Eapp({ a_op = (Efun ({ Names.qual = Names.Pervasives; Names.name = "=" }) as op)},
@@ -270,6 +272,20 @@ and ifthenelse context e e1 e2 e3 =
     ) else
       context, { e with e_desc = Eapp (mk_app Eifthenelse, [e1; e2; e3], None) }
 
+(** transforms [[d1 <- s1, ..., dn <- sn](e1,..., en)]
+    into [[d1 <- s1](e1), ..., [dn <- sn](en)]  *)
+and comm context e c_list e_list =
+  let context, e_list = translate_list ExtValue context e_list in
+  let e_list = flatten_e_list e_list in
+  let mk_comm c e' =
+    mk_exp ~loc:e.e_loc (Eapp (mk_app (Ecomm [c]), [e'], None)) e'.e_ty ~linearity:e'.e_linearity
+  in
+  match c_list with
+  | [_] -> context, { e with e_desc = Eapp (mk_app (Ecomm c_list), e_list, None) }
+  | _ ->
+     let ec_list = List.map2 mk_comm c_list e_list in
+     context, { e with e_desc = Eapp(mk_app Etuple, e_list, None) }
+		
 (** transforms [merge x (c1, (e11,...,e1n));...;(ck, (ek1,...,ekn))] into
     [merge x (c1, e11)...(ck, ek1),..., merge x (c1, e1n)...(ck, ekn)]    *)
 and merge context e x c_e_list =
