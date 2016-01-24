@@ -109,7 +109,8 @@ let translate_op = function
   | Heptagon.Ecomm l -> Ecomm (translate_comm (assert_1 l))
 
 let translate_app app =
-  mk_app ~params:app.Heptagon.a_params
+  mk_app ~sites:app.Heptagon.a_sites
+	 ~params:app.Heptagon.a_params
     ~unsafe:app.Heptagon.a_unsafe
     ~id:(Some (fresh app.Heptagon.a_op))
     (translate_op app.Heptagon.a_op)

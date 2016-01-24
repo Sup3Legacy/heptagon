@@ -99,6 +99,7 @@ and edesc =
                        (** [map f <<n>> <(extvalue)> (extvalue) reset ident] *)
 
 and app = { a_op: op;
+	    a_sites: name list;
             a_params: static_exp list;
             a_unsafe: bool;
             a_id: ident option;
@@ -277,6 +278,6 @@ let mk_type_dec type_desc name loc =
 let mk_const_dec id ty e loc =
   { c_name = id; c_type = ty; c_value = e; c_loc = loc }
 
-let mk_app ?(params=[]) ?(unsafe=false) ?(id=None) ?(inlined=false) op =
-  { a_op = op; a_params = params; a_unsafe = unsafe;
+let mk_app ?(sites=[]) ?(params=[]) ?(unsafe=false) ?(id=None) ?(inlined=false) op =
+  { a_op = op; a_sites = sites; a_params = params; a_unsafe = unsafe;
     a_id = id; a_inlined = inlined }
