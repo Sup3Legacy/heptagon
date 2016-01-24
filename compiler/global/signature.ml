@@ -97,7 +97,8 @@ let site_to_ssite s =
   match s with
   | Sites.Scentralized -> Scentralized
   | Sites.Slocalized n -> Slocalized (Idents.source_name n)
-  | _ -> Misc.internal_error "Signature couldn't translate site s"
+  | _ -> Scentralized 	   (* TODO remove when site analysis done *)
+(*| _ -> Misc.internal_error "Signature couldn't translate site s"*)
 
 let names_of_arg_list l = List.map (fun ad -> ad.a_name) l
 
