@@ -70,6 +70,8 @@ let print_const_dec ff c =
       print_qualname c.c_name print_static_exp c.c_value;
   fprintf ff "@."
 
+let print_sites ff l =
+  fprintf ff "@[<2>%a@]" (print_list_r print_name "[" "," "]") l
 
 let rec print_params ff l =
   fprintf ff "@[<2>%a@]" (print_list_r print_static_exp "<<"","">>") l
@@ -161,8 +163,8 @@ and print_app ff (app, args) =
               print_qualname f print_params app.a_params  print_w_tuple args
 	end
     | Efun f | Enode f ->
-        fprintf ff "@[%a@,%a@,%a@]"
-          print_qualname f print_params app.a_params  print_w_tuple args
+        fprintf ff "@[%a@,%a@,%a@,%a@]"
+          print_qualname f print_sites app.a_sites print_params app.a_params  print_w_tuple args
     | Eifthenelse ->
       let e1, e2, e3 = assert_3 args in
         fprintf ff "@[<hv>if %a@ then %a@ else %a@]"
@@ -259,9 +261,10 @@ let print_contract ff { c_local = l; c_eq = eqs;
 
 let print_node ff { n_name = n; n_input = ni; n_output = no;
                     n_contract = contract; n_local = nl;
-                    n_equs = ne; n_params = params } =
-  fprintf ff "@[node %a%a%a@ returns %a@]@\n%a%a%a@]@\n@."
+                    n_equs = ne; n_sites = sites; n_params = params } =
+  fprintf ff "@[node %a%a%a%a@ returns %a@]@\n%a%a%a@]@\n@."
     print_qualname n
+    print_sites sites
     print_node_params params
     print_vd_tuple ni
     print_vd_tuple no
