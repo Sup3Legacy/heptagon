@@ -42,9 +42,24 @@ let qn_comm = { qual = Module "Desynch"; name = "comm" }
 let edesc funs env desc =
   match desc with
   | Eapp ({ a_op = Ecomm c } as a, [e], r) ->
+     let e, env = extvalue_it funs env e in
      let s = NamesEnv.find c.c_src env in
      let d = NamesEnv.find c.c_dst env in
-     Eapp ({ a with a_op = Efun qn_comm }, [s;d;e], r)
+     let e_s = mk_extvalue ~ty:Initial.tbool ~linearity:Linearity.Ltop
+			   ~clock:Clocks.Cbase (Wvar s) in
+     let e_d = mk_extvalue ~ty:Initial.tbool ~linearity:Linearity.Ltop
+			   ~clock:Clocks.Cbase (Wvar d) in
+     Eapp ({ a with a_op = Efun qn_comm }, [e_s;e_d;e], r), env
+  | Eapp ({ a_op = (Efun _ | Enode _); a_sites = sl } as a, args, r) ->
+     let args, env = Misc.mapfold (extvalue_it funs) env args in
+     let site_args =
+       List.map (fun s ->
+		 let s_id = NamesEnv.find s env in
+		 mk_extvalue ~ty:Initial.tbool
+			     ~linearity:Linearity.Ltop
+			     ~clock:Clocks.Cbase (Wvar s_id))
+		sl in
+     Eapp({ a with a_sites = [] }, site_args @ args, r), env
   | _ -> raise Errors.Fallback
 
 let node funs _ nd =
@@ -61,6 +76,6 @@ let node funs _ nd =
   { nd with n_input = site_inputs @ nd.n_input }, env
 
 let program p =
-  let funs = { Mls_mapfold.defaults with exp = exp; node_dec = node } in
+  let funs = { Mls_mapfold.defaults with edesc = edesc; node_dec = node } in
   let p, _ = Mls_mapfold.program_it funs NamesEnv.empty p in
   p
