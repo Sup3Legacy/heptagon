@@ -34,6 +34,7 @@
 
 (* -------------------------------------------------------------------------- *)
 
+open Misc
 open Compiler_utils
 open Ctrln_utils
 open Signature

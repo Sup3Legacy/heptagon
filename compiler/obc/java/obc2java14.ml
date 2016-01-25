@@ -38,6 +38,7 @@
 (** Requires scalarized Obc :
   [p = e] when [e] is an array is understand as a copy of the reference, not a copy of the array.*)
 
+open Misc
 open Format
 open Names
 open Modules

@@ -26,6 +26,8 @@
 (* along with Heptagon.  If not, see <http://www.gnu.org/licenses/>    *)
 (*                                                                     *)
 (***********************************************************************)
+
+open Misc
 open Names
 open Modules
 open Signature

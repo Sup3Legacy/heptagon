@@ -27,7 +27,7 @@
 (*                                                                     *)
 (***********************************************************************)
 
-
+open Misc
 open Compiler_utils
 open Compiler_options
 

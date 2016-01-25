@@ -28,6 +28,7 @@
 (*                                                                     *)
 (***********************************************************************)
 
+open Misc
 open Format
 open Signature
 open Types

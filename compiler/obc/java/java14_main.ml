@@ -1,3 +1,4 @@
+open Misc
 open Names
 open Modules
 open Signature
