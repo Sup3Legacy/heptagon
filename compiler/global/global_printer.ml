@@ -30,6 +30,7 @@ open Names
 open Signature
 open Types
 open Clocks
+open Sites
 open Modules
 open Format
 open Pp_tools
@@ -84,10 +85,28 @@ let rec print_ct ff = function
   | Cprod ct_list ->
       fprintf ff "@[<2>(%a)@]" (print_list_r print_ct """ *""") ct_list
 
- let rec print_sck ff = function
+let rec print_sck ff = function
   | Signature.Cbase -> fprintf ff "."
   | Signature.Con (ck, c, n) -> fprintf ff "%a on %a(%a)" print_sck ck print_qualname c print_name n
 
+let rec print_site ff = function
+  | Scentralized -> fprintf ff "-"
+  | Slocalized n -> print_name ff n
+  | Svar { contents = Sindex i } -> fprintf ff "'a%i" i
+  | Svar { contents = Slink s } ->
+     if !Compiler_options.full_type_info then
+       fprintf ff "~> %a" print_site s
+     else
+       fprintf ff "%a" print_site s
+
+let rec print_tsite ff = function
+  | Ssite s -> print_site ff s
+  | Sprod ts_l ->
+     fprintf ff "@[<2>(%a)@]" (print_list_r print_tsite """ *""") ts_l
+
+let rec print_sigsite ff = function
+  | Signature.Scentralized -> fprintf ff "-"
+  | Signature.Slocalized n -> print_name ff n
 
 let rec print_static_exp_desc ff sed = match sed with
   | Sint i -> fprintf ff "%d" i
@@ -164,12 +183,16 @@ let print_interface_const ff (name,c) =
 
 let print_sarg ff arg = match arg.a_name with
     | None ->
-        fprintf ff "@[%a :: %a@]" print_type arg.a_type print_sck arg.a_clock
+       fprintf ff "@[%a :: %a @@ %a@]"
+	       print_type arg.a_type
+	       print_sck arg.a_clock
+	       print_sigsite arg.a_site
     | Some(name) ->
-        fprintf ff "@[%a : %a :: %a@]"
-          print_name name
-          print_type arg.a_type
-          print_sck arg.a_clock
+       fprintf ff "@[%a : %a :: %a @@ %a@]"
+               print_name name
+               print_type arg.a_type
+               print_sck arg.a_clock
+	       print_sigsite arg.a_site
 
 let print_interface_value ff (name,node) =
 (*  let print_node_params ff (p_list, constraints) =
@@ -177,12 +200,13 @@ let print_interface_value ff (name,node) =
       (print_list_r (fun ff p -> print_name ff p.p_name) "" "," "") p_list
       print_constraints constraints
   in*)
-  fprintf ff "@[<4>val %a@,@[<2>%a@]%a@,@[<1>%a@]@ returns @[<1>%a@]@]"
-    print_name name
-    (print_list_r print_param "<<" "," ">>") node.node_params
-    print_constraints node.node_param_constraints
-    (print_list_r print_sarg "(" ";" ")") node.node_inputs
-    (print_list_r print_sarg "(" ";" ")") node.node_outputs
+  fprintf ff "@[<4>val %a@,@[<1>%a@]@,@[<2>%a@]%a@,@[<1>%a@]@ returns @[<1>%a@]@]"
+	  print_name name
+	  (print_list_r print_name "<[" "," "]>") node.node_sites
+	  (print_list_r print_param "<<" "," ">>") node.node_params
+	  print_constraints node.node_param_constraints
+	  (print_list_r print_sarg "(" ";" ")") node.node_inputs
+	  (print_list_r print_sarg "(" ";" ")") node.node_outputs
 
 let print_interface ff =
   let m = Modules.current_module () in
@@ -193,4 +217,4 @@ let print_interface ff =
     (fun key constdec -> Format.fprintf ff "%a@," print_interface_const (key,constdec)) m.m_consts;
   NamesEnv.iter
     (fun key sigtype -> Format.fprintf ff "%a@," print_interface_value (key,sigtype)) m.m_values;
-  Format.fprintf ff "@]@."
+  Format.fprintf ff "@]"

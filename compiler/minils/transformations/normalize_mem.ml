@@ -90,7 +90,7 @@ let eq _funs (env, vds, v, eqs) eq = match eq.eq_lhs, eq.eq_rhs with
         let vd_mem = { vd with v_ident = x_mem } in
         let ck = Misc.assert_1 (Clocks.unprod e.e_ct) in
         let exp_mem_x = mk_extvalue_exp e.e_level_ck vd.v_type
-          ~clock:ck ~linearity:vd.v_linearity (Wvar x_mem) in
+          ~clock:ck ~linearity:vd.v_linearity ~site:vd.v_site (Wvar x_mem) in
         (* mem_o = v fby e *)
         let eq_copy = { eq with eq_lhs = Evarpat x_mem } in
         (* o = mem_o *)

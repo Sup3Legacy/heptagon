@@ -99,6 +99,7 @@ let mkp t e =
     e_ct_annot = None;
     e_level_ck = Clocks.Cbase;
     e_linearity = Linearity.Ltop;
+    e_tsite = Sites.Ssite Scentralized;
     e_loc = Location.no_location;
   }
 

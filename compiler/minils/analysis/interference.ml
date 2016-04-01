@@ -618,7 +618,7 @@ let add_init_return_eq f =
 
   let tuple_from_dec_and_mem_list decs =
     let exp_of_vd vd =
-      mk_extvalue ~clock:vd.v_clock ~ty:vd.v_type ~linearity:vd.v_linearity (Wvar vd.v_ident)
+      mk_extvalue ~clock:vd.v_clock ~ty:vd.v_type ~linearity:vd.v_linearity ~site:vd.v_site (Wvar vd.v_ident)
     in
     let exp_of_mem x = exp_of_vd (World.vd_from_ident x) in
     let decs = List.map exp_of_vd decs in
@@ -628,10 +628,10 @@ let add_init_return_eq f =
 
    (** a_1,..,a_p = __init__  *)
   let eq_init = mk_equation false (pat_from_dec_list f.n_input)
-    (mk_extvalue_exp Clocks.Cbase Initial.tint ~linearity:Ltop (Wconst (Initial.mk_static_int 0))) in
+    (mk_extvalue_exp Clocks.Cbase Initial.tint ~linearity:Ltop ~site:Sites.Scentralized (Wconst (Initial.mk_static_int 0))) in
     (** __return__ = o_1,..,o_q, mem_1, ..., mem_k *)
   let eq_return = mk_equation false (Etuplepat [])
-    (mk_exp Clocks.Cbase Tinvalid ~linearity:Ltop (tuple_from_dec_and_mem_list f.n_output)) in
+    (mk_exp Clocks.Cbase Tinvalid ~linearity:Ltop ~tsite:(Sites.Ssite Sites.Scentralized) (tuple_from_dec_and_mem_list f.n_output)) in
     (eq_init::f.n_equs)@[eq_return]
 
 (** Coalesce Imem x and Ivar x *)

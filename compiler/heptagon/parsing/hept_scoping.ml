@@ -200,7 +200,7 @@ end
 
 let mk_app ?(sites=[]) ?(params=[]) ?(unsafe=false) ?(inlined = false) op =
   { Heptagon.a_op = op;
-    Heptagon.a_sites = [];
+    Heptagon.a_sites = sites;
     Heptagon.a_params = params;
     Heptagon.a_unsafe = unsafe;
     Heptagon.a_inlined = inlined }
@@ -293,7 +293,7 @@ let rec translate_ct loc env ct = match ct with
 
 let translate_some_site loc env s = match s with
   | None -> Sites.fresh_site()
-  | Some s -> Sites.Slocalized (Rename.var loc env s)
+  | Some s -> Sites.Slocalized s
 			      
 let translate_comm c =
   { Heptagon.c_src = c.c_src;
@@ -306,6 +306,7 @@ let rec translate_exp env e =
       Heptagon.e_linearity = Linearity.Ltop;
       Heptagon.e_level_ck = Clocks.Cbase;
       Heptagon.e_ct_annot = Misc.optional (translate_ct e.e_loc env) e.e_ct_annot;
+      Heptagon.e_tsite = Sites.invalid_site;
       Heptagon.e_loc = e.e_loc }
   with ScopingError(error) -> Error.message e.e_loc error
 
@@ -324,10 +325,10 @@ and translate_desc loc env = function
         List.map (fun (f,e) -> qualify_field f, translate_exp env e)
           f_e_list in
       Heptagon.Estruct f_e_list
-  | Eapp ({ a_op = op; a_params = params; a_inlined = inl }, e_list) ->
+  | Eapp ({ a_op = op; a_sites = sites; a_params = params; a_inlined = inl }, e_list) ->
       let e_list = List.map (translate_exp env) e_list in
       let params = List.map (expect_static_exp) params in
-      let app = mk_app ~params:params ~inlined:inl (translate_op op) in
+      let app = mk_app ~sites:sites ~params:params ~inlined:inl (translate_op op) in
       Heptagon.Eapp (app, e_list, None)
 
   | Eiterator (it, { a_op = op; a_params = params }, n_list, pe_list, e_list) ->

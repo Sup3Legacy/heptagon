@@ -499,7 +499,11 @@ let assign_uc_groups gd =
 let scmp a b = String.compare (Symb.to_string a) (Symb.to_string b)
 
 let var_exp v ty =
-  mk_extvalue ~ty ~clock:Clocks.Cbase ~linearity:Linearity.Ltop (Wvar v)
+  mk_extvalue ~ty
+	      ~clock:Clocks.Cbase
+	      ~linearity:Linearity.Ltop
+	      ~site:Sites.Scentralized
+	      (Wvar v)
 
 let decl_arg (v, t) =
   mk_arg (Some (name v)) t Linearity.Ltop Signature.Cbase Signature.Scentralized
@@ -527,7 +531,7 @@ let gen_ctrlf_calls ~requal_types gd node_name equs =
     (* Build controller call *)
     let func_name = controller_node ~num node_name in
     let app = Eapp (mk_app (Efun func_name), i, None) in
-    let exp = mk_exp ~linearity:Linearity.Ltop Clocks.Cbase (Tprod ot) app in
+    let exp = mk_exp ~linearity:Linearity.Ltop ~tsite:(Sites.Ssite Sites.Scentralized) Clocks.Cbase (Tprod ot) app in
     let equ = mk_equation false ov exp in
 
     let is, os = if requal_types then

@@ -187,6 +187,8 @@ rule token = parse
   | "]"             {RBRACKET}
   | "[>"            {LBRACKETGREATER}
   | "<]"            {LESSRBRACKET}
+  | "<["            {LESS_LBRACKET}
+  | "]>"            {RBRACKET_GREATER}
   | "@"             {AROBASE}
   | ".."            {DOUBLE_DOT}
   | "<<"            {DOUBLE_LESS}

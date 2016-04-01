@@ -37,6 +37,7 @@ open Hept_parsetree
 %}
 
 %token DOT LPAREN LESS_LPAREN RPAREN RPAREN_GREATER LBRACE RBRACE COLON COLONCOLON SEMICOL
+%token LESS_LBRACKET RBRACKET_GREATER
 %token EQUAL EQUALEQUAL LESS_GREATER BARBAR COMMA BAR ARROW LET TEL
 %token <string> Constructor
 %token <string> IDENT
@@ -265,7 +266,7 @@ node_params:
 
 node_sites:
   | /* empty */ { [] }
-  | LBRACKET s=snlist(COMMA, IDENT) RBRACKET { s }
+  | LESS_LBRACKET s=snlist(COMMA, IDENT) RBRACKET_GREATER { s }
 ;
 
 contract:
@@ -640,7 +641,7 @@ _exp:
 
 site_params:
   | /* empty */ { [] }
-  | LBRACKET l=snlist(COMMA,IDENT) RBRACKET { l }
+  | LESS_LBRACKET  l=snlist(COMMA,IDENT) RBRACKET_GREATER  { l }
   
 call_params:
   | /* empty */ { [] }

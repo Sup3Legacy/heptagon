@@ -34,7 +34,7 @@ open Linearity
 
 (** Warning: Whenever these types are modified,
     interface_format_version should be incremented. *)
-let interface_format_version = "4"
+let interface_format_version = "5"
 
 type ck =
   | Cbase
@@ -96,9 +96,8 @@ let site_to_ssite s =
   let s = Sites.site_repr s in
   match s with
   | Sites.Scentralized -> Scentralized
-  | Sites.Slocalized n -> Slocalized (Idents.source_name n)
-  | _ -> Scentralized 	   (* TODO remove when site analysis done *)
-(*| _ -> Misc.internal_error "Signature couldn't translate site s"*)
+  | Sites.Slocalized n -> Slocalized n
+  | _ -> Misc.internal_error "Signature couldn't translate site"
 
 let names_of_arg_list l = List.map (fun ad -> ad.a_name) l
 

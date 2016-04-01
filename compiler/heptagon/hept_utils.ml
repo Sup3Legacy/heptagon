@@ -39,12 +39,13 @@ open Heptagon
 
 (* Helper functions to create AST. *)
 (* TODO : After switch, all mk_exp should take care of level_ck *)
-let mk_exp desc ?(level_ck = Clocks.Cbase) ?(ct_annot = None) ?(loc = no_location) ty ~linearity =
+let mk_exp desc ?(level_ck = Clocks.Cbase) ?(ct_annot = None) ?(tsite = Sprod []) ?(loc = no_location) ty ~linearity =
   { e_desc = desc;
     e_ty = ty;
     e_ct_annot = ct_annot;
     e_linearity = linearity;
     e_level_ck = level_ck;
+    e_tsite = tsite;
     e_loc = loc; }
 
 let mk_app ?(sites=[]) ?(params=[]) ?(unsafe=false) ?(inlined=false) op =

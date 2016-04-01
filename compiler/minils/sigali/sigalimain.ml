@@ -478,12 +478,14 @@ let translate_node
 	      Cbase
 	      (Tprod (List.map (fun _ -> Initial.tbool) mls_ctrl))
 	      ~linearity:Linearity.Ltop
+	      ~tsite:(Sites.Ssite Sites.Scentralized)
 	      (Minils.Eapp(Minils.mk_app (Minils.Efun ctrlr_fun_name),
 			   (List.map
 			      (fun v ->
 				 Minils.mk_extvalue
 				   ~ty:Initial.tbool
 				   ~linearity:Linearity.Ltop
+				   ~site:Sites.Scentralized
 				   ~clock:Cbase
 				   (Minils.Wvar v))
 			      (mls_inputs@mls_states))
@@ -492,6 +494,7 @@ let translate_node
 				   Minils.mk_extvalue
 				     ~ty:Initial.tbool
 				     ~linearity:Linearity.Ltop
+				     ~site:Sites.Scentralized
 				     ~clock:Cbase
 				     (Minils.Wconst(Initial.mk_static_bool true)))
 				mls_ctrl),

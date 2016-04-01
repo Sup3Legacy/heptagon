@@ -98,7 +98,7 @@ let print_ct_annot ff = function
   | Some ct -> fprintf ff " :: %a" print_ct ct
 
 let print_sites ff l =
-  fprintf ff "@[<2>%a@]" (print_list_r print_name "[" "," "]") l
+  fprintf ff "@[<2>%a@]" (print_list_r print_name "<[" "," "]>") l
 		       
 let rec print_params ff l =
   fprintf ff "@[<2>%a@]" (print_list_r print_static_exp "<<"","">>") l
@@ -133,8 +133,10 @@ and print_stateful ff s =
 and print_exp ff e =
  if !Compiler_options.full_type_info then
     fprintf ff "(%a : %a%a%a)"
-      print_exp_desc e.e_desc print_type e.e_ty
-                              print_linearity e.e_linearity print_ct_annot e.e_ct_annot
+	    print_exp_desc e.e_desc
+	    print_type e.e_ty
+	    print_linearity e.e_linearity
+	    print_ct_annot e.e_ct_annot
   else fprintf ff "%a%a" print_exp_desc e.e_desc print_ct_annot e.e_ct_annot
 
 and print_exp_desc ff = function

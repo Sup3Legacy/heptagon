@@ -121,7 +121,7 @@ let mk_extvalue e w =
     | Some ct -> assert_1 (Clocks.unprod ct)
   in
   mk_extvalue ~loc:e.Heptagon.e_loc ~linearity:e.Heptagon.e_linearity
-    ~ty:e.Heptagon.e_ty ~clock:clock w
+    ~ty:e.Heptagon.e_ty ~clock:clock w ~site:(Sites.site_of_tsite e.Heptagon.e_tsite)
 
 
 let rec translate_extvalue e =
@@ -142,8 +142,9 @@ let rec translate_extvalue e =
     | _ -> Error.message e.Heptagon.e_loc Error.Enormalization
 
 let rec translate ({ Heptagon.e_desc = desc; Heptagon.e_ty = ty;
-                 Heptagon.e_level_ck = b_ck; Heptagon.e_linearity = linearity;
-                 Heptagon.e_ct_annot = a_ct; Heptagon.e_loc = loc;  } as e) =
+                     Heptagon.e_level_ck = b_ck; Heptagon.e_linearity = linearity;
+		     Heptagon.e_tsite = tsite;
+                     Heptagon.e_ct_annot = a_ct; Heptagon.e_loc = loc;  } as e) =
   let desc = match desc with
     | Heptagon.Econst _
     | Heptagon.Evar _
@@ -178,8 +179,8 @@ let rec translate ({ Heptagon.e_desc = desc; Heptagon.e_ty = ty;
         Emerge (x, List.map (fun (c,e)-> c, translate_extvalue e) c_e_list)
   in
   match a_ct with
-    | None -> mk_exp b_ck ty ~loc:loc ~linearity:linearity desc
-    | Some ct -> mk_exp b_ck ty ~ct:ct ~loc:loc ~linearity:linearity desc
+    | None -> mk_exp b_ck ty ~loc:loc ~linearity:linearity ~tsite:tsite desc
+    | Some ct -> mk_exp b_ck ty ~ct:ct ~loc:loc ~linearity:linearity ~tsite:tsite desc
 
 
 

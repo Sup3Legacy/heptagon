@@ -65,6 +65,7 @@ and extvalue = {
   mutable w_ck: Clocks.ck;
   w_ty        : ty;
   w_linearity : linearity;
+  w_site      : site;
   w_loc       : location }
 
 and extvalue_desc =
@@ -220,8 +221,8 @@ and interface_desc =
 
 (*Helper functions to build the AST*)
 
-let mk_extvalue ~ty ~linearity ?(clock = fresh_clock()) ?(loc = no_location) desc =
-  { w_desc = desc; w_ty = ty; w_linearity = linearity;
+let mk_extvalue ~ty ~linearity ~site ?(clock = fresh_clock()) ?(loc = no_location) desc =
+  { w_desc = desc; w_ty = ty; w_linearity = linearity; w_site = site;
     w_ck = clock; w_loc = loc }
 
 let extvalue_true, extvalue_false =
@@ -235,8 +236,8 @@ let mk_vd_extvalue vd =
   mk_extvalue ~ty:vd.v_type ~linearity:vd.v_linearity
               ~clock:vd.v_clock ~loc:vd.v_loc (Wvar vd.v_ident)
 
-let mk_exp level_ck ty ~linearity
-    ?(ct = fresh_ct ty) ?(tsite = fresh_tsite ty) ?(loc = no_location) desc =
+let mk_exp level_ck ty ~linearity ~tsite
+    ?(ct = fresh_ct ty) ?(loc = no_location) desc =
   { e_desc = desc; e_ty = ty; e_linearity = linearity;
     e_level_ck = level_ck; e_ct = ct; e_site = tsite; e_loc = loc }
 
@@ -244,9 +245,9 @@ let mk_var_dec ?(loc = no_location) ident ty linearity ck site =
   { v_ident = ident; v_type = ty; v_linearity = linearity;  v_clock = ck; v_site = site; v_loc = loc }
 
 let mk_extvalue_exp ?(clock = fresh_clock())
-    ?(loc = no_location) level_ck ty ~linearity desc =
-  mk_exp ~loc:loc level_ck ty ~linearity:linearity
-    (Eextvalue (mk_extvalue ~clock:clock ~loc:loc ~linearity:linearity ~ty:ty desc))
+    ?(loc = no_location) level_ck ty ~linearity ~site desc =
+  mk_exp ~loc:loc level_ck ty ~linearity:linearity ~tsite:(Ssite site)
+    (Eextvalue (mk_extvalue ~clock:clock ~loc:loc ~linearity:linearity ~site:site ~ty:ty desc))
 
 let mk_equation ?(loc = no_location) ?(base_ck=fresh_clock()) unsafe pat exp =
   { eq_lhs = pat; eq_rhs = exp; eq_unsafe = unsafe; eq_base_ck = base_ck; eq_loc = loc }
