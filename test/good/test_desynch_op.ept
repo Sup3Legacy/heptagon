@@ -1,0 +1,9 @@
+node f<[a,b]>(x:int) = (y:int)
+let
+    y = [b <- a](x + 1) * 2
+tel
+
+node g<[c,d,e]>(z:int) = (t:int)
+let
+    t = [d<-c](f<[e,c]>(z+3)) + 4
+tel

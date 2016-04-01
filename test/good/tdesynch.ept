@@ -1,0 +1,4 @@
+node f[a,b](x:int) = (y:int)
+let
+    y = [b <- a](x)
+tel
