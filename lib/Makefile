@@ -25,7 +25,7 @@ install: all
 	(cd c/; $(INSTALL) $(C_OBJ) $(INSTALL_LIBDIR)/$(C_DIR))
 
 uninstall:
-	$(foreach f,$(STDLIB_OBJ) $(STDLIB_INTERFACE),$(RM) $(INSTALL_LIBDIR)/$(f))
+	$(foreach f,$(STDLIB_OBJ) $(STDLIB_INTERFACE),$(RM) $(INSTALL_LIBDIR)/$(f);)
 	$(RM) $(INSTALL_LIBDIR)/$(C_DIR)/$(C_OBJ)
 
 clean:
