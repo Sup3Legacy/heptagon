@@ -42,13 +42,17 @@ let keyword_table = ((Hashtbl.create 149) : (string, token) Hashtbl.t);;
 
 List.iter (fun (str,tok) -> Hashtbl.add keyword_table str tok) [
  "node", NODE;
+ "equa", EQUA;
+ "_void", VOID;
  "fun", FUN;
  "returns", RETURNS;
+ "hidden", HIDDEN;
  "var", VAR;
  "val", VAL;
  "const", CONST;
  "let", LET;
  "tel", TEL;
+ "and", AND;
  "end", END;
  "fby", FBY;
  "switch", SWITCH;
@@ -191,9 +195,11 @@ rule token = parse
   | "<<"            {DOUBLE_LESS}
   | ">>"            {DOUBLE_GREATER}
   | "..."           {THREE_DOTS}
+(*
   | (['A'-'Z']('_' ? ['A'-'Z' 'a'-'z' ''' '0'-'9']) * as id)
       {Constructor id}
-  | (['A'-'Z' 'a'-'z']('_' ? ['A'-'Z' 'a'-'z' ''' '0'-'9']) * as id)
+*)
+  | (((['0'-'9']+)?['A'-'Z' 'a'-'z' ''' '_']['A'-'Z' 'a'-'z' ''' '_' '0'-'9']*) as id)
       { let s = Lexing.lexeme lexbuf in
           begin try
       Hashtbl.find keyword_table s
@@ -206,7 +212,9 @@ rule token = parse
   | '0' ['o' 'O'] ['0'-'7']+
   | '0' ['b' 'B'] ['0'-'1']+
       { INT (int_of_string(Lexing.lexeme lexbuf)) }
-  | ['0'-'9']+ ('.' ['0'-'9']+)? (['e' 'E'] ['+' '-']? ['0'-'9']+)?
+  | ['-' '+']?['0'-'9']+ ('.' ['0'-'9']*)? (['e' 'E'] ['+' '-']? ['0'-'9']+)?
+      { FLOAT (float_of_string(Lexing.lexeme lexbuf)) }
+  | '.' ['0'-'9']+ (['e' 'E'] ['+' '-']? ['0'-'9']+)?
       { FLOAT (float_of_string(Lexing.lexeme lexbuf)) }
   | "\""
       { reset_string_buffer();
@@ -226,7 +234,9 @@ rule token = parse
   end;
   PRAGMA(id,get_stored_string())
       }
-  | "(*"
+  | "--" [^ '\n']* newline
+      { new_line lexbuf; token lexbuf }
+  | "(*" | "/*" | "/*!"
       { let comment_start = lexbuf.lex_curr_p in
         comment_depth := 1;
         begin try
@@ -267,7 +277,7 @@ rule token = parse
 
 and pragma = parse
   | newline         { new_line lexbuf; pragma lexbuf }
-  | "(*"
+  | "(*" | "/*"
       { let comment_start = lexbuf.lex_curr_p in
         comment_depth := 1;
         begin try
@@ -289,9 +299,9 @@ and pragma = parse
 
 and comment = parse
   | newline         { new_line lexbuf; comment lexbuf }
-  |  "(*"
+  |  "(*" | "/*"
       { comment_depth := succ !comment_depth; comment lexbuf }
-  | "*)"
+  | "*)" | "*/"
       { comment_depth := pred !comment_depth;
         if !comment_depth > 0 then comment lexbuf }
   | "\""

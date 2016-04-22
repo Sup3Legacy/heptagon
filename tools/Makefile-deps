@@ -1,0 +1,28 @@
+include depend
+HEPTC=./heptc
+MAPDEPS=./tools/map_deps.py
+EXT=saofd
+
+default: pervasives.epci all
+
+all: $(OBJS)
+
+depend: symbols.txt
+	python $(MAPDEPS) <$< | sed -e 's/\.$(EXT)/\.obc/g' >$@
+
+symbols.txt:
+	for f in *.$(EXT); do		\
+	    $(HEPTC) -M -stdlib . $$f;	\
+	done > $@
+
+pervasives.epci: pervasives.epi
+	$(HEPTC) $<
+
+clean:
+	@rm -rf $(OBJS)
+	@rm -rf symbols.txt
+	@rm -rf $(OBJS:.obc=.epci) $(OBJS:.obc=.mls)
+
+%.obc: %.saofd
+	$(HEPTC) -stdlib . $(filter-out $<,$(^:%.obc=-open %)) $<
+
