@@ -160,7 +160,12 @@ struct
   (** Rename a var *)
   let var loc env n =
     try fst (find n env)
-    with Not_found -> Error.message loc (Evar_unbound n)
+    with Not_found ->
+      if !Compiler_options.calc_deps then begin
+          Modules.unknown_vars := n :: !Modules.unknown_vars;
+          Idents.gen_var "calc_deps" n
+        end
+      else Error.message loc (Evar_unbound n)
   (** Rename a last *)
   let last loc env n =
     try
