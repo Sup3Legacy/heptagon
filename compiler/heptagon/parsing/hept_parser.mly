@@ -37,7 +37,7 @@ open Hept_parsetree
 %}
 
 %token DOT LPAREN LESS_LPAREN RPAREN RPAREN_GREATER LBRACE RBRACE COLON COLONCOLON SEMICOL
-%token EQUAL EQUALEQUAL LESS_GREATER BARBAR COMMA BAR ARROW LET TEL
+%token EQUAL EQUALEQUAL LESS_GREATER BARBAR COMMA BAR ARROW LET TEL HIDDEN VOID
 %token <string> Constructor
 %token <string> IDENT
 %token <int> INT
@@ -50,7 +50,7 @@ open Hept_parsetree
 %token FBY PRE SWITCH EVERY
 %token OR STAR NOT
 %token AMPERSAND
-%token AMPERAMPER
+%token AMPERAMPER AND
 %token AUTOMATON
 %token PRESENT
 %token RESET
@@ -89,6 +89,7 @@ open Hept_parsetree
 %token <string> INFIX3
 %token <string> INFIX4
 %token EOF
+%token EQUA
 
 
 %right AROBASE
@@ -150,15 +151,18 @@ adelim_slist(S, L, R, x) :
   |/* empty */    { None }
   | P v=x         { Some(v) }
 
-program: o=list(opens) p=list(program_desc) EOF { {p_modname = ""; p_opened = o; p_desc = p} }
+program: o=list(opens) p=list(program_desc) EOF
+  { {p_modname = "";
+     p_opened = (List.map (fun x -> Names.Module x) (List.rev !Compiler_options.files_to_open)) @ o;
+     p_desc = List.concat p} }
 
 program_desc:
-  | p=PRAGMA       { Ppragma p }
-  | c=const_dec    { Pconst c }
-  | t=type_dec     { Ptype t }
-  | c=class_dec    { Pclass c}
-  | i=instance_dec { Pinstance i}
-  | n=node_dec     { Pnode n }
+  | p=PRAGMA       { [Ppragma p] }
+  | c=const_decs   { List.map (fun x -> Pconst x) c }
+  | t=type_dec     { [Ptype t] }
+  | c=class_dec    { [Pclass c] }
+  | i=instance_dec { [Pinstance i] }
+  | n=list(node_dec)   { List.map (fun x -> Pnode x) n }
 ;
 
 opens: OPEN m=modul { m }
@@ -167,6 +171,15 @@ const_dec:
   | CONST x=IDENT COLON t=ty_ident EQUAL e=exp
       { mk_const_dec x t e (Loc($startpos,$endpos)) }
 ;
+
+const_dec2:
+  | x=IDENT COLON t=ty_ident EQUAL e=exp
+      { mk_const_dec x t e (Loc($startpos,$endpos)) }
+;
+
+const_decs:
+  | LET CONST ident consts=optsnlist(SEMICOL, const_dec2) TEL SEMICOL
+      {consts}
 
 type_dec:
   | TYPE IDENT
@@ -210,8 +223,8 @@ returns: RETURNS | EQUAL {}
 
 node_dec:
   | u=unsafe n=node_or_fun f=ident pc=node_params tp=type_params
-    LPAREN i=in_params RPAREN returns LPAREN o=out_params RPAREN
-    c=contract b=block(LET) TEL
+    LPAREN i=in_params RPAREN returns LPAREN o=out_params RPAREN SEMICOL
+    c=contract b=block(LET) TEL SEMICOL
       {{ n_name = f;
          n_stateful = n;
          n_unsafe = u;
@@ -257,9 +270,14 @@ nonmt_params:
 ;
 
 param:
-  | idl=ident_list COLON ty_lin=located_ty_ident ck=ck_annot
+  | param_qualifier idl=ident_list COLON ty_lin=located_ty_ident ck=ck_annot
       { List.map (fun id -> mk_var_dec ~linearity:(snd ty_lin)
         id (fst ty_lin) ck Var (Loc($startpos,$endpos))) idl }
+;
+
+param_qualifier:
+  | /* empty */ { () }
+  | HIDDEN { () }
 ;
 
 out_params:
@@ -397,8 +415,12 @@ opt_bar:
 
 /* delimited block */
 block(S) :
-  | VAR l=loc_params S eq=equs { mk_block l eq (Loc($startpos,$endpos)) }
-  | S eq=equs                    { mk_block [] eq (Loc($startpos,$endpos)) }
+  | VAR l=loc_params S equa_decl_seq eq=equs { mk_block l eq (Loc($startpos,$endpos)) }
+  | S equa_decl_seq eq=equs
+      { mk_block [] eq (Loc($startpos,$endpos)) }
+
+equa_decl_seq:
+  | EQUA IDENT LBRACKET COMMA RBRACKET {()}
 
 /* separated block */
 sblock(S) :
@@ -493,13 +515,26 @@ present_handlers:
       { $3 :: $1 }
 ;
 
+patid:
+  | id=IDENT             { Evarpat id, Lno_init }
+
 pat:
+  | VOID { Etuplepat [], Linit_tuple [] }
+  | pat_init_list=snlist(COMMA, patid)
+      { match pat_init_list with
+        | [x] -> x
+        | _ -> 
+          let pat_list, init_list = List.split pat_init_list in
+          Etuplepat pat_list, Linit_tuple init_list
+      }
+(*
   | id=IDENT             { Evarpat id, Lno_init }
   | INIT DOUBLE_LESS r=IDENT DOUBLE_GREATER id=IDENT { Evarpat id, Linit_var r }
   | pat_init_list=adelim_slist(COMMA, LPAREN, RPAREN, pat)
       { let pat_list, init_list = List.split pat_init_list in
           Etuplepat pat_list, Linit_tuple init_list
       }
+*)
 ;
 
 nonmtexps:
@@ -524,7 +559,8 @@ _simple_exp:
   | IDENT                            { Evar $1 }
   | const                            { Econst $1 }
   | LBRACE field_exp_list RBRACE     { Estruct $2 }
-  | LBRACKET array_exp_list RBRACKET { mk_call Earray $2 }
+  | LBRACKET const_exp_list RBRACKET
+      { Econst (mk_static_exp (Sarray $2) (Loc($startpos,$endpos))) }
   | LPAREN tuple_exp RPAREN          { mk_call Etuple $2 }
   | e=simple_exp DOT c=qualname
       { mk_call ~params:[mk_field_exp c (Loc($startpos(c),$endpos(c)))] Efield [e] }
@@ -545,8 +581,9 @@ exp:
   | e=simple_exp { e }
   | e=_exp { mk_exp e (Loc($startpos,$endpos)) }
 _exp:
-  | simple_exp FBY exp
-      { Efby ($1, $3) }
+  (* | simple_exp FBY exp *)
+  | FBY LPAREN e=exp COMMA simple_exp COMMA v0=simple_exp RPAREN
+      { Efby (v0, e) }
   | PRE exp
       { Epre (None, $2) }
   /* node call*/
@@ -587,6 +624,8 @@ _exp:
           mk_op_call "not" [e] }
   | exp OR exp
       { mk_op_call "or" [$1; $3] }
+  | exp AND exp
+      { mk_op_call "and" [$1; $3] }
   | exp STAR exp
       { mk_op_call "*" [$1; $3] }
   | exp AMPERSAND exp
@@ -661,8 +700,8 @@ qualified(X):
   | m=modul DOT x=X { Q { qual = m; name = x } }
 
 modul:
-  | c=Constructor { Names.Module c }
-  | m=modul DOT c=Constructor { Names.QualModule { Names.qual = m; Names.name = c} }
+  | c=IDENT { Names.Module c }
+  | m=modul DOT c=IDENT { Names.QualModule { Names.qual = m; Names.name = c} }
 
 constructor:
   | Constructor { ToQ $1 }
@@ -701,6 +740,15 @@ array_exp_list:
   | exp COMMA array_exp_list { $1 :: $3 }
 ;
 
+const_exp_list:
+  | const { [$1] }
+  | LBRACKET const_exp_list RBRACKET
+      { [mk_static_exp (Sarray $2) (Loc($startpos,$endpos))] }
+  | const COMMA const_exp_list { $1 :: $3 }
+  | LBRACKET const_exp_list RBRACKET COMMA const_exp_list
+      { (mk_static_exp (Sarray $2) (Loc($startpos,$endpos))) :: $5 }
+;
+
 field_exp:
   | qualname EQUAL exp { ($1, $3) }
 ;
@@ -722,6 +770,7 @@ infx:
   | EQUALEQUAL      { "==" }
   | SUBTRACTIVE     { $1 }    | PREFIX        { $1 }
   | AMPERSAND       { "&" }   | AMPERAMPER    { "&&" }
+  | AND             { "and" }
   | OR              { "or" }  | BARBAR        { "||" }
   | NOT             { "not" }
 ;
