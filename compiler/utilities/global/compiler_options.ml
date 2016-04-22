@@ -68,6 +68,10 @@ let show_version () =
 
 
 (* other options of the compiler *)
+let calc_deps = ref false
+let files_to_open = ref ([] : string list)
+let new_file_to_open s = (files_to_open := s :: !files_to_open)
+
 let verbose = ref false
 let print_types = ref false
 
@@ -183,6 +187,8 @@ and doc_version = "\t\tThe version of the compiler"
 and doc_print_types = "\t\t\tPrint types"
 and doc_include = "<dir>\t\tAdd <dir> to the list of include directories"
 and doc_stdlib = "<dir>\t\tDirectory for the standard library"
+and doc_calc_deps = "\t\t\tCalculate dependencies for the given files"
+and doc_files_to_open = "\t\tFiles to open before compiling"
 and doc_object_file = "\t\t\tOnly generate a .epo object file"
 and doc_sim = "<node>\t\tCreate simulation for node <node>"
 and doc_hepts = "\t\tSimulation for hepts (graphical simulator)"

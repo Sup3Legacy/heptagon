@@ -283,7 +283,19 @@ let _qualify env name =
   let m = List.find tries (g_env.current_mod::g_env.opened_mod) in
   { qual = m; name = name }
 
-let qualify_value name = _qualify g_env.values name
+(* TB: hacks to calculate dependencies *)
+let unknown_vars = ref ([] : string list)
+let unknown_nodes = ref ([] : string list)
+let _dep_qualify name =
+  try
+    _qualify g_env.values name
+  with Not_found ->
+    unknown_nodes := name :: !unknown_nodes;
+    { qual = Pervasives; name = name }
+
+let qualify_value name =
+  if !calc_deps then _dep_qualify name
+  else _qualify g_env.values name
 let qualify_type name = _qualify g_env.types name
 let qualify_class name = _qualify g_env.classes name
 let qualify_constrs name = _qualify g_env.constrs name

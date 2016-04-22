@@ -97,7 +97,37 @@ let compile_program modname source_f =
     Compiler_timings.report_statistics ()
   with x -> close_all_files (); raise x
 
+let extract_symbol pd =
+  let n =
+    match pd with
+    | Heptagon.Ptype  { Heptagon.t_name = n } -> n
+    | Heptagon.Pnode  { Heptagon.n_name = n } -> n
+    | Heptagon.Pconst { Heptagon.c_name = n } -> n
+  in
+  Names.shortname n
 
+let calculate_deps modname source_f =
+  (* output file names *)
+  let output = String.uncapitalize modname in
+  let epci_f = output ^ ".epci" in
+  let mls_f = output ^ ".mls" in
+
+  (* input/output channels *)
+  let source_c, lexbuf = lexbuf_from_file source_f in
+  let epci_c = open_out_bin epci_f in
+  let mls_c = open_out mls_f in
+  let close_all_files () = close_in source_c; close_out epci_c; close_out mls_c in
+
+  let p = do_silent_pass "Parsing" (Hept_parser_scoper.parse Hept_parser.program) lexbuf in
+
+  let p = do_pass "Scoping" Hept_scoping.translate_program p ignore in
+
+  let deps = List.sort_uniq String.compare
+               (!Modules.unknown_nodes @ !Modules.unknown_vars) in
+  let { Heptagon.p_desc=pds } = p in
+  let syms = List.map extract_symbol pds in
+  Printf.printf "%s=%s: %s\n" source_f (String.concat " " syms)
+                                       (String.concat " " deps)
 
 let compile source_f =
   let modname = source_f
@@ -108,7 +138,15 @@ let compile source_f =
   Initial.initialize modul;
   source_f |> Filename.dirname |> add_include;
   check_options ();
+  if !calc_deps then
+    match Misc.file_extension source_f with
+      | "saofd" -> calculate_deps modname source_f
+      | "ept" -> calculate_deps modname source_f
+      | ext -> raise (Arg.Bad ("Cannot calculate dependencies for files of type: "
+                        ^ ext ^ " for file: " ^ source_f))
+  else
   match Misc.file_extension source_f with
+    | "saofd" -> compile_program modname source_f
     | "ept" -> compile_program modname source_f
     | "epi" -> compile_interface modname source_f
     | ext -> raise (Arg.Bad ("Unknow file type: " ^ ext ^ " for file: " ^ source_f))
@@ -129,6 +167,8 @@ let main () =
         "-I", Arg.String add_include, doc_include;
         "-where", Arg.Unit locate_stdlib, doc_locate_stdlib;
         "-stdlib", Arg.String set_stdlib, doc_stdlib;
+        "-M", Arg.Set calc_deps, doc_calc_deps;
+        "-open", Arg.String new_file_to_open, doc_files_to_open;
         "-c", Arg.Set create_object_file, doc_object_file;
         "-s", Arg.String set_simulation_node, doc_sim;
         "-hepts", Arg.Set hepts_simulation, doc_hepts;
