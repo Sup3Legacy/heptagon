@@ -45,7 +45,7 @@ type error_kind =
   | Esiteclash of site * site
   | Esiteundefined of name
   | Einstanciation of name list
-		       
+
 let error_message loc = function
   | Etypeclash (actual_tsite, expected_tsite) ->
       Format.eprintf "%aDistribution: this expression has location %a,@\n\
@@ -63,13 +63,13 @@ let error_message loc = function
       raise Errors.Error
   | Esiteundefined n ->
      Format.eprintf "%aDistribution: undefined site %a.@."
-		    print_location loc
-		    print_name n;
+                    print_location loc
+                    print_name n;
      raise Errors.Error
   | Einstanciation name_list ->
      Format.eprintf "%aDistribution: invalid instanciation of site list %a@."
-		    print_location loc
-		    (print_list_r print_name "[" "," "]") name_list;
+                    print_location loc
+                    (print_list_r print_name "[" "," "]") name_list;
      raise Errors.Error
 
 let site_of_name h x =
@@ -77,13 +77,13 @@ let site_of_name h x =
     Env.find x h
   with Not_found ->
     Format.printf "Not found while distribution : %a@\n"
-		  Idents.print_ident x;
+                  Idents.print_ident x;
     raise Not_found
 
 let build_site_env s_l = s_l
-			
+
 let mem_env senv x = List.mem x senv
-	  
+
 let rec typing_pat h = function
   | Evarpat x -> Ssite (site_of_name h x)
   | Etuplepat pat_list -> Sprod (List.map (typing_pat h) pat_list)
@@ -106,13 +106,15 @@ let rec typing h senv e =
     | Ewhen (e,c,n) ->
        (* TODO : distrib implicite *)
        let site_n = site_of_name h n in
-       let tsite = skeleton site_n e.e_ty in
+       let s = fresh_site() in
+       let tsite = skeleton s e.e_ty in
        expect h senv tsite e;
        tsite
     | Emerge (x, c_e_list) ->
        (* TODO : distrib implicite *)
        let site_n = site_of_name h x in
-       let tsite = Ssite site_n in
+       let s = fresh_site () in
+       let tsite = Ssite s in
        List.iter (fun (_c,e) -> expect h senv tsite e) c_e_list;
        tsite
     | Estruct l ->
@@ -128,9 +130,9 @@ let rec typing h senv e =
               typing_app h senv e.e_loc app (pargs@args)
           | Imapi | Ifoldi
           | Ifold | Imapfold ->
-	     failwith("Imapi not implemented")
+             failwith("Imapi not implemented")
         in
-	tsite
+        tsite
     | Esplit _ | Elast _ -> assert false
   in
   e.e_tsite <- tsite;
@@ -144,12 +146,12 @@ and expect h senv expected_tsite e =
 and typing_app h senv loc app e_list = match app.a_op with
   | Ecomm c_list ->
      let tsite_l = List.map2
-		     (fun c e ->
-		      let tsite_from = Ssite (Slocalized c.c_src) in
-		      let tsite_to = Ssite (Slocalized c.c_dst) in
-		      expect h senv tsite_from e;
-		      tsite_to)
-		     c_list e_list in
+                     (fun c e ->
+                      let tsite_from = Ssite (Slocalized c.c_src) in
+                      let tsite_to = Ssite (Slocalized c.c_dst) in
+                      expect h senv tsite_from e;
+                      tsite_to)
+                     c_list e_list in
      Sites.prod tsite_l
   | Etuple
   | Earrow
@@ -171,8 +173,8 @@ and typing_app h senv loc app e_list = match app.a_op with
      let site_map =
        try List.combine node.node_sites app.a_sites
        with Invalid_argument _ ->
-	 Format.eprintf "ici : %a@\n" (print_list_r print_name "[" "," "]") app.a_sites;
-	 error_message loc (Einstanciation node.node_sites)
+         Format.eprintf "ici : %a@\n" (print_list_r print_name "[" "," "]") app.a_sites;
+         error_message loc (Einstanciation node.node_sites)
      in
      (* Site variable for centralized nodes *)
      let s = fresh_site () in
@@ -180,12 +182,12 @@ and typing_app h senv loc app e_list = match app.a_op with
      let rec sigsite_to_site ssite = match ssite with
         | Signature.Scentralized -> Ssite s
         | Signature.Slocalized n ->
-	   let n_inst =
-	     try List.assoc n site_map
-	     with Not_found ->
-	       Misc.internal_error "Distribution: unconsistent signature"
-	   in
-	   Ssite (Slocalized n_inst)
+           let n_inst =
+             try List.assoc n site_map
+             with Not_found ->
+               Misc.internal_error "Distribution: unconsistent signature"
+           in
+           Ssite (Slocalized n_inst)
       in
       List.iter2
         (fun a e -> expect h senv (sigsite_to_site a.a_site) e)
@@ -198,8 +200,8 @@ let append_env h senv vds =
      begin match s with
      | Scentralized | Svar _ -> ()
      | Slocalized n ->
-	if not (mem_env senv n) then
-	  error_message loc (Esiteundefined n)
+        if not (mem_env senv n) then
+          error_message loc (Esiteundefined n)
      end;
      Env.add n s h)
     h vds
@@ -251,7 +253,7 @@ let typing_local_contract h contract =
         (* property *)
         expect h (Etuplepat []) (Ck Clocks.Cbase) e_g_loc
      *)
-    
+
 (* check signature causality and update it in the global env *)
 let update_signature h node =
   let set_arg_site vd ad =
