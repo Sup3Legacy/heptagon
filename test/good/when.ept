@@ -1,0 +1,4 @@
+node n <[a,b]>(x : int @ a; c : bool @ b) = (y : int)
+let
+	y = x when c;
+tel

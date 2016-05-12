@@ -1,0 +1,17 @@
+node n<[a,b]>(x:int; c : bool @ b; y : int) = (d : bool; t : int)
+let
+   d = ((x when c) + [b <- a](y)) > 0;
+   t = merge d (y when d) 42;
+tel
+
+node p<[a,b]>() = ()
+   var
+      c' : bool @ b;
+      c : bool;
+      d : bool;
+      t : int;
+let
+   c' = true fby (not c');
+   c = true when c';
+   (d, t) = n<[a,b]>(42, c, 27);
+tel
