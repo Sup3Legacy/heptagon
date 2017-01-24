@@ -1,6 +1,6 @@
 include ../config
 
-BIN:=$(COMPILER)
+BIN:=$(COMPILER) $(HEPTLINC)
 
 ifeq ($(ENABLE_SIMULATOR), yes)
   BIN:=$(BIN) $(SIMULATOR)
