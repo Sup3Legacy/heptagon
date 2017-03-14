@@ -80,8 +80,18 @@ let mk_simple_equation pat e =
 let mk_switch_equation e l =
   mk_equation (Eswitch (e, l))
 
-let mk_signature name ~extern ins outs stateful params constraints loc =
+let mk_typeparam_dec nametype nameclass =
+  { t_nametype = nametype; t_nameclass = nameclass }
+
+let mk_class_dec classname loc =
+  { c_nameclass = classname; c_loc = loc }
+
+let mk_instance_dec nametype nameclass loc =
+  { i_nametype = nametype; i_nameclass = nameclass ; i_loc = loc }
+
+let mk_signature name ~extern ?(typeparamdecs=[]) ins outs stateful params constraints loc =
   { sig_name = name;
+    sig_typeparamdecs = typeparamdecs;
     sig_inputs = ins;
     sig_stateful = stateful;
     sig_outputs = outs;
@@ -91,12 +101,13 @@ let mk_signature name ~extern ins outs stateful params constraints loc =
     sig_loc = loc }
 
 let mk_node
-    ?(input = []) ?(output = []) ?(contract = None)
+    ?(typeparamdecs=[]) ?(input = []) ?(output = []) ?(contract = None)
     ?(stateful = true) ?(unsafe = false) ?(loc = no_location) ?(param = []) ?(constraints = [])
     name block =
   { n_name = name;
     n_stateful = stateful;
     n_unsafe = unsafe;
+    n_typeparamdecs = typeparamdecs;
     n_input = input;
     n_output = output;
     n_contract = contract;
@@ -127,11 +138,18 @@ let args_of_var_decs =
    (fun vd -> Signature.mk_arg (Some (Idents.source_name vd.v_ident))
                                vd.v_type (Linearity.check_linearity vd.v_linearity) Signature.Cbase)
 
+(* Translate the typeparam_dec (of heptagon.ml) into a typeparam_def (of signature.ml) *)
+let typeparamdefs_of_decs =
+  List.map (fun tpdec -> Signature.mk_typeparam_def
+                             (Names.shortname tpdec.t_nametype)
+                             (Names.fullname tpdec.t_nameclass) ) 
+
 let signature_of_node n =
     { node_inputs = args_of_var_decs n.n_input;
       node_outputs  = args_of_var_decs n.n_output;
       node_stateful = n.n_stateful;
       node_unsafe = n.n_unsafe;
+      node_typeparams = typeparamdefs_of_decs n.n_typeparamdecs;
       node_params = n.n_params;
       node_param_constraints = n.n_param_constraints;
       node_external = false;

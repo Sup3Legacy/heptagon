@@ -36,6 +36,8 @@ open Heptagon
 open Hept_utils
 open Hept_mapfold
 
+exception Output_type_of_node_is_not_product
+
 let to_be_inlined s =
   (!Compiler_options.flatten && not (s.qual = Pervasives))
   || (List.mem s !Compiler_options.inline)
@@ -53,7 +55,6 @@ let mk_unique_node nd =
          Env.add id vd.v_ident subst)
       Env.empty
       (nd.n_input @ nd.n_output) in
-
   (* let subst_var_dec _ () vd = (List.assoc vd.v_ident subst, ()) in *)
 
   (* let subst_edesc funs () ed = *)
@@ -105,22 +106,61 @@ let mk_unique_node nd =
 let exp funs (env, newvars, newequs) exp =
   let exp, (env, newvars, newequs) = Hept_mapfold.exp funs (env, newvars, newequs) exp in
   match exp.e_desc with
-  | Eiterator (it, { a_op = Enode nn; }, _, _, _, _) when to_be_inlined nn ->
+  | Eiterator (it, { a_op = Enode (nn,_); }, _, _, _, _) when to_be_inlined nn ->
       Format.eprintf
         "WARN: inlining iterators (\"%s %s\" here) is unsupported.@."
         (Hept_printer.iterator_to_string it) (fullname nn);
       (exp, (env, newvars, newequs))
 
-  | Eapp ({ a_op = (Enode nn | Efun nn);
+  | Eapp ({ a_op = (Enode (nn,_) | Efun (nn,_));
             a_unsafe = false; (* Unsafe can't be inlined *)
             a_inlined = inlined } as op, argl, rso) when inlined || to_be_inlined nn ->
     begin try
       let add_reset eq = match rso with
         | None -> eq
         | Some x -> mk_equation (Ereset (mk_block [eq], x)) in
-
-      let ni = mk_unique_node (QualEnv.find nn env) in
-
+      
+      let node_dec = QualEnv.find nn env in
+      
+      (* Check if the node to be inlined contain some type parameter
+      	=> value of the type: from output or input expression (typing was done)
+      	Note: due to the nature of the type parameters, "t" is always alone when it appears *)
+      let env_type_param = QualEnv.empty in
+      
+      let env_type_param = if (node_dec.n_typeparamdecs != []) then
+        begin        (* We find the value of these parameters for this instance *)
+        (* Outputs *)
+        let list_ty_output = if (List.length node_dec.n_output ==1) then exp.e_ty::[]
+          else match exp.e_ty with
+            | Tprod lty -> lty
+            | _ -> raise Output_type_of_node_is_not_product
+        in
+        let env_type_param = fst (List.fold_left
+          (fun (env_acc,i) vd -> match vd.v_type with
+            | Tclasstype (tname, tclass) ->
+              (* i-th output of the node is a type parameter *)
+              let value = List.nth list_ty_output i in
+              let env_acc = QualEnv.add tname value env_acc in
+              (env_acc, i+1)
+            | _ -> (env_acc, i+1)
+          ) (env_type_param, 0) node_dec.n_output) in
+        
+        (* Inputs *)
+        let env_type_param = fst (List.fold_left
+          (fun (env_acc, i) vd -> match vd.v_type with
+            | Tclasstype (tname, tclass) ->
+              (* i-th output of the node is a type parameter *)
+              let ith_input = List.nth argl i in
+              let env_acc = QualEnv.add tname ith_input.e_ty env_acc in
+              (env_acc, i+1)
+            | _ -> (env_acc, i+1)
+          ) (env_type_param, 0) node_dec.n_input) in
+        env_type_param
+        end
+      else env_type_param in
+      
+      let ni = mk_unique_node node_dec in
+      
       let static_subst =
         List.combine (List.map (fun p -> (local_qn p.p_name)) ni.n_params)
           op.a_params in
@@ -138,7 +178,21 @@ let exp funs (env, newvars, newequs) exp =
                   apply_sexp_subst_sexp; }; } in
 
         fst (Hept_mapfold.node_dec funs () ni) in
-
+      
+      (* Perform [env_type_param] substitution *)
+      let ni =
+        let apply_typaram_subst_ty funs () ty = match ty with
+          | Tclasstype (tname, _) -> (QualEnv.find tname env_type_param, ())
+          | _ -> Global_mapfold.ty funs () ty
+        in
+        let funs =
+          { defaults with global_funs =
+            { Global_mapfold.defaults with
+                 Global_mapfold.ty = apply_typaram_subst_ty; };
+          } in
+          fst (Hept_mapfold.node_dec funs () ni)
+      in
+       
       let mk_input_equ vd e = mk_equation (Eeq (Evarpat vd.v_ident, e)) in
       let mk_output_exp vd = mk_exp (Evar vd.v_ident) vd.v_type ~linearity:vd.v_linearity in
 

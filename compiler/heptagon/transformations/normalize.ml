@@ -52,6 +52,8 @@ struct
     raise Errors.Error
 end
 
+exception CurrentShouldNotHappenHere
+
 let exp_list_of_static_exp_list se_list =
   let mk_one_const se =
     mk_exp (Econst se) se.se_ty ~linearity:Ltop
@@ -171,18 +173,19 @@ let rec translate kind context e =
     | Ewhen(e1, c, n) ->
         let context, e1 = translate kind context e1 in
         whenc context e1 c n e
+    | Ecurrent (_, _, _) -> raise CurrentShouldNotHappenHere
     | Emerge(n, tag_e_list) ->
         merge context e n tag_e_list
     | Eapp({ a_op = Eifthenelse }, [e1; e2; e3], _) ->
         ifthenelse context e e1 e2 e3
     (* XXX Huge hack to avoid comparing tuples... (temporary, until this is
        fixed where it should be) *)
-    | Eapp({ a_op = (Efun ({ Names.qual = Names.Pervasives; Names.name = "=" }) as op)},
+    | Eapp({ a_op = (Efun ({ Names.qual = Names.Pervasives; Names.name = "=" },_) as op)},
            [x;y], reset) when is_list x ->
         let x = e_to_e_list x and y = e_to_e_list y in
         let xy = List.fold_left2 (fun acc x y ->
           let cmp = mk_exp (mk_op_app op [x; y] ~reset) Initial.tbool ~linearity:Ltop in
-          mk_exp (mk_op_app (Efun Initial.pand) [acc; cmp] ~reset) Initial.tbool ~linearity:Ltop)
+          mk_exp (mk_op_app (Efun (Initial.pand,[])) [acc; cmp] ~reset) Initial.tbool ~linearity:Ltop)
           dtrue
           x y
         in

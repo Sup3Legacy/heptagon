@@ -64,6 +64,7 @@ and root =
 
 (* typing errors *)
 exception Unify of root
+exception CurrentShouldNotHappenHere
 
 (** unalias [init] type *)
 let rec irepr i =
@@ -269,6 +270,7 @@ let rec typing h e =
     | Ewhen (e, _, x) ->
         let i = imax (IEnv.find_var x h) (itype (typing h e)) in
         skeleton i e.e_ty
+    | Ecurrent (_, _, _) -> raise CurrentShouldNotHappenHere
     | Emerge (x, c_e_list) ->
         let i =
           List.fold_left

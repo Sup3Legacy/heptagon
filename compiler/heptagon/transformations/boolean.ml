@@ -70,6 +70,8 @@ open Clocks
 open Heptagon
 open Hept_utils
 
+exception CurrentShouldNotHappenHere
+
 let fresh = Idents.gen_fresh "bool" (fun s -> s)
 
 let ty_bool = Tid({ qual = Pervasives; name = "bool"})
@@ -315,6 +317,7 @@ let translate_ty ty =
         end
     | Tprod(ty_list) -> Tprod(List.map trans ty_list)
     | Tarray(ty,se) -> Tarray(trans ty,se)
+    | Tclasstype _ -> ty (* variable: no enumeration below *) 
     | Tinvalid -> assert false
   in
   trans ty
@@ -506,6 +509,7 @@ let rec base_value ck li ty =
         e_linearity = li;
         e_loc = no_location;
       }
+  | Tclasstype _ -> failwith("No base value for a type of a class")
   | Tinvalid -> failwith("Boolean: invalid type")
 
 let rec merge_tree ck ty li e_map btree vtree =
@@ -618,6 +622,7 @@ let rec translate env context ({e_desc = desc; e_ty = ty; e_ct_annot = ct} as e)
                 (context,[]) l in
             context,Emerge(ck,l)
         end
+    | Ecurrent (_, _, _) -> raise CurrentShouldNotHappenHere
     | Esplit(e1,e2) ->
         let context,e1 = translate env context e1 in
         let context,e2 = translate env context e2 in
@@ -776,7 +781,7 @@ let var_dec_list (acc_vd,acc_loc,acc_eq) var_from n =
 
 let buildenv_var_dec (acc_vd,acc_loc,acc_eq,env) ({v_type = ty} as v) =
   match ty with
-  | Tprod _ | Tarray _ ->
+  | Tprod _ | Tarray _ | Tclasstype _ ->
       v::acc_vd, acc_loc, acc_eq, env
   | Tid(tname) ->
       begin

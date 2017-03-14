@@ -113,7 +113,7 @@ let assert_node_res cd =
     statements) needed for a main() function calling [cd]. *)
 let main_def_of_class_def cd =
   let format_for_type ty = match ty with
-    | Tarray _ | Tprod _ | Tinvalid -> assert false
+    | Tarray _ | Tprod _ | Tclasstype _ | Tinvalid -> assert false
     | Types.Tid id when id = Initial.pfloat -> "%f"
     | Types.Tid id when id = Initial.pint -> "%d"
     | Types.Tid id when id = Initial.pbool -> "%d"
@@ -123,7 +123,7 @@ let main_def_of_class_def cd =
   (** Does reading type [ty] need a buffer? When it is the case,
       [need_buf_for_ty] also returns the type's name. *)
   let need_buf_for_ty ty = match ty with
-    | Tarray _ | Tprod _ | Tinvalid -> assert false
+    | Tarray _ | Tprod _ | Tclasstype _ | Tinvalid -> assert false
     | Types.Tid id when id = Initial.pfloat -> None
     | Types.Tid id when id = Initial.pint -> None
     | Types.Tid id when id = Initial.pbool -> None
@@ -194,7 +194,7 @@ let main_def_of_class_def cd =
                                      [Cvar varn])))],
                  [(varn, Cty_arr (20, Cty_char))])
         end
-    | Tprod _ | Tinvalid -> failwith("read_lhs_of_ty: untranslatable type")
+    | Tprod _ | Tclasstype _ | Tinvalid -> failwith("read_lhs_of_ty: untranslatable type")
   in
 
   (** Generates printf statements and buffer declarations needed for printing
@@ -245,7 +245,7 @@ let main_def_of_class_def cd =
              | None -> []
              | Some _ -> [(varn, Cty_arr (20, Cty_char))])
         end
-    | Tprod _ | Tinvalid -> failwith("write_lhs_of_ty: untranslatable type")
+    | Tprod _ | Tclasstype _ | Tinvalid -> failwith("write_lhs_of_ty: untranslatable type")
   in
 
   let stepm = find_step_method cd in

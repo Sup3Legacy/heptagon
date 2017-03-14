@@ -64,6 +64,8 @@ and desc =
     (** exp when Constructor(ident) *)
   | Emerge of var_ident * (constructor_name * exp) list
     (** merge ident (Constructor -> exp)+ *)
+  | Ecurrent of constructor_name * var_ident * exp
+    (** current(clk, exp) / syntactic sugar to obtain the last produced value, on the clock exp *)
   | Esplit of exp * exp
   | Eapp of app * exp list * exp option
   | Eiterator of iterator_type * app * static_exp list
@@ -75,10 +77,12 @@ and app = {
   a_unsafe : bool;
   a_inlined : bool }
 
+and ty_subst = (type_name * ty) list
+
 and op =
   | Etuple
-  | Efun of fun_name
-  | Enode of fun_name
+  | Efun of (fun_name * ty_subst)
+  | Enode of (fun_name * ty_subst)
   | Eifthenelse
   | Earrow
   | Efield
@@ -99,8 +103,8 @@ and pat =
 
 type eq = {
   eq_desc      : eqdesc;
-  eq_stateful : bool;
-  eq_inits    : init;
+  eq_stateful  : bool;
+  eq_inits     : init;
   eq_loc       : location; }
 
 and eqdesc =
@@ -175,10 +179,15 @@ type contract = {
   c_controllables : var_dec list;
   c_block   : block }
 
+type typeparam_dec =
+  { t_nametype    : type_name;
+    t_nameclass   : class_name; }
+
 type node_dec = {
   n_name               : qualname;
   n_stateful           : bool;
   n_unsafe             : bool;
+  n_typeparamdecs      : typeparam_dec list;
   n_input              : var_dec list;
   n_output             : var_dec list;
   n_contract           : contract option;
@@ -193,6 +202,15 @@ type const_dec = {
   c_value : static_exp;
   c_loc   : location }
 
+type class_dec =
+  { c_nameclass   : class_name;
+    c_loc         : location }
+
+type instance_dec =
+  { i_nametype    : type_name;
+    i_nameclass   : class_name;
+    i_loc         : location }
+
 type program = {
   p_modname : modul;
   p_opened  : modul list;
@@ -202,10 +220,13 @@ and program_desc =
   | Ptype of type_dec
   | Pnode of node_dec
   | Pconst of const_dec
+  | Pclass of class_dec
+  | Pinstance of instance_dec
 
 
 type signature = {
   sig_name              : qualname;
+  sig_typeparamdecs     : typeparam_dec list;
   sig_inputs            : arg list;
   sig_stateful          : bool;
   sig_outputs           : arg list;
@@ -222,4 +243,6 @@ type interface =
 and interface_desc =
   | Itypedef of type_dec
   | Iconstdef of const_dec
+  | Iclassdef of class_dec
+  | Iinstancedef of instance_dec
   | Isignature of signature

@@ -182,7 +182,7 @@ let form_new_extvalue_node nd =
       (*   (try Svar (Q (qualify_const local_const (ToQ n))) *)
       (*    with Error.ScopingError _ -> raise Errors.Fallback) *)
 
-      | Eapp ({ a_op = Efun ({ qual = Names.Pervasives; } as funn); }, w_list, None) ->
+      | Eapp ({ a_op = Efun ({ qual = Names.Pervasives; } as funn, _); }, w_list, None) ->
         Sop (funn, form_new_consts w_list)
 
       | Eapp ({ a_op = Earray_fill; a_params = n_list; }, [w], None) ->

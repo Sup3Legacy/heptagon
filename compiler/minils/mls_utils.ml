@@ -276,11 +276,18 @@ let args_of_var_decs =
                                vd.v_type (Linearity.check_linearity vd.v_linearity)
                                (ck_to_sck (Clocks.ck_repr vd.v_clock)))
 
+
+
 let signature_of_node n =
+  let convert_typeparams_to_signature typeparamsnode =
+    let {t_nametype = ntype; t_nameclass = nclass } = typeparamsnode in
+    { tp_nametype = ntype.name; tp_nameclass = nclass.name }
+  in
   { node_inputs = args_of_var_decs n.n_input;
     node_outputs  = args_of_var_decs n.n_output;
     node_stateful = n.n_stateful;
     node_unsafe = n.n_unsafe;
+    node_typeparams = List.map convert_typeparams_to_signature n.n_typeparams;
     node_params = n.n_params;
     node_param_constraints = n.n_param_constraints;
     node_external = false;

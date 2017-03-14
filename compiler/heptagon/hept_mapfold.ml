@@ -90,8 +90,11 @@ type 'a hept_it_funs = {
   last           : 'a hept_it_funs -> 'a -> last -> last * 'a;
   objective      : 'a hept_it_funs -> 'a -> objective -> objective * 'a;
   contract       : 'a hept_it_funs -> 'a -> contract -> contract * 'a;
+  typeparam_dec  : 'a hept_it_funs -> 'a -> typeparam_dec -> typeparam_dec * 'a;
   node_dec       : 'a hept_it_funs -> 'a -> node_dec -> node_dec * 'a;
   const_dec      : 'a hept_it_funs -> 'a -> const_dec -> const_dec * 'a;
+  class_dec      : 'a hept_it_funs -> 'a -> class_dec -> class_dec * 'a;
+  instance_dec   : 'a hept_it_funs -> 'a -> instance_dec -> instance_dec * 'a;
   program        : 'a hept_it_funs -> 'a -> program -> program * 'a;
   program_desc   : 'a hept_it_funs -> 'a -> program_desc -> program_desc * 'a;
   global_funs    : 'a Global_mapfold.global_it_funs }
@@ -156,6 +159,10 @@ and edesc funs acc ed = match ed with
       in
       let c_e_list, acc = mapfold aux acc c_e_list in
       Emerge (n, c_e_list), acc
+  | Ecurrent (c, n, e) ->
+     let e, acc = exp_it funs acc e in
+     let n, acc = var_ident_it funs.global_funs acc n in
+     Ecurrent (c, n, e), acc
   | Esplit (e1, e2) ->
       let e1, acc = exp_it funs acc e1 in
       let e2, acc = exp_it funs acc e2 in
@@ -304,6 +311,9 @@ and param funs acc vd =
   let v_last, acc = last_it funs acc vd.v_last in
   { vd with v_last = v_last }, acc
 
+and typeparam_dec_it funs acc tpd = funs.typeparam_dec funs acc tpd
+and typeparam_dec _ acc tpd = tpd, acc  (* Just contains 2 names: no recursion here *)
+
 and node_dec_it funs acc nd =
   Idents.enter_node nd.n_name;
   funs.node_dec funs acc nd
@@ -311,6 +321,7 @@ and node_dec funs acc nd =
   let n_input, acc = mapfold (var_dec_it funs) acc nd.n_input in
   let n_output, acc = mapfold (var_dec_it funs) acc nd.n_output in
   let n_params, acc = mapfold (param_it funs.global_funs) acc nd.n_params in
+  let n_typeparamdecs, acc = mapfold (typeparam_dec_it funs) acc nd.n_typeparamdecs in
   let n_contract, acc =  optional_wacc (contract_it funs) acc nd.n_contract in
   let n_block, acc = block_it funs acc nd.n_block in
   { nd with
@@ -318,6 +329,7 @@ and node_dec funs acc nd =
       n_output = n_output;
       n_block = n_block;
       n_params = n_params;
+      n_typeparamdecs = n_typeparamdecs;
       n_contract = n_contract }
   , acc
 
@@ -327,6 +339,14 @@ and const_dec funs acc c =
   let c_type, acc = ty_it funs.global_funs acc c.c_type in
   let c_value, acc = static_exp_it funs.global_funs acc c.c_value in
   { c with c_value = c_value; c_type = c_type }, acc
+
+and class_dec_it funs acc c = funs.class_dec funs acc c
+and class_dec funs acc c = c, acc (* Nothing below to explore *)
+
+
+and instance_dec_it funs acc i = funs.instance_dec funs acc i
+and instance_dec funs acc i = i, acc (* Nothing below to explore *)
+
 
 and program_it funs acc p = funs.program funs acc p
 and program funs acc p =
@@ -340,6 +360,8 @@ and program_desc funs acc pd = match pd with
   | Pconst cd -> let cd, acc = const_dec_it funs acc cd in Pconst cd, acc
   | Ptype _td -> pd, acc (* TODO types *)
   | Pnode n -> let n, acc = node_dec_it funs acc n in Pnode n, acc
+  | Pclass c -> let c, acc = class_dec_it funs acc c in Pclass c, acc
+  | Pinstance i -> let i, acc = instance_dec_it funs acc i in Pinstance i, acc
 
 let defaults = {
   app = app;
@@ -358,8 +380,11 @@ let defaults = {
   last = last;
   objective = objective;
   contract = contract;
+  typeparam_dec = typeparam_dec;
   node_dec = node_dec;
   const_dec = const_dec;
+  class_dec = class_dec;
+  instance_dec = instance_dec;
   program = program;
   program_desc = program_desc;
   global_funs = Global_mapfold.defaults }
@@ -383,8 +408,11 @@ let defaults_stop = {
   last = stop;
   objective = stop;
   contract = stop;
+  typeparam_dec = stop;
   node_dec = stop;
   const_dec = stop;
+  class_dec = stop;
+  instance_dec = stop;
   program = stop;
   program_desc = stop;
   global_funs = Global_mapfold.defaults_stop }

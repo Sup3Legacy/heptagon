@@ -48,7 +48,10 @@ type eval_error = Division_by_zero
 exception Evaluation_failed of eval_error * location
 
 (** Some unknown operators could be used preventing the evaluation *)
-type partial_eval_cause = Unknown_op of fun_name | Unknown_param of qualname
+type partial_eval_cause = Unknown_op of fun_name
+  | Unknown_param of qualname
+  | Unknown_typeparam of qualname
+
 exception Partial_evaluation of partial_eval_cause * location
 
 let message exn =
@@ -67,6 +70,10 @@ let message exn =
               Global_printer.print_qualname op
           | Unknown_param q ->
               eprintf "%aUninstanciated param %a.@."
+              Location.print_location loc
+              Global_printer.print_qualname q
+          | Unknown_typeparam q ->
+              eprintf "%aUninstanciated typeparam %a.@."
               Location.print_location loc
               Global_printer.print_qualname q
         )
@@ -176,6 +183,23 @@ let rec eval_core partial env se = match se.se_desc with
       { se with se_desc = Srecord
           (List.map (fun (f,se) -> f, eval_core partial env se) f_se_list) }
 
+let rec eval_type_core partial env ty = match ty with
+  | Tid _ | Tinvalid -> ty
+  | Tarray (tarray, size) -> Tarray (eval_type_core partial env tarray, size)
+  | Tprod ty_list ->
+    let ty_list = List.map (eval_type_core partial env) ty_list in Tprod ty_list
+  | Tclasstype (ty_name, ty_class) ->
+    (try               (* Search in the local env *)
+       let ty = QualEnv.find ty_name env in
+       (match ty with
+         | Tclasstype (ty_name_2, _) when ty_name=ty_name_2 -> (* prevent basic infinite loop *)
+           if partial then ty else raise Not_found
+         | _ -> eval_type_core partial env ty
+       )
+     with Not_found -> (* Could not evaluate the var *)
+       if partial then ty
+       else raise (Partial_evaluation (Unknown_typeparam ty_name, no_location) )
+    )
 
 (** [simplify env e] returns e simplified with the
     variables values taken from [env] or from the global env with [find_const].
@@ -195,6 +219,10 @@ let rec simplify_type env ty = match ty with
     @raise Errors.Error when it cannot fully evaluate. *)
 let eval env se =
   try eval_core false env se
+  with exn -> message exn
+
+let eval_type env ty =
+  try eval_type_core false env ty
   with exn -> message exn
 
 (** [int_of_static_exp env e] returns the value of the expression

@@ -108,13 +108,28 @@ let generate_target p s =
     if !Compiler_options.verbose
     then List.iter (Mls_printer.print stderr) p_list in*)
   let { t_program = program; t_name = name } = find_target s in
+  
+  (* DEBUG
+  Format.fprintf (Format.formatter_of_out_channel stdout) "---------------------- AST_prog before Callgraph ----------------------\n@?";
+  Mls_printast.printAST_program stdout p; *)
+  
   let callgraph p = do_silent_pass "Callgraph" Callgraph.program p in
+  
+  (* Note: callgraph::(Minils.program -> Minils.program list) / p::Minils.program *)
+  (* DEBUG
+  let p_list_DEBUG = callgraph p in
+  Format.fprintf (Format.formatter_of_out_channel stdout) "---------------------- AST_prog after Callgraph ----------------------\n@?";
+  List.iter (Mls_printast.printAST_program stdout) p_list_DEBUG;*)
+  
+  
   let mls2obc p = do_silent_pass "Translation from MiniLS" Mls2obc.program p in
   let mls2obc_list p_l = do_silent_pass "Translation from MiniLS" (List.map Mls2obc.program) p_l in
   match program with
     | Minils convert_fun ->
         do_silent_pass "Code generation from MiniLS" convert_fun p
     | Obc convert_fun ->
+        (* TODO: callgraph partial pass to remove the type parameters *)
+        
         let o = mls2obc p in
         let o = Obc_compiler.compile_program o in
         do_silent_pass "Code generation from Obc" convert_fun o

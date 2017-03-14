@@ -50,6 +50,7 @@ type error =
   | Eundefined of name
   | Elast_undefined of name
   | Etype_clash of ty * ty
+  | EconstrOnClassType of (type_name * ty)
   | Eargs_clash of ty * ty
   | Earity_clash of int * int
   | Estatic_arity_clash of int * int
@@ -79,9 +80,12 @@ type error =
   | Eenable_memalloc
   | Ebad_format
   | Eformat_string_not_constant
+  | Eoutput_node_is_unconstrained_classtype of name * ty
 
 exception Unify
 exception TypingError of error
+
+exception CurrentShouldNotHappenHere
 
 let error kind = raise (TypingError(kind))
 
@@ -109,6 +113,11 @@ let message loc kind =
           print_location loc
           print_type actual_ty
           print_type expected_ty
+    | EconstrOnClassType(ty_name, tval) ->
+      eprintf "%aType Clash: the classtype %a is forced to correspond to the value %a@."
+          print_location loc
+          print_qualname ty_name
+          print_type tval
     | Eargs_clash(actual_ty, expected_ty) ->
         eprintf "%aType Clash: arguments of type %a were given, @\n\
             but %a was expected.@."
@@ -233,6 +242,13 @@ let message loc kind =
       eprintf
         "%aA static format string was expected@."
           print_location loc
+    | Eoutput_node_is_unconstrained_classtype (name, ty) ->
+      eprintf
+        "%aThe output of the call of the node %s \
+         is a classtype %a whose value is not constrained@."
+          print_location loc
+          name
+          print_type ty
   end;
   raise Errors.Error
 
@@ -266,15 +282,16 @@ let flatten_ty_list l =
   List.fold_right
     (fun arg args -> match arg with Tprod l -> l@args | a -> a::args ) l []
 
+(* Extract the operator and types of the inputs/outputs of a node *)
 let kind f ty_desc =
   let ty_of_arg v =
     if Linearity.is_linear v.a_linearity && not !Compiler_options.do_linear_typing then
       error Eenable_memalloc;
     v.a_type
   in
-  let op = if ty_desc.node_stateful then Enode f else Efun f in
+  let op = if ty_desc.node_stateful then Enode (f,[]) else Efun (f,[]) in
     op, List.map ty_of_arg ty_desc.node_inputs,
-  List.map ty_of_arg ty_desc.node_outputs
+  List.map ty_of_arg ty_desc.node_outputs, ty_desc.node_typeparams
 
 let typ_of_name h x =
   try
@@ -298,7 +315,7 @@ let set_of_constr = function
 
 let build_subst names values =
   if List.length names <> List.length values
-  then error (Estatic_arity_clash (List.length values, List.length names));
+    then error (Estatic_arity_clash (List.length values, List.length names));
   List.fold_left2 (fun m n v -> QualEnv.add n v m)
     QualEnv.empty names values
 
@@ -426,9 +443,54 @@ let struct_info_from_field f =
   with
       Not_found -> error (Eundefined (fullname f))
 
+
+(* list of the newly introduced typeclass inside a block - reset between blocks
+   type: (type_name * (ty option)) list *)
+let l_new_typeclass = ref []
+
+(* DEBUG TODO *)
+let print_lntypeclass ff =
+  let print_lntclassaux ff (tn,cn,tyop) = 
+    fprintf ff "%a (of %s) = %a"
+      print_qualname tn
+      cn
+      (Pp_tools.print_opt Global_printer.print_type) tyop
+  in
+  match !l_new_typeclass with
+    | [] -> fprintf ff "   l_new_typeclass = []\n@?"
+    | _::_ ->
+      Pp_tools.print_list print_lntclassaux "   l_new_typeclass = [" "; " "]\n@?"  ff !l_new_typeclass
+
+
+let find_l_new_typeclass tname lntycl = 
+  try
+    Some (List.find (fun (tn1,_,_) -> (tn1=tname)) lntycl)
+  with
+    Not_found -> None
+ 
+and replace_l_new_typeclass tname tvalopt =
+  let rec _repl_lntc tname tvalopt lntc = match lntc with
+    | [] -> []
+    | (tn,cname,_)::t when tn=tname -> (tname,cname,tvalopt)::t
+    | h::t -> h::(_repl_lntc tname tvalopt t)
+  in
+  l_new_typeclass := _repl_lntc tname tvalopt !l_new_typeclass
+
 let rec _unify cenv t1 t2 =
+  
+  (*fprintf (Format.formatter_of_out_channel stdout) "_unify => t1 = %a  | t2 = %a \n@?"
+    Global_printer.print_type t1  Global_printer.print_type t2; TODO DEBUG *)
+  
   match t1, t2 with
     | b1, b2 when b1 = b2 -> ()
+    | Tclasstype (tn1, _), _ ->
+      begin
+      match (find_l_new_typeclass tn1 !l_new_typeclass) with
+        | None -> error (EconstrOnClassType (tn1,t2))
+        | Some (_,_,None) -> replace_l_new_typeclass tn1 (Some t2)
+        | Some (_,_,Some tyval) -> _unify cenv t2 tyval
+      end
+    | _ , Tclasstype _ -> _unify cenv t2 t1
     | Tprod t1_list, Tprod t2_list ->
         (try
            List.iter2 (_unify cenv) t1_list t2_list
@@ -438,8 +500,7 @@ let rec _unify cenv t1 t2 =
     | Tarray (ty1, e1), Tarray (ty2, e2) ->
         (try
            add_constraint_eq ~unsafe:true cenv e1 e2
-         with Solve_failed _ ->
-           raise Unify);
+         with Solve_failed _ -> raise Unify);
         _unify cenv ty1 ty2
     | _ -> raise Unify
 
@@ -456,7 +517,7 @@ and solve ?(unsafe=false) c_l =
 
 (** [cenv] is the constant env which will be used to simplify the given constraints *)
 and add_constraint ?(unsafe=false) cenv c =
-  let c = expect_static_exp cenv Initial.tbool c in
+  let c = expect_static_exp cenv (Tid Initial.pbool) c in
   curr_constrnt := (solve ~unsafe:unsafe [c])@(!curr_constrnt)
 
 (** Add the constraint [c1=c2] *)
@@ -469,7 +530,6 @@ and add_constraint_leq cenv c1 c2 =
   let c = mk_static_exp tbool (Sop (mk_pervasives "<=",[c1;c2])) in
   add_constraint cenv c
 
-
 and get_constraints () =
   let l = !curr_constrnt in
   curr_constrnt := [];
@@ -481,6 +541,7 @@ and unify cenv t1 t2 =
   try _unify cenv ut1 ut2 with Unify -> error (Etype_clash(t1, t2))
 
 
+
 (** [check_type t] checks that t exists *)
 and check_type cenv = function
   | Tarray(ty, e) ->
@@ -489,6 +550,7 @@ and check_type cenv = function
   (* No need to check that the type is defined as it is done by the scoping. *)
   | Tid ty_name -> Tid ty_name
   | Tprod l -> Tprod (List.map (check_type cenv) l)
+  | Tclasstype (ty_name, cl_name) -> Tclasstype (ty_name, cl_name)
   | Tinvalid -> Tinvalid
 
 and typing_static_exp cenv se =
@@ -512,12 +574,7 @@ and typing_static_exp cenv se =
         let typed_se2 = expect_static_exp cenv t1 se2 in
         Sop (op, [typed_se1;typed_se2]), Tid Initial.pbool
     | Sop (op, se_list) ->
-        let ty_desc = find_value op in
-        let typed_se_list = typing_static_args cenv
-          (types_of_arg_list ty_desc.node_inputs) se_list
-        in
-        Sop (op, typed_se_list),
-        prod (types_of_arg_list ty_desc.node_outputs)
+        typing_operator op cenv se_list
     | Sarray_power (se, n_list) ->
         let typed_n_list = List.map (expect_static_exp cenv Initial.tint) n_list in
         let typed_se, ty = typing_static_exp cenv se in
@@ -562,30 +619,120 @@ and typing_static_field cenv fields t1 (f,se) =
   with
       Not_found -> message se.se_loc (Eno_such_field (t1, f))
 
-and typing_static_args cenv expected_ty_list e_list =
+and typing_static_args funname cenv e_list =
+  let ty_desc = find_value funname in
+  let expected_ty_list = types_of_arg_list ty_desc.node_inputs in
+  let expected_ty_output = types_of_arg_list ty_desc.node_outputs in
   try
     List.map2 (expect_static_exp cenv) expected_ty_list e_list
   with Invalid_argument _ ->
     error (Earity_clash(List.length e_list, List.length expected_ty_list))
 
+
+and typing_operator op cenv se_list =
+  (* We get the information on the signature of "op" *)
+  let ty_desc = find_value op in
+  let expected_ty_list = types_of_arg_list ty_desc.node_inputs in
+  let expected_ty_output = types_of_arg_list ty_desc.node_outputs in
+  let ty_paramnames = ty_desc.node_typeparams in
+  
+  (* Default case when the operator does not have any typeparam *)
+  if (ty_paramnames=[]) then
+    let typed_se_list = typing_static_args op cenv se_list in
+    Sop (op, typed_se_list), prod expected_ty_output
+  else
+  (* More complicated case when the operator do have a typeparam *)
+  
+  (* Note: the operators are actually simpler than the general function *)
+  (* Thus, we do not need the general typing_funcall *)
+  let typed_se_list = List.map (typing_static_exp cenv) se_list in
+  let typed_se_list = List.map (fun (se,ty) -> se) typed_se_list in
+  
+  (* Hashtbl keeping track of the found values of the type parameters *)
+  let val_typeclass = Hashtbl.create (List.length ty_paramnames) in
+  List.map (fun ty_paramname -> Hashtbl.add val_typeclass ty_paramname.tp_nametype None) ty_paramnames;
+  
+  (* Local unify function *)
+  let rec unify_op cenv t1 t2 =
+    (* fprintf (Format.formatter_of_out_channel stdout) "unify_op => t1 = %a  | t2 = %a \n@?"
+      Global_printer.print_type t1  Global_printer.print_type t2; TODO DEBUG *)
+    
+    match t1, t2 with
+    | b1, b2 when b1 = b2 -> ()
+    | Tclasstype (tn1, _), _ ->
+      (try
+        match (Hashtbl.find val_typeclass tn1.name) with
+          | None -> Hashtbl.replace val_typeclass tn1.name (Some t2)
+          | Some tyval -> unify_op cenv t2 tyval
+      with Not_found -> error (EconstrOnClassType (tn1,t2))
+      )
+    | _ , Tclasstype _ -> unify_op cenv t2 t1
+    | Tprod t1_list, Tprod t2_list ->
+        (try
+           List.iter2 (unify_op cenv) t1_list t2_list
+         with _ -> raise Unify
+        )
+    | Tarray (ty1, e1), Tarray (ty2, e2) ->
+        (try
+           add_constraint_eq ~unsafe:true cenv e1 e2
+         with Solve_failed _ -> raise Unify);
+        unify_op cenv ty1 ty2
+    | _ -> raise Unify
+  in
+  
+  (* We unify the expected input types with the computed types *)
+  let _ = List.map2
+    (fun se exp_ty -> unify_op cenv se.se_ty exp_ty)
+    typed_se_list expected_ty_list in
+  
+  (* At this point, all the necessary constraints on the type parameters should be in val_typeclass *)
+  
+  (* We deduce the output types using val_typeclass if it contains a type parameter *)
+  let rec subst_classtype val_tyclass ty = match ty with
+    | Tprod tylist -> Tprod (List.map (subst_classtype val_tyclass) tylist)
+    | Tid id -> Tid id
+    | Tarray (typ, stexp) -> Tarray (subst_classtype val_tyclass typ, stexp)
+    | Tinvalid -> raise Errors.Error
+    | Tclasstype (tname, _) ->
+      begin
+      let valtypeopt = Hashtbl.find val_tyclass tname.name in
+      match valtypeopt with
+        | None -> raise Errors.Error (* Should not happen for operators *)
+        | Some tvalue -> subst_classtype val_tyclass tvalue
+      end
+  in
+  
+  let result_ty_output = List.map (subst_classtype val_typeclass) expected_ty_output in
+  Sop (op, typed_se_list), prod result_ty_output
+
+
 and expect_static_exp cenv exp_ty se =
+  (* TODO DEBUG
+  fprintf (formatter_of_out_channel stdout) "\nexp_ty = %a\n@?" Global_printer.print_type exp_ty;
+  fprintf (formatter_of_out_channel stdout) "se = %a\n@?" Global_printer.print_static_exp se; *)
+  
   let se, ty = typing_static_exp cenv se in
-    try
-      unify cenv ty exp_ty; se
-    with
-      _ -> message se.se_loc (Etype_clash(ty, exp_ty))
+  
+  (* TODO DEBUG
+  fprintf (formatter_of_out_channel stdout) "ty = %a\n@?" Global_printer.print_type ty;
+  fprintf (formatter_of_out_channel stdout) "exp_ty = %a\n@?" Global_printer.print_type exp_ty; *)
+  
+  try
+    unify cenv ty exp_ty; se
+  with
+    _ -> message se.se_loc (Etype_clash(ty, exp_ty))
 
 
 (** @return the type of the field with name [f] in the list
     [fields]. [t1] is the corresponding record type and [loc] is
     the location, both used for error reporting. *)
-let field_type cenv f fields t1 loc =
+and field_type cenv f fields t1 loc =
   try
     check_type cenv (field_assoc f fields)
   with
       Not_found -> message loc (Eno_such_field (t1, f))
 
-let rec typing cenv h e =
+and typing cenv h e =
   try
     let typed_desc,ty = match e.e_desc with
       | Econst c ->
@@ -629,34 +776,83 @@ let rec typing cenv h e =
           let typed_e2 = expect cenv h t1 e2 in
             Efby (typed_e1, typed_e2), t1
 
-      | Eiterator (it, ({ a_op = (Enode f | Efun f);
+      | Eiterator (it, ({ a_op = (Enode (f,_) | Efun (f,_));
                           a_params = params } as app),
                    n_list, pe_list, e_list, reset) ->
+          
+          (* Getting the signature of the operator of the iterator *)
           let ty_desc = find_value f in
-          let op, expected_ty_list, result_ty_list = kind f ty_desc in
-          let node_params =
-            List.map (fun { p_name = n } -> local_qn n) ty_desc.node_params in
-          let m = build_subst node_params params in
-          let expected_ty_list =
-            List.map (simplify_type m) expected_ty_list in
-          let result_ty_list = List.map (simplify_type m) result_ty_list in
-          let typed_n_list = List.map (expect_static_exp cenv (Tid Initial.pint)) n_list in
-          (*typing of partial application*)
-          let p_ty_list, expected_ty_list =
-            Misc.split_at (List.length pe_list) expected_ty_list in
-          let typed_pe_list = typing_args cenv h p_ty_list pe_list in
-          (*typing of other arguments*)
-          let ty, typed_e_list = typing_iterator cenv h it typed_n_list
-            expected_ty_list result_ty_list e_list in
-          let typed_params = typing_node_params cenv
-            ty_desc.node_params params in
-          (* add size constraints *)
-          let constrs = List.map (simplify m) ty_desc.node_param_constraints in
-          List.iter (fun n -> add_constraint_leq cenv (mk_static_int 1) n) typed_n_list;
-          List.iter (add_constraint cenv) constrs;
-          (* return the type *)
-          Eiterator(it, { app with a_op = op; a_params = typed_params }
-                      , typed_n_list, typed_pe_list, typed_e_list, reset), ty
+          let op, expected_ty_list, result_ty_list, typarams = kind f ty_desc in
+          
+          if (typarams==[]) then
+            begin
+            let node_params =
+              List.map (fun { p_name = n } -> local_qn n) ty_desc.node_params in
+            
+            (* Propagate the parameters values to the type *)
+            let m = build_subst node_params params in
+            let expected_ty_list = List.map (simplify_type m) expected_ty_list in
+            let result_ty_list = List.map (simplify_type m) result_ty_list in
+            
+            let typed_n_list = List.map (expect_static_exp cenv (Tid Initial.pint)) n_list in
+            
+            (*typing of partial application*)
+            let p_ty_list, expected_ty_list =
+              Misc.split_at (List.length pe_list) expected_ty_list in
+            let typed_pe_list = typing_args cenv h p_ty_list pe_list in
+          
+            (*typing of other arguments*)
+            let ty, typed_e_list = typing_iterator cenv h it typed_n_list
+              expected_ty_list result_ty_list e_list in
+            let typed_params = typing_node_params cenv
+              ty_desc.node_params params in
+            (* add size constraints *)
+            let constrs = List.map (simplify m) ty_desc.node_param_constraints in
+            List.iter (fun n -> add_constraint_leq cenv (mk_static_int 1) n) typed_n_list;
+            List.iter (add_constraint cenv) constrs;
+            (* return the type *)
+            Eiterator(it, { app with a_op = op; a_params = typed_params }
+                        , typed_n_list, typed_pe_list, typed_e_list, reset), ty
+          end
+          else  
+          begin
+            let node_params =
+              List.map (fun { p_name = n } -> local_qn n) ty_desc.node_params in
+            
+            (* Propagate the parameters values to the type *)
+            let m = build_subst node_params params in
+            let expected_ty_list = List.map (simplify_type m) expected_ty_list in
+            let result_ty_list = List.map (simplify_type m) result_ty_list in
+            
+            
+            
+            (* TODO: typarams à gérer *)
+            
+            
+            
+            
+            let typed_n_list = List.map (expect_static_exp cenv (Tid Initial.pint)) n_list in
+            
+            (*typing of partial application*)
+            let p_ty_list, expected_ty_list =
+              Misc.split_at (List.length pe_list) expected_ty_list in
+            let typed_pe_list = typing_args cenv h p_ty_list pe_list in
+            
+            (*typing of other arguments*)
+            let ty, typed_e_list = typing_iterator cenv h it typed_n_list
+              expected_ty_list result_ty_list e_list in
+            let typed_params = typing_node_params cenv
+              ty_desc.node_params params in
+            
+            (* add size constraints *)
+            let constrs = List.map (simplify m) ty_desc.node_param_constraints in
+            List.iter (fun n -> add_constraint_leq cenv (mk_static_int 1) n) typed_n_list;
+            List.iter (add_constraint cenv) constrs;
+            
+            (* return the type *)
+            Eiterator(it, { app with a_op = op; a_params = typed_params }
+                        , typed_n_list, typed_pe_list, typed_e_list, reset), ty
+          end
       | Eiterator _ -> assert false
 
       | Ewhen (e, c, x) ->
@@ -698,7 +894,9 @@ let rec typing cenv h e =
             List.map (fun (c, e) -> (c, expect cenv h t e)) c_e_list in
           Emerge (x, (c1,typed_e1)::typed_c_e_list), t
       | Emerge (_, []) -> assert false
-
+      
+      | Ecurrent (_, _, _) -> raise CurrentShouldNotHappenHere
+      
       | Esplit(c, e2) ->
           let typed_c, ty_c = typing cenv h c in
           let typed_e2, ty = typing cenv h e2 in
@@ -719,6 +917,151 @@ let rec typing cenv h e =
   with
       TypingError(kind) -> message e.e_loc kind
 
+
+(** Unify function local to a node or a function call *)
+and typing_funcall funname cenv h expected_ty_list e_list m_simpl result_ty_list typaramnames =
+  let typed_e_list, args_ty_list = List.split (List.map (typing cenv h) e_list) in
+  let args_ty_list = flatten_ty_list args_ty_list in
+  
+  let get_fresh_name_typeclass tyname funname = "_" ^ funname ^ "_" ^ tyname in
+  
+  (* Constraints on the typeclass of the signature of the function call *)
+  (* (string * ty) list *)
+  let local_ty_constr = ref [] in
+  
+  let rec find_typeconstr tn lty_constr = match lty_constr with
+    | [] -> None
+    | (tname,tyval)::t -> if (tn=tname) then Some (tn, tyval) else find_typeconstr tn t
+  in
+  
+  (* DEBUG TODO *)
+  let print_local_ty_constraux ff (tn,tyval) = 
+    fprintf ff "%s = %a" tn Global_printer.print_type tyval
+  in
+  let print_local_ty_constr ff =
+    Pp_tools.print_list print_local_ty_constraux "   -> local_ty_constr = [" "; " "]"  ff !local_ty_constr;
+    fprintf ff "\n@?"
+  in
+  
+  
+  (* Unification for function call *)
+  let rec unify_funcall cenv t1 t2 =
+    
+    (* fprintf (Format.formatter_of_out_channel stdout) "\nunify_funcall => t1 = %a  | t2 = %a \n@?"
+       Global_printer.print_type t1  Global_printer.print_type t2;
+    print_lntypeclass (Format.formatter_of_out_channel stdout);
+    print_local_ty_constr (Format.formatter_of_out_channel stdout); TODO DEBUG *)
+    
+    match t1, t2 with
+      | b1, b2 when b1 = b2 -> ()
+      | Tclasstype (tn1, _), _ -> (* left classtype is always coming from the signature of the node*)
+        begin
+        let tn1renamed = { qual = tn1.qual; name = get_fresh_name_typeclass tn1.name funname } in
+        let constropt = find_typeconstr tn1renamed.name !local_ty_constr in
+        match constropt with
+          | None ->
+            local_ty_constr := (tn1renamed.name, t2)::(!local_ty_constr)
+          | Some constr ->
+            let (_ , tval) = constr in
+            try _unify cenv t2 tval (* Check of coherency between the expressions *)
+            with Unify -> error (Etype_clash(t2, tval))
+        end
+      | _ , Tclasstype _ -> _unify cenv t2 t1
+      | Tprod t1_list, Tprod t2_list ->
+        (try
+           List.iter2 (unify_funcall cenv) t1_list t2_list
+         with _ -> raise Unify )
+      | Tarray (ty1, e1), Tarray (ty2, e2) ->
+        (try
+           add_constraint_eq ~unsafe:true cenv e1 e2
+         with Solve_failed _ -> raise Unify);
+        unify_funcall cenv ty1 ty2
+      | _ -> raise Unify
+  in
+  
+  (* Unifying the type of the arguments *)
+  (match args_ty_list, expected_ty_list with
+    | [], [] -> ()
+    | _, _ ->
+      (try
+        unify_funcall cenv (unalias_type (prod expected_ty_list)) (unalias_type (prod args_ty_list))
+      with _ ->
+        raise (TypingError (Eargs_clash (prod args_ty_list, prod expected_ty_list)))
+      )
+  );
+  
+  (* Sorting the constraints gathered in local_ty_constr to get the substitution of the call *)
+  let rec sort_type_constraints typaramnames ltyconstr = match typaramnames with
+    | [] -> []
+    | typaramname::t_typaramnames ->
+      (
+        let typaramnewname = get_fresh_name_typeclass typaramname funname in
+        let optconstr = find_typeconstr typaramnewname ltyconstr in
+        match optconstr with
+          | None -> (typaramname,None)
+          | Some (_,tyval) -> (typaramname, Some tyval)
+      ) :: (sort_type_constraints t_typaramnames ltyconstr)
+  in
+  let subst_ty = sort_type_constraints typaramnames !local_ty_constr in
+  
+  
+  
+  (*
+  print_local_ty_constr (Format.formatter_of_out_channel stdout);
+  let print_string ff str = fprintf ff "%s" str in
+  fprintf (Format.formatter_of_out_channel stdout) "subst_ty (funcall) = [%a]\n@?"
+    (Pp_tools.print_list
+      (Pp_tools.print_couple print_string (Pp_tools.print_opt Global_printer.print_type) "(" "," ")")
+    "" "; " "") subst_ty; TODO DEBUG *)
+  
+  
+  
+  (* Check if tname is a classtype from the node whose instance we are currently typing *)
+  let is_local_class_type tname =
+    List.fold_left
+      (fun isfound ntyparam ->
+       isfound || (ntyparam = get_fresh_name_typeclass tname.name funname))
+      false typaramnames
+  in
+  
+  (* Dealing with outputs *)
+  let renaming_tclasstype res_ty = match res_ty with
+    | Tclasstype (tname, cname) ->
+      let tnamerenamed = { qual = tname.qual; name = get_fresh_name_typeclass tname.name funname } in
+      Tclasstype (tnamerenamed, cname)
+    | _ -> res_ty
+  in
+  
+  let rec subst_classtype res_ty = match res_ty with
+    | Tprod tylist -> Tprod (List.map subst_classtype tylist)
+    | Tid id -> Tid id
+    | Tarray (typ, stexp) -> Tarray (subst_classtype typ, stexp)
+    | Tclasstype (tname, _) ->
+      begin
+      let tnamerenamed = tname in
+      let loctypeconstropt = find_typeconstr tnamerenamed.name !local_ty_constr in
+      match loctypeconstropt with
+        | None ->
+          if (is_local_class_type tname)
+            then error (Eoutput_node_is_unconstrained_classtype(funname,res_ty))
+            else res_ty
+        | Some (tn,tvalue) -> subst_classtype tvalue
+      end
+    | Tinvalid -> raise Errors.Error
+  in
+  
+  (* (Pp_tools.print_list Global_printer.print_type "-> result_ty_list = [" "; " "]\n@?")
+    (Format.formatter_of_out_channel stdout) result_ty_list;
+  fprintf (Format.formatter_of_out_channel stdout) "	(size result_ty_list = %i)\n@?" (List.length result_ty_list);
+    print_local_ty_constr (Format.formatter_of_out_channel stdout); TODO DEBUG  *)
+  
+  let result_ty_list = List.map subst_classtype
+    (List.map renaming_tclasstype result_ty_list) in
+  
+  let result_ty_list = List.map m_simpl result_ty_list in
+  (typed_e_list, subst_ty, result_ty_list)
+
+
 and typing_field cenv h fields t1 (f, e) =
   try
     let ty = check_type cenv (field_assoc f fields) in
@@ -729,6 +1072,11 @@ and typing_field cenv h fields t1 (f, e) =
 
 and expect cenv h expected_ty e =
   let typed_e, actual_ty = typing cenv h e in
+  
+  (*print_lntypeclass (Format.formatter_of_out_channel stdout);
+  fprintf (formatter_of_out_channel stdout) "typed_e = %a\n@?" Hept_printer.print_exp typed_e;
+  fprintf (Format.formatter_of_out_channel stdout) "	-> expected_ty = %a\n@?"
+    Global_printer.print_type expected_ty; TODO DEBUG *)
   try
     unify cenv actual_ty expected_ty;
     typed_e
@@ -750,40 +1098,75 @@ and typing_app cenv h app e_list =
         let typed_e3 = expect cenv h t1 e3 in
         t1, app, [typed_e1; typed_e2; typed_e3]
 
-    | Efun {name = "="} ->
+    | Efun ({name = "="},_) ->
         let e1, e2 = assert_2 e_list in
         let typed_e1, t1 = typing cenv h e1 in
         let typed_e2 = expect cenv h t1 e2 in
         Tid Initial.pbool, app, [typed_e1; typed_e2]
 
-    | Efun { qual = Module "Iostream"; name = "printf" } ->
+    | Efun ({ qual = Module "Iostream"; name = "printf" },_) ->
         let e1, format_args = assert_1min e_list in
         let typed_e1 = expect cenv h Initial.tstring e1 in
         let typed_format_args = typing_format_args cenv h typed_e1 format_args in
         Tprod [], app, typed_e1::typed_format_args
 
-    | Efun { qual = Module "Iostream"; name = "fprintf" } ->
+    | Efun ({ qual = Module "Iostream"; name = "fprintf" },_) ->
         let e1, e2, format_args = assert_2min e_list in
         let typed_e1 = expect cenv h Initial.tfile e1 in
         let typed_e2 = expect cenv h Initial.tstring e2 in
         let typed_format_args = typing_format_args cenv h typed_e1 format_args in
         Tprod [], app, typed_e1::typed_e2::typed_format_args
 
-    | (Efun f | Enode f) ->
+    | (Efun (f,_) | Enode (f,_)) ->
         let ty_desc = find_value f in
-        let op, expected_ty_list, result_ty_list = kind f ty_desc in
+        let op, expected_ty_list, result_ty_list, typarams = kind f ty_desc in
         let node_params = List.map (fun { p_name = n } -> local_qn n) ty_desc.node_params in
         let m = build_subst node_params app.a_params in
         let expected_ty_list = List.map (simplify_type m) expected_ty_list in
-        let typed_e_list = typing_args cenv h expected_ty_list e_list in
-        let result_ty_list = List.map (simplify_type m) result_ty_list in
+        
+        let (typed_e_list, subst_ty, result_ty_list) =
+          if (List.length typarams > 0) then
+            begin
+            (* Pass 1: get the constraints of the node instanciation *)
+            let typaramsname = List.map (fun typaram -> typaram.tp_nametype) typarams in
+            typing_funcall f.name cenv h expected_ty_list e_list
+              (simplify_type m) result_ty_list typaramsname
+            end
+          else
+            (typing_args cenv h expected_ty_list e_list,
+              [],
+              List.map (simplify_type m) result_ty_list)
+        in
+        let subst_ty = List.map (fun (n,tyval) -> ({qual=f.qual; name=n},tyval)) subst_ty in
+        
+        (* fprintf (Format.formatter_of_out_channel stdout) "subst_ty = [%a]\n@?"
+          (Pp_tools.print_list
+            (Pp_tools.print_couple Global_printer.print_qualname (Pp_tools.print_opt Global_printer.print_type) "(" "," ")")
+          "" "; " "") subst_ty; TODO DEBUG *)
+        
+        let subst_ty = List.map2
+          (fun (nqual,tyval) typaram -> match tyval with
+            | None -> (* We register a new type class *)
+              l_new_typeclass := (nqual, typaram.tp_nameclass, None)::(!l_new_typeclass);
+              (nqual,
+                Tclasstype (nqual, mk_type_class (Modules.qualify_class typaram.tp_nameclass)))
+            | Some tval -> (nqual, tval) )
+          subst_ty typarams
+        in
+        
         (* Type static parameters and generate constraints *)
         let typed_params = typing_node_params cenv ty_desc.node_params app.a_params in
         let constrs = List.map (simplify m) ty_desc.node_param_constraints in
         List.iter (add_constraint cenv) constrs;
+        
+        let op = match op with
+          | Efun _ -> Efun (f, subst_ty)
+          | Enode _-> Enode (f, subst_ty)
+          | _ -> raise Errors.Error
+       in
         prod result_ty_list,
-        { app with a_op = op; a_params = typed_params },
-         typed_e_list
+          { app with a_op = op; a_params = typed_params },
+          typed_e_list
 
     | Etuple ->
         let typed_e_list,ty_list =
@@ -834,8 +1217,7 @@ and typing_app cenv h app e_list =
     | Eselect ->
         let e1 = assert_1 e_list in
         let typed_e1, t1 = typing cenv h e1 in
-        let typed_idx_list, ty =
-          typing_array_subscript cenv h app.a_params t1 in
+        let typed_idx_list, ty = typing_array_subscript cenv h app.a_params t1 in
           ty, { app with a_params = typed_idx_list }, [typed_e1]
 
     | Eselect_dyn ->
@@ -1227,6 +1609,37 @@ let build_node_params cenv l =
 let typing_arg cenv a =
   { a with a_type = check_type cenv a.a_type }
 
+
+
+(* Second pass of typing a block/node *)
+let rec ty_blockpropagating funs acc t = match t with
+  | Tid _ -> t, acc
+  | Tprod t_l -> let t_l, acc = mapfold (ty_blockpropagating funs) acc t_l in Tprod t_l, acc
+  | Tarray (t, se) ->
+      let t, acc = ty_blockpropagating funs acc t in
+      let se, acc = funs.Global_mapfold.static_exp funs acc se in
+      Tarray (t, se), acc
+  | Tclasstype (tid, _) ->
+    begin
+      match (find_l_new_typeclass tid acc) with
+        | None -> Format.eprintf
+          "Internal error - l_new_typeclass, type %s is not valid in l_new_typeclass.@." tid.name;
+          raise Errors.Error
+        | Some (_, _, tyval) ->
+           ty_blockpropagating funs acc tyval (* Replace the value + recursive call *)
+    end
+  | Tinvalid -> Tinvalid, acc
+
+
+
+let typing_block_propagating l_ntypeclass typed_b =
+  let glfuns = { Global_mapfold.defaults with ty = ty_blockpropagating } in
+  let funs_typing_block_propagating = { Hept_mapfold.defaults with global_funs = glfuns } in
+  let (typed_b,_) = Hept_mapfold.block_it funs_typing_block_propagating l_ntypeclass typed_b in
+  typed_b
+
+
+(* Node management *)
 let node ({ n_name = f; n_input = i_list; n_output = o_list;
             n_contract = contract;
             n_block = b; n_loc = loc;
@@ -1239,12 +1652,53 @@ let node ({ n_name = f; n_input = i_list; n_output = o_list;
 
     (* typing contract *)
     let typed_contract, h = typing_contract cenv h contract in
-
+    
     let typed_b, defined_names, _ = typing_block cenv h b in
+    
     (* check that the defined names match exactly the outputs and locals *)
     included_env defined_names output_names;
     included_env output_names defined_names;
-
+    
+    (* recover the list of constraints on the type of the node, and reinitialize it *)
+    let typed_b = if (!l_new_typeclass!=[]) then
+      begin
+      let l_ntypeclass = !l_new_typeclass in
+      l_new_typeclass := [];
+      
+      (* TODO DEBUG
+      let print_lntypeclass_aux ff (tname,cname,tyval) =
+        fprintf ff "(%a,%s,%a)"
+          Global_printer.print_qualname tname
+          cname
+          (Pp_tools.print_opt Global_printer.print_type) tyval
+      in
+      fprintf (Format.formatter_of_out_channel stdout) "l_ntypeclass = [ %a ]\n@?"
+        (Pp_tools.print_list print_lntypeclass_aux "" "; " "") l_ntypeclass;   TODO DEBUG *)
+      
+      
+      (* Step 2: we instanciate the l_ntypeclass with no values *)
+      let l_ntypeclass = List.map
+        (fun (tname, cname, tyvalopt) -> match tyvalopt with
+          | None -> (tname, cname, Modules.instanciate_class cname)
+          | Some tyval -> (tname,cname, tyval) ) l_ntypeclass
+      in
+      
+      (* TODO DEBUG 
+      let print_lntypeclass_aux2 ff (tname,cname,tyval) =
+        fprintf ff "(%a,%s,%a)"
+          Global_printer.print_qualname tname
+          cname
+          Global_printer.print_type tyval
+      in
+      fprintf (Format.formatter_of_out_channel stdout) "l_ntypeclass = [ %a ]\n@?"
+        (Pp_tools.print_list print_lntypeclass_aux2 "" "; " "") l_ntypeclass; TODO DEBUG *)
+      
+      
+      (* Propagate the information of l_ntypeclass to the rest of the block *)
+      typing_block_propagating l_ntypeclass typed_b
+      end
+    else typed_b in
+    
     (* update the node signature to add static params constraints *)
     let s = find_value f in
     let cl = List.map (expect_static_exp cenv Initial.tbool) s.node_param_constraints in
@@ -1289,6 +1743,10 @@ let typing_typedec td =
   in
     { td with t_desc = tydesc }
 
+let typing_classdec c = c  (* Nothing to check *)
+
+let typing_instancedec i = i (* The class and type are already defined - checked in hept_scoping.ml *)
+
 let typing_signature s =
   let typed_params, cenv = build_node_params QualEnv.empty s.sig_params in
   if Modules.current () = Pervasives
@@ -1303,6 +1761,8 @@ let program p =
     | Pnode n -> Pnode (node n)
     | Pconst c -> Pconst (typing_const_dec c)
     | Ptype t -> Ptype (typing_typedec t)
+    | Pclass c -> Pclass (typing_classdec c)
+    | Pinstance i -> Pinstance (typing_instancedec i)
   in
   { p with p_desc = List.map program_desc p.p_desc }
 
@@ -1310,6 +1770,8 @@ let interface i =
   let interface_desc id = match id with
       | Iconstdef c -> Iconstdef (typing_const_dec c)
       | Itypedef t -> Itypedef (typing_typedec t)
+      | Iclassdef c -> Iclassdef (typing_classdec c)
+      | Iinstancedef i -> Iinstancedef (typing_instancedec i)
       | Isignature i -> Isignature (typing_signature i)
   in
   { i with i_desc = List.map interface_desc i.i_desc }

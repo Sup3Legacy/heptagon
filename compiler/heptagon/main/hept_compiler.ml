@@ -33,12 +33,15 @@ open Compiler_utils
 let pp p = if !verbose then Hept_printer.print stdout p
 
 let compile_program p =
+  (* Remove the "current" construct (syntactic sugar) *)
+  let p = silent_pass "Current removal" true CurrentRemoval.program p in
+  
   (* Typing *)
   let p = silent_pass "Statefulness check" true Stateful.program p in
   let p = silent_pass "Unsafe check" true Unsafe.program p in
   let p = pass "Typing" true Typing.program p pp in
   let p = pass "Linear Typing" !do_linear_typing Linear_typing.program p pp in
-
+  
   (* Inlining *)
   let p = pass "Inlining" true Inline.program p pp in
 

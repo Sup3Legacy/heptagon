@@ -54,8 +54,11 @@ type 'a hept_it_funs = {
   last            : 'a hept_it_funs -> 'a -> last -> last * 'a;
   objective       : 'a hept_it_funs -> 'a -> objective -> objective * 'a;
   contract        : 'a hept_it_funs -> 'a -> contract -> contract * 'a;
+  typeparam_dec   : 'a hept_it_funs -> 'a -> typeparam_dec -> typeparam_dec * 'a;
   node_dec        : 'a hept_it_funs -> 'a -> node_dec -> node_dec * 'a;
   const_dec       : 'a hept_it_funs -> 'a -> const_dec -> const_dec * 'a;
+  class_dec       : 'a hept_it_funs -> 'a -> class_dec -> class_dec * 'a;
+  instance_dec    : 'a hept_it_funs -> 'a -> instance_dec -> instance_dec * 'a;
   type_dec        : 'a hept_it_funs -> 'a -> type_dec -> type_dec * 'a;
   type_desc       : 'a hept_it_funs -> 'a -> type_desc -> type_desc * 'a;
   program         : 'a hept_it_funs -> 'a -> program -> program * 'a;
@@ -128,6 +131,9 @@ and edesc funs acc ed = match ed with
         (c,e), acc in
     let c_e_list, acc = mapfold aux acc c_e_list in
       Emerge(x, c_e_list), acc
+  | Ecurrent (c, x, e) ->
+    let e, acc = exp_it funs acc e in
+      Ecurrent(c, x, e), acc
   | Ewhen (e, c, x) ->
     let e, acc = exp_it funs acc e in
       Ewhen (e, c, x), acc
@@ -274,9 +280,12 @@ and contract funs acc c =
       c_block = c_block }
   , acc
 
+and typeparam_dec_it funs acc tpdec = funs.typeparam_dec funs acc tpdec
+and typeparam_dec _ acc tpdec = tpdec, acc
 
 and node_dec_it funs acc nd = funs.node_dec funs acc nd
 and node_dec funs acc nd =
+  let n_typeparamdecs, acc = mapfold (typeparam_dec_it funs) acc nd.n_typeparams in
   let n_input, acc = mapfold (var_dec_it funs) acc nd.n_input in
   let n_output, acc = mapfold (var_dec_it funs) acc nd.n_output in
   let n_params, acc = mapfold (var_dec_it funs) acc nd.n_params in
@@ -284,6 +293,7 @@ and node_dec funs acc nd =
   let n_constraints, acc = mapfold (exp_it funs) acc nd.n_constraints in
   let n_block, acc = block_it funs acc nd.n_block in
   { nd with
+      n_typeparams = n_typeparamdecs;
       n_input = n_input;
       n_output = n_output;
       n_block = n_block;
@@ -308,6 +318,14 @@ and const_dec funs acc c =
   let c_type, acc = ty_it funs acc c.c_type in
   let c_value, acc = exp_it funs acc c.c_value in
   { c with c_value = c_value; c_type = c_type }, acc
+
+
+and class_dec_it funs acc c = funs.class_dec funs acc c
+and class_dec funs acc c = c, acc (* nothing to parse below that *)
+
+
+and instance_dec_it funs acc i = funs.instance_dec funs acc i
+and instance_dec funs acc i = i, acc (* nothing to parse below that *)
 
 
 and type_dec_it funs acc td = funs.type_dec funs acc td
@@ -340,6 +358,8 @@ and program_desc_it funs acc pd =
 and program_desc funs acc pd = match pd with
   | Pconst c -> let c, acc = const_dec_it funs acc c in Pconst c, acc
   | Ptype t -> let t, acc = type_dec_it funs acc t in Ptype t, acc
+  | Pclass c -> let c, acc = class_dec_it funs acc c in Pclass c, acc
+  | Pinstance i -> let i, acc = instance_dec_it funs acc i in Pinstance i, acc
   | Pnode n -> let n, acc = node_dec_it funs acc n in Pnode n, acc
   | Ppragma _ -> pd, acc
 
@@ -349,6 +369,8 @@ and interface_desc_it funs acc id =
 and interface_desc funs acc id = match id with
   | Itypedef t -> let t, acc = type_dec_it funs acc t in Itypedef t, acc
   | Iconstdef c -> let c, acc = const_dec_it funs acc c in Iconstdef c, acc
+  | Iclassdef c -> let c, acc = class_dec_it funs acc c in Iclassdef c, acc
+  | Iinstancedef i -> let i, acc = instance_dec_it funs acc i in Iinstancedef i, acc
   | Isignature s -> let s, acc = signature_it funs acc s in Isignature s, acc
 
 and interface_it funs acc i = funs.interface funs acc i
@@ -358,11 +380,13 @@ and interface funs acc i =
 
 and signature_it funs acc s = funs.signature funs acc s
 and signature funs acc s =
+  let sig_typeparamdecs, acc = mapfold (typeparam_dec_it funs) acc s.sig_typeparams in
   let sig_inputs, acc = mapfold (arg_it funs) acc s.sig_inputs in
   let sig_outputs, acc = mapfold (arg_it funs) acc s.sig_outputs in
   let sig_params, acc = mapfold (var_dec_it funs) acc s.sig_params in
   let sig_param_constraints, acc = mapfold (exp_it funs) acc s.sig_param_constraints in
-  { s with sig_inputs = sig_inputs;
+  { s with sig_typeparams = sig_typeparamdecs;
+           sig_inputs = sig_inputs;
            sig_outputs = sig_outputs;
            sig_params = sig_params;
            sig_param_constraints = sig_param_constraints; }
@@ -389,8 +413,11 @@ let defaults = {
   last = last;
   objective = objective;
   contract = contract;
+  typeparam_dec = typeparam_dec;
   node_dec = node_dec;
   const_dec = const_dec;
+  class_dec = class_dec;
+  instance_dec = instance_dec;
   type_dec = type_dec;
   type_desc = type_desc;
   program = program;
@@ -422,8 +449,11 @@ let defaults_stop = {
   last = Global_mapfold.stop;
   objective = Global_mapfold.stop;
   contract = Global_mapfold.stop;
+  typeparam_dec = Global_mapfold.stop;
   node_dec = Global_mapfold.stop;
   const_dec = Global_mapfold.stop;
+  class_dec = Global_mapfold.stop;
+  instance_dec = Global_mapfold.stop;
   type_dec = Global_mapfold.stop;
   type_desc = Global_mapfold.stop;
   program = Global_mapfold.stop;

@@ -35,6 +35,9 @@ type var_name = Names.name
 
 (** dec_names are locally declared qualified names *)
 type dec_name = Names.name
+type dec_class = Names.name
+type type_name = Names.name
+type class_name = Names.name
 
 type module_name = Names.modul
 
@@ -46,7 +49,6 @@ type qualname =
   | Q of Names.qualname (* already qualified name *)
   | ToQ of Names.name (* name to qualify in the scoping process *)
 
-type type_name = qualname
 type fun_name = qualname
 type field_name = qualname
 type constructor_name = qualname
@@ -80,6 +82,7 @@ type ty =
   | Tid of qualname
   | Tarray of ty * exp
   | Tinvalid
+  (** no "Tclasstype" yet (currently inside Tid) *)
 
 and ck =
   | Cbase
@@ -105,6 +108,7 @@ and edesc =
   | Eiterator of iterator_type * app * exp list * exp list * exp list
   | Ewhen of exp * constructor_name * var_name
   | Emerge of var_name * (constructor_name * exp) list
+  | Ecurrent of constructor_name * var_name * exp
   | Esplit of var_name * exp
 
 and app = { a_op: op; a_params: exp list; a_inlined: bool }
@@ -205,10 +209,15 @@ type contract =
     c_controllables : var_dec list;
     c_block   : block }
 
+type typeparam_dec =
+  { t_nametype    : type_name;
+    t_nameclass   : class_name; }
+
 type node_dec =
   { n_name        : dec_name;
     n_stateful    : bool;
     n_unsafe      : bool;
+    n_typeparams  : typeparam_dec list;
     n_input       : var_dec list;
     n_output      : var_dec list;
     n_contract    : contract option;
@@ -223,15 +232,26 @@ type const_dec =
     c_value : exp;
     c_loc   : location; }
 
+type class_dec =
+  { c_nameclass   : class_name;
+    c_loc         : location }
+
+type instance_dec =
+  { i_nametype    : type_name;
+    i_nameclass   : class_name;
+    i_loc         : location }
+
 type program =
   { p_modname : dec_name;
-    p_opened : module_name list;
-    p_desc : program_desc list }
+    p_opened  : module_name list;
+    p_desc    : program_desc list }
 
 and program_desc =
   | Ppragma of (var_name * string)
   | Ptype of type_dec
   | Pconst of const_dec
+  | Pclass of class_dec
+  | Pinstance of instance_dec
   | Pnode of node_dec
 
 
@@ -243,6 +263,7 @@ type arg =
 
 type signature =
   { sig_name              : dec_name;
+    sig_typeparams        : typeparam_dec list;
     sig_inputs            : arg list;
     sig_stateful          : bool;
     sig_unsafe            : bool;
@@ -260,6 +281,8 @@ type interface =
 and interface_desc =
   | Itypedef of type_dec
   | Iconstdef of const_dec
+  | Iclassdef of class_dec
+  | Iinstancedef of instance_dec
   | Isignature of signature
 
 (* {3 Helper functions to create AST} *)
@@ -291,6 +314,12 @@ let mk_field_exp f loc =
 let mk_type_dec name desc loc =
   { t_name = name; t_desc = desc; t_loc = loc }
 
+let mk_class_dec nameclass loc =
+  { c_nameclass = nameclass; c_loc = loc }
+
+let mk_instance_dec nametype nameclass loc =
+  { i_nametype = nametype; i_nameclass = nameclass; i_loc = loc}
+
 let mk_equation desc loc =
   { eq_desc = desc; eq_loc = loc }
 
@@ -311,5 +340,14 @@ let mk_const_dec id ty e loc =
 let mk_arg name (ty,lin) ck =
   { a_type = ty; a_linearity = lin; a_name = name; a_clock = ck }
 
+let mk_typeparam id classid =
+   { t_nametype = id; t_nameclass = classid }
+
 let ptrue = Q Initial.ptrue
 let pfalse = Q Initial.pfalse
+
+(** Extract the name from a Hept_parsetree.qualname *)
+let unqualify q = match q with
+  | Q qname -> qname.name
+  | ToQ name -> name
+

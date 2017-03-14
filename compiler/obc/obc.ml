@@ -39,6 +39,7 @@ open Signature
 open Location
 
 type class_name = qualname
+type classtype_name = qualname
 type op_name = qualname
 type obj_ident = var_ident
 
@@ -140,6 +141,16 @@ type class_def =
       cd_mem_alloc : (ty * Interference_graph.ivar list) list; }
 
 
+type classtype_dec =
+    { c_nameclass   : classtype_name;
+      c_loc         : location }
+
+type instance_dec =
+    { i_nametype    : type_name;
+      i_nameclass   : classtype_name;
+      i_loc         : location }
+
+
 type program =
     { p_modname : modul;
       p_opened  : modul list;
@@ -169,3 +180,5 @@ and interface_desc =
   | Itypedef of type_dec
   | Iconstdef of const_dec
   | Isignature of signature
+  | Iclasstype of classtype_dec
+  | Iinstance of instance_dec

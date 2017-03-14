@@ -141,6 +141,7 @@ let rec nth_of_list n l = match n, l with
 let remove x l =
   List.filter (fun y -> x <> y) l
 
+
 let list_compare c l1 l2 =
   let rec aux l1 l2 = match (l1, l2) with
     | (h1::t1, h2::t2) ->
@@ -150,6 +151,10 @@ let list_compare c l1 l2 =
     | (_,      []    ) -> 1
     | ([],     _     ) -> -1
   in aux l1 l2
+
+let pair_compare c1 c2 (a1,b1) (a2,b2) =
+  let result = c1 a1 a2 in
+  if result = 0 then c2 b1 b2 else result
 
 let option_compare f ox1 ox2 = match ox1, ox2 with
   | None, None -> 0

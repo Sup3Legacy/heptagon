@@ -104,20 +104,22 @@ and app = { a_op: op;
     (** Unsafe applications could have side effects
         and be delicate about optimizations, !be careful! *)
 
+and ty_subst = (type_name * ty) list
+
 and op =
-  | Eequal             (** [arg1 = arg2] *)
-  | Efun of fun_name   (** "Stateless" [longname <<a_params>> (args) reset r] *)
-  | Enode of fun_name  (** "Stateful" [longname <<a_params>> (args) reset r] *)
-  | Eifthenelse        (** [if arg1 then arg2 else arg3] *)
-  | Efield_update      (** [{ arg1 with a_param1 = arg2 }] *)
-  | Earray             (** [[ args ]] *)
-  | Earray_fill        (** [[arg1^a_param1^..^a_paramn]] *)
-  | Eselect            (** [arg1[a_params]] *)
-  | Eselect_slice      (** [arg1[a_param1..a_param2]] *)
-  | Eselect_dyn        (** [arg1.[arg3...] default arg2] *)
-  | Eselect_trunc      (** [arg1[>arg_2 ...<]]*)
-  | Eupdate            (** [[ arg1 with arg3..arg_n = arg2 ]] *)
-  | Econcat            (** [arg1\@\@arg2] *)
+  | Eequal                        (** [arg1 = arg2] *)
+  | Efun of (fun_name * ty_subst)  (** "Stateless" [longname <<a_params>> (args) reset r] *)
+  | Enode of (fun_name * ty_subst) (** "Stateful" [longname <<a_params>> (args) reset r] *)
+  | Eifthenelse                   (** [if arg1 then arg2 else arg3] *)
+  | Efield_update                 (** [{ arg1 with a_param1 = arg2 }] *)
+  | Earray                        (** [[ args ]] *)
+  | Earray_fill                   (** [[arg1^a_param1^..^a_paramn]] *)
+  | Eselect                       (** [arg1[a_params]] *)
+  | Eselect_slice                 (** [arg1[a_param1..a_param2]] *)
+  | Eselect_dyn                   (** [arg1.[arg3...] default arg2] *)
+  | Eselect_trunc                 (** [arg1[>arg_2 ...<]]*)
+  | Eupdate                       (** [[ arg1 with arg3..arg_n = arg2 ]] *)
+  | Econcat                       (** [arg1\@\@arg2] *)
 
 type pat =
   | Etuplepat of pat list
@@ -155,19 +157,24 @@ type contract = {
   c_local         : var_dec list;
   c_eq            : eq list }
 
+type typeparam_dec =
+  { t_nametype    : qualname;
+    t_nameclass   : qualname; }
+
 type node_dec = {
-  n_name     : qualname;
-  n_stateful : bool;
-  n_unsafe   : bool;
-  n_input    : var_dec list;
-  n_output   : var_dec list;
-  n_contract : contract option;
-  n_local    : var_dec list;
-  n_equs     : eq list;
-  n_loc      : location;
-  n_params   : param list;
+  n_name              : qualname;
+  n_stateful          : bool;
+  n_unsafe            : bool;
+  n_typeparams        : typeparam_dec list;
+  n_input             : var_dec list;
+  n_output            : var_dec list;
+  n_contract          : contract option;
+  n_local             : var_dec list;
+  n_equs              : eq list;
+  n_loc               : location;
+  n_params            : param list;
   n_param_constraints : constrnt list;
-  n_mem_alloc : (ty * Interference_graph.ivar list) list; }
+  n_mem_alloc         : (ty * Interference_graph.ivar list) list; }
 
 
 type const_dec = {
@@ -175,6 +182,15 @@ type const_dec = {
   c_type : ty;
   c_value : static_exp;
   c_loc : location }
+
+type classtype_dec =
+  { c_nameclass   : qualname;
+    c_loc         : location }
+
+type instance_dec =
+  { i_nametype    : qualname;
+    i_nameclass   : qualname;
+    i_loc         : location }
 
 type program = {
   p_modname : modul;
@@ -186,9 +202,12 @@ and program_desc =
   | Pnode of node_dec
   | Pconst of const_dec
   | Ptype of type_dec
+  | Pclasstype of classtype_dec
+  | Pinstance of instance_dec
 
 type signature = {
   sig_name              : qualname;
+  sig_typeparams 		: typeparam_dec list;
   sig_inputs            : arg list;
   sig_stateful          : bool;
   sig_outputs           : arg list;
@@ -206,6 +225,8 @@ and interface_desc =
   | Itypedef of type_dec
   | Iconstdef of const_dec
   | Isignature of signature
+  | Iclasstype of classtype_dec
+  | Iinstance of instance_dec
 
 
 (*Helper functions to build the AST*)
@@ -242,7 +263,7 @@ let mk_equation ?(loc = no_location) ?(base_ck=fresh_clock()) unsafe pat exp =
   { eq_lhs = pat; eq_rhs = exp; eq_unsafe = unsafe; eq_base_ck = base_ck; eq_loc = loc }
 
 let mk_node
-    ?(input = []) ?(output = []) ?(contract = None)
+    ?(input = []) ?(output = []) ?(contract = None) ?(typeparams = [])
     ?(local = []) ?(eq = [])
     ?(stateful = true) ~unsafe ?(loc = no_location) ?(param = []) ?(constraints = [])
     ?(mem_alloc=[])
@@ -250,6 +271,7 @@ let mk_node
   { n_name = name;
     n_stateful = stateful;
     n_unsafe = unsafe;
+    n_typeparams = typeparams;
     n_input = input;
     n_output = output;
     n_contract = contract;
@@ -265,6 +287,10 @@ let mk_type_dec type_desc name loc =
 
 let mk_const_dec id ty e loc =
   { c_name = id; c_type = ty; c_value = e; c_loc = loc }
+
+let mk_classtype_dec id loc = { c_nameclass = id; c_loc = loc }
+
+let mk_instance_dec id_ty id_cl loc = { i_nametype = id_ty; i_nameclass = id_cl; i_loc = loc }
 
 let mk_app ?(params=[]) ?(unsafe=false) ?(id=None) ?(inlined=false) op =
   { a_op = op; a_params = params; a_unsafe = unsafe;

@@ -101,6 +101,8 @@ val assocd : 'b -> ('a * 'b) list -> 'a
     lexicographical order induced by [c]. *)
 val list_compare : ('a -> 'a -> int) -> 'a list -> 'a list -> int
 
+val pair_compare : ('a -> 'a -> int) -> ('b -> 'b -> int) -> ('a * 'b) -> ('a * 'b) -> int
+
 val option_compare : ('a -> 'a -> int) -> 'a option -> 'a option -> int
 
 (** [list_diff l dl] returns [l] without the elements belonging to [dl].*)

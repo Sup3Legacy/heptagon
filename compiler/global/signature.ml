@@ -34,7 +34,7 @@ open Linearity
 
 (** Warning: Whenever these types are modified,
     interface_format_version should be incremented. *)
-let interface_format_version = "4"
+let interface_format_version = "4.1"  (* last change: add type parameters & type class (Guillaume I) *)
 
 type ck =
   | Cbase
@@ -51,6 +51,9 @@ type arg = {
 (** Node static parameters *)
 type param = { p_name : name; p_type : ty }
 
+(** Type parameters of a node *)
+type typeparam_def = {tp_nametype : name; tp_nameclass : name }
+
 (** Constraints on size expressions *)
 type constrnt = static_exp
 
@@ -60,6 +63,7 @@ type node = {
   node_outputs            : arg list;
   node_stateful           : bool;
   node_unsafe             : bool;
+  node_typeparams         : typeparam_def list;
   node_params             : param list;
   node_param_constraints  : constrnt list;
   node_external           : bool;
@@ -75,6 +79,10 @@ type type_def =
   | Tstruct of structure
 
 type const_def = { c_type : ty; c_value : static_exp }
+
+type class_def = { c_class : name }
+
+type instance_def = { i_nametype : name; i_nameclass : name }
 
 
 (** {3 Signature helper functions} *)
@@ -105,11 +113,19 @@ let mk_field n ty = { f_name = n; f_type = ty }
 let mk_const_def ty value =
   { c_type = ty; c_value = value }
 
-let mk_node ?(constraints = []) loc ~extern ins outs stateful unsafe params =
+let mk_class_def cname = { c_class = cname }
+
+let mk_instance_def tname cname = { i_nametype = tname; i_nameclass = cname }
+
+let mk_typeparam_def ntype nclass =
+  { tp_nametype = ntype; tp_nameclass = nclass }
+
+let mk_node ?(constraints = []) loc ~extern ?(typeparams = []) ins outs stateful unsafe params =
   { node_inputs = ins;
     node_outputs  = outs;
     node_stateful = stateful;
     node_unsafe = unsafe;
+    node_typeparams = typeparams;
     node_params = params;
     node_param_constraints = constraints;
     node_external = extern;

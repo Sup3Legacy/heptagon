@@ -47,10 +47,10 @@ open Linearity
 
 let fresh = Idents.gen_var "contracts"
 
-let not_exp e = mk_exp (mk_op_app (Efun pnot) [e]) tbool ~linearity:Ltop
+let not_exp e = mk_exp (mk_op_app (Efun (pnot,[])) [e]) tbool ~linearity:Ltop
 
-let (&&&) e1 e2 = mk_exp (mk_op_app (Efun pand) [e1;e2]) tbool ~linearity:Ltop
-let (|||) e1 e2 = mk_exp (mk_op_app (Efun por) [e1;e2]) tbool ~linearity:Ltop
+let (&&&) e1 e2 = mk_exp (mk_op_app (Efun (pand,[])) [e1;e2]) tbool ~linearity:Ltop
+let (|||) e1 e2 = mk_exp (mk_op_app (Efun (por,[])) [e1;e2]) tbool ~linearity:Ltop
 
 let (=>) e1 e2 = (not_exp e1) ||| e2
 
@@ -181,7 +181,7 @@ let exp funs (env, newvars, newequs, cont_vars, contracts) exp =
   let exp, (env, newvars, newequs, cont_vars, contracts) =
     Hept_mapfold.exp funs (env, newvars, newequs, cont_vars, contracts) exp in
   match exp.e_desc with
-  | Eapp ({ a_op = (Enode nn | Efun nn); } as op, argl, rso) ->
+  | Eapp ({ a_op = (Enode (nn,_) | Efun (nn,_)); } as op, argl, rso) ->
     begin try
 
       let add_reset eq = match rso with

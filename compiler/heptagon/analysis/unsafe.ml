@@ -46,7 +46,7 @@ let message loc kind =
 
 (* Returns whether an op is unsafe *)
 let unsafe_op op = match op with
-  | Enode f | Efun f ->
+  | Enode (f,_) | Efun (f,_) ->
       (find_value f).node_unsafe
   | _ -> (*TODO il y a des op unsafe ??*)
       false

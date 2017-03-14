@@ -49,8 +49,11 @@ type 'a mls_it_funs = {
   var_decs:      'a mls_it_funs -> 'a -> Minils.var_dec list -> Minils.var_dec list * 'a;
   objective:     'a mls_it_funs -> 'a -> Minils.objective -> Minils.objective * 'a;
   contract:      'a mls_it_funs -> 'a -> Minils.contract -> Minils.contract * 'a;
+  typeparam_dec: 'a mls_it_funs -> 'a -> Minils.typeparam_dec -> Minils.typeparam_dec * 'a;
   node_dec:      'a mls_it_funs -> 'a -> Minils.node_dec -> Minils.node_dec * 'a;
   const_dec:     'a mls_it_funs -> 'a -> Minils.const_dec -> Minils.const_dec * 'a;
+  classtype_dec: 'a mls_it_funs -> 'a -> Minils.classtype_dec -> Minils.classtype_dec * 'a;
+  instance_dec:  'a mls_it_funs -> 'a -> Minils.instance_dec -> Minils.instance_dec * 'a;
   type_dec:      'a mls_it_funs -> 'a -> Minils.type_dec -> Minils.type_dec * 'a;
   tdesc:         'a mls_it_funs -> 'a -> Minils.tdesc -> Minils.tdesc * 'a;
   program:       'a mls_it_funs -> 'a -> Minils.program -> Minils.program * 'a;
@@ -201,6 +204,8 @@ and contract funs acc c =
       c_eq = c_eq }
   , acc
 
+and typeparam_dec_it funs acc td = funs.typeparam_dec funs acc td
+and typeparam_dec funs acc td = td, acc (* Nothing to explore below *)
 
 and node_dec_it funs acc nd =
   Idents.enter_node nd.n_name;
@@ -210,12 +215,14 @@ and node_dec funs acc nd =
   let n_output, acc = var_decs_it funs acc nd.n_output in
   let n_local, acc = var_decs_it funs acc nd.n_local in
   let n_params, acc = mapfold (param_it funs.global_funs) acc nd.n_params in
+  let n_typeparam, acc = mapfold (typeparam_dec_it funs) acc nd.n_typeparams in
   let n_contract, acc =  optional_wacc (contract_it funs) acc nd.n_contract in
   let n_equs, acc = eqs_it funs acc nd.n_equs in
   { nd with
       n_input = n_input; n_output = n_output;
       n_local = n_local; n_params = n_params;
-      n_contract = n_contract; n_equs = n_equs }
+      n_contract = n_contract; n_equs = n_equs;
+      n_typeparams = n_typeparam }
   , acc
 
 
@@ -224,6 +231,14 @@ and const_dec funs acc c =
   let ty, acc = ty_it funs.global_funs acc c.c_type in
   let se, acc = static_exp_it funs.global_funs acc c.c_value in
   { c with c_type = ty; c_value = se }, acc
+
+
+and classtype_dec_it funs acc c = funs.classtype_dec funs acc c
+and classtype_dec funs acc c = c, acc (* Nothing to explore below *)
+
+
+and instance_dec_it funs acc i = funs.instance_dec funs acc i
+and instance_dec funs acc i = i, acc (* Nothing to explore below *)
 
 
 and type_dec_it funs acc t =
@@ -259,6 +274,8 @@ and program_desc funs acc pd = match pd with
   | Pconst cd -> let cd, acc = const_dec_it funs acc cd in Pconst cd, acc
   | Ptype td -> let td, acc = type_dec_it funs acc td in Ptype td, acc
   | Pnode n -> let n, acc = node_dec_it funs acc n in Pnode n, acc
+  | Pclasstype cd -> let cd, acc = classtype_dec_it funs acc cd in Pclasstype cd, acc
+  | Pinstance id -> let id, acc = instance_dec_it funs acc id in Pinstance id, acc
 
 
 let defaults = {
@@ -274,8 +291,11 @@ let defaults = {
   var_decs = var_decs;
   objective = objective;
   contract = contract;
+  typeparam_dec = typeparam_dec;
   node_dec = node_dec;
   const_dec = const_dec;
+  classtype_dec = classtype_dec;
+  instance_dec = instance_dec;
   type_dec = type_dec;
   tdesc = tdesc;
   program = program;

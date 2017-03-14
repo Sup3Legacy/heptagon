@@ -46,6 +46,7 @@ open Hept_parsetree
 %token <string> STRING
 %token <string * string> PRAGMA
 %token TYPE FUN NODE RETURNS VAR VAL OPEN END CONST UNSAFE EXTERNAL
+%token CLASS INSTANCE OF
 %token FBY PRE SWITCH EVERY
 %token OR STAR NOT
 %token AMPERSAND
@@ -69,7 +70,7 @@ open Hept_parsetree
 %token REACHABLE
 %token ATTRACTIVE
 %token WITH
-%token WHEN WHENOT MERGE ON ONOT
+%token WHEN WHENOT MERGE ON ONOT CURRENT
 %token INLINED
 %token POWER
 %token LBRACKET LBRACKETGREATER
@@ -152,10 +153,12 @@ adelim_slist(S, L, R, x) :
 program: o=list(opens) p=list(program_desc) EOF { {p_modname = ""; p_opened = o; p_desc = p} }
 
 program_desc:
-  | p=PRAGMA     { Ppragma p }
-  | c=const_dec  { Pconst c }
-  | t=type_dec   { Ptype t }
-  | n=node_dec   { Pnode n }
+  | p=PRAGMA       { Ppragma p }
+  | c=const_dec    { Pconst c }
+  | t=type_dec     { Ptype t }
+  | c=class_dec    { Pclass c}
+  | i=instance_dec { Pinstance i}
+  | n=node_dec     { Pnode n }
 ;
 
 opens: OPEN m=modul { m }
@@ -175,6 +178,12 @@ type_dec:
   | TYPE IDENT EQUAL struct_ty_desc
       { mk_type_dec $2 (Type_struct ($4)) (Loc($startpos,$endpos)) }
 ;
+
+class_dec:
+  | CLASS IDENT    { mk_class_dec $2 (Loc($startpos,$endpos)) }
+
+instance_dec:
+  | INSTANCE IDENT OF IDENT { mk_instance_dec $2 $4 (Loc($startpos,$endpos)) }
 
 enum_ty_desc:
   | Constructor                   {[$1]}
@@ -200,12 +209,13 @@ returns: RETURNS | EQUAL {}
 ;
 
 node_dec:
-  | u=unsafe n=node_or_fun f=ident pc=node_params LPAREN i=in_params RPAREN
-    returns LPAREN o=out_params RPAREN
+  | u=unsafe n=node_or_fun f=ident pc=node_params tp=type_params
+    LPAREN i=in_params RPAREN returns LPAREN o=out_params RPAREN
     c=contract b=block(LET) TEL
       {{ n_name = f;
          n_stateful = n;
          n_unsafe = u;
+         n_typeparams = tp;
          n_input  = i;
          n_output = o;
          n_contract = c;
@@ -218,6 +228,17 @@ node_dec:
 node_or_fun:
   | NODE { true }
   | FUN { false }
+;
+
+type_params:
+  | /*empty*/                      { [] }
+  | LBRACKET list_type_params RBRACKET { $2 }
+;
+
+list_type_params:
+  | TYPE IDENT COLON IDENT                          { [mk_typeparam $2 $4] }
+  | TYPE IDENT COLON IDENT SEMICOL                  { [mk_typeparam $2 $4] }
+  | TYPE IDENT COLON IDENT SEMICOL list_type_params { [mk_typeparam $2 $4] @ $6 }
 ;
 
 in_params:
@@ -556,6 +577,10 @@ _exp:
       { Ewhen (e, Q Initial.pfalse, ce) }
   | MERGE n=IDENT hs=merge_handlers
       { Emerge (n, hs) }
+  | CURRENT LPAREN c=constructor_or_bool LPAREN ce=IDENT RPAREN COMMA e=exp RPAREN
+      { Ecurrent (c, ce, e) }
+  | CURRENT LPAREN ce=IDENT COMMA e=exp RPAREN
+      { Ecurrent (Q Initial.ptrue, ce, e) }
   | exp INFIX1 exp
       { mk_op_call $2 [$1; $3] }
   | exp INFIX0 exp
@@ -726,9 +751,12 @@ val_or_empty:
 interface_desc:
   | type_dec         { Itypedef $1 }
   | const_dec        { Iconstdef $1 }
-  | e=extern u=unsafe val_or_empty n=node_or_fun f=ident pc=node_params LPAREN i=params_signature RPAREN
+  | class_dec        { Iclassdef $1 }
+  | instance_dec     { Iinstancedef $1 }
+  | e=extern u=unsafe val_or_empty n=node_or_fun f=ident pc=node_params tp=type_params LPAREN i=params_signature RPAREN
     returns LPAREN o=params_signature RPAREN
     { Isignature({ sig_name = f;
+                   sig_typeparams = tp;
                    sig_inputs = i;
                    sig_stateful = n;
                    sig_unsafe = u;

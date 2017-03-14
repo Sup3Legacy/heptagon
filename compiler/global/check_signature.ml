@@ -48,7 +48,7 @@ let message loc (s,e) =
         a name ck_name
   | Eckvar_unbound_ouput (var_name,ck_name) ->
       let a,name = match var_name with None -> "A","" | Some n -> "The"," "^n in
-      Format.eprintf "%s sampled ouput%s should be returned with its sampling value %s.@."
+      Format.eprintf "%s sampled output%s should be returned with its sampling value %s.@."
         a name ck_name
   end;
   Format.eprintf "@.";

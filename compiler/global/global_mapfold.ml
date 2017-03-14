@@ -37,7 +37,8 @@ type 'a global_it_funs = {
   static_exp         : 'a global_it_funs -> 'a -> static_exp -> static_exp * 'a;
   static_exp_desc    : 'a global_it_funs -> 'a -> static_exp_desc -> static_exp_desc * 'a;
   ty                 : 'a global_it_funs -> 'a -> ty -> ty * 'a;
-  ct               : 'a global_it_funs -> 'a -> ct -> ct * 'a;
+  type_class         : 'a global_it_funs -> 'a -> type_class -> type_class * 'a;
+  ct                 : 'a global_it_funs -> 'a -> ct -> ct * 'a;
   ck                 : 'a global_it_funs -> 'a -> Clocks.ck -> Clocks.ck * 'a;
   link               : 'a global_it_funs -> 'a -> link -> link * 'a;
   var_ident          : 'a global_it_funs -> 'a -> var_ident -> var_ident * 'a;
@@ -78,6 +79,8 @@ and static_exp_desc funs acc sd = match sd with
       let f_se_l, acc = mapfold aux acc f_se_l in
       Srecord f_se_l, acc
 
+and type_class_it funs acc cl = funs.type_class funs acc cl
+and type_class funs acc cl = cl, acc
 
 and ty_it funs acc t = try funs.ty funs acc t with Fallback -> ty funs acc t
 and ty funs acc t = match t with
@@ -87,6 +90,9 @@ and ty funs acc t = match t with
       let t, acc = ty_it funs acc t in
       let se, acc = static_exp_it funs acc se in
       Tarray (t, se), acc
+  | Tclasstype (tid, cl) ->
+      let cl, acc = type_class_it funs acc cl in
+      Tclasstype (tid, cl), acc
   | Tinvalid -> t, acc
 
 and ct_it funs acc c = try funs.ct funs acc c with Fallback -> ct funs acc c
@@ -152,6 +158,7 @@ let defaults = {
   static_exp = static_exp;
   static_exp_desc = static_exp_desc;
   ty = ty;
+  type_class = type_class;
   ct = ct;
   ck = ck;
   link = link;
@@ -171,6 +178,7 @@ let defaults_stop = {
   static_exp = stop;
   static_exp_desc = stop;
   ty = stop;
+  type_class = stop;
   ct = stop;
   ck = stop;
   link = stop;

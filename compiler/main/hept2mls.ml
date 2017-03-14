@@ -61,8 +61,10 @@ struct
     raise Errors.Error
 end
 
+exception CurrentShouldNotHappenHere
+
 let fresh = Idents.gen_fresh "hept2mls"
-  (function Heptagon.Enode f -> (shortname f)
+  (function Heptagon.Enode (f,_) -> (shortname f)
     | _ -> "n")
 
 let translate_var { Heptagon.v_ident = n; Heptagon.v_type = ty; Heptagon.v_linearity = linearity;
@@ -83,8 +85,8 @@ let translate_iterator_type = function
 
 let translate_op = function
   | Heptagon.Eifthenelse -> Eifthenelse
-  | Heptagon.Efun f -> Efun f
-  | Heptagon.Enode f -> Enode f
+  | Heptagon.Efun (f,subst_ty) -> Efun (f,subst_ty)
+  | Heptagon.Enode (f,subst_ty) -> Enode (f,subst_ty)
   | Heptagon.Efield -> assert false
   | Heptagon.Efield_update -> Efield_update
   | Heptagon.Earray_fill -> Earray_fill
@@ -166,6 +168,7 @@ let rec translate ({ Heptagon.e_desc = desc; Heptagon.e_ty = ty;
         Error.message loc Error.Eunsupported_language_construct
     | Heptagon.Emerge (x, c_e_list) ->
         Emerge (x, List.map (fun (c,e)-> c, translate_extvalue e) c_e_list)
+    | Heptagon.Ecurrent (_, _, _) -> raise CurrentShouldNotHappenHere
   in
   match a_ct with
     | None -> mk_exp b_ck ty ~loc:loc ~linearity:linearity desc
@@ -217,11 +220,15 @@ let translate_contract contract =
                c_enforce_loc = translate_extvalue e_g_loc;
                c_controllables = List.map translate_var l_c }
 
+let translate_typeparamdecs { Heptagon.t_nametype = tname; Heptagon.t_nameclass = cname } =
+  { Minils.t_nametype = tname; Minils.t_nameclass = cname; }
+
 let node n =
   enter_node n.Heptagon.n_name;
   { n_name = n.Heptagon.n_name;
     n_stateful = n.Heptagon.n_stateful;
     n_unsafe = n.Heptagon.n_unsafe;
+    n_typeparams = List.map translate_typeparamdecs n.Heptagon.n_typeparamdecs;
     n_input = List.map translate_var n.Heptagon.n_input;
     n_output = List.map translate_var n.Heptagon.n_output;
     n_contract = translate_contract n.Heptagon.n_contract;
@@ -249,10 +256,21 @@ let const_dec cd =
     Minils.c_type = cd.Heptagon.c_type;
     Minils.c_loc = cd.Heptagon.c_loc; }
 
+let class_dec cd =
+  { Minils.c_nameclass = cd.Heptagon.c_nameclass;
+    Minils.c_loc = cd.Heptagon.c_loc }
+
+let instance_dec id =
+  { Minils.i_nametype = id.Heptagon.i_nametype;
+    Minils.i_nameclass = id.Heptagon.i_nameclass;
+    Minils.i_loc = id.Heptagon.i_loc }
+
 let program_desc pd = match pd with
   | Heptagon.Ptype td -> Ptype (typedec td)
   | Heptagon.Pnode nd -> Pnode (node nd)
   | Heptagon.Pconst cd -> Pconst (const_dec cd)
+  | Heptagon.Pclass cd -> Pclasstype (class_dec cd)
+  | Heptagon.Pinstance id -> Pinstance (instance_dec id)
 
 let program
     { Heptagon.p_modname = modname;
@@ -266,6 +284,7 @@ let program
 let signature s =
   { sig_name = s.Heptagon.sig_name;
     sig_inputs = s.Heptagon.sig_inputs;
+    sig_typeparams = List.map translate_typeparamdecs s.Heptagon.sig_typeparamdecs;
     sig_stateful = s.Heptagon.sig_stateful;
     sig_outputs = s.Heptagon.sig_outputs;
     sig_params = s.Heptagon.sig_params;
@@ -278,6 +297,8 @@ let interface i =
     | Heptagon.Itypedef td -> Itypedef (typedec td)
     | Heptagon.Iconstdef cd -> Iconstdef (const_dec cd)
     | Heptagon.Isignature s -> Isignature (signature s)
+    | Heptagon.Iclassdef cd -> Iclasstype (class_dec cd)
+    | Heptagon.Iinstancedef id -> Iinstance (instance_dec id)
   in
   { i_modname = i.Heptagon.i_modname;
     i_opened = i.Heptagon.i_opened;

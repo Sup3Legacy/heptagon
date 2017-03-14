@@ -257,7 +257,7 @@ let rec translate map e =
         let w = translate_extvalue map w in Eextvalue w
     | Minils.Eapp ({ Minils.a_op = Minils.Eequal }, w_list, _) ->
       Eop (op_from_string "=", List.map (translate_extvalue_to_exp map) w_list)
-    | Minils.Eapp ({ Minils.a_op = Minils.Efun n }, e_list, _)
+    | Minils.Eapp ({ Minils.a_op = Minils.Efun (n,_) }, e_list, _)
         when Mls_utils.is_op n ->
         Eop (n, List.map (translate_extvalue_to_exp map ) e_list)
     | Minils.Estruct f_e_list ->
@@ -483,7 +483,7 @@ let rec translate_eq map call_context
         v, si, j, (control map ck action) :: s
 
     | _pat, Minils.Eapp({ Minils.a_op =
-        Minils.Efun ({ qual = Module "Iostream"; name = "printf" | "fprintf" } as q)},
+        Minils.Efun ({ qual = Module "Iostream"; name = "printf" | "fprintf" } as q, _)},
                        args, _) ->
       let action = Aop (q, List.map (translate_extvalue_to_exp map) args) in
       v, si, j, (control map ck action) :: s
@@ -533,7 +533,7 @@ and translate_eq_list map call_context act_list =
 
 and mk_node_call map call_context app loc (name_list : Obc.pattern list) args ty =
   match app.Minils.a_op with
-    | Minils.Efun f when Mls_utils.is_op f ->
+    | Minils.Efun (f,_) when Mls_utils.is_op f ->
         let act = match name_list with
           | [] -> Aop (f, args)
           | [name] ->
@@ -543,7 +543,7 @@ and mk_node_call map call_context app loc (name_list : Obc.pattern list) args ty
             Misc.unsupported "mls2obc: external function with multiple return values" in
         [], [], [], [act]
 
-    | Minils.Enode f when Itfusion.is_anon_node f ->
+    | Minils.Enode (f,_) when Itfusion.is_anon_node f ->
         let add_input env vd =
           Env.add vd.Minils.v_ident
             (mk_pattern vd.Minils.v_type (Lvar vd.Minils.v_ident)) env in
@@ -570,7 +570,7 @@ and mk_node_call map call_context app loc (name_list : Obc.pattern list) args ty
         let env = List.fold_left2 build Env.empty nd.Minils.n_input args in
           v @ nd.Minils.n_local, si, j, subst_act_list env s
 
-    | Minils.Enode f | Minils.Efun f ->
+    | Minils.Enode (f,_) | Minils.Efun (f,_) ->
         let id = match app.Minils.a_id with
           | None -> gen_obj_ident f
           | Some id -> id
@@ -774,6 +774,14 @@ let translate_const_def { Minils.c_name = name; Minils.c_value = se;
     Obc.c_type = ty;
     Obc.c_loc = loc }
 
+let translate_classtype_dec { Minils.c_nameclass = nclass; Minils.c_loc = loc } =
+  { Obc.c_nameclass = nclass; Obc.c_loc = loc }
+
+let translate_instance_def { Minils.i_nametype = ntype; Minils.i_nameclass = nclass;
+                             Minils.i_loc = loc } =
+  { Obc.i_nametype = ntype; Obc.i_nameclass = nclass; Obc.i_loc = loc }
+
+
 let program { Minils.p_modname = p_modname; Minils.p_opened = p_o; Minils.p_desc = pd; } =
   build_anon pd;
 
@@ -784,6 +792,8 @@ let program { Minils.p_modname = p_modname; Minils.p_opened = p_o; Minils.p_desc
     | Minils.Pnode _ -> acc
     | Minils.Ptype t -> Ptype (translate_ty_def t) :: acc
     | Minils.Pconst c -> Pconst (translate_const_def c) :: acc
+    | Minils.Pclasstype c -> acc (* Not needed anymore *)
+    | Minils.Pinstance i ->acc   (* Not needed anymore *)
   in
   let p_desc = List.fold_right program_desc pd [] in
   { p_modname = p_modname;
@@ -805,6 +815,8 @@ let interface i =
     | Minils.Itypedef td -> Itypedef (translate_ty_def td)
     | Minils.Iconstdef cd -> Iconstdef (translate_const_def cd)
     | Minils.Isignature s -> Isignature (signature s)
+    | Minils.Iclasstype c -> Iclasstype (translate_classtype_dec c)
+    | Minils.Iinstance i -> Iinstance (translate_instance_def i)
   in
   { i_modname = i.Minils.i_modname;
     i_opened = i.Minils.i_opened;

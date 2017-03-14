@@ -42,6 +42,7 @@ type modul =
 and qualname = { qual: modul; name: name }
 
 type type_name = qualname
+type class_name = qualname   (* name of a class of type (ex: Num) *)
 type fun_name = qualname
 type field_name = qualname
 type constructor_name = qualname

@@ -70,6 +70,11 @@ let print_const_dec ff c =
       print_qualname c.c_name print_static_exp c.c_value;
   fprintf ff "@."
 
+let print_classtype_dec ff c =
+  fprintf ff "class %a@." print_qualname c.c_nameclass
+
+let print_instance_dec ff i =
+  fprintf ff "instance %a of %a@." print_qualname i.i_nametype print_qualname i.i_nameclass
 
 let rec print_params ff l =
   fprintf ff "@[<2>%a@]" (print_list_r print_static_exp "<<"","">>") l
@@ -149,7 +154,7 @@ and print_app ff (app, args) =
     | Eequal ->
       let e1, e2 = assert_2 args in
         fprintf ff "@[<2>%a@ = %a@]" print_extvalue e1  print_extvalue e2
-    | Efun ({ qual = Pervasives; name = n } as f) when (is_infix n) ->
+    | Efun ({ qual = Pervasives; name = n } as f, _) when (is_infix n) ->
 	begin match args with
 	  [a1;a2] ->
 	    fprintf ff "@[(%a@, %s@, %a)@]"
@@ -160,7 +165,7 @@ and print_app ff (app, args) =
             fprintf ff "@[%a@,%a@,%a@]"
               print_qualname f print_params app.a_params  print_w_tuple args
 	end
-    | Efun f | Enode f ->
+    | Efun (f,_) | Enode (f,_) ->
         fprintf ff "@[%a@,%a@,%a@]"
           print_qualname f print_params app.a_params  print_w_tuple args
     | Eifthenelse ->
@@ -253,12 +258,17 @@ let print_contract ff { c_local = l; c_eq = eqs;
     print_vd_tuple c
 
 
-let print_node ff { n_name = n; n_input = ni; n_output = no;
+let print_typeparams ff tp =
+  fprintf ff "%a of %a" print_qualname tp.t_nametype  print_qualname tp.t_nameclass
+
+
+let print_node ff { n_name = n; n_input = ni; n_output = no; n_typeparams = ntp;
                     n_contract = contract; n_local = nl;
                     n_equs = ne; n_params = params } =
-  fprintf ff "@[node %a%a%a@ returns %a@]@\n%a%a%a@]@\n@."
+  fprintf ff "@[node %a%a%a%a@ returns %a@]@\n%a%a%a@]@\n@."
     print_qualname n
     print_node_params params
+    (print_list print_typeparams "[" "; " "]") ntp
     print_vd_tuple ni
     print_vd_tuple no
     (print_opt print_contract) contract
@@ -271,6 +281,8 @@ let print oc { p_opened = pm; p_desc = pd } =
     | Pnode n -> print_node ff n
     | Ptype t -> print_type_dec ff t
     | Pconst c -> print_const_dec ff c
+    | Pclasstype c -> print_classtype_dec ff c
+    | Pinstance i -> print_instance_dec ff i
   in
   let ff = formatter_of_out_channel oc in
   List.iter (print_open_module ff) pm;

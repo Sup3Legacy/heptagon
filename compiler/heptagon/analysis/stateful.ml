@@ -60,13 +60,13 @@ let edesc funs stateful ed =
     match ed with
       | Efby _ | Epre _ -> ed, true
       | Eapp({ a_op = Earrow }, _, _) -> ed, true
-      | Eapp({ a_op = (Enode f | Efun f) } as app, e_list, r) ->
+      | Eapp({ a_op = (Enode (f,tysubst) | Efun (f,tysubst)) } as app, e_list, r) ->
           let ty_desc = find_value f in
-          let op = if ty_desc.node_stateful then Enode f else Efun f in
+          let op = if ty_desc.node_stateful then Enode (f,tysubst) else Efun (f,tysubst) in
           Eapp({ app with a_op = op }, e_list, r), ty_desc.node_stateful || stateful
-      | Eiterator(it, ({ a_op = (Enode f | Efun f) } as app), n, pe_list, e_list, r) ->
+      | Eiterator(it, ({ a_op = (Enode (f,tysubst) | Efun (f,tysubst)) } as app), n, pe_list, e_list, r) ->
           let ty_desc = find_value f in
-          let op = if ty_desc.node_stateful then Enode f else Efun f in
+          let op = if ty_desc.node_stateful then Enode (f,tysubst) else Efun (f,tysubst) in
           Eiterator(it, { app with a_op = op }, n, pe_list, e_list, r),
           ty_desc.node_stateful || stateful
       | _ -> ed, stateful

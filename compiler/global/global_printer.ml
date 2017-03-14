@@ -129,8 +129,12 @@ and print_type ff = function
   | Tprod ty_list ->
       fprintf ff "@[<hov2>%a@]" (print_list_r print_type "(" " *" ")") ty_list
   | Tid id -> print_qualname ff id
+  | Tclasstype (id, cl) -> fprintf ff "%a of %a" print_qualname id print_type_class cl
   | Tarray (ty, n) ->
       fprintf ff "@[<hov2>%a^%a@]" print_type ty print_static_exp n
+
+and print_type_class ff cl =
+  fprintf ff "%a" print_qualname cl.tc_name
 
 let print_field ff field =
   fprintf ff "@[%a: %a@]" print_qualname field.f_name  print_type field.f_type

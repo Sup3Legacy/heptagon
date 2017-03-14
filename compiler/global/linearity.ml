@@ -29,6 +29,7 @@
 open Format
 open Names
 open Misc
+open Pp_tools
 
 type linearity_var = name
 
@@ -125,6 +126,11 @@ let rec lin_to_string = function
   | Lat r -> "at "^r
   | Lvar r -> "at _"^r
   | Ltuple l_list -> String.concat ", " (List.map lin_to_string l_list)
+
+let rec print_init ff ini = match ini with
+  | Lno_init -> fprintf ff "Lno_init"
+  | Linit_var lin_var -> fprintf ff "Linit_var %s" lin_var
+  | Linit_tuple lini -> fprintf ff "Linit_tuple %a" (print_list print_init "("","")") lini
 
 let print_linearity ff l =
   match l with

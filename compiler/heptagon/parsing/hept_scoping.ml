@@ -70,6 +70,7 @@ struct
     | Equal_unbound of name*name
     | Enot_last of name
     | Evariable_already_defined of name
+    | Etypevar_already_defined of name
     | Econst_variable_already_defined of name
     | Estatic_exp_expected
     | Eredefinition of Names.qualname
@@ -95,6 +96,10 @@ struct
             name
       | Evariable_already_defined name ->
           eprintf "%aThe variable %s is already defined.@."
+            print_location loc
+            name
+      | Etypevar_already_defined name ->
+          eprintf "%aThe type variable %s is already defined.@."
             print_location loc
             name
       | Econst_variable_already_defined name ->
@@ -135,6 +140,7 @@ let _qualify_with_error s qfun cqfun q = match q with
 
 let qualify_value = _qualify_with_error "value" qualify_value check_value
 let qualify_type = _qualify_with_error "type" qualify_type check_type
+let qualify_class = _qualify_with_error "class" qualify_class check_class
 let qualify_constrs =
   _qualify_with_error "constructor" qualify_constrs check_constrs
 let qualify_field = _qualify_with_error "field" qualify_field check_field
@@ -191,14 +197,43 @@ struct
 end
 
 
+(* Environment management for locally introduced types inside a node *)
+module RenameType =
+struct
+  include (Map.Make (struct type t = string let compare = String.compare end))
+  
+  (** Rename a type variable *)
+  let typevar loc tenv n =
+    try fst (find n tenv)
+    with Not_found -> Error.message loc (Evar_unbound n)
+  
+  (** Add a name of type variable to the list of used names/idents *)
+  let add_used_name tenv tvd =
+    add tvd.t_nametype tvd tenv
+  
+  (** Add a type var *)
+  let add_typevar loc tenv tvd =
+    if mem tvd.t_nametype tenv then
+      Error.message loc (Etypevar_already_defined tvd.t_nametype)
+    else
+      add tvd.t_nametype tvd tenv
+  
+  (** Add a type var declaration *)
+  let add loc tenv tvd = add_typevar loc tenv tvd
+  
+  (* No need for an append function (type variable are only defined at one place of the node) *)
+end
+
+
 let mk_app ?(params=[]) ?(unsafe=false) ?(inlined = false) op =
   { Heptagon.a_op = op;
     Heptagon.a_params = params;
     Heptagon.a_unsafe = unsafe;
     Heptagon.a_inlined = inlined }
 
-let mk_signature name ~extern ins outs stateful params constraints loc =
+let mk_signature name ~extern ?(typeparamdecs=[]) ins outs stateful params constraints loc =
   { Heptagon.sig_name = name;
+    Heptagon.sig_typeparamdecs = typeparamdecs;
     Heptagon.sig_inputs = ins;
     Heptagon.sig_stateful = stateful;
     Heptagon.sig_outputs = outs;
@@ -257,14 +292,24 @@ let expect_static_exp e = match e.e_desc with
   | Econst se -> translate_static_exp se
   | _ ->  Error.message e.e_loc Estatic_exp_expected
 
-let rec translate_type loc ty =
+let rec translate_type loc tenv ty =
   try
     (match ty with
       | Tprod ty_list ->
-          Types.Tprod(List.map (translate_type loc) ty_list)
-      | Tid ln -> Types.Tid (qualify_type ln)
+          Types.Tprod(List.map (translate_type loc tenv) ty_list)
+      | Tid ln ->
+        let unqualified_name = Hept_parsetree.unqualify ln in
+        if (RenameType.mem unqualified_name tenv)  (* Is the type defined locally to the node? *)
+          then (
+            try
+              let tvd = RenameType.find unqualified_name tenv in
+              let nameclass = tvd.t_nameclass in
+              Types.Tclasstype (current_qual unqualified_name, find_class (qualify_class (ToQ nameclass)))
+            with Not_found -> assert false;
+          )
+          else Types.Tid (qualify_type ln)
       | Tarray (ty, e) ->
-          let ty = translate_type loc ty in
+          let ty = translate_type loc tenv ty in
           Types.Tarray (ty, expect_static_exp e)
       | Tinvalid -> Types.Tinvalid
     )
@@ -337,6 +382,11 @@ and translate_desc loc env = function
           (c, e) in
         List.map fun_c_e c_e_list in
       Heptagon.Emerge (x, c_e_list)
+  | Ecurrent (c, x, e) ->
+      let x = Rename.var loc env x in
+      let c = qualify_constrs c in
+      let e = translate_exp env e in
+      Heptagon.Ecurrent (c, x, e)
   | Esplit (x, e1) ->
      let x = translate_exp env (mk_exp (Evar x) loc) in
      let e1 = translate_exp env e1 in
@@ -356,53 +406,53 @@ and translate_op = function
   | Econcat -> Heptagon.Econcat
   | Eselect_dyn -> Heptagon.Eselect_dyn
   | Eselect_trunc -> Heptagon.Eselect_trunc
-  | Efun ln -> Heptagon.Efun (qualify_value ln)
-  | Enode ln -> Heptagon.Enode (qualify_value ln)
+  | Efun ln -> Heptagon.Efun (qualify_value ln, [])
+  | Enode ln -> Heptagon.Enode (qualify_value ln, [])
   | Ereinit -> Heptagon.Ereinit
 
 and translate_pat loc env = function
   | Evarpat x -> Heptagon.Evarpat (Rename.var loc env x)
   | Etuplepat l -> Heptagon.Etuplepat (List.map (translate_pat loc env) l)
 
-let rec translate_eq env eq =
+let rec translate_eq env tenv eq =
   let init = match eq.eq_desc with | Eeq(_, init, _) -> init | _ -> Linearity.Lno_init in
-  { Heptagon.eq_desc = translate_eq_desc eq.eq_loc env eq.eq_desc ;
+  { Heptagon.eq_desc = translate_eq_desc eq.eq_loc env tenv eq.eq_desc ;
     Heptagon.eq_stateful = false;
     Heptagon.eq_inits = init;
     Heptagon.eq_loc = eq.eq_loc; }
 
-and translate_eq_desc loc env = function
+and translate_eq_desc loc env tenv = function
   | Eswitch(e, switch_handlers) ->
       let sh = List.map
-        (translate_switch_handler loc env)
+        (translate_switch_handler loc env tenv)
         switch_handlers in
       Heptagon.Eswitch (translate_exp env e, sh)
   | Eeq(p, _, e) ->
       Heptagon.Eeq (translate_pat loc env p, translate_exp env e)
   | Epresent (present_handlers, b) ->
       Heptagon.Epresent
-        (List.map (translate_present_handler env) present_handlers
-           , fst (translate_block env b))
+        (List.map (translate_present_handler env tenv) present_handlers
+           , fst (translate_block env tenv b))
   | Eautomaton state_handlers ->
-      Heptagon.Eautomaton (List.map (translate_state_handler env)
+      Heptagon.Eautomaton (List.map (translate_state_handler env tenv)
                              state_handlers)
   | Ereset (b, e) ->
-      let b, _ = translate_block env b in
+      let b, _ = translate_block env tenv b in
       Heptagon.Ereset (b, translate_exp env e)
   | Eblock b ->
-      let b, _ = translate_block env b in
+      let b, _ = translate_block env tenv b in
       Heptagon.Eblock b
 
-and translate_block env b =
+and translate_block env tenv b =
   let env = Rename.append env b.b_local in
-  { Heptagon.b_local = translate_vd_list env b.b_local;
-    Heptagon.b_equs = List.map (translate_eq env) b.b_equs;
+  { Heptagon.b_local = translate_vd_list env tenv b.b_local;
+    Heptagon.b_equs = List.map (translate_eq env tenv) b.b_equs;
     Heptagon.b_defnames = Env.empty;
     Heptagon.b_stateful = false;
     Heptagon.b_loc = b.b_loc; }, env
 
-and translate_state_handler env sh =
-  let b, env = translate_block env sh.s_block in
+and translate_state_handler env tenv sh =
+  let b, env = translate_block env tenv sh.s_block in
   { Heptagon.s_state = sh.s_state;
     Heptagon.s_block = b;
     Heptagon.s_until = List.map (translate_escape env) sh.s_until;
@@ -414,29 +464,29 @@ and translate_escape env esc =
     Heptagon.e_reset = esc.e_reset;
     Heptagon.e_next_state = esc.e_next_state }
 
-and translate_present_handler env ph =
+and translate_present_handler env tenv ph =
   { Heptagon.p_cond = translate_exp env ph.p_cond;
-    Heptagon.p_block = fst (translate_block env ph.p_block) }
+    Heptagon.p_block = fst (translate_block env tenv ph.p_block) }
 
-and translate_switch_handler loc env sh =
+and translate_switch_handler loc env tenv sh =
   try
     { Heptagon.w_name = qualify_constrs sh.w_name;
-      Heptagon.w_block = fst (translate_block env sh.w_block) }
+      Heptagon.w_block = fst (translate_block env tenv sh.w_block) }
   with
     | ScopingError err -> Error.message loc err
 
-and translate_var_dec env vd =
+and translate_var_dec env tenv vd =
   (* env is initialized with the declared vars before their translation *)
     { Heptagon.v_ident = Rename.var vd.v_loc env vd.v_name;
-      Heptagon.v_type = translate_type vd.v_loc vd.v_type;
+      Heptagon.v_type = translate_type vd.v_loc tenv vd.v_type;
       Heptagon.v_linearity = Linearity.check_linearity vd.v_linearity;
       Heptagon.v_last = translate_last vd.v_last;
       Heptagon.v_clock = translate_some_clock vd.v_loc env vd.v_clock;
       Heptagon.v_loc = vd.v_loc }
 
 (** [env] should contain the declared variables prior to this translation *)
-and translate_vd_list env =
-  List.map (translate_var_dec env)
+and translate_vd_list env tenv =
+  List.map (translate_var_dec env tenv)
 
 and translate_last = function
   | Var -> Heptagon.Var
@@ -454,23 +504,23 @@ let translate_objective env obj =
     Heptagon.o_exp = translate_exp env obj.o_exp
   }
 
-let translate_contract env opt_ct =
+let translate_contract env tenv opt_ct =
   match opt_ct with
   | None -> None, env
   | Some ct ->
       let env' = Rename.append env ct.c_controllables in
-      let b, env = translate_block env ct.c_block in
+      let b, env = translate_block env tenv ct.c_block in
       Some { Heptagon.c_assume = translate_exp env ct.c_assume;
              Heptagon.c_objectives = List.map (translate_objective env) ct.c_objectives;
              Heptagon.c_assume_loc = translate_exp env ct.c_assume_loc;
              Heptagon.c_enforce_loc = translate_exp env ct.c_enforce_loc;
-             Heptagon.c_controllables = translate_vd_list env' ct.c_controllables;
+             Heptagon.c_controllables = translate_vd_list env' tenv ct.c_controllables;
              Heptagon.c_block = b }, env'
 
 let params_of_var_decs env p_l =
   let pofvd env vd =
     let env = Rename.add_used_name env vd.v_name in
-    Signature.mk_param vd.v_name (translate_type vd.v_loc vd.v_type), env
+    Signature.mk_param vd.v_name (translate_type vd.v_loc RenameType.empty vd.v_type), env
   in
   Misc.mapfold pofvd env p_l
 
@@ -490,24 +540,42 @@ let args_of_var_decs =
     List.map arg_of_vd
 *)
 
+let translate_typeparam_dec loc tenv tparamdec =
+  try
+    let tenv = RenameType.add loc tenv tparamdec in (* Add tparamdec to the typing environment *)
+    { Heptagon.t_nametype = current_qual tparamdec.t_nametype;
+      Heptagon.t_nameclass = qualify_class (ToQ tparamdec.t_nameclass) }, tenv
+  with
+    | ScopingError err -> Error.message loc err
+
 let translate_node node =
   let n = current_qual node.n_name in
   Idents.enter_node n;
   let params, env = params_of_var_decs Rename.empty node.n_params in
+  
+  (* Getting the local type environment and the type parameter declarations of the node *)
+  let (typeparamdecs, tenv) = List.fold_left
+    (fun (tres,env) tpd ->
+      let (hres, env1) = translate_typeparam_dec node.n_loc env tpd in
+      (hres::tres, env1) )
+    ([], RenameType.empty)
+    node.n_typeparams in
+  
   let constraints = List.map translate_constrnt node.n_constraints in
   let env = Rename.append env (node.n_input) in
   (* inputs should refer only to inputs *)
-  let inputs = translate_vd_list env node.n_input in
+  let inputs = translate_vd_list env tenv node.n_input in
   (* Inputs and outputs define the initial local env *)
   let env0 = Rename.append env node.n_output in
-  let outputs = translate_vd_list env0 node.n_output in
+  let outputs = translate_vd_list env0 tenv node.n_output in
   (* Enrich env with controllable variables (used in block) *)
-  let contract, env = translate_contract env0 node.n_contract in
-  let b, _ = translate_block env node.n_block in
+  let contract, env = translate_contract env0 tenv node.n_contract in
+  let b, _ = translate_block env tenv node.n_block in
   (* add the node signature to the environment *)
   let nnode = { Heptagon.n_name = n;
                Heptagon.n_stateful = node.n_stateful;
                Heptagon.n_unsafe = node.n_unsafe;
+               Heptagon.n_typeparamdecs = typeparamdecs;
                Heptagon.n_input = inputs;
                Heptagon.n_output = outputs;
                Heptagon.n_contract = contract;
@@ -526,7 +594,7 @@ let translate_typedec ty =
           safe_add ty.t_loc add_type n Signature.Tabstract;
           Heptagon.Type_abs
       | Type_alias t ->
-          let t = translate_type ty.t_loc t in
+          let t = translate_type ty.t_loc RenameType.empty t in
           safe_add ty.t_loc add_type n (Signature.Talias t);
           Heptagon.Type_alias t
       | Type_enum(tag_list) ->
@@ -537,7 +605,7 @@ let translate_typedec ty =
       | Type_struct(field_ty_list) ->
           let translate_field_type (f,t) =
             let f = current_qual f in
-            let t = translate_type ty.t_loc t in
+            let t = translate_type ty.t_loc RenameType.empty t in
             add_field f n;
             Signature.mk_field f t in
           let field_list = List.map translate_field_type field_ty_list in
@@ -547,10 +615,9 @@ let translate_typedec ty =
       Heptagon.t_desc = tydesc;
       Heptagon.t_loc = ty.t_loc }
 
-
 let translate_const_dec cd =
   let c_name = current_qual cd.c_name in
-  let c_type = translate_type cd.c_loc cd.c_type in
+  let c_type = translate_type cd.c_loc RenameType.empty cd.c_type in
   let c_value = expect_static_exp cd.c_value in
   replace_const c_name (Signature.mk_const_def c_type c_value);
   { Heptagon.c_name = c_name;
@@ -558,11 +625,31 @@ let translate_const_dec cd =
     Heptagon.c_value = c_value;
     Heptagon.c_loc = cd.c_loc; }
 
+
+let translate_classdec cd =
+  let c_nclass = current_qual cd.c_nameclass in
+  replace_class c_nclass (Types.mk_type_class c_nclass);
+  Hept_utils.mk_class_dec c_nclass cd.c_loc
+
+
+let translate_instancedec id =
+  try
+    let i_ntype = qualify_type (ToQ id.i_nametype) in
+    let i_nclass = qualify_class (ToQ id.i_nameclass) in
+    replace_instance i_ntype (Types.mk_type_class i_nclass);
+    { Heptagon.i_nametype = i_ntype;
+      Heptagon.i_nameclass = i_nclass;
+      Heptagon.i_loc = id.i_loc; }
+  with
+    | ScopingError err -> Error.message id.i_loc err
+
 let translate_program p =
   let translate_program_desc pd = match pd with
     | Ppragma _ -> Misc.unsupported "pragma in scoping"
     | Pconst c -> Heptagon.Pconst (translate_const_dec c)
     | Ptype t -> Heptagon.Ptype (translate_typedec t)
+    | Pclass c -> Heptagon.Pclass (translate_classdec c)
+    | Pinstance i -> Heptagon.Pinstance (translate_instancedec i)
     | Pnode n -> Heptagon.Pnode (translate_node n)
   in
   let desc = List.map translate_program_desc p.p_desc in
@@ -571,6 +658,7 @@ let translate_program p =
     Heptagon.p_desc = desc; }
 
 
+(* --------------------------------------------------------- *)
 let translate_signature s =
   let rec translate_some_clock ck = match ck with
     | None -> Signature.Cbase
@@ -578,27 +666,40 @@ let translate_signature s =
   and translate_clock ck = match ck with
     | Cbase -> Signature.Cbase
     | Con(ck,c,x) -> Signature.Con(translate_clock ck, qualify_constrs c, x)
-  and translate_arg a =
-    Signature.mk_arg a.a_name (translate_type s.sig_loc a.a_type)
+  and translate_arg tenv a =
+    Signature.mk_arg a.a_name (translate_type s.sig_loc tenv a.a_type)
       a.a_linearity (translate_some_clock a.a_clock)
   in
   let n = current_qual s.sig_name in
-  let i = List.map translate_arg s.sig_inputs in
-  let o = List.map translate_arg s.sig_outputs in
+  let tp = List.map 
+    (fun stp -> Signature.mk_typeparam_def stp.t_nametype stp.t_nameclass )
+    s.sig_typeparams in
+  
+  let (tpdecs,tenv) = List.fold_left
+    (fun (tres,env) tpd ->
+      let (hres, env1) = translate_typeparam_dec s.sig_loc env tpd in
+      (hres::tres, env1) )
+    ([], RenameType.empty)
+    s.sig_typeparams in
+  
+  let i = List.map (translate_arg tenv) s.sig_inputs in
+  let o = List.map (translate_arg tenv) s.sig_outputs in
   let p, _ = params_of_var_decs Rename.empty s.sig_params in
   let c = List.map translate_constrnt s.sig_param_constraints in
   let sig_node =
     Signature.mk_node
-      ~extern:s.sig_external s.sig_loc i o s.sig_stateful s.sig_unsafe p in
+      ~extern:s.sig_external ~typeparams:tp s.sig_loc i o s.sig_stateful s.sig_unsafe p in
   Check_signature.check_signature sig_node;
   safe_add s.sig_loc add_value n sig_node;
-  mk_signature n i o s.sig_stateful p c s.sig_loc ~extern:s.sig_external
+  mk_signature n ~typeparamdecs:tpdecs i o s.sig_stateful p c s.sig_loc ~extern:s.sig_external
 
 
 let translate_interface_desc = function
   | Itypedef tydec -> Heptagon.Itypedef (translate_typedec tydec)
   | Iconstdef const_dec -> Heptagon.Iconstdef (translate_const_dec const_dec)
   | Isignature s -> Heptagon.Isignature (translate_signature s)
+  | Iclassdef cd -> Heptagon.Iclassdef (translate_classdec cd)
+  | Iinstancedef id -> Heptagon.Iinstancedef (translate_instancedec id)
 
 let translate_interface i =
   let desc = List.map translate_interface_desc i.i_desc in

@@ -217,6 +217,7 @@ and boxed_ty param_env t = match Modules.unalias_type t with
     in
     let t, s_l = gather_array t in
     Tarray (t, s_l)
+  | Types.Tclasstype _ -> Misc.internal_error "obc2java type of class should not be remaining here"
   | Types.Tinvalid -> Misc.internal_error "obc2java invalid type"
 
 and tuple_ty _param_env ty_l =
@@ -241,6 +242,7 @@ and ty param_env t =
       in
       let tin, s_l = gather_array t in
       Tarray (tin, s_l)
+  | Types.Tclasstype _ -> Misc.internal_error "obc2java type of class should not be remaining here"
   | Types.Tinvalid -> Misc.internal_error "obc2java invalid type"
 
 and var_dec param_env vd = { vd_type = ty param_env vd.v_type;
@@ -595,6 +597,9 @@ let const_dec_list cd_l = match cd_l with
 
 
 let program p =
+  (* TODO DEBUG *)
+  Obc_printer.print stdout p;
+  
   let rec program_descs pds (ns,cs,ts) = match pds with
     | [] -> ns,cs,ts
     | Obc.Pclass n :: pds -> program_descs pds (n::ns,cs,ts)

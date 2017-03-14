@@ -201,7 +201,7 @@ let rec static_exp param_env se = match se.Types.se_desc with
       Enew (Tclass ty_name, List.map (static_exp param_env) e_l)
   | Types.Sop (f, se_l) -> Efun (f, List.map (static_exp param_env) se_l)
 
-and boxed_ty param_env t = match Modules.unalias_type t with
+and boxed_ty param_env (t : Types.ty) = match Modules.unalias_type t with
   | Types.Tprod [] -> Tunit
   | Types.Tprod ty_l -> tuple_ty param_env ty_l
   | Types.Tid t when t = Initial.pbool -> Tclass (Names.local_qn "Boolean")
@@ -225,6 +225,7 @@ and boxed_ty param_env t = match Modules.unalias_type t with
     in
     let t, s_l = gather_array t in
     Tarray (t, s_l)
+  | Types.Tclasstype _ -> Misc.internal_error "obc2java type of class should not be remaining here"
   | Types.Tinvalid -> Misc.internal_error "obc2java invalid type"
 
 and tuple_ty _param_env ty_l =
@@ -257,6 +258,7 @@ and ty param_env t =
       in
       let tin, s_l = gather_array t in
       Tarray (tin, s_l)
+  | Types.Tclasstype _ -> Misc.internal_error "obc2java type of class should not be remaining here"
   | Types.Tinvalid -> Misc.internal_error "obc2java invalid type"
 
 and var_dec param_env vd = { vd_type = ty param_env vd.v_type;

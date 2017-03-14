@@ -127,8 +127,15 @@ and type_compare ty1 ty2 = match ty1, ty2 with
   | Tarray (ty1, se1), Tarray (ty2, se2) ->
       let cr = type_compare ty1 ty2 in
       if cr <> 0 then cr else static_exp_compare se1 se2
+  | Tclasstype (tname1, cl1), Tclasstype (tname2, cl2) ->
+      let cr = Pervasives.compare tname1 tname2 in
+      if cr<> 0 then cr else type_class_compare cl1 cl2
   | Tinvalid, _ | _, Tinvalid -> -1
   | Tprod _, _ -> 1
   | Tid _, Tprod _ -> -1
   | Tid _, _ -> 1
   | Tarray _, (Tprod _ | Tid _) -> -1
+  | Tarray _, Tclasstype _ -> 1
+  | Tclasstype _, (Tprod _ | Tid _ | Tarray _ ) -> -1
+
+and type_class_compare cl1 cl2 = Pervasives.compare cl1.tc_name cl2.tc_name

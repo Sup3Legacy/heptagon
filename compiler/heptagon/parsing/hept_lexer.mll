@@ -53,6 +53,9 @@ List.iter (fun (str,tok) -> Hashtbl.add keyword_table str tok) [
  "fby", FBY;
  "switch", SWITCH;
  "type", TYPE;
+ "class", CLASS;
+ "instance", INSTANCE;
+ "of", OF;
  "every", EVERY;
  "true", BOOL(true);
  "false", BOOL(false);
@@ -86,6 +89,7 @@ List.iter (fun (str,tok) -> Hashtbl.add keyword_table str tok) [
  "when", WHEN;
  "whenot", WHENOT;
  "merge", MERGE;
+ "current", CURRENT;
  "on", ON;
  "onot", ONOT;
  "map", MAP;

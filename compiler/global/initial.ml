@@ -48,6 +48,10 @@ let tfloat = Types.Tid pfloat
 let pstring = { qual = Pervasives; name = "string" }
 let tstring = Types.Tid pstring
 
+let pNum = { qual = Pervasives; name = "num" }
+let clNum = { tc_name = pNum }
+
+
 let pfile = { qual = Module "Iostream"; name = "file" }
 let tfile = Types.Tid pfile
 
@@ -60,7 +64,7 @@ let mk_static_int i =
   mk_static_exp tint (Sint i)
 
 let mk_static_float f =
-  mk_static_exp tint (Sfloat f)
+  mk_static_exp tfloat (Sfloat f)
 
 let mk_static_bool b =
   mk_static_exp tbool (Sbool b)

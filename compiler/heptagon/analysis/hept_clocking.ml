@@ -53,6 +53,8 @@ type error_kind =
   | Eclockclash of Clocks.ck * Clocks.ck
   | Edefclock
 
+exception CurrentShouldNotHappenHere
+
 let error_message loc = function
   | Etypeclash (actual_ct, expected_ct) ->
       Format.eprintf "%aClock Clash: this expression has clock %a,@\n\
@@ -119,6 +121,7 @@ let rec typing h pat e =
         let ck = ck_of_name h x in
         List.iter (fun (c,e) -> expect h pat (Ck(Clocks.Con (ck,c,x))) e) c_e_list;
         Ck ck, ck
+    | Ecurrent (_, _, _) -> raise CurrentShouldNotHappenHere
     | Estruct l ->
         let ck = fresh_clock () in
         List.iter (fun (_, e) -> expect h pat (Ck ck) e) l;
@@ -194,11 +197,11 @@ and typing_app h base pat op e_list = match op with
   | Eselect_slice | Econcat | Earray | Efield | Efield_update | Eifthenelse | Ereinit ->
       List.iter (expect h pat (Ck base)) e_list;
       Ck base
-  | Efun { qual = Module "Iostream"; name = "printf" }
-  | Efun { qual = Module "Iostream"; name = "fprintf" } ->
+  | Efun ({ qual = Module "Iostream"; name = "printf" },_)
+  | Efun ({ qual = Module "Iostream"; name = "fprintf" },_) ->
       List.iter (expect h pat (Ck base)) e_list;
       Cprod []
-  | (Efun f | Enode f) ->
+  | (Efun (f,_) | Enode (f,_)) ->
       let node = Modules.find_value f in
       let pat_id_list = ident_list_of_pat pat in
       let rec build_env a_l v_l env = match a_l, v_l with

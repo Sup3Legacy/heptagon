@@ -47,6 +47,7 @@ type error =
   | Ewrong_init of linearity_var * linearity
 
 exception TypingError of error
+exception CurrentShouldNotHappenHere
 
 let error kind = raise (TypingError(kind))
 
@@ -448,6 +449,7 @@ let rec typing_exp env e =
     | Ewhen (e1, _, _) ->
         let env = safe_expect env (not_linear_for_exp e1) e1 in
         lin_skeleton Ltop e.e_ty, env
+    | Ecurrent (_, _, _) -> raise CurrentShouldNotHappenHere
     | Estruct _ -> Ltop, env
     | Emerge _ | Esplit _ | Eapp _ | Eiterator _ -> assert false
   in
@@ -466,7 +468,7 @@ and collect_exp env e =
     | Eapp ({ a_op = Etuple }, e_list, _) ->
       VarsCollection.prod (List.map (collect_exp env) e_list)
     | Eapp({ a_op = op }, e_list, _) -> collect_app env op e_list
-    | Eiterator (it, { a_op = Enode f | Efun f }, _, _, e_list, _) ->
+    | Eiterator (it, { a_op = Enode (f,_) | Efun (f,_) }, _, _, e_list, _) ->
       let ty_desc = Modules.find_value f in
         collect_iterator env it ty_desc e_list
     | _ -> VarsCollection.var_collection_of_lin (fst (typing_exp env e))
@@ -522,10 +524,10 @@ and collect_app env op e_list = match op with
     let _, e2, e3 = assert_3 e_list in
       VarsCollection.union (collect_exp env e2) (collect_exp env e3)
 
-  | Efun { qual = Module "Iostream"; name = "fprintf" | "printf" } ->
+  | Efun ({ qual = Module "Iostream"; name = "fprintf" | "printf" },_) ->
       VarsCollection.prod []
 
-  | Efun f | Enode f ->
+  | Efun (f,_) | Enode (f,_) ->
     let ty_desc = Modules.find_value f in
     let inputs_lins = linearities_of_arg_list ty_desc.node_inputs in
     let outputs_lins = linearities_of_arg_list ty_desc.node_outputs in
@@ -596,11 +598,11 @@ and typing_app env op e_list = match op with
 (** Check that the application of op to e_list can have the linearity
     expected_lin. *)
 and expect_app env expected_lin op e_list = match op with
-  | Efun { qual = Module "Iostream"; name = "fprintf" | "printf" } ->
+  | Efun ({ qual = Module "Iostream"; name = "fprintf" | "printf" },_) ->
       let env = List.fold_left (fun env -> safe_expect env Ltop) env e_list in
         Ltuple [], env
 
-  | Efun f | Enode f ->
+  | Efun (f,_) | Enode (f,_) ->
     let ty_desc = Modules.find_value f in
     let inputs_lins = linearities_of_arg_list ty_desc.node_inputs in
     let outputs_lins = linearities_of_arg_list ty_desc.node_outputs in
@@ -855,7 +857,7 @@ and expect env lin e =
        with
            UnifyFailed -> message e.e_loc (Eunify_failed_one lin))
 
-    | Eiterator (it, { a_op = Enode f | Efun f }, _, pe_list, e_list, _) ->
+    | Eiterator (it, { a_op = Enode (f,_) | Efun (f,_) }, _, pe_list, e_list, _) ->
       let ty_desc = Modules.find_value f in
       let expected_lin_list = linearity_list_of_linearity lin in
       let inputs_lins = linearities_of_arg_list ty_desc.node_inputs in

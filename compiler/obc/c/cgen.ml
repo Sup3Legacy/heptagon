@@ -120,6 +120,7 @@ let rec ctype_of_otype oty =
     | Tid id -> Cty_id id
     | Tarray(ty, n) -> Cty_arr(int_of_static_exp n, ctype_of_otype ty)
     | Tprod _ -> assert false
+    | Tclasstype _ -> assert false
     | Tinvalid -> assert false
 
 let copname = function

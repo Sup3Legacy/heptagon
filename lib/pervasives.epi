@@ -30,41 +30,52 @@
 (* The core module *)
 (* To compile : heptc -nopervasives pervasives.epi *)
 type bool = true | false
+
+class num
 type int
 type float
+instance int of num
+instance float of num
+
 type string
 external val fun (&)(bool;bool) returns (bool)
-external val fun ( * )(int;int) returns (int)
+
+external val fun ( * )[type t : num] (t;t) returns (t)
 external val fun ( *. )(float;float) returns (float)
 external val fun (%)(int;int) returns (int)
-external val fun (+)(int;int) returns (int)
+external val fun (+)[type t : num] (t;t) returns (t)
 external val fun (+.)(float;float) returns (float)
-external val fun (-)(int;int) returns (int)
+
+external val fun (-)[type t : num] (t;t) returns (t)
 external val fun (-.)(float;float) returns (float)
-external val fun (/)(int;int) returns (int)
+
+external val fun (/)[type t : num] (t;t) returns (t)
 external val fun (/.)(float;float) returns (float)
+
 external val fun ( = )(int;int) returns (bool)
-external val fun ( <= )(int;int) returns (bool)
+external val fun ( <= )[type t : num] (t;t) returns (bool)
 external val fun ( <=. )(float;float) returns (bool)
-external val fun ( < )(int;int) returns (bool)
+external val fun ( < )[type t : num] (t;t) returns (bool)
 external val fun ( <. )(float;float) returns (bool)
-external val fun ( >= )(int;int) returns (bool)
+external val fun ( >= )[type t : num] (t;t) returns (bool)
 external val fun ( >=. )(float;float) returns (bool)
-external val fun ( > )(int;int) returns (bool)
+external val fun ( > )[type t : num] (t;t) returns (bool)
 external val fun ( >. )(float;float) returns (bool)
+
 external val fun (not)(bool) returns (bool)
 external val fun (or)(bool;bool) returns (bool)
 external val fun (xor)(bool;bool) returns (bool)
-external val fun (~-)(int) returns (int)
+external val fun (~-)[type t : num] (t;t) returns (t)
+external val fun (~-.)(float) returns (float)
 external val fun (~~)(int) returns (int)
 external val fun (>>>)(int;int) returns (int)
 external val fun (<<<)(int;int) returns (int)
 external val fun (&&&)(int;int) returns (int)
 external val fun (|||)(int;int) returns (int)
-external val fun (~-.)(float) returns (float)
 external val fun do_stuff(int) returns (int)
 external val fun between(int;int) returns (int)
 external val fun (=>)(bool;bool) returns (bool)
 
 external val fun exit(bool) returns ()
 external val fun assert(bool) returns ()
+
