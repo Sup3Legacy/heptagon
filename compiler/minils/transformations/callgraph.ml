@@ -104,14 +104,16 @@ struct
       (Misc.list_compare compare_se)
       (Misc.list_compare Global_compare.type_compare)
 
-  module S = (** Instances set *)
+  (** Instances set *)
+  module S =
     Set.Make(
       struct
         type t = instance
         let compare = compare_instances
       end)
 
-  module M = (** Map instance to its instantiated node *)
+  (** Map instance to its instantiated node *)
+  module M =
     Map.Make(
       struct
         type t = qualname * instance
@@ -489,7 +491,7 @@ let load_object_file modul =
       | Names.LocalModule -> Misc.internal_error "modules"
       | Names.QualModule _ -> Misc.unsupported "modules"
   in
-  let name = String.uncapitalize modname in
+  let name = String.uncapitalize_ascii modname in
     try
       let filename = Compiler_utils.findfile (name ^ ".epo") in
       let ic = open_in_bin filename in

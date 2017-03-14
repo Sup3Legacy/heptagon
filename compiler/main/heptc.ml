@@ -35,7 +35,7 @@ open Compiler_options
 let compile_interface modname source_f =
 
   (* output file names *)
-  let output = String.uncapitalize modname in
+  let output = String.uncapitalize_ascii modname in
   let epci_f = output ^ ".epci" in
 
   (* input/output channels *)
@@ -64,7 +64,7 @@ let compile_interface modname source_f =
 let compile_program modname source_f =
 
   (* output file names *)
-  let output = String.uncapitalize modname in
+  let output = String.uncapitalize_ascii modname in
   let epci_f = output ^ ".epci" in
   let mls_f = output ^ ".mls" in
 
@@ -100,7 +100,10 @@ let compile_program modname source_f =
 
 
 let compile source_f =
-  let modname = source_f |> Filename.basename |> Filename.chop_extension |> String.capitalize in
+  let modname = source_f
+                |> Filename.basename
+                |> Filename.chop_extension
+                |> String.capitalize_ascii in
   let modul = Names.modul_of_string modname in
   Initial.initialize modul;
   source_f |> Filename.dirname |> add_include;
@@ -148,7 +151,7 @@ let main () =
         "-nbvars", Arg.Set nbvars, doc_nbvars;
         "-itfusion", Arg.Set do_iterator_fusion, doc_itfusion;
         "-strict_ssa", Arg.Unit set_strict_ssa, doc_strict_ssa;
-	"-nosink", Arg.Set nosink, doc_nosink;
+        "-nosink", Arg.Set nosink, doc_nosink;
         "-memalloc", Arg.Unit do_mem_alloc_and_typing, doc_memalloc;
         "-only-memalloc", Arg.Set do_mem_alloc, doc_memalloc_only;
         "-only-linear", Arg.Set do_linear_typing, doc_linear_only;
@@ -168,5 +171,5 @@ let main () =
     | Errors.Error -> exit 2;;
 
 
-(** Launch the [main] *)
+(* Launch the [main] *)
 main ()

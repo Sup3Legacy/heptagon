@@ -163,6 +163,9 @@ let nnop t : nnop -> fun_name =
 let buop: buop -> fun_name = function
   | `Neg -> Initial.pnot
 
+let bbop: bbop -> fun_name = function
+  | `Imp -> Initial.pimp
+
 let bnop: bnop -> fun_name = function
   | `Conj -> Initial.pand
   | `Disj -> Initial.por
@@ -183,6 +186,7 @@ and flttyp_desc = function
             Eapp ({ op with a_op }, List.map flttyp_exp el, None)
         | _ -> assert false
       end
+  | Evar v -> Evar v
   | _ -> assert false
 and flttyp_sexp ({ se_desc; se_ty } as e) =
   if se_ty = Initial.tfloat then e
@@ -211,6 +215,7 @@ let translate_expr gd e =
     | `Ref v -> mkb (Evar (ts gd v))
     | `Bool b -> mkb (Econst (Initial.mk_static_bool b))
     | `Buop (op, e) -> mkb (mk_uapp (Efun (buop op)) (tb e))
+    | `Bbop (op, e, f) -> mkb (mk_bapp (Efun (bbop op)) (tb e) (tb f))
     | `Bnop (op, e, f, l) -> mkb_bapp ?flag (Efun (bnop op)) tb e f l
     | `Bcmp (re, e, f) -> mkb (mk_bapp (Efun (eqrel re)) (tb e) (tb f))
     | `Ecmp (re, e, f) -> mkb (mk_bapp (Efun (eqrel re)) (te e) (te f))
@@ -258,7 +263,9 @@ let translate_expr gd e =
     (* NB: manual coercion from ints to floats *)
     let flt = List.exists (fun { e_ty } -> e_ty = Initial.tfloat) el in
     let typ = if flt then Initial.tfloat else Initial.tint in
-    let el = List.rev_map flttyp_exp el in
+    let el = if flt
+             then List.rev_map flttyp_exp el
+             else List.rev el in
     let op = mk_bapp (Efun (nnop typ op)) in
     List.fold_left (fun acc e -> mkp typ (op acc e)) (List.hd el) (List.tl el)
   and tp ?flag : 'f AST.exp -> _ = function
@@ -278,7 +285,7 @@ let translate_expr gd e =
 let decl_typs modul_name typdefs =
   let qualify name = { qual = modul modul_name; name } in
   fold_typdefs begin fun tname tdef (types, typ_symbs) ->
-    let name = qualify (Symb.to_string tname |> String.uncapitalize) in
+    let name = qualify (Symb.to_string tname |> String.uncapitalize_ascii) in
     match tdef with
       | EnumDef labels, _ ->
           let constrs = List.map (fun (l, _) ->
@@ -308,7 +315,7 @@ let decl_typs_from_module_itf modul_name =
       let t_desc, rem, (types, typ_symbs) = match tdef with
         | Tenum cl ->
             (* Compiler_utils.info "declaring enum type %s" (shortname t_name); *)
-            let name = Symb.of_string (String.capitalize (shortname t_name)) in
+            let name = Symb.of_string (String.capitalize_ascii (shortname t_name)) in
             (Type_enum cl, rem, (types, SMap.add name t_name typ_symbs))
         | Talias (Tid tn) when tn.qual = t_name.qual ->    (* declare deps 1st *)
             (* Compiler_utils.info "declaring alias type %s" (shortname t_name); *)
