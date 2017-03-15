@@ -103,6 +103,8 @@ let extract_symbol pd =
     | Heptagon.Ptype  { Heptagon.t_name = n } -> n
     | Heptagon.Pnode  { Heptagon.n_name = n } -> n
     | Heptagon.Pconst { Heptagon.c_name = n } -> n
+    | Heptagon.Pclass { Heptagon.c_nameclass = n } -> n
+    | Heptagon.Pinstance { Heptagon.i_nametype = n } -> n (* Not sure about this one => instance does not have names => might be redundant *) 
   in
   Names.shortname n
 

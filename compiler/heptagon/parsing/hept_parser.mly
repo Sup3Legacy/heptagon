@@ -162,7 +162,7 @@ program_desc:
   | t=type_dec     { [Ptype t] }
   | c=class_dec    { [Pclass c] }
   | i=instance_dec { [Pinstance i] }
-  | n=list(node_dec)   { List.map (fun x -> Pnode x) n }
+  | n=node_dec     { [Pnode n] }
 ;
 
 opens: OPEN m=modul { m }
