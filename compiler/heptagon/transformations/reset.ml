@@ -52,7 +52,7 @@ let reset_var_from_exp e =
 
 (** Merge two reset conditions *)
 let merge_resets res1 res2 =
-  let mk_or e1 e2 = mk_op_app (Efun (Initial.por,[])) [e1;e2] in
+  let mk_or e1 e2 = mk_op_app (Efun Initial.por) [e1;e2] in
   match res1, res2 with
     | None, _ -> res2
     | _, None -> res1

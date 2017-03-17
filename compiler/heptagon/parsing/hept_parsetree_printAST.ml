@@ -288,10 +288,10 @@ let print_type_dec ff {t_name = name; t_desc = desc} =
 
 
 let print_class_dec ff cdec = 
-  fprintf ff "class %a@\n" print_class_name cdec.c_nameclass
+  fprintf ff "class %a (%a)@\n"
+    print_class_name cdec.c_nameclass
+    (print_list print_type_name "" ", " "") cdec.c_insttypes
 
-let print_instance_dec ff idec =
-  fprintf ff "instance %a of %a@\n" print_type_name idec.i_nametype print_class_name idec.i_nameclass
 
 
 (************************************)
@@ -306,7 +306,6 @@ let print_pdesc ff pdesc = match pdesc with
   | Ptype t_dec -> print_type_dec ff t_dec
   | Pconst c_dec -> print_const_dec ff c_dec
   | Pclass c_dec -> print_class_dec ff c_dec
-  | Pinstance i_dec -> print_instance_dec ff i_dec
   | Pnode n_dec -> print_node_dec ff n_dec
 
 (* Pretty-print a Hept_parsetree AST - Entry point*)

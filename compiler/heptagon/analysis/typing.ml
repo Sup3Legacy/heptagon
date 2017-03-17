@@ -289,7 +289,7 @@ let kind f ty_desc =
       error Eenable_memalloc;
     v.a_type
   in
-  let op = if ty_desc.node_stateful then Enode (f,[]) else Efun (f,[]) in
+  let op = if ty_desc.node_stateful then Enode f else Efun f in
     op, List.map ty_of_arg ty_desc.node_inputs,
   List.map ty_of_arg ty_desc.node_outputs, ty_desc.node_typeparams
 
@@ -650,7 +650,7 @@ and typing_operator op cenv se_list =
   
   (* Hashtbl keeping track of the found values of the type parameters *)
   let val_typeclass = Hashtbl.create (List.length ty_paramnames) in
-  List.map (fun ty_paramname -> Hashtbl.add val_typeclass ty_paramname.tp_nametype None) ty_paramnames;
+  List.iter (fun ty_paramname -> Hashtbl.add val_typeclass ty_paramname.tp_nametype None) ty_paramnames;
   
   (* Local unify function *)
   let rec unify_op cenv t1 t2 =
@@ -776,7 +776,7 @@ and typing cenv h e =
           let typed_e2 = expect cenv h t1 e2 in
             Efby (typed_e1, typed_e2), t1
 
-      | Eiterator (it, ({ a_op = (Enode (f,_) | Efun (f,_));
+      | Eiterator (it, ({ a_op = (Enode f | Efun f);
                           a_params = params } as app),
                    n_list, pe_list, e_list, reset) ->
           
@@ -784,8 +784,8 @@ and typing cenv h e =
           let ty_desc = find_value f in
           let op, expected_ty_list, result_ty_list, typarams = kind f ty_desc in
           
-          if (typarams==[]) then
-            begin
+          if (typarams==[]) then (* No type parameter *)
+          begin
             let node_params =
               List.map (fun { p_name = n } -> local_qn n) ty_desc.node_params in
             
@@ -826,7 +826,13 @@ and typing cenv h e =
             
             
             
-            (* TODO: typarams à gérer *)
+            (* TODO: typarams de l'operateur à gérer *)
+            
+            
+            (* TODO: class num (int, float) *)
+            (* TODO: tysubst (on fun/node) => le mettre dans edesc *)
+            
+            
             
             
             
@@ -841,6 +847,9 @@ and typing cenv h e =
             (*typing of other arguments*)
             let ty, typed_e_list = typing_iterator cenv h it typed_n_list
               expected_ty_list result_ty_list e_list in
+            
+            (* TODO: getting the constraints on the type parameters here, then *)
+            
             let typed_params = typing_node_params cenv
               ty_desc.node_params params in
             
@@ -1098,26 +1107,26 @@ and typing_app cenv h app e_list =
         let typed_e3 = expect cenv h t1 e3 in
         t1, app, [typed_e1; typed_e2; typed_e3]
 
-    | Efun ({name = "="},_) ->
+    | Efun {name = "="} ->
         let e1, e2 = assert_2 e_list in
         let typed_e1, t1 = typing cenv h e1 in
         let typed_e2 = expect cenv h t1 e2 in
         Tid Initial.pbool, app, [typed_e1; typed_e2]
 
-    | Efun ({ qual = Module "Iostream"; name = "printf" },_) ->
+    | Efun { qual = Module "Iostream"; name = "printf" } ->
         let e1, format_args = assert_1min e_list in
         let typed_e1 = expect cenv h Initial.tstring e1 in
         let typed_format_args = typing_format_args cenv h typed_e1 format_args in
         Tprod [], app, typed_e1::typed_format_args
 
-    | Efun ({ qual = Module "Iostream"; name = "fprintf" },_) ->
+    | Efun { qual = Module "Iostream"; name = "fprintf" } ->
         let e1, e2, format_args = assert_2min e_list in
         let typed_e1 = expect cenv h Initial.tfile e1 in
         let typed_e2 = expect cenv h Initial.tstring e2 in
         let typed_format_args = typing_format_args cenv h typed_e1 format_args in
         Tprod [], app, typed_e1::typed_e2::typed_format_args
 
-    | (Efun (f,_) | Enode (f,_)) ->
+    | (Efun f | Enode f) ->
         let ty_desc = find_value f in
         let op, expected_ty_list, result_ty_list, typarams = kind f ty_desc in
         let node_params = List.map (fun { p_name = n } -> local_qn n) ty_desc.node_params in
@@ -1148,8 +1157,7 @@ and typing_app cenv h app e_list =
           (fun (nqual,tyval) typaram -> match tyval with
             | None -> (* We register a new type class *)
               l_new_typeclass := (nqual, typaram.tp_nameclass, None)::(!l_new_typeclass);
-              (nqual,
-                Tclasstype (nqual, mk_type_class (Modules.qualify_class typaram.tp_nameclass)))
+              (nqual, Tclasstype (nqual, Modules.find_class (Modules.qualify_class typaram.tp_nameclass) ))
             | Some tval -> (nqual, tval) )
           subst_ty typarams
         in
@@ -1160,12 +1168,12 @@ and typing_app cenv h app e_list =
         List.iter (add_constraint cenv) constrs;
         
         let op = match op with
-          | Efun _ -> Efun (f, subst_ty)
-          | Enode _-> Enode (f, subst_ty)
+          | Efun _ -> Efun f
+          | Enode _-> Enode f
           | _ -> raise Errors.Error
        in
         prod result_ty_list,
-          { app with a_op = op; a_params = typed_params },
+          { app with a_op = op; a_params = typed_params; a_ty_subst = subst_ty },
           typed_e_list
 
     | Etuple ->
@@ -1745,8 +1753,6 @@ let typing_typedec td =
 
 let typing_classdec c = c  (* Nothing to check *)
 
-let typing_instancedec i = i (* The class and type are already defined - checked in hept_scoping.ml *)
-
 let typing_signature s =
   let typed_params, cenv = build_node_params QualEnv.empty s.sig_params in
   if Modules.current () = Pervasives
@@ -1762,7 +1768,6 @@ let program p =
     | Pconst c -> Pconst (typing_const_dec c)
     | Ptype t -> Ptype (typing_typedec t)
     | Pclass c -> Pclass (typing_classdec c)
-    | Pinstance i -> Pinstance (typing_instancedec i)
   in
   { p with p_desc = List.map program_desc p.p_desc }
 
@@ -1771,7 +1776,6 @@ let interface i =
       | Iconstdef c -> Iconstdef (typing_const_dec c)
       | Itypedef t -> Itypedef (typing_typedec t)
       | Iclassdef c -> Iclassdef (typing_classdec c)
-      | Iinstancedef i -> Iinstancedef (typing_instancedec i)
       | Isignature i -> Isignature (typing_signature i)
   in
   { i with i_desc = List.map interface_desc i.i_desc }

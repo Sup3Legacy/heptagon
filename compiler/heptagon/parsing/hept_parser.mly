@@ -46,7 +46,7 @@ open Hept_parsetree
 %token <string> STRING
 %token <string * string> PRAGMA
 %token TYPE FUN NODE RETURNS VAR VAL OPEN END CONST UNSAFE EXTERNAL
-%token CLASS INSTANCE OF
+%token CLASS
 %token FBY PRE SWITCH EVERY
 %token OR STAR NOT
 %token AMPERSAND
@@ -157,7 +157,6 @@ program_desc:
   | c=const_dec    { Pconst c }
   | t=type_dec     { Ptype t }
   | c=class_dec    { Pclass c}
-  | i=instance_dec { Pinstance i}
   | n=node_dec     { Pnode n }
 ;
 
@@ -168,22 +167,21 @@ const_dec:
       { mk_const_dec x t e (Loc($startpos,$endpos)) }
 ;
 
+ty_id: IDENT  {$1}
+
 type_dec:
-  | TYPE IDENT
+  | TYPE ty_id
       { mk_type_dec $2 Type_abs (Loc($startpos,$endpos)) }
-  | TYPE IDENT EQUAL ty_ident
+  | TYPE ty_id EQUAL ty_ident
       { mk_type_dec $2 (Type_alias $4) (Loc($startpos,$endpos)) }
-  | TYPE IDENT EQUAL enum_ty_desc
+  | TYPE ty_id EQUAL enum_ty_desc
       { mk_type_dec $2 (Type_enum ($4)) (Loc($startpos,$endpos)) }
-  | TYPE IDENT EQUAL struct_ty_desc
+  | TYPE ty_id EQUAL struct_ty_desc
       { mk_type_dec $2 (Type_struct ($4)) (Loc($startpos,$endpos)) }
 ;
 
 class_dec:
-  | CLASS IDENT    { mk_class_dec $2 (Loc($startpos,$endpos)) }
-
-instance_dec:
-  | INSTANCE IDENT OF IDENT { mk_instance_dec $2 $4 (Loc($startpos,$endpos)) }
+  | CLASS c=IDENT LPAREN lt=snlist(COMMA, ty_id) RPAREN   { mk_class_dec c lt (Loc($startpos,$endpos)) }
 
 enum_ty_desc:
   | Constructor                   {[$1]}
@@ -747,7 +745,6 @@ interface_desc:
   | type_dec         { Itypedef $1 }
   | const_dec        { Iconstdef $1 }
   | class_dec        { Iclassdef $1 }
-  | instance_dec     { Iinstancedef $1 }
   | e=extern u=unsafe val_or_empty n=node_or_fun f=ident pc=node_params tp=type_params LPAREN i=params_signature RPAREN
     returns LPAREN o=params_signature RPAREN
     { Isignature({ sig_name = f;

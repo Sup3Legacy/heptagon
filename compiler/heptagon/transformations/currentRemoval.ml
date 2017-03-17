@@ -1,5 +1,4 @@
 
-open Idents
 open Signature
 open Heptagon
 open Hept_utils
@@ -23,7 +22,7 @@ let edesc funs acc ed = match ed with
 (* Phase 2 (node_dec): use the logs to create the new local variables *)
 let flatten_type_def tydesc = match tydesc with
   | Tabstract | Tstruct _ -> raise TypeDefForClockUnespected
-  | Talias ty -> []				(* No recursion possible? (ex: calling another enum type?) *)
+  | Talias _ -> []				(* No recursion possible? (ex: calling another enum type?) *)
   | Tenum l_c_name -> l_c_name
 
 let block funs acc bl =
@@ -64,7 +63,7 @@ let block funs acc bl =
           let dPre_merge_false = Epre (None, expVar_merge_false) in
           let exprPre_merge_false = mk_exp dPre_merge_false Types.Tinvalid ~linearity:Linearity.Ltop in
           
-          let dWhen_merge_false =  Ewhen (subExpr, constr_false , idCk) in
+          let dWhen_merge_false =  Ewhen (exprPre_merge_false, constr_false , idCk) in
           let branch_merge_false = mk_exp dWhen_merge_false Types.Tinvalid ~linearity:Linearity.Ltop in
           (constr_false, branch_merge_false)
         ) l_constr_br_false in

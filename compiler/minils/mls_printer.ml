@@ -71,10 +71,8 @@ let print_const_dec ff c =
   fprintf ff "@."
 
 let print_classtype_dec ff c =
-  fprintf ff "class %a@." print_qualname c.c_nameclass
-
-let print_instance_dec ff i =
-  fprintf ff "instance %a of %a@." print_qualname i.i_nametype print_qualname i.i_nameclass
+  fprintf ff "class %a (%a)@." print_qualname c.c_nameclass
+    (print_list_r print_qualname "" "," "") c.c_insttypes
 
 let rec print_params ff l =
   fprintf ff "@[<2>%a@]" (print_list_r print_static_exp "<<"","">>") l
@@ -154,7 +152,7 @@ and print_app ff (app, args) =
     | Eequal ->
       let e1, e2 = assert_2 args in
         fprintf ff "@[<2>%a@ = %a@]" print_extvalue e1  print_extvalue e2
-    | Efun ({ qual = Pervasives; name = n } as f, _) when (is_infix n) ->
+    | Efun ({ qual = Pervasives; name = n } as f) when (is_infix n) ->
 	begin match args with
 	  [a1;a2] ->
 	    fprintf ff "@[(%a@, %s@, %a)@]"
@@ -165,7 +163,7 @@ and print_app ff (app, args) =
             fprintf ff "@[%a@,%a@,%a@]"
               print_qualname f print_params app.a_params  print_w_tuple args
 	end
-    | Efun (f,_) | Enode (f,_) ->
+    | Efun f | Enode f ->
         fprintf ff "@[%a@,%a@,%a@]"
           print_qualname f print_params app.a_params  print_w_tuple args
     | Eifthenelse ->
@@ -282,7 +280,6 @@ let print oc { p_opened = pm; p_desc = pd } =
     | Ptype t -> print_type_dec ff t
     | Pconst c -> print_const_dec ff c
     | Pclasstype c -> print_classtype_dec ff c
-    | Pinstance i -> print_instance_dec ff i
   in
   let ff = formatter_of_out_channel oc in
   List.iter (print_open_module ff) pm;

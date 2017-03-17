@@ -54,8 +54,6 @@ List.iter (fun (str,tok) -> Hashtbl.add keyword_table str tok) [
  "switch", SWITCH;
  "type", TYPE;
  "class", CLASS;
- "instance", INSTANCE;
- "of", OF;
  "every", EVERY;
  "true", BOOL(true);
  "false", BOOL(false);

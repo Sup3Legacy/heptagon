@@ -197,11 +197,11 @@ and typing_app h base pat op e_list = match op with
   | Eselect_slice | Econcat | Earray | Efield | Efield_update | Eifthenelse | Ereinit ->
       List.iter (expect h pat (Ck base)) e_list;
       Ck base
-  | Efun ({ qual = Module "Iostream"; name = "printf" },_)
-  | Efun ({ qual = Module "Iostream"; name = "fprintf" },_) ->
+  | Efun { qual = Module "Iostream"; name = "printf" }
+  | Efun { qual = Module "Iostream"; name = "fprintf" } ->
       List.iter (expect h pat (Ck base)) e_list;
       Cprod []
-  | (Efun (f,_) | Enode (f,_)) ->
+  | (Efun f | Enode f) ->
       let node = Modules.find_value f in
       let pat_id_list = ident_list_of_pat pat in
       let rec build_env a_l v_l env = match a_l, v_l with

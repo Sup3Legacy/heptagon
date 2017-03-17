@@ -98,18 +98,18 @@ and edesc =
 
 and app = { a_op: op;
             a_params: static_exp list;
+            a_ty_subst : (type_name * ty) list;
+                (* non-empty only when a_op = (Efun _) | (Enode _) with type params *)
             a_unsafe: bool;
             a_id: ident option;
             a_inlined: bool }
     (** Unsafe applications could have side effects
         and be delicate about optimizations, !be careful! *)
 
-and ty_subst = (type_name * ty) list
-
 and op =
   | Eequal                        (** [arg1 = arg2] *)
-  | Efun of (fun_name * ty_subst)  (** "Stateless" [longname <<a_params>> (args) reset r] *)
-  | Enode of (fun_name * ty_subst) (** "Stateful" [longname <<a_params>> (args) reset r] *)
+  | Efun of fun_name              (** "Stateless" [longname <<a_params>> (args) reset r] *)
+  | Enode of fun_name             (** "Stateful" [longname <<a_params>> (args) reset r] *)
   | Eifthenelse                   (** [if arg1 then arg2 else arg3] *)
   | Efield_update                 (** [{ arg1 with a_param1 = arg2 }] *)
   | Earray                        (** [[ args ]] *)
@@ -185,12 +185,8 @@ type const_dec = {
 
 type classtype_dec =
   { c_nameclass   : qualname;
+    c_insttypes   : qualname list;
     c_loc         : location }
-
-type instance_dec =
-  { i_nametype    : qualname;
-    i_nameclass   : qualname;
-    i_loc         : location }
 
 type program = {
   p_modname : modul;
@@ -203,7 +199,6 @@ and program_desc =
   | Pconst of const_dec
   | Ptype of type_dec
   | Pclasstype of classtype_dec
-  | Pinstance of instance_dec
 
 type signature = {
   sig_name              : qualname;
@@ -226,7 +221,6 @@ and interface_desc =
   | Iconstdef of const_dec
   | Isignature of signature
   | Iclasstype of classtype_dec
-  | Iinstance of instance_dec
 
 
 (*Helper functions to build the AST*)
@@ -288,10 +282,8 @@ let mk_type_dec type_desc name loc =
 let mk_const_dec id ty e loc =
   { c_name = id; c_type = ty; c_value = e; c_loc = loc }
 
-let mk_classtype_dec id loc = { c_nameclass = id; c_loc = loc }
+let mk_classtype_dec id ltyid loc = { c_nameclass = id; c_insttypes=ltyid; c_loc = loc }
 
-let mk_instance_dec id_ty id_cl loc = { i_nametype = id_ty; i_nameclass = id_cl; i_loc = loc }
-
-let mk_app ?(params=[]) ?(unsafe=false) ?(id=None) ?(inlined=false) op =
-  { a_op = op; a_params = params; a_unsafe = unsafe;
+let mk_app ?(params=[]) ?(ty_subst=[]) ?(unsafe=false) ?(id=None) ?(inlined=false) op =
+  { a_op = op; a_params = params; a_ty_subst=ty_subst; a_unsafe = unsafe;
     a_id = id; a_inlined = inlined }

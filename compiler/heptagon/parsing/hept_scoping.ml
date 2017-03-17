@@ -232,9 +232,10 @@ struct
 end
 
 
-let mk_app ?(params=[]) ?(unsafe=false) ?(inlined = false) op =
+let mk_app ?(params=[]) ?(ty_subst=[]) ?(unsafe=false) ?(inlined = false) op =
   { Heptagon.a_op = op;
     Heptagon.a_params = params;
+    Heptagon.a_ty_subst = ty_subst;
     Heptagon.a_unsafe = unsafe;
     Heptagon.a_inlined = inlined }
 
@@ -413,8 +414,8 @@ and translate_op = function
   | Econcat -> Heptagon.Econcat
   | Eselect_dyn -> Heptagon.Eselect_dyn
   | Eselect_trunc -> Heptagon.Eselect_trunc
-  | Efun ln -> Heptagon.Efun (qualify_value ln, [])
-  | Enode ln -> Heptagon.Enode (qualify_value ln, [])
+  | Efun ln -> Heptagon.Efun (qualify_value ln)
+  | Enode ln -> Heptagon.Enode (qualify_value ln)
   | Ereinit -> Heptagon.Ereinit
 
 and translate_pat loc env = function
@@ -632,23 +633,14 @@ let translate_const_dec cd =
     Heptagon.c_value = c_value;
     Heptagon.c_loc = cd.c_loc; }
 
-
 let translate_classdec cd =
-  let c_nclass = current_qual cd.c_nameclass in
-  replace_class c_nclass (Types.mk_type_class c_nclass);
-  Hept_utils.mk_class_dec c_nclass cd.c_loc
-
-
-let translate_instancedec id =
   try
-    let i_ntype = qualify_type (ToQ id.i_nametype) in
-    let i_nclass = qualify_class (ToQ id.i_nameclass) in
-    replace_instance i_ntype (Types.mk_type_class i_nclass);
-    { Heptagon.i_nametype = i_ntype;
-      Heptagon.i_nameclass = i_nclass;
-      Heptagon.i_loc = id.i_loc; }
+    let c_nclass = current_qual cd.c_nameclass in
+    let c_linsts = List.map (fun tyname -> qualify_type (ToQ tyname)) cd.c_insttypes in
+    replace_class c_nclass (Types.mk_type_class c_nclass c_linsts);
+    Hept_utils.mk_class_dec c_nclass c_linsts cd.c_loc
   with
-    | ScopingError err -> Error.message id.i_loc err
+    | ScopingError err -> Error.message cd.c_loc err
 
 let translate_program p =
   let translate_program_desc pd = match pd with
@@ -656,7 +648,6 @@ let translate_program p =
     | Pconst c -> Heptagon.Pconst (translate_const_dec c)
     | Ptype t -> Heptagon.Ptype (translate_typedec t)
     | Pclass c -> Heptagon.Pclass (translate_classdec c)
-    | Pinstance i -> Heptagon.Pinstance (translate_instancedec i)
     | Pnode n -> Heptagon.Pnode (translate_node n)
   in
   let desc = List.map translate_program_desc p.p_desc in
@@ -706,7 +697,6 @@ let translate_interface_desc = function
   | Iconstdef const_dec -> Heptagon.Iconstdef (translate_const_dec const_dec)
   | Isignature s -> Heptagon.Isignature (translate_signature s)
   | Iclassdef cd -> Heptagon.Iclassdef (translate_classdec cd)
-  | Iinstancedef id -> Heptagon.Iinstancedef (translate_instancedec id)
 
 let translate_interface i =
   let desc = List.map translate_interface_desc i.i_desc in

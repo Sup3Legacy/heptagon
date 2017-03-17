@@ -142,7 +142,7 @@ and print_exp_desc ff = function
         print_app (app, args) print_every reset
   | Estruct(f_e_list) ->
       print_record (print_couple print_qualname print_exp """ = """) ff f_e_list
-  | Eiterator (it, { a_op = (Efun (f,_) | Enode (f,_)); a_params =f_params },
+  | Eiterator (it, { a_op = (Efun f | Enode f); a_params =f_params },
                params, pargs, args, reset) ->
     (match f_params with
       | [] ->
@@ -188,10 +188,10 @@ and print_app ff (app, args) =
   match app.a_op with
     | Etuple -> print_exp_tuple ff args
     (* we need a special case for '*' and '*.' as printing (_*_) is incorrect *)
-    | Efun ({ name = n },_) when (n = "*" || n = "*.") ->
+    | Efun { name = n } when (n = "*" || n = "*.") ->
       let a1, a2 = assert_2 args in
       fprintf ff "@[%a@, %s@, %a@]" print_exp a1  n  print_exp a2
-    | Efun (({ qual = Pervasives; name = n } as f),_) when (is_infix n) ->
+    | Efun ({ qual = Pervasives; name = n } as f) when (is_infix n) ->
 	begin match args with
 	  [a1;a2] ->
 	    fprintf ff "@[(%a@, %s@, %a)@]" print_exp a1  n  print_exp a2
@@ -199,10 +199,10 @@ and print_app ff (app, args) =
             fprintf ff "@[%a@,%a@,%a@]"
               print_qualname f print_params app.a_params  print_exp_tuple args
 	end
-    | Efun (f,_) ->
+    | Efun f ->
         fprintf ff "@[%a@,%a@,%a@]"
           print_qualname f print_params app.a_params  print_exp_tuple args
-    | Enode (f,_) ->
+    | Enode f ->
         print_stateful ff true;
         fprintf ff "@[%a@,%a@,%a@]"
           print_qualname f print_params app.a_params  print_exp_tuple args
@@ -383,16 +383,11 @@ let print_node ff
 let print_class_dec ff cdec = 
   fprintf ff "class %a@\n" print_qualname cdec.c_nameclass
 
-let print_instance_dec ff idec =
-  fprintf ff "instance %a of %a@\n" print_qualname idec.i_nametype print_qualname idec.i_nameclass
-
-
 let print_pdesc ff pd = match pd with
   | Pnode n -> print_node ff n
   | Pconst c -> print_const_dec ff c
   | Ptype t -> print_type_def ff t
   | Pclass c -> print_class_dec ff c
-  | Pinstance i -> print_instance_dec ff i
 
 let print_open_module ff name = fprintf ff "open %s@." (modul_to_string name)
 

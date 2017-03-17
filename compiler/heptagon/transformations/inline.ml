@@ -106,13 +106,13 @@ let mk_unique_node nd =
 let exp funs (env, newvars, newequs) exp =
   let exp, (env, newvars, newequs) = Hept_mapfold.exp funs (env, newvars, newequs) exp in
   match exp.e_desc with
-  | Eiterator (it, { a_op = Enode (nn,_); }, _, _, _, _) when to_be_inlined nn ->
+  | Eiterator (it, { a_op = Enode nn; }, _, _, _, _) when to_be_inlined nn ->
       Format.eprintf
         "WARN: inlining iterators (\"%s %s\" here) is unsupported.@."
         (Hept_printer.iterator_to_string it) (fullname nn);
       (exp, (env, newvars, newequs))
 
-  | Eapp ({ a_op = (Enode (nn,_) | Efun (nn,_));
+  | Eapp ({ a_op = (Enode nn | Efun nn);
             a_unsafe = false; (* Unsafe can't be inlined *)
             a_inlined = inlined } as op, argl, rso) when inlined || to_be_inlined nn ->
     begin try
@@ -121,6 +121,9 @@ let exp funs (env, newvars, newequs) exp =
         | Some x -> mk_equation (Ereset (mk_block [eq], x)) in
       
       let node_dec = QualEnv.find nn env in
+      
+      (* TODO: simpler alternative: use the tysubst which is stored at the "app" level? *)
+      (* 			instead of recomputing it? *)
       
       (* Check if the node to be inlined contain some type parameter
       	=> value of the type: from output or input expression (typing was done)
@@ -140,7 +143,7 @@ let exp funs (env, newvars, newequs) exp =
             | Tclasstype (tname, tclass) ->
               (* i-th output of the node is a type parameter *)
               let value = List.nth list_ty_output i in
-              let env_acc = QualEnv.add tname value env_acc in
+              let env_acc = QualEnv.add tname value env_acc in (* Solving the constraint about the type parameter *)
               (env_acc, i+1)
             | _ -> (env_acc, i+1)
           ) (env_type_param, 0) node_dec.n_output) in
@@ -165,7 +168,7 @@ let exp funs (env, newvars, newequs) exp =
         List.combine (List.map (fun p -> (local_qn p.p_name)) ni.n_params)
           op.a_params in
 
-      (* Perform [static_exp] substitution. *)
+      (* Perform [static_exp] substitution *)
       let ni =
         let apply_sexp_subst_sexp funs () sexp = match sexp.se_desc with
           | Svar s -> ((try List.assoc s static_subst

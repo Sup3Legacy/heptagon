@@ -100,11 +100,11 @@ let vd_of_arg ad =
 (** @return the lists of inputs and outputs (as var_dec) of
     an app object. *)
 let get_node_inp_outp app = match app.a_op with
-  | (Enode (f,_) | Efun (f,_)) when is_anon_node f ->
+  | (Enode f | Efun f) when is_anon_node f ->
     (* first check if it is an anonymous node *)
     let nd = find_anon_node f in
       nd.n_input, nd.n_output
-  | Enode (f,_) | Efun (f,_) ->
+  | Enode f | Efun f ->
       (* it is a regular node*)
     let ty_desc = find_value f in
     let new_inp = List.map vd_of_arg ty_desc.node_outputs in
@@ -166,7 +166,7 @@ let edesc funs acc ed =
           let eq = mk_equation (Eeq(pat_of_vd_list outp, call)) in
           (* create the lambda *)
           let anon = mk_app
-            (Enode ( (add_anon_node inp outp [] (eq::acc_eq_list)) , []) ) in
+            (Enode (add_anon_node inp outp [] (eq::acc_eq_list)) ) in
           Eiterator(Imap, anon, n, [], args, r), acc)
         else
           ed, acc

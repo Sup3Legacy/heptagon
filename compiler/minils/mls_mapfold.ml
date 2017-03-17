@@ -53,7 +53,6 @@ type 'a mls_it_funs = {
   node_dec:      'a mls_it_funs -> 'a -> Minils.node_dec -> Minils.node_dec * 'a;
   const_dec:     'a mls_it_funs -> 'a -> Minils.const_dec -> Minils.const_dec * 'a;
   classtype_dec: 'a mls_it_funs -> 'a -> Minils.classtype_dec -> Minils.classtype_dec * 'a;
-  instance_dec:  'a mls_it_funs -> 'a -> Minils.instance_dec -> Minils.instance_dec * 'a;
   type_dec:      'a mls_it_funs -> 'a -> Minils.type_dec -> Minils.type_dec * 'a;
   tdesc:         'a mls_it_funs -> 'a -> Minils.tdesc -> Minils.tdesc * 'a;
   program:       'a mls_it_funs -> 'a -> Minils.program -> Minils.program * 'a;
@@ -236,11 +235,6 @@ and const_dec funs acc c =
 and classtype_dec_it funs acc c = funs.classtype_dec funs acc c
 and classtype_dec funs acc c = c, acc (* Nothing to explore below *)
 
-
-and instance_dec_it funs acc i = funs.instance_dec funs acc i
-and instance_dec funs acc i = i, acc (* Nothing to explore below *)
-
-
 and type_dec_it funs acc t =
   try funs.type_dec funs acc t
   with Fallback -> type_dec funs acc t
@@ -275,7 +269,6 @@ and program_desc funs acc pd = match pd with
   | Ptype td -> let td, acc = type_dec_it funs acc td in Ptype td, acc
   | Pnode n -> let n, acc = node_dec_it funs acc n in Pnode n, acc
   | Pclasstype cd -> let cd, acc = classtype_dec_it funs acc cd in Pclasstype cd, acc
-  | Pinstance id -> let id, acc = instance_dec_it funs acc id in Pinstance id, acc
 
 
 let defaults = {
@@ -295,7 +288,6 @@ let defaults = {
   node_dec = node_dec;
   const_dec = const_dec;
   classtype_dec = classtype_dec;
-  instance_dec = instance_dec;
   type_dec = type_dec;
   tdesc = tdesc;
   program = program;

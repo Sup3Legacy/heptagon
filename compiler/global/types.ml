@@ -54,7 +54,7 @@ and ty =
   | Tclasstype of type_name * type_class
   | Tinvalid
 
-and type_class = { tc_name : class_name }
+and type_class = { tc_name : class_name; tc_insts : type_name list }
 
 let invalid_type = Tinvalid (** Invalid type given to untyped expression etc. *)
 
@@ -69,4 +69,4 @@ let unprod = function
 let mk_static_exp ?(loc = no_location) ty desc = (*note ~ty: replace as first arg*)
   { se_desc = desc; se_ty = ty; se_loc = loc }
 
-let mk_type_class name = { tc_name = name }
+let mk_type_class name linsts = { tc_name = name; tc_insts = linsts }

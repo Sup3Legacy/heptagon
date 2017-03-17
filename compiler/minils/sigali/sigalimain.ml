@@ -128,7 +128,7 @@ let rec translate prefix ({ Minils.e_desc = desc } as e) =
   match desc with
   | Minils.Eextvalue(ext) -> translate_ext prefix ext
   | Minils.Eapp (* pervasives binary or unary stateless operations *)
-      ({ Minils.a_op = Minils.Efun({qual=Pervasives;name=n},_)},
+      ({ Minils.a_op = Minils.Efun {qual=Pervasives;name=n}},
        e_list, _) ->
       begin
         match n, e_list with
@@ -285,7 +285,7 @@ let translate_eq f
           current_inputs := IdentSet.add n !current_inputs;
           acc_states,acc_init,acc_inputs,acc_eqs
       end
-  | pat, Minils.Eapp({ Minils.a_op = (Minils.Enode (f,_)|Minils.Efun (f,_)); },
+  | pat, Minils.Eapp({ Minils.a_op = (Minils.Enode f|Minils.Efun f); },
                      _e_list, None) when f.qual <> Pervasives ->
       (*
         (y1,...,yp) = f(x1,...,xn)
@@ -478,7 +478,7 @@ let translate_node
               Cbase
               (Tprod (List.map (fun _ -> Initial.tbool) mls_ctrl))
               ~linearity:Linearity.Ltop
-              (Minils.Eapp(Minils.mk_app (Minils.Efun (ctrlr_fun_name, [])),
+              (Minils.Eapp(Minils.mk_app (Minils.Efun ctrlr_fun_name),
                            (List.map
                               (fun v ->
                                  Minils.mk_extvalue

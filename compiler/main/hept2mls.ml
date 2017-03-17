@@ -64,7 +64,7 @@ end
 exception CurrentShouldNotHappenHere
 
 let fresh = Idents.gen_fresh "hept2mls"
-  (function Heptagon.Enode (f,_) -> (shortname f)
+  (function Heptagon.Enode f -> (shortname f)
     | _ -> "n")
 
 let translate_var { Heptagon.v_ident = n; Heptagon.v_type = ty; Heptagon.v_linearity = linearity;
@@ -85,8 +85,8 @@ let translate_iterator_type = function
 
 let translate_op = function
   | Heptagon.Eifthenelse -> Eifthenelse
-  | Heptagon.Efun (f,subst_ty) -> Efun (f,subst_ty)
-  | Heptagon.Enode (f,subst_ty) -> Enode (f,subst_ty)
+  | Heptagon.Efun f -> Efun f
+  | Heptagon.Enode f -> Enode f
   | Heptagon.Efield -> assert false
   | Heptagon.Efield_update -> Efield_update
   | Heptagon.Earray_fill -> Earray_fill
@@ -102,7 +102,7 @@ let translate_op = function
   | Heptagon.Ereinit -> assert false
 
 let translate_app app =
-  mk_app ~params:app.Heptagon.a_params
+  mk_app ~params:app.Heptagon.a_params ~ty_subst:app.Heptagon.a_ty_subst
     ~unsafe:app.Heptagon.a_unsafe
     ~id:(Some (fresh app.Heptagon.a_op))
     (translate_op app.Heptagon.a_op)
@@ -258,19 +258,14 @@ let const_dec cd =
 
 let class_dec cd =
   { Minils.c_nameclass = cd.Heptagon.c_nameclass;
+    Minils.c_insttypes = cd.Heptagon.c_insttypes;
     Minils.c_loc = cd.Heptagon.c_loc }
-
-let instance_dec id =
-  { Minils.i_nametype = id.Heptagon.i_nametype;
-    Minils.i_nameclass = id.Heptagon.i_nameclass;
-    Minils.i_loc = id.Heptagon.i_loc }
 
 let program_desc pd = match pd with
   | Heptagon.Ptype td -> Ptype (typedec td)
   | Heptagon.Pnode nd -> Pnode (node nd)
   | Heptagon.Pconst cd -> Pconst (const_dec cd)
   | Heptagon.Pclass cd -> Pclasstype (class_dec cd)
-  | Heptagon.Pinstance id -> Pinstance (instance_dec id)
 
 let program
     { Heptagon.p_modname = modname;
@@ -298,7 +293,6 @@ let interface i =
     | Heptagon.Iconstdef cd -> Iconstdef (const_dec cd)
     | Heptagon.Isignature s -> Isignature (signature s)
     | Heptagon.Iclassdef cd -> Iclasstype (class_dec cd)
-    | Heptagon.Iinstancedef id -> Iinstance (instance_dec id)
   in
   { i_modname = i.Heptagon.i_modname;
     i_opened = i.Heptagon.i_opened;

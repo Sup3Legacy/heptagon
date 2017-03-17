@@ -180,12 +180,12 @@ let rec translate kind context e =
         ifthenelse context e e1 e2 e3
     (* XXX Huge hack to avoid comparing tuples... (temporary, until this is
        fixed where it should be) *)
-    | Eapp({ a_op = (Efun ({ Names.qual = Names.Pervasives; Names.name = "=" },_) as op)},
+    | Eapp({ a_op = (Efun ({ Names.qual = Names.Pervasives; Names.name = "=" }) as op)},
            [x;y], reset) when is_list x ->
         let x = e_to_e_list x and y = e_to_e_list y in
         let xy = List.fold_left2 (fun acc x y ->
           let cmp = mk_exp (mk_op_app op [x; y] ~reset) Initial.tbool ~linearity:Ltop in
-          mk_exp (mk_op_app (Efun (Initial.pand,[])) [acc; cmp] ~reset) Initial.tbool ~linearity:Ltop)
+          mk_exp (mk_op_app (Efun Initial.pand) [acc; cmp] ~reset) Initial.tbool ~linearity:Ltop)
           dtrue
           x y
         in

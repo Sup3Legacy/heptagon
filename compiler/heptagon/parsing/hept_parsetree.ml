@@ -234,12 +234,8 @@ type const_dec =
 
 type class_dec =
   { c_nameclass   : class_name;
+    c_insttypes   : type_name list;
     c_loc         : location }
-
-type instance_dec =
-  { i_nametype    : type_name;
-    i_nameclass   : class_name;
-    i_loc         : location }
 
 type program =
   { p_modname : dec_name;
@@ -251,7 +247,6 @@ and program_desc =
   | Ptype of type_dec
   | Pconst of const_dec
   | Pclass of class_dec
-  | Pinstance of instance_dec
   | Pnode of node_dec
 
 
@@ -282,7 +277,6 @@ and interface_desc =
   | Itypedef of type_dec
   | Iconstdef of const_dec
   | Iclassdef of class_dec
-  | Iinstancedef of instance_dec
   | Isignature of signature
 
 (* {3 Helper functions to create AST} *)
@@ -314,11 +308,8 @@ let mk_field_exp f loc =
 let mk_type_dec name desc loc =
   { t_name = name; t_desc = desc; t_loc = loc }
 
-let mk_class_dec nameclass loc =
-  { c_nameclass = nameclass; c_loc = loc }
-
-let mk_instance_dec nametype nameclass loc =
-  { i_nametype = nametype; i_nameclass = nameclass; i_loc = loc}
+let mk_class_dec nameclass lnametypes loc =
+  { c_nameclass = nameclass; c_insttypes = lnametypes; c_loc = loc }
 
 let mk_equation desc loc =
   { eq_desc = desc; eq_loc = loc }

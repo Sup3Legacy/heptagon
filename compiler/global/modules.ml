@@ -46,7 +46,6 @@ type module_object =
     m_values  : node NamesEnv.t;
     m_types   : type_def NamesEnv.t;
     m_classes : type_class NamesEnv.t;
-    m_instances : (name, name) Hashtbl.t;
     m_consts  : const_def NamesEnv.t;
     m_constrs : name NamesEnv.t;
     m_fields  : name NamesEnv.t;
@@ -59,7 +58,6 @@ type env = {
   mutable values  : node QualEnv.t;      (** Node definitions *)
   mutable types   : type_def QualEnv.t;  (** Type definitions *)
   mutable classes : type_class QualEnv.t; (** Class definitions *)
-  mutable instances : (type_name, type_class) Hashtbl.t; (** Instance definitions (matching of type name to typeclass) *)
   mutable consts  : const_def QualEnv.t; (** Constants definitions *)
   mutable constrs  : qualname QualEnv.t; (** Constructors mapped to their corresponding type *)
   mutable fields  : qualname QualEnv.t;  (** Fields mapped to their corresponding type *)
@@ -74,7 +72,6 @@ let g_env =
     values    = QualEnv.empty;
     types     = QualEnv.empty;
     classes   = QualEnv.empty;
-    instances = Hashtbl.create 10;
     constrs   = QualEnv.empty;
     fields    = QualEnv.empty;
     consts    = QualEnv.empty;
@@ -100,17 +97,9 @@ let _append_module mo =
       (fun x v env ->
         QualEnv.add {qual= mo.m_name; name= x} {qual= mo.m_name; name= v} env)
       mo_env QualEnv.empty in
-  let qualify_all_htbl mo_inst = (* qualify env keys and values of a Hashtbl *)
-    let init_htbl = Hashtbl.create (Hashtbl.length mo_inst) in
-    Hashtbl.iter (fun k v ->
-        Hashtbl.add init_htbl { qual = mo.m_name; name = k } { tc_name = { qual = mo.m_name; name = v } }
-      ) mo_inst;
-    init_htbl
-  in
   g_env.values <- QualEnv.append (qualify mo.m_values) g_env.values;
   g_env.types <- QualEnv.append (qualify mo.m_types) g_env.types;
   g_env.classes <- QualEnv.append (qualify mo.m_classes) g_env.classes;
-  append_hashtbl g_env.instances (qualify_all_htbl mo.m_instances);
   g_env.constrs <- QualEnv.append (qualify_all mo.m_constrs) g_env.constrs;
   g_env.fields <- QualEnv.append (qualify_all mo.m_fields) g_env.fields;
   g_env.consts <- QualEnv.append (qualify mo.m_consts) g_env.consts
@@ -198,12 +187,6 @@ let add_const f v =
   _check_not_defined g_env.consts f;
   g_env.consts <- QualEnv.add f v g_env.consts
 
-let add_instance k v =
-  let check_not_def_htbl htbl k =
-    if Hashtbl.mem htbl k then raise Already_defined
-  in
-  check_not_def_htbl g_env.instances k;
-  Hashtbl.add g_env.instances k v
 
 
 (** Same as add_value but without checking for redefinition *)
@@ -216,8 +199,6 @@ let replace_class f v =
 let replace_const f v =
   g_env.consts <- QualEnv.add f v g_env.consts
 
-let replace_instance k v =
-  Hashtbl.replace g_env.instances k v
 
 
 (** {3 Find functions look in the global environement, nothing more} *)
@@ -229,7 +210,6 @@ let find_constrs x = QualEnv.find x g_env.constrs
 let find_field x = QualEnv.find x g_env.fields
 let find_const x = QualEnv.find x g_env.consts
 
-let find_instance x = Hashtbl.find g_env.instances x
 
 
 (** @return the fields of a record type. *)
@@ -262,9 +242,6 @@ let check_const q =
   _load_module q.qual;
   try let _ = QualEnv.find q g_env.consts in true with Not_found -> false
 
-let check_instance q =
-  _load_module q.qual;
-  Hashtbl.mem g_env.instances q
 
 
 (** {3 Qualify functions}
@@ -289,8 +266,6 @@ let qualify_class name = _qualify g_env.classes name
 let qualify_constrs name = _qualify g_env.constrs name
 let qualify_field name = _qualify g_env.fields name
 let qualify_const name = _qualify g_env.consts name
-
-(* Qualifying an instance is a non sense *)
 
 
 (** @return the name as qualified with the current module
@@ -360,7 +335,6 @@ let rec fresh_constr pass_name name =
   then fresh_constr pass_name (name ^ Misc.gen_symbol())
   else q
 
-(* Getting a fresh name for an instance is a non sense *)
 
 exception Undefined_type of qualname
 
@@ -383,16 +357,11 @@ let rec unalias_type t = match t with
 
 (* Return a type associated with the class cname through an "instance" *)
 let instanciate_class cname =
-  let firsttype = ref [] in
-  Hashtbl.iter (fun tname tclass ->
-    if (!firsttype=[] && tclass.tc_name.name=cname)
-      then firsttype := tname::(!firsttype);
-    ) g_env.instances;
-  match (!firsttype) with
-    | [] -> Format.eprintf "No type was declared as instanciating %s.@." cname;
+  try
+    let cl = QualEnv.find (qualify_class cname) g_env.classes in
+    Tid (List.hd cl.tc_insts)
+  with Not_found -> Format.eprintf "The class %s was never declared.@." cname;
           raise Errors.Error
-    | t::_ -> Tid t
-
 
 
 
@@ -422,7 +391,6 @@ let current_module () =
       m_values = unqualify g_env.values;
       m_types = unqualify g_env.types;
       m_classes = unqualify g_env.classes;
-      m_instances = unqualify_all_htbl g_env.instances;
       m_consts = unqualify g_env.consts;
       m_constrs = unqualify_all g_env.constrs;
       m_fields = unqualify_all g_env.fields;

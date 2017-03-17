@@ -94,7 +94,6 @@ type 'a hept_it_funs = {
   node_dec       : 'a hept_it_funs -> 'a -> node_dec -> node_dec * 'a;
   const_dec      : 'a hept_it_funs -> 'a -> const_dec -> const_dec * 'a;
   class_dec      : 'a hept_it_funs -> 'a -> class_dec -> class_dec * 'a;
-  instance_dec   : 'a hept_it_funs -> 'a -> instance_dec -> instance_dec * 'a;
   program        : 'a hept_it_funs -> 'a -> program -> program * 'a;
   program_desc   : 'a hept_it_funs -> 'a -> program_desc -> program_desc * 'a;
   global_funs    : 'a Global_mapfold.global_it_funs }
@@ -340,12 +339,9 @@ and const_dec funs acc c =
   let c_value, acc = static_exp_it funs.global_funs acc c.c_value in
   { c with c_value = c_value; c_type = c_type }, acc
 
+
 and class_dec_it funs acc c = funs.class_dec funs acc c
 and class_dec funs acc c = c, acc (* Nothing below to explore *)
-
-
-and instance_dec_it funs acc i = funs.instance_dec funs acc i
-and instance_dec funs acc i = i, acc (* Nothing below to explore *)
 
 
 and program_it funs acc p = funs.program funs acc p
@@ -361,7 +357,6 @@ and program_desc funs acc pd = match pd with
   | Ptype _td -> pd, acc (* TODO types *)
   | Pnode n -> let n, acc = node_dec_it funs acc n in Pnode n, acc
   | Pclass c -> let c, acc = class_dec_it funs acc c in Pclass c, acc
-  | Pinstance i -> let i, acc = instance_dec_it funs acc i in Pinstance i, acc
 
 let defaults = {
   app = app;
@@ -384,7 +379,6 @@ let defaults = {
   node_dec = node_dec;
   const_dec = const_dec;
   class_dec = class_dec;
-  instance_dec = instance_dec;
   program = program;
   program_desc = program_desc;
   global_funs = Global_mapfold.defaults }
@@ -412,7 +406,6 @@ let defaults_stop = {
   node_dec = stop;
   const_dec = stop;
   class_dec = stop;
-  instance_dec = stop;
   program = stop;
   program_desc = stop;
   global_funs = Global_mapfold.defaults_stop }

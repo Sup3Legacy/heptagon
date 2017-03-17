@@ -143,13 +143,8 @@ type class_def =
 
 type classtype_dec =
     { c_nameclass   : classtype_name;
+      c_insttypes   : type_name list;
       c_loc         : location }
-
-type instance_dec =
-    { i_nametype    : type_name;
-      i_nameclass   : classtype_name;
-      i_loc         : location }
-
 
 type program =
     { p_modname : modul;
@@ -181,4 +176,3 @@ and interface_desc =
   | Iconstdef of const_dec
   | Isignature of signature
   | Iclasstype of classtype_dec
-  | Iinstance of instance_dec

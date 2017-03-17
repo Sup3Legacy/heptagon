@@ -31,11 +31,9 @@
 (* To compile : heptc -nopervasives pervasives.epi *)
 type bool = true | false
 
-class num
 type int
 type float
-instance int of num
-instance float of num
+class num (int, float)
 
 type string
 external val fun (&)(bool;bool) returns (bool)

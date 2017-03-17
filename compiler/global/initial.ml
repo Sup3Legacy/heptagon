@@ -50,7 +50,7 @@ let pstring = { qual = Pervasives; name = "string" }
 let tstring = Types.Tid pstring
 
 let pNum = { qual = Pervasives; name = "num" }
-let clNum = { tc_name = pNum }
+let clNum = { tc_name = pNum; tc_insts = (pint::pfloat::[]) }
 
 
 let pfile = { qual = Module "Iostream"; name = "file" }

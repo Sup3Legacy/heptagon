@@ -74,15 +74,14 @@ and desc =
 and app = {
   a_op     : op;
   a_params : static_exp list;
+  a_ty_subst : (type_name * ty) list; (* non-empty only when a_op = (Efun _) | (Enode _) with type params *)
   a_unsafe : bool;
   a_inlined : bool }
 
-and ty_subst = (type_name * ty) list
-
 and op =
   | Etuple
-  | Efun of (fun_name * ty_subst)
-  | Enode of (fun_name * ty_subst)
+  | Efun of fun_name
+  | Enode of fun_name
   | Eifthenelse
   | Earrow
   | Efield
@@ -204,12 +203,8 @@ type const_dec = {
 
 type class_dec =
   { c_nameclass   : class_name;
+    c_insttypes   : type_name list;
     c_loc         : location }
-
-type instance_dec =
-  { i_nametype    : type_name;
-    i_nameclass   : class_name;
-    i_loc         : location }
 
 type program = {
   p_modname : modul;
@@ -221,8 +216,6 @@ and program_desc =
   | Pnode of node_dec
   | Pconst of const_dec
   | Pclass of class_dec
-  | Pinstance of instance_dec
-
 
 type signature = {
   sig_name              : qualname;
@@ -244,5 +237,4 @@ and interface_desc =
   | Itypedef of type_dec
   | Iconstdef of const_dec
   | Iclassdef of class_dec
-  | Iinstancedef of instance_dec
   | Isignature of signature

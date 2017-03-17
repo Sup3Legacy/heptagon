@@ -149,7 +149,7 @@ and print_app ff (app, args) =
     | Eequal ->
       let e1, e2 = assert_2 args in
         fprintf ff "@[<2>%a@ = %a@]" print_extvalue e1  print_extvalue e2
-    | Efun ({ qual = Pervasives; name = n } as f,_) when (is_infix n) ->
+    | Efun ({ qual = Pervasives; name = n } as f) when (is_infix n) ->
 	begin match args with
 	  [a1;a2] ->
 	    fprintf ff "@[(%a@, %s@, %a)@]"
@@ -160,7 +160,7 @@ and print_app ff (app, args) =
             fprintf ff "@[%a@,%a@,%a@]"
               print_qualname f print_params app.a_params  print_w_tuple args
 	end
-    | Efun (f,_) | Enode (f,_) ->
+    | Efun f | Enode f ->
         fprintf ff "@[%a@,%a@,%a@]"
           print_qualname f print_params app.a_params  print_w_tuple args
     | Eifthenelse ->
@@ -358,12 +358,8 @@ let print_type_dec ff tdecl =
 
 
 let print_classtype_dec ff cdecl =
-  fprintf ff "@[class %a@]@\n@." print_full_qualname cdecl.c_nameclass
-
-let print_instance_dec ff idecl =
-  fprintf ff "@[instance %a of %a@]@\n@."
-    print_full_qualname idecl.i_nametype
-    print_full_qualname idecl.i_nameclass
+  fprintf ff "@[class %a (%a)@]@\n@." print_full_qualname cdecl.c_nameclass
+    (print_list print_full_qualname "" ", " "") cdecl.c_insttypes
 
 
 (************************************)
@@ -378,7 +374,6 @@ let printAST_program oc prog =
     | Pconst cdecl -> print_const_dec ff cdecl
     | Ptype tdecl -> print_type_dec ff tdecl
     | Pclasstype cdecl -> print_classtype_dec ff cdecl
-    | Pinstance idecl -> print_instance_dec ff idecl
   in
   let {p_modname=modname; p_format_version=format_version;
        p_opened=lopened; p_desc = ldesc} = prog in

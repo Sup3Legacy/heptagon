@@ -58,7 +58,6 @@ type 'a hept_it_funs = {
   node_dec        : 'a hept_it_funs -> 'a -> node_dec -> node_dec * 'a;
   const_dec       : 'a hept_it_funs -> 'a -> const_dec -> const_dec * 'a;
   class_dec       : 'a hept_it_funs -> 'a -> class_dec -> class_dec * 'a;
-  instance_dec    : 'a hept_it_funs -> 'a -> instance_dec -> instance_dec * 'a;
   type_dec        : 'a hept_it_funs -> 'a -> type_dec -> type_dec * 'a;
   type_desc       : 'a hept_it_funs -> 'a -> type_desc -> type_desc * 'a;
   program         : 'a hept_it_funs -> 'a -> program -> program * 'a;
@@ -324,10 +323,6 @@ and class_dec_it funs acc c = funs.class_dec funs acc c
 and class_dec funs acc c = c, acc (* nothing to parse below that *)
 
 
-and instance_dec_it funs acc i = funs.instance_dec funs acc i
-and instance_dec funs acc i = i, acc (* nothing to parse below that *)
-
-
 and type_dec_it funs acc td = funs.type_dec funs acc td
 and type_dec funs acc td =
   let t_desc, acc = type_desc_it funs acc td.t_desc in
@@ -359,7 +354,6 @@ and program_desc funs acc pd = match pd with
   | Pconst c -> let c, acc = const_dec_it funs acc c in Pconst c, acc
   | Ptype t -> let t, acc = type_dec_it funs acc t in Ptype t, acc
   | Pclass c -> let c, acc = class_dec_it funs acc c in Pclass c, acc
-  | Pinstance i -> let i, acc = instance_dec_it funs acc i in Pinstance i, acc
   | Pnode n -> let n, acc = node_dec_it funs acc n in Pnode n, acc
   | Ppragma _ -> pd, acc
 
@@ -370,7 +364,6 @@ and interface_desc funs acc id = match id with
   | Itypedef t -> let t, acc = type_dec_it funs acc t in Itypedef t, acc
   | Iconstdef c -> let c, acc = const_dec_it funs acc c in Iconstdef c, acc
   | Iclassdef c -> let c, acc = class_dec_it funs acc c in Iclassdef c, acc
-  | Iinstancedef i -> let i, acc = instance_dec_it funs acc i in Iinstancedef i, acc
   | Isignature s -> let s, acc = signature_it funs acc s in Isignature s, acc
 
 and interface_it funs acc i = funs.interface funs acc i
@@ -417,7 +410,6 @@ let defaults = {
   node_dec = node_dec;
   const_dec = const_dec;
   class_dec = class_dec;
-  instance_dec = instance_dec;
   type_dec = type_dec;
   type_desc = type_desc;
   program = program;
@@ -453,7 +445,6 @@ let defaults_stop = {
   node_dec = Global_mapfold.stop;
   const_dec = Global_mapfold.stop;
   class_dec = Global_mapfold.stop;
-  instance_dec = Global_mapfold.stop;
   type_dec = Global_mapfold.stop;
   type_desc = Global_mapfold.stop;
   program = Global_mapfold.stop;
