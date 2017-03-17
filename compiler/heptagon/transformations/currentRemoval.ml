@@ -5,17 +5,18 @@ open Hept_utils
 
 
 (* Remove all occurence of "current" in the program *)
+(* Require the type of the subexpression of "current", in order to build the intermediate variable *)
 (* Author : Guillaume I *)
 
 exception TypeDefForClockUnespected
 
 
 (* Phase 1 (edesc) : iterate over the whole program and replace the current
-    by fresh variables. Also log the association "fresh var, current_clk, current_sub_expr" *)
+    by fresh variables. Also log the association "fresh var, current_clk, current_init_expr, current_sub_expr" *)
 let edesc funs acc ed = match ed with
-  | Ecurrent (constr, id, e) ->
+  | Ecurrent (constr, id, eInit, e) ->
     let fresh_ident = Idents.gen_var "currRem" "var" in
-    Evar(fresh_ident), (fresh_ident, (constr, id, e) )::acc
+    Evar(fresh_ident), (fresh_ident, (constr, id, eInit, e) )::acc
   | _ -> Hept_mapfold.edesc funs acc ed (* Default recursion case *)
 
 
@@ -34,7 +35,7 @@ let block funs acc bl =
       (* New var/eq: "currRem_var = merge idCk (consCk -> subExpr when consCk) ( ??? -> pre(currRem_var))" *)
       (* The "???" constructors are the alternatives versions of the constructor *)
       
-      let (ident, (consCk, idCk, subExpr) ) = elemLog in
+      let (ident, (consCk, idCk, initExpr, subExpr) ) = elemLog in
       let ck = Clocks.Con (Clocks.Cbase, consCk, idCk) in (* Not sure about the Cbase *)
       
       (* Check the global environment for the type definition of the clock containing the constructor consCk *)
@@ -49,27 +50,29 @@ let block funs acc bl =
         end in
       let l_constr_br_false = List.filter (fun elem -> elem<>consCk) l_constr in
       
+      (* Building the temporary variable corresponding to the current *)
       let n_var_dec = mk_var_dec ~clock:ck ident subExpr.e_ty ~linearity:Linearity.Ltop in
       
+      (* Branch "true" *)
       let dWhen_merge_true = Ewhen (subExpr, consCk, idCk) in
-      let branch_merge_true = mk_exp dWhen_merge_true Types.Tinvalid ~linearity:Linearity.Ltop in (* We are before the typing *)
+      let branch_merge_true = mk_exp dWhen_merge_true subExpr.e_ty ~linearity:Linearity.Ltop in (* We are before the typing *)
       
-      (* Building all the false branches *)
+      (* Building all the "false" branches *)
       let l_branch_merge_false = List.map
         (fun constr_false ->
           let dVar_merge_false = Evar ident in
-          let expVar_merge_false = mk_exp dVar_merge_false Types.Tinvalid ~linearity:Linearity.Ltop in
+          let expVar_merge_false = mk_exp dVar_merge_false subExpr.e_ty ~linearity:Linearity.Ltop in
           
-          let dPre_merge_false = Epre (None, expVar_merge_false) in
-          let exprPre_merge_false = mk_exp dPre_merge_false Types.Tinvalid ~linearity:Linearity.Ltop in
+          let dPre_merge_false = Efby (initExpr, expVar_merge_false) in
+          let exprPre_merge_false = mk_exp dPre_merge_false subExpr.e_ty ~linearity:Linearity.Ltop in
           
           let dWhen_merge_false =  Ewhen (exprPre_merge_false, constr_false , idCk) in
-          let branch_merge_false = mk_exp dWhen_merge_false Types.Tinvalid ~linearity:Linearity.Ltop in
+          let branch_merge_false = mk_exp dWhen_merge_false subExpr.e_ty ~linearity:Linearity.Ltop in
           (constr_false, branch_merge_false)
         ) l_constr_br_false in
       
       let deq_rhs = Emerge (idCk, (consCk, branch_merge_true) :: l_branch_merge_false ) in
-      let eq_rhs = mk_exp deq_rhs Types.Tinvalid ~linearity:Linearity.Ltop in
+      let eq_rhs = mk_exp deq_rhs subExpr.e_ty ~linearity:Linearity.Ltop in
       
       let n_eq = mk_equation (Eeq (Evarpat ident, eq_rhs)) in
       

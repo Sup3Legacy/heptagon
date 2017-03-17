@@ -168,7 +168,7 @@ let rec translate ({ Heptagon.e_desc = desc; Heptagon.e_ty = ty;
         Error.message loc Error.Eunsupported_language_construct
     | Heptagon.Emerge (x, c_e_list) ->
         Emerge (x, List.map (fun (c,e)-> c, translate_extvalue e) c_e_list)
-    | Heptagon.Ecurrent (_, _, _) -> raise CurrentShouldNotHappenHere
+    | Heptagon.Ecurrent _ -> raise CurrentShouldNotHappenHere
   in
   match a_ct with
     | None -> mk_exp b_ck ty ~loc:loc ~linearity:linearity desc

@@ -85,8 +85,6 @@ type error =
 exception Unify
 exception TypingError of error
 
-exception CurrentShouldNotHappenHere
-
 let error kind = raise (TypingError(kind))
 
 let message loc kind =
@@ -903,9 +901,12 @@ and typing cenv h e =
             List.map (fun (c, e) -> (c, expect cenv h t e)) c_e_list in
           Emerge (x, (c1,typed_e1)::typed_c_e_list), t
       | Emerge (_, []) -> assert false
-      
-      | Ecurrent (_, _, _) -> raise CurrentShouldNotHappenHere
-      
+      | Ecurrent (cons_clk, exp_clk, e_init, e) ->
+        let typed_e_init, t = typing cenv h e_init in
+        let typed_e = expect cenv h t e in
+        (* Check that the type of exp_clk match the constructor cons_clk *)
+        unify cenv (typ_of_name h exp_clk) (find_constrs cons_clk);
+        Ecurrent (cons_clk, exp_clk, typed_e_init, typed_e), t
       | Esplit(c, e2) ->
           let typed_c, ty_c = typing cenv h c in
           let typed_e2, ty = typing cenv h e2 in

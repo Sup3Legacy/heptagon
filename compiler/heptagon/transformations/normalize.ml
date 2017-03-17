@@ -173,7 +173,7 @@ let rec translate kind context e =
     | Ewhen(e1, c, n) ->
         let context, e1 = translate kind context e1 in
         whenc context e1 c n e
-    | Ecurrent (_, _, _) -> raise CurrentShouldNotHappenHere
+    | Ecurrent _ -> raise CurrentShouldNotHappenHere
     | Emerge(n, tag_e_list) ->
         merge context e n tag_e_list
     | Eapp({ a_op = Eifthenelse }, [e1; e2; e3], _) ->

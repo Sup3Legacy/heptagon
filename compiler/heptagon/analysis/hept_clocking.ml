@@ -121,7 +121,7 @@ let rec typing h pat e =
         let ck = ck_of_name h x in
         List.iter (fun (c,e) -> expect h pat (Ck(Clocks.Con (ck,c,x))) e) c_e_list;
         Ck ck, ck
-    | Ecurrent (_, _, _) -> raise CurrentShouldNotHappenHere
+    | Ecurrent _ -> raise CurrentShouldNotHappenHere
     | Estruct l ->
         let ck = fresh_clock () in
         List.iter (fun (_, e) -> expect h pat (Ck ck) e) l;

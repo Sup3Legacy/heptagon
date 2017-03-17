@@ -168,9 +168,9 @@ and print_exp_desc ff = function
   | Emerge (x, tag_e_list) ->
       fprintf ff "@[<2>merge %a@ %a@]"
         print_ident x print_tag_e_list tag_e_list
-  | Ecurrent (c, n, e) ->
-      fprintf ff "@[<2>current %a(%a)@ %a@]"
-        print_qualname c  print_ident n  print_exp e
+  | Ecurrent (c, n, eInit, e) ->
+      fprintf ff "@[<2>current %a(%a)@ %a@ %a@]"
+        print_qualname c  print_ident n  print_exp eInit  print_exp e
   | Esplit (x, e1) ->
       fprintf ff "@[<2>split %a@ %a@]"
         print_exp x  print_exp e1

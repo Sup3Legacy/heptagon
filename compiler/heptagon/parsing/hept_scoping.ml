@@ -390,11 +390,12 @@ and translate_desc loc env = function
           (c, e) in
         List.map fun_c_e c_e_list in
       Heptagon.Emerge (x, c_e_list)
-  | Ecurrent (c, x, e) ->
+  | Ecurrent (c, x, eInit, e) ->
       let x = Rename.var loc env x in
       let c = qualify_constrs c in
+      let eInit = translate_exp env eInit in
       let e = translate_exp env e in
-      Heptagon.Ecurrent (c, x, e)
+      Heptagon.Ecurrent (c, x, eInit, e)
   | Esplit (x, e1) ->
      let x = translate_exp env (mk_exp (Evar x) loc) in
      let e1 = translate_exp env e1 in

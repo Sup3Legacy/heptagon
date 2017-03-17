@@ -449,7 +449,7 @@ let rec typing_exp env e =
     | Ewhen (e1, _, _) ->
         let env = safe_expect env (not_linear_for_exp e1) e1 in
         lin_skeleton Ltop e.e_ty, env
-    | Ecurrent (_, _, _) -> raise CurrentShouldNotHappenHere
+    | Ecurrent _ -> raise CurrentShouldNotHappenHere
     | Estruct _ -> Ltop, env
     | Emerge _ | Esplit _ | Eapp _ | Eiterator _ -> assert false
   in

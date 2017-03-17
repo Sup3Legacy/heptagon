@@ -108,7 +108,7 @@ and edesc =
   | Eiterator of iterator_type * app * exp list * exp list * exp list
   | Ewhen of exp * constructor_name * var_name
   | Emerge of var_name * (constructor_name * exp) list
-  | Ecurrent of constructor_name * var_name * exp
+  | Ecurrent of constructor_name * var_name * exp * exp (* current(cons(clk), eInit, eCurr) *)
   | Esplit of var_name * exp
 
 and app = { a_op: op; a_params: exp list; a_inlined: bool }

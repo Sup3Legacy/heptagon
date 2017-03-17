@@ -138,7 +138,7 @@ let rec typing e =
         let t = typing e in
         let tc = read x in
         cseq tc t
-    | Ecurrent (_, _, _) -> raise CurrentShouldNotHappenHere
+    | Ecurrent _ -> raise CurrentShouldNotHappenHere
     | Emerge (x, c_e_list) ->
         let t = read x in
         let tl = List.map (fun (_,e) -> typing e) c_e_list in

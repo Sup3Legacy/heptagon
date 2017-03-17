@@ -64,8 +64,8 @@ and desc =
     (** exp when Constructor(ident) *)
   | Emerge of var_ident * (constructor_name * exp) list
     (** merge ident (Constructor -> exp)+ *)
-  | Ecurrent of constructor_name * var_ident * exp
-    (** current(clk, exp) / syntactic sugar to obtain the last produced value, on the clock exp *)
+  | Ecurrent of constructor_name * var_ident * exp * exp
+    (** current( cons(clk), expInit, exp) *)
   | Esplit of exp * exp
   | Eapp of app * exp list * exp option
   | Eiterator of iterator_type * app * static_exp list

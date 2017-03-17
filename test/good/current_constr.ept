@@ -1,0 +1,10 @@
+(* Test for a *)
+type c3 = C3_0 | C3_1 | C3_2 | C3_3
+
+node current_test(data: float; tC3 : c3)
+   returns (dataCurr : float)
+let
+  dataCurr = current(C3_0(tC3), 0.0, data);
+tel
+
+

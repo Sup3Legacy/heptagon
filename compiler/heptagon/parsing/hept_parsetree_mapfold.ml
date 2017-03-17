@@ -130,9 +130,10 @@ and edesc funs acc ed = match ed with
         (c,e), acc in
     let c_e_list, acc = mapfold aux acc c_e_list in
       Emerge(x, c_e_list), acc
-  | Ecurrent (c, x, e) ->
+  | Ecurrent (c, x, ei, e) ->
+    let ei, acc = exp_it funs acc ei in
     let e, acc = exp_it funs acc e in
-      Ecurrent(c, x, e), acc
+      Ecurrent(c, x, ei, e), acc
   | Ewhen (e, c, x) ->
     let e, acc = exp_it funs acc e in
       Ewhen (e, c, x), acc

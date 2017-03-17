@@ -570,10 +570,10 @@ _exp:
       { Ewhen (e, Q Initial.pfalse, ce) }
   | MERGE n=IDENT hs=merge_handlers
       { Emerge (n, hs) }
-  | CURRENT LPAREN c=constructor_or_bool LPAREN ce=IDENT RPAREN COMMA e=exp RPAREN
-      { Ecurrent (c, ce, e) }
-  | CURRENT LPAREN ce=IDENT COMMA e=exp RPAREN
-      { Ecurrent (Q Initial.ptrue, ce, e) }
+  | CURRENT LPAREN c=constructor_or_bool LPAREN ce=IDENT RPAREN COMMA eInit=exp COMMA e=exp RPAREN
+      { Ecurrent (c, ce, eInit, e) }
+  | CURRENT LPAREN ce=IDENT COMMA eInit=exp COMMA e=exp RPAREN
+      { Ecurrent (Q Initial.ptrue, ce, eInit, e) }
   | exp INFIX1 exp
       { mk_op_call $2 [$1; $3] }
   | exp INFIX0 exp

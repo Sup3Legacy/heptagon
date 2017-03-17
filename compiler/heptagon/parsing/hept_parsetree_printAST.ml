@@ -143,8 +143,8 @@ and print_edesc ff edesc = match edesc with
       print_const_name cons_name  print_var_name var_name
   | Emerge (var_name, lconstname_exp) -> fprintf ff "Emerge %a%a" print_var_name var_name
      (print_list (print_couple print_const_name print_exp "" "|" "") "" "," "") lconstname_exp
-  | Ecurrent (cons_name, var_name, exp) -> fprintf ff "Ecurrent %a(%a) %a"
-      print_const_name cons_name  print_var_name var_name print_exp expr
+  | Ecurrent (cons_name, var_name, expInit, exp) -> fprintf ff "Ecurrent(%a(%a), %a, %a)"
+      print_const_name cons_name  print_var_name var_name  print_exp expInit  print_exp expr
   | Esplit (var_name, exp) -> fprintf ff "Esplit %a%a" print_var_name var_name print_exp exp
 
 and print_exp ff { e_desc= edesc; e_ct_annot= optct } =
