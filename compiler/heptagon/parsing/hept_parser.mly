@@ -422,6 +422,7 @@ block(S) :
       { mk_block [] eq (Loc($startpos,$endpos)) }
 
 equa_decl_seq:
+  | /* empty */ {()}
   | EQUA IDENT LBRACKET COMMA RBRACKET {()}
 
 /* separated block */
