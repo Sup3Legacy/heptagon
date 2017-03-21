@@ -180,6 +180,8 @@ const_dec2:
 const_decs:
   | LET CONST ident consts=optsnlist(SEMICOL, const_dec2) TEL SEMICOL
       {consts}
+  | const=const_dec
+     {[const]}
 
 type_dec:
   | TYPE IDENT
