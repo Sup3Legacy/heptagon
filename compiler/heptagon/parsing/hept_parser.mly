@@ -581,7 +581,8 @@ exp:
   | e=simple_exp { e }
   | e=_exp { mk_exp e (Loc($startpos,$endpos)) }
 _exp:
-  (* | simple_exp FBY exp *)
+  | v0=simple_exp FBY e=exp
+      { Efby (v0, e) }
   | FBY LPAREN e=exp COMMA simple_exp COMMA v0=simple_exp RPAREN
       { Efby (v0, e) }
   | PRE exp
