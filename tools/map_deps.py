@@ -1,9 +1,8 @@
-# Translate -deps produced by hacked Heptagon into a normal .depend file
+# Translate deps produced by hacked Heptagon -M into a normal .depend file
+# T. Bourke 20160422
 
 import sys
 import re
-
-ignored_reqs = [ '', '_null' ]
 
 re_depline = re.compile(r'(?P<filename>[^=]*)=(?P<defs>[^:]*):(?P<reqs>.*)')
 
@@ -17,8 +16,7 @@ for l in sys.stdin.readlines():
 
     filename = r.group('filename')
     defined = filter(lambda s: s <> '', r.group('defs').split(" "))
-    required = filter(lambda s: s not in ignored_reqs,
-                      r.group('reqs').split(" "))
+    required = filter(lambda s: s <> '', r.group('reqs').split(" "))
 
     filedeps[filename] = required
 
@@ -32,14 +30,14 @@ print "_default: default"
 filenames = filedeps.keys()
 filenames.sort()
 
-missing = []
+missing = set()
 for filename in filenames:
     deps = {}
     for r in filedeps[filename]:
         try:
             deps[definedby[r]] = True
         except KeyError:
-            missing.append(r)
+            missing.add(r)
     print "%s:%s" % (filename, " ".join(deps.keys()))
 
 # print out all the filenames
@@ -55,5 +53,5 @@ print
 
 # Print the symbols that could not be resolved
 for m in missing:
-    print "! could not find '%s'" % m
+    print >> sys.stderr, "! could not find '%s'" % m
 
