@@ -131,6 +131,46 @@ let calculate_deps modname source_f =
   Printf.printf "%s=%s: %s\n" source_f (String.concat " " syms)
                                        (String.concat " " deps)
 
+
+(* Get some simple stats on the source program (number of equations/ variables/ constants) *)
+let simple_stats modname source_f = 
+  (* output file names *)
+  let output = String.uncapitalize modname in
+  let stats_f = output ^ ".stats" in
+  
+  (* input/output channels *)
+  let source_c, lexbuf = lexbuf_from_file source_f in
+  let stats_c = open_out stats_f in
+  let close_all_files () = close_in source_c; close_out stats_c in
+  
+  let p = do_silent_pass "Parsing" (Hept_parser_scoper.parse Hept_parser.program) lexbuf in
+  
+  (* Get the stats of the file *)
+  let name_node = modname in
+  let num_const = List.fold_left
+    (fun cnt pdesc -> match pdesc with
+      | Hept_parsetree.Pconst _ -> (cnt+1)
+      | _ -> cnt
+    )
+    0 p.p_desc in
+  let (num_eq, num_var_in, num_var_out, num_var_loc) = List.fold_left
+    (fun (cnt_eq, cnt_var_in, cnt_var_out, cnt_var_loc) pdesc -> match pdesc with
+      | Hept_parsetree.Pnode nd ->
+        (cnt_eq + (List.length nd.n_block.b_equs),
+          cnt_var_in + (List.length nd.n_input),
+          cnt_var_out + (List.length nd.n_output),
+          cnt_var_loc + (List.length nd.n_block.b_local)
+        )
+      | _ -> (cnt_eq, cnt_var_in, cnt_var_out, cnt_var_loc)
+    )
+    (0,0,0,0) p.p_desc in
+  
+  Printf.printf "Node %s => (Num_eq : %i) (Num_var_in : %i) (Num_var_out : %i) (Num_var_loc : %i) (Num_const : %i)\n"
+    name_node num_eq num_var_in num_var_out num_var_loc num_const;
+  close_all_files ()
+
+
+
 let compile source_f =
   let modname = source_f
                 |> Filename.basename
@@ -145,6 +185,13 @@ let compile source_f =
       | "saofd" -> calculate_deps modname source_f
       | "ept" -> calculate_deps modname source_f
       | ext -> raise (Arg.Bad ("Cannot calculate dependencies for files of type: "
+                        ^ ext ^ " for file: " ^ source_f))
+  else
+  if !calc_stats then
+    match Misc.file_extension source_f with
+      | "saofd" -> simple_stats modname source_f
+      | "ept" -> simple_stats modname source_f
+      | ext -> raise (Arg.Bad ("Cannot calculate statistics for files of type: "
                         ^ ext ^ " for file: " ^ source_f))
   else
   match Misc.file_extension source_f with
@@ -169,7 +216,10 @@ let main () =
         "-I", Arg.String add_include, doc_include;
         "-where", Arg.Unit locate_stdlib, doc_locate_stdlib;
         "-stdlib", Arg.String set_stdlib, doc_stdlib;
+        
         "-M", Arg.Set calc_deps, doc_calc_deps;
+        "-stats", Arg.Set calc_stats, doc_calc_stats;
+        
         "-open", Arg.String new_file_to_open, doc_files_to_open;
         "-c", Arg.Set create_object_file, doc_object_file;
         "-s", Arg.String set_simulation_node, doc_sim;
