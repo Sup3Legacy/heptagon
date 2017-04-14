@@ -119,11 +119,7 @@ let calculate_deps modname source_f =
   let epci_c = open_out_bin epci_f in
   let mls_c = open_out mls_f in
   let close_all_files () = close_in source_c; close_out epci_c; close_out mls_c in
-
-  let p = do_silent_pass "Parsing" (Hept_parser_scoper.parse Hept_parser.program) lexbuf in
-  List.iter Modules.open_module p.p_opened;
-  let p = do_pass "Scoping" Hept_scoping.translate_program p ignore in
-
+  let p = Hept_parser_scoper.parse_program modname lexbuf in
   let deps = List.sort_uniq String.compare
                (!Modules.unknown_nodes @ !Modules.unknown_vars) in
   let { Heptagon.p_desc=pds } = p in
