@@ -81,7 +81,7 @@ and ty_subst = (type_name * ty) list
 
 and op =
   | Etuple
-  | Efun of (fun_name * ty_subst)
+  | Efun of (fun_name * ty_subst)  (* TODO: update AST to remove that *)
   | Enode of (fun_name * ty_subst)
   | Eifthenelse
   | Earrow

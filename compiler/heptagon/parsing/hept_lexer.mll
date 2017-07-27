@@ -114,7 +114,11 @@ List.iter (fun (str,tok) -> Hashtbl.add keyword_table str tok) [
  "xor", INFIX2("xor");
  "lsl", INFIX4("lsl");
  "lsr", INFIX4("lsr");
- "asr", INFIX4("asr")
+ "asr", INFIX4("asr");
+ 
+ "probe", PROBE;
+ "imported", IMPORTED;
+ "state_operator", STATE_OPERATOR;
 ]
 
 
@@ -226,6 +230,8 @@ rule token = parse
       }
   | "--" [^ '\n']* newline
       { new_line lexbuf; token lexbuf }
+  | "--" [^ '\n']* eof
+      { EOF } 
   | "(*" | "/*" | "/*!"
       { let comment_start = lexbuf.lex_curr_p in
         comment_depth := 1;

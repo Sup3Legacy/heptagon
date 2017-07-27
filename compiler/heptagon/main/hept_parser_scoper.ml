@@ -51,6 +51,9 @@ let parse_program modname lexbuf =
   let p = do_silent_pass "Parsing" (parse Hept_parser.program) lexbuf in
   let p = { p with Hept_parsetree.p_modname = modname } in
   
+  (* TODO DEBUG *)
+  (*Hept_parsetree_printAST.print_AST stdout p;*)
+  
   (* Fuse static exps together *)
   let p = do_silent_pass "Static Scoping" Hept_static_scoping.program p in
   

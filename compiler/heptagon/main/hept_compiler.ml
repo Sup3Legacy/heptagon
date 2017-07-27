@@ -36,6 +36,9 @@ let compile_program p =
   (* Remove the "current" construct (syntactic sugar) *)
   let p = silent_pass "Current removal" true CurrentRemoval.program p in
   
+  (* TODO DEBUG*)
+  Hept_printer.print stdout p;
+  
   (* Typing *)
   let p = silent_pass "Statefulness check" true Stateful.program p in
   let p = silent_pass "Unsafe check" true Unsafe.program p in

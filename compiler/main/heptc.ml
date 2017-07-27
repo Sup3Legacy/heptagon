@@ -108,6 +108,14 @@ let extract_symbol pd =
   in
   Names.shortname n
 
+let uppercase_first str =
+  if (str="") then "" else
+  let fstChar = String.get str 0 in
+  let fstChar = Char.uppercase_ascii fstChar in
+  let fstStr = Char.escaped fstChar in
+  fstStr ^ (String.sub str 1 ((String.length str) -1))
+
+
 let calculate_deps modname source_f =
   (* output file names *)
   let output = String.uncapitalize modname in
@@ -124,6 +132,12 @@ let calculate_deps modname source_f =
                (!Modules.unknown_nodes @ !Modules.unknown_vars) in
   let { Heptagon.p_desc=pds } = p in
   let syms = List.map extract_symbol pds in
+  
+  (* Uppercases if needed *)
+  let source_f = uppercase_first source_f in
+  let syms = List.map uppercase_first syms in
+  let deps = List.map uppercase_first deps in
+  
   Printf.printf "%s=%s: %s\n" source_f (String.concat " " syms)
                                        (String.concat " " deps)
 
@@ -215,6 +229,7 @@ let main () =
         
         "-M", Arg.Set calc_deps, doc_calc_deps;
         "-stats", Arg.Set calc_stats, doc_calc_stats;
+        "-safran", Arg.Set safran_handling, doc_safran_handling;
         
         "-open", Arg.String new_file_to_open, doc_files_to_open;
         "-c", Arg.Set create_object_file, doc_object_file;

@@ -32,7 +32,129 @@ open Location
 open Names
 open Linearity
 open Hept_parsetree
+open Modules
 
+let get_sexp_from_exp e = match e.e_desc with
+  | Econst se -> se
+  | _ -> failwith "This is not a static expression."
+
+
+
+(*
+let rec sexp_desc_to_parsetree_sexp_desc dsexp = match dsexp with
+  | Types.Svar cst_name -> Hept_parsetree.Svar (Q cst_name)
+  | Types.Sint i -> Hept_parsetree.Sint i
+  | Types.Sfloat f -> Hept_parsetree.Sfloat f
+  | Types.Sbool b -> Hept_parsetree.Sbool b
+  | Types.Sstring s -> Hept_parsetree.Sstring s
+  | Types.Sconstructor cname -> Hept_parsetree.Sconstructor (Q cname)
+  | Types.Sfield fname -> Hept_parsetree.Sfield (Q fname)
+  | Types.Stuple lsexp -> Hept_parsetree.Stuple (List.map sexp_to_parsetree_sexp lsexp)
+  | Types.Sarray_power (sexp, lsexp) ->
+      Hept_parsetree.Sarray_power ((sexp_to_parsetree_sexp sexp), (List.map sexp_to_parsetree_sexp lsexp))
+  | Types.Sarray lsexp -> Hept_parsetree.Sarray (List.map sexp_to_parsetree_sexp lsexp)
+  | Types.Srecord lfname_sexp ->
+      Hept_parsetree.Srecord (List.map (fun (fname, sexp) -> (Q fname, sexp_to_parsetree_sexp sexp)) lfname_sexp)
+  | Types.Sop (fname, lsexp) ->
+      Hept_parsetree.Sop (Q fname, (List.map sexp_to_parsetree_sexp lsexp))
+
+and sexp_to_parsetree_sexp sexp =
+   Hept_parsetree.mk_static_exp (sexp_desc_to_parsetree_sexp_desc sexp.se_desc) sexp.se_loc
+
+let rec ty_to_parsetree_ty ty = match ty with
+  | Types.Tprod lty -> Hept_parsetree.Tprod (List.map ty_to_parsetree_ty lty)
+  | Types.Tid name -> Hept_parsetree.Tid (Q name)
+  | Types.Tarray (ty, sexp) ->
+    let sexp = sexp_to_parsetree_sexp sexp in
+    let exp = Hept_parsetree.mk_exp (Econst sexp) no_location in
+    Hept_parsetree.Tarray ((ty_to_parsetree_ty ty), exp)
+  | Types.Tclasstype (name, cl) -> Hept_parsetree.Tid (Q name)
+  | Types.Tinvalid -> Hept_parsetree.Tinvalid
+
+
+let rec get_dummy_st_expr t = match t with
+  | Tprod lty ->
+    let lst_exp = List.map get_dummy_st_expr lty in
+    let se_desc = Stuple lst_exp in
+    mk_static_exp se_desc no_location
+  | Tid qname -> begin
+    let real_qual_name = match qname with
+      | Q real_qname -> real_qname
+      | ToQ n ->  begin
+        try Modules.qualify_type n
+        with Not_found -> failwith ("No default static expression and alias for type " ^ n) (* TODO: issue here *)
+       end
+    in
+    try
+      let ty_def = Modules.find_type real_qual_name in
+      let se_desc = match ty_def with
+       | Tabstract -> begin
+         match real_qual_name.name with
+          | "int" -> Sint 0
+          | "real" -> Sfloat 0.0
+          | "float" -> Sfloat 0.0
+          | "string" -> Sstring ""
+          | _ -> failwith ("No default static expression for type " ^ real_qual_name.name)
+         end
+       | Talias ty -> let sexpr = get_dummy_st_expr (ty_to_parsetree_ty ty) in sexpr.se_desc
+       | Tenum lconstr ->
+         if (real_qual_name.name="bool") then Sbool false
+         else failwith ("No default static expression for enum type " ^ real_qual_name.name)
+       | Tstruct strct ->failwith ("No default static expression for struct type " ^ real_qual_name.name)
+     in
+     mk_static_exp se_desc no_location
+    with Not_found -> failwith ("Undeclared type " ^ real_qual_name.name)
+   end
+  | Tarray (ty, expr) ->
+    let st_exp_ty = get_dummy_st_expr ty in
+    let sexpr = get_sexp_from_exp expr in
+    let se_desc = Sarray_power (st_exp_ty, [sexpr]) in
+    mk_static_exp se_desc no_location
+  | Tinvalid -> failwith "Constant declaration with Tinvalid type."
+
+let get_dummy_expr t =
+  let sexp = get_dummy_st_expr t in
+  mk_exp (Econst sexp) no_location 
+*)
+
+(* TODO: ad-hoc solution for Safran UC *)
+let rec get_dummy_st_expr t = match t with
+  | Tid qname ->
+    begin
+    let name = match qname with
+      | Q real_qname -> real_qname.name
+      | ToQ n -> n
+    in
+    match name with
+      | "int" -> Sint 0
+      | "real" -> Sfloat 0.0
+      | "float" -> Sfloat 0.0
+      | "string" -> Sstring ""
+      | "bool" -> Sbool false
+      | _ ->
+        (* We use Safran type naming convention to get the type => DIRTY ! *)
+        if ( (String.sub name 0 7)="Vector_") then
+          let l = String.length name in
+          let stri = String.sub name 7 (l-8) in
+          let num_array = int_of_string stri in
+          let sexp_numarray = mk_static_exp (Sint num_array) no_location in
+          let sexp_ty = match (String.get name (l-1)) with
+            | 'i' -> mk_static_exp (Sint 0) no_location
+            | 'r' -> mk_static_exp (Sfloat 0.0) no_location
+            | 'b' -> mk_static_exp (Sbool false) no_location
+            | _ -> failwith "unrecognized last char"
+          in
+          Sarray_power (sexp_ty, [sexp_numarray])
+          
+        else failwith "get_dummy_st_expr - unrecognized type"
+    end
+  | _ -> failwith "get_dummy_st_expr - Case should not happen."
+
+
+let get_dummy_expr t =
+  let sexp_desc = get_dummy_st_expr t in
+  let sexp = mk_static_exp sexp_desc no_location in
+  mk_exp (Econst sexp) no_location 
 
 %}
 
@@ -91,6 +213,9 @@ open Hept_parsetree
 %token EOF
 %token EQUA
 
+%token PROBE
+%token IMPORTED
+%token STATE_OPERATOR
 
 %right AROBASE
 %nonassoc DEFAULT
@@ -159,7 +284,7 @@ program: o=list(opens) p=list(program_desc) EOF
 program_desc:
   | p=PRAGMA       { [Ppragma p] }
   | c=const_decs   { List.map (fun x -> Pconst x) c }
-  | t=type_dec     { [Ptype t] }
+  | lt=type_dec     { List.map (fun t -> Ptype t) lt }
   | c=class_dec    { [Pclass c] }
   | i=instance_dec { [Pinstance i] }
   | n=node_dec     { [Pnode n] }
@@ -175,6 +300,8 @@ const_dec:
 const_dec2:
   | x=IDENT COLON t=ty_ident EQUAL e=exp
       { mk_const_dec x t e (Loc($startpos,$endpos)) }
+  | IMPORTED x=IDENT COLON t=ty_ident
+      { mk_const_dec x t (get_dummy_expr t) (Loc($startpos,$endpos)) }
 ;
 
 const_decs:
@@ -185,14 +312,51 @@ const_decs:
 
 type_dec:
   | TYPE IDENT
-      { mk_type_dec $2 Type_abs (Loc($startpos,$endpos)) }
+      { [mk_type_dec $2 Type_abs (Loc($startpos,$endpos))] }
   | TYPE IDENT EQUAL ty_ident
-      { mk_type_dec $2 (Type_alias $4) (Loc($startpos,$endpos)) }
+      { [mk_type_dec $2 (Type_alias $4) (Loc($startpos,$endpos))] }
   | TYPE IDENT EQUAL enum_ty_desc
-      { mk_type_dec $2 (Type_enum ($4)) (Loc($startpos,$endpos)) }
+      { [mk_type_dec $2 (Type_enum ($4)) (Loc($startpos,$endpos))] }
   | TYPE IDENT EQUAL struct_ty_desc
-      { mk_type_dec $2 (Type_struct ($4)) (Loc($startpos,$endpos)) }
+      { [mk_type_dec $2 (Type_struct ($4)) (Loc($startpos,$endpos))] }
+/* ADDED FOR SAFRAN */
+  | LET TYPE IDENT ltype_dec_scade TEL SEMICOL
+      { $4 }
 ;
+
+
+
+/* ADDED FOR SAFRAN */
+
+ltype_dec_scade:
+  | IDENT EQUAL LBRACKET lident_type_dec_scade RBRACKET SEMICOL
+      { let (num, ty) = $4 in (* There is only arrays of elem of same type for our case *)
+        let loc = Loc($startpos,$endpos) in
+        let enumdesc = Econst (mk_static_exp (Sint num) loc) in
+        let e_num = mk_exp enumdesc loc in
+        let tydec = mk_type_dec $1 (Type_alias (Tarray (ty, e_num))) loc in
+        [tydec]
+      }
+  | IDENT EQUAL LBRACKET lident_type_dec_scade RBRACKET SEMICOL ltype_dec_scade
+      { let (num, ty) = $4 in (* There is only arrays of elem of same type for our case *)
+        let loc = Loc($startpos,$endpos) in
+        let enumdesc = Econst (mk_static_exp (Sint num) loc) in
+        let e_num = mk_exp enumdesc loc in
+        let tydec = mk_type_dec $1 (Type_alias (Tarray (ty, e_num))) loc in
+        tydec::$7
+      }
+
+lident_type_dec_scade:
+  | IDENT
+      {
+        (1, Tid (ToQ $1)) 
+      }
+  | IDENT COMMA lident_type_dec_scade
+      { let (num,ty) = $3 in (num+1,ty) }
+
+/* END ADDED FOR SAFRAN */
+
+
 
 class_dec:
   | CLASS IDENT    { mk_class_dec $2 (Loc($startpos,$endpos)) }
@@ -226,7 +390,7 @@ returns: RETURNS | EQUAL {}
 node_dec:
   | u=unsafe n=node_or_fun f=ident pc=node_params tp=type_params
     LPAREN i=in_params RPAREN returns LPAREN o=out_params RPAREN SEMICOL
-    c=contract b=block(LET) TEL SEMICOL
+    c=contract b=block(LET) TEL semicolopt
       {{ n_name = f;
          n_stateful = n;
          n_unsafe = u;
@@ -242,6 +406,7 @@ node_dec:
 
 node_or_fun:
   | NODE { true }
+  | STATE_OPERATOR { true (* Safran *) }
   | FUN { false }
 ;
 
@@ -359,6 +524,10 @@ var_last:
   | LAST id=IDENT COLON ty_lin=located_ty_ident ck=ck_annot
       { [ mk_var_dec ~linearity:(snd ty_lin) id (fst ty_lin)
             ck (Last(None)) (Loc($startpos,$endpos)) ] }
+  
+  | PROBE id=IDENT COLON ty_lin=located_ty_ident ck=ck_annot
+      { [ mk_var_dec ~linearity:(snd ty_lin) id (fst ty_lin)
+            ck Var (Loc($startpos,$endpos)) ] }
 ;
 
 ident_list:
@@ -675,6 +844,10 @@ _exp:
   | LBRACE simple_exp WITH DOT c=qualname EQUAL exp RBRACE
       { mk_call ~params:[mk_field_exp c (Loc($startpos(c),$endpos(c)))]
                 Efield_update [$2; $7] }
+  
+/* ADDED FOR SAFRAN UC */
+  | LBRACKET l=separated_nonempty_list(COMMA, exp) RBRACKET
+      { mk_call Earray l }
 ;
 
 call_params:
@@ -781,7 +954,9 @@ infx:
 
 interface:
   | o=list(opens) i=list(interface_desc) EOF
-    { { i_modname = ""; i_opened = o; i_desc = i } }
+    { { i_modname = "";
+        i_opened = (List.map (fun x -> Names.Module x) (List.rev !Compiler_options.files_to_open)) @  o;
+        i_desc = i } }
 ;
 
 unsafe:
@@ -790,6 +965,7 @@ unsafe:
 
 extern:
   | EXTERNAL  { true }
+  | IMPORTED  { true }
   | /*empty*/ { false }
 
 val_or_empty:
@@ -797,12 +973,12 @@ val_or_empty:
   | /*empty*/ { () }
 
 interface_desc:
-  | type_dec         { Itypedef $1 }
+  | type_dec         { assert(List.length $1 =1); Itypedef (List.hd $1)}
   | const_dec        { Iconstdef $1 }
   | class_dec        { Iclassdef $1 }
   | instance_dec     { Iinstancedef $1 }
   | e=extern u=unsafe val_or_empty n=node_or_fun f=ident pc=node_params tp=type_params LPAREN i=params_signature RPAREN
-    returns LPAREN o=params_signature RPAREN
+    returns LPAREN o=params_signature RPAREN semicolopt
     { Isignature({ sig_name = f;
                    sig_typeparams = tp;
                    sig_inputs = i;
@@ -814,6 +990,10 @@ interface_desc:
                    sig_external = e;
                    sig_loc = (Loc($startpos,$endpos)) }) }
 ;
+
+semicolopt:
+  |  /* empty */ {}
+  | SEMICOL      {}
 
 params_signature:
   | /* empty */  {[]}

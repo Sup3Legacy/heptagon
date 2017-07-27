@@ -70,6 +70,7 @@ let show_version () =
 (* other options of the compiler *)
 let calc_deps = ref false
 let calc_stats = ref false
+let safran_handling = ref false
 let files_to_open = ref ([] : string list)
 let new_file_to_open s = (files_to_open := s :: !files_to_open)
 
@@ -190,6 +191,8 @@ and doc_include = "<dir>\t\tAdd <dir> to the list of include directories"
 and doc_stdlib = "<dir>\t\tDirectory for the standard library"
 and doc_calc_deps = "\t\t\tCalculate dependencies for the given files"
 and doc_calc_stats = "\t\t\tCalculate statistics for the given files"
+and doc_safran_handling = "\t\t\tTrigger special modification to fit the Safran usecase"
+
 and doc_files_to_open = "\t\tFiles to open before compiling"
 and doc_object_file = "\t\t\tOnly generate a .epo object file"
 and doc_sim = "<node>\t\tCreate simulation for node <node>"

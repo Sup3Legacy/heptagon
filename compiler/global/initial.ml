@@ -49,10 +49,6 @@ let tfloat = Types.Tid pfloat
 let pstring = { qual = Pervasives; name = "string" }
 let tstring = Types.Tid pstring
 
-let pNum = { qual = Pervasives; name = "num" }
-let clNum = { tc_name = pNum }
-
-
 let pfile = { qual = Module "Iostream"; name = "file" }
 let tfile = Types.Tid pfile
 
