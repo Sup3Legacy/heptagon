@@ -322,6 +322,16 @@ let rec translate_type loc tenv ty =
       | Tarray (ty, e) ->
           let ty = translate_type loc tenv ty in
           Types.Tarray (ty, expect_static_exp e)
+      | Tclasstype (ToQ ntype, Q qnclass) ->
+        
+        (* TODO: check tenv and compare it with ntype... :/  *)
+        
+        
+        
+        
+        let qntype = qualify_type (ToQ ntype) in
+        Types.Tclasstype (qntype, { tc_name = qnclass})
+      | Tclasstype (_,_) -> assert false (* Class name should be qualified *)
       | Tinvalid -> Types.Tinvalid
     )
   with

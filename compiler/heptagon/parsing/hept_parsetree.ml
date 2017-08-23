@@ -81,8 +81,9 @@ type ty =
   | Tprod of ty list
   | Tid of qualname
   | Tarray of ty * exp
+  | Tclasstype of qualname * qualname
   | Tinvalid
-  (** no "Tclasstype" yet (currently inside Tid) *)
+  (* most "Tclasstype" are currently Tid (except the one introduced by "*") *)
 
 and ck =
   | Cbase

@@ -156,6 +156,8 @@ let rec print_type ff typ = match typ with
   | Tprod ltyp -> fprintf ff "Tprod %a" (print_list print_type "(" ", " ")") ltyp
   | Tid qname -> fprintf ff "Tid %a" print_qualname qname
   | Tarray (typ,exp) -> fprintf ff "Tarray %a^(%a)" print_type typ print_exp exp
+  | Tclasstype (qntype, qnclass) ->
+    fprintf ff "Tclasstype (%a of %a)" print_qualname qntype  print_qualname qnclass
   | Tinvalid -> fprintf ff "Tinvalid"
 
 

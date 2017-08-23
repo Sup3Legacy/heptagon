@@ -156,6 +156,19 @@ let get_dummy_expr t =
   let sexp = mk_static_exp sexp_desc no_location in
   mk_exp (Econst sexp) no_location 
 
+
+(* TODO: hacky solution to manage the "*" types as a type variable (cf NamedNVM in Safran UC) *)
+let default_type_var_string = "t_default"
+
+let default_type_var_name = ToQ default_type_var_string
+
+let default_class_name = "intbool"
+
+let default_class_type = Q Initial.pintbool
+
+let contain_star_type_var = ref false
+
+
 %}
 
 %token DOT LPAREN LESS_LPAREN RPAREN RPAREN_GREATER LBRACE RBRACE COLON COLONCOLON SEMICOL
@@ -389,9 +402,14 @@ returns: RETURNS | EQUAL {}
 
 node_dec:
   | u=unsafe n=node_or_fun f=ident pc=node_params tp=type_params
-    LPAREN i=in_params RPAREN returns LPAREN o=out_params RPAREN SEMICOL
+    LPAREN i=in_params RPAREN returns LPAREN o=out_params RPAREN semicolopt
     c=contract b=block(LET) TEL semicolopt
-      {{ n_name = f;
+      {
+        let tp = if (!contain_star_type_var) then
+          (mk_typeparam default_type_var_string default_class_name)::tp
+        else tp in
+        contain_star_type_var := false;
+        { n_name = f;
          n_stateful = n;
          n_unsafe = u;
          n_typeparams = tp;
@@ -547,6 +565,10 @@ ty_ident:
       { Tid $1 }
   | ty_ident POWER simple_exp
       { Tarray ($1, $3) }
+  | STAR
+      { contain_star_type_var := true;
+        Tclasstype (default_type_var_name, default_class_type)
+      }
 ;
 
 ct_annot:

@@ -49,6 +49,8 @@ let tfloat = Types.Tid pfloat
 let pstring = { qual = Pervasives; name = "string" }
 let tstring = Types.Tid pstring
 
+let pintbool = { qual = Pervasives; name = "intbool"}
+
 let pfile = { qual = Module "Iostream"; name = "file" }
 let tfile = Types.Tid pfile
 

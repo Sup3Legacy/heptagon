@@ -43,7 +43,7 @@ open Pp_tools
 open Format
 
 
-let verbose_debug_typing = ref false; (* TODO DEBUG *)
+let verbose_debug_typing = ref false; (* DEBUG *)
 
 type value = { vd: var_dec; mutable last: bool }
 
@@ -465,6 +465,17 @@ let struct_info_from_field f =
 type typ_constrnt = name * name * (ty option)  (* Type name, class name, associated value *)
 
 (* Pretty-printer *)
+let print_list_type ff lty =
+  let rec print_list_type_aux ff lty = match lty with
+    | [] -> ()
+    | h::t -> fprintf ff "%a; " Global_printer.print_type h;
+      print_list_type_aux ff t
+  in
+  fprintf ff "[";
+  print_list_type_aux ff lty;
+  fprintf ff "]\n@?"
+
+
 let print_lntypeclass ff ltypeclass =
   let print_lntclassaux ff (tn,cn,tyop) = 
     fprintf ff "%s (of %s) = %a"
@@ -795,75 +806,56 @@ and typing cenv h e =
           let ty_desc = find_value f in
           let op, expected_ty_list, result_ty_list, typarams = kind f ty_desc in
           
-          if (typarams==[]) then
-            begin
-            let node_params =
-              List.map (fun { p_name = n } -> local_qn n) ty_desc.node_params in
-            
-            (* Propagate the parameters values to the type *)
-            let m = build_subst node_params params in
-            let expected_ty_list = List.map (simplify_type m) expected_ty_list in
-            let result_ty_list = List.map (simplify_type m) result_ty_list in
-            
-            let typed_n_list = List.map (expect_static_exp cenv (Tid Initial.pint)) n_list in
-            
-            (*typing of partial application*)
-            let p_ty_list, expected_ty_list =
-              Misc.split_at (List.length pe_list) expected_ty_list in
-            let typed_pe_list = typing_args cenv h p_ty_list pe_list in
+          let node_params =
+            List.map (fun { p_name = n } -> local_qn n) ty_desc.node_params in
           
-            (*typing of other arguments*)
-            let ty, typed_e_list = typing_iterator cenv h it typed_n_list
-              expected_ty_list result_ty_list e_list in
-            let typed_params = typing_node_params cenv
-              ty_desc.node_params params in
-            (* add size constraints *)
-            let constrs = List.map (simplify m) ty_desc.node_param_constraints in
-            List.iter (fun n -> add_constraint_leq cenv (mk_static_int 1) n) typed_n_list;
-            List.iter (add_constraint cenv) constrs;
-            (* return the type *)
-            Eiterator(it, { app with a_op = op; a_params = typed_params }
-                        , typed_n_list, typed_pe_list, typed_e_list, reset), ty
-          end
-          else  
-          begin
-            let node_params =
-              List.map (fun { p_name = n } -> local_qn n) ty_desc.node_params in
-            
-            (* Propagate the parameters values to the type *)
-            let m = build_subst node_params params in
-            let expected_ty_list = List.map (simplify_type m) expected_ty_list in
-            let result_ty_list = List.map (simplify_type m) result_ty_list in
-            
-            
-            
-            (* TODO: typarams à gérer *)
-            
-            
-            
-            
-            let typed_n_list = List.map (expect_static_exp cenv (Tid Initial.pint)) n_list in
-            
-            (*typing of partial application*)
-            let p_ty_list, expected_ty_list =
-              Misc.split_at (List.length pe_list) expected_ty_list in
-            let typed_pe_list = typing_args cenv h p_ty_list pe_list in
-            
-            (*typing of other arguments*)
-            let ty, typed_e_list = typing_iterator cenv h it typed_n_list
-              expected_ty_list result_ty_list e_list in
-            let typed_params = typing_node_params cenv
-              ty_desc.node_params params in
-            
-            (* add size constraints *)
-            let constrs = List.map (simplify m) ty_desc.node_param_constraints in
-            List.iter (fun n -> add_constraint_leq cenv (mk_static_int 1) n) typed_n_list;
-            List.iter (add_constraint cenv) constrs;
-            
-            (* return the type *)
-            Eiterator(it, { app with a_op = op; a_params = typed_params }
-                        , typed_n_list, typed_pe_list, typed_e_list, reset), ty
-          end
+          (* Propagate the parameters values to the type *)
+          let m = build_subst node_params params in
+          let expected_ty_list = List.map (simplify_type m) expected_ty_list in
+          let result_ty_list = List.map (simplify_type m) result_ty_list in
+          
+          (* Management of the typarams *)
+          let ty_paramnames = List.map (fun typaram -> typaram.tp_nametype) typarams in
+          
+          (* TODO DEBUG *)
+          
+          (* Creation and propagation of fresh names in the signature *)
+          let frname_ty_paramnames = List.map
+            (fun tp_name -> (tp_name, fresh_typaram_name f.name tp_name)) ty_paramnames in
+          List.iter2
+            (fun (_,ty_paramname) typaram ->
+              curr_typeconstrnt := (ty_paramname.name, typaram.tp_nameclass, None)::!curr_typeconstrnt)
+            frname_ty_paramnames typarams;
+          let expected_ty_list = List.map
+              (fun exp_ty -> subst_name_typaram frname_ty_paramnames exp_ty)
+              expected_ty_list in
+          let result_ty_list = List.map
+            (fun res_ty -> subst_name_typaram frname_ty_paramnames res_ty)
+            result_ty_list in
+          
+          (* Typing *)
+          let typed_n_list = List.map (expect_static_exp cenv (Tid Initial.pint)) n_list in
+          
+          (* splitting arguments for the partial application*)
+          let p_ty_list, expected_ty_list =
+            Misc.split_at (List.length pe_list) expected_ty_list in
+          
+          (*typing of partial application*)
+          let typed_pe_list = typing_args cenv h p_ty_list pe_list in
+        
+          (*typing of other arguments*)
+          let ty, typed_e_list = typing_iterator cenv h it typed_n_list
+            expected_ty_list result_ty_list e_list in
+          let typed_params = typing_node_params cenv
+            ty_desc.node_params params in
+          
+          (* add size constraints *)
+          let constrs = List.map (simplify m) ty_desc.node_param_constraints in
+          List.iter (fun n -> add_constraint_leq cenv (mk_static_int 1) n) typed_n_list;
+          List.iter (add_constraint cenv) constrs;
+          (* return the type *)
+          Eiterator(it, { app with a_op = op; a_params = typed_params }
+                      , typed_n_list, typed_pe_list, typed_e_list, reset), ty
       | Eiterator _ -> assert false
 
       | Ewhen (e, c, x) ->
@@ -938,9 +930,12 @@ and typing_funcall funname cenv h expected_ty_list e_list m_simpl result_ty_list
   
   (* Fresh names in order to avoid conflict *)
   let frname_ty_paramnames = List.map
-      (fun tp_name ->
-        (tp_name, fresh_typaram_name funname tp_name)
-      ) ty_paramnames in
+    (fun tp_name -> (tp_name, fresh_typaram_name funname tp_name)) ty_paramnames in
+  List.iter2
+    (fun (_,ty_paramname) typaram ->
+      curr_typeconstrnt := (ty_paramname.name, typaram.tp_nameclass, None)::!curr_typeconstrnt)
+    frname_ty_paramnames typarams;
+  
   let expected_ty_list = List.map
     (fun exp_ty -> subst_name_typaram frname_ty_paramnames exp_ty)
     expected_ty_list in
@@ -948,30 +943,18 @@ and typing_funcall funname cenv h expected_ty_list e_list m_simpl result_ty_list
     (fun arg_ty -> subst_name_typaram frname_ty_paramnames arg_ty)
     args_ty_list in
   
-  List.iter2
-    (fun (_,ty_paramname) typaram ->
-      curr_typeconstrnt := (ty_paramname.name, typaram.tp_nameclass, None)::!curr_typeconstrnt)
-    frname_ty_paramnames typarams;
-  
-  
-  (* DEBUG
-  fprintf (formatter_of_out_channel stdout) "curr_typeconstrnt = %a\n@?"
-    print_lntypeclass !curr_typeconstrnt; *)
-  (*Format.fprintf (formatter_of_out_channel stdout) "expected_ty_list.size = %i\n@?" (List.length expected_ty_list);
-  fprintf (formatter_of_out_channel stdout) "expected_ty_list =@?";
-  if (List.length expected_ty_list==3) then  fprintf (formatter_of_out_channel stdout) "expected_ty_list = [%a; %a; %a]\n@?"
-  	Global_printer.print_type (List.hd expected_ty_list)
-  	Global_printer.print_type (List.hd (List.tl expected_ty_list))
-  	Global_printer.print_type (List.hd (List.tl (List.tl expected_ty_list)));
-  
-  fprintf (formatter_of_out_channel stdout) "args_ty_list =@?";
-  if (List.length args_ty_list==3) then  fprintf (formatter_of_out_channel stdout) "args_ty_list = [%a; %a; %a]\n@?"
-  	Global_printer.print_type (List.hd args_ty_list)
-  	Global_printer.print_type (List.hd (List.tl args_ty_list))
-  	Global_printer.print_type (List.hd (List.tl (List.tl args_ty_list)));
-  
+  (* DEBUG *)
+  (*fprintf (formatter_of_out_channel stdout) "curr_typeconstrnt =\n%a\n@?"
+    print_lntypeclass !curr_typeconstrnt;
+  Format.fprintf (formatter_of_out_channel stdout) "expected_ty_list.size = %i\n@?" (List.length expected_ty_list);
+  Format.fprintf (formatter_of_out_channel stdout) "args_ty_list.size = %i\n@?" (List.length args_ty_list);
+  fprintf (formatter_of_out_channel stdout) "expected_ty_list = @?";
+  print_list_type (formatter_of_out_channel stdout) expected_ty_list;
+  fprintf (formatter_of_out_channel stdout) "args_ty_list = @?";
+  print_list_type (formatter_of_out_channel stdout) args_ty_list;
   Format.fprintf (formatter_of_out_channel stdout) "result_ty_list.size = %i\n@?" (List.length result_ty_list);
   Format.fprintf (formatter_of_out_channel stdout) "typarams.size = %i\n@?" (List.length typarams); *)
+  
   
   (* Unifying the type of the arguments *)
   List.iter2
@@ -1069,7 +1052,7 @@ and typing_app cenv h app e_list =
         let constrs = List.map (simplify m) ty_desc.node_param_constraints in
         List.iter (add_constraint cenv) constrs;
         
-        let op = match op with   (*  TODO CHANGE AST HERE *)
+        let op = match op with   (*  TODO CHANGE AST HERE (done in main branch) *)
           | Efun _ -> Efun (f, [])
           | Enode _-> Enode (f, [])
           | _ -> raise Errors.Error
@@ -1338,7 +1321,13 @@ let rec typing_pat h acc = function
       acc, Tprod(ty_list)
 
 (* Second pass of typing a block/node (substitution at the type level) *)
-let typing_eq_propagating l_ntypeclass typed_desc =
+let typing_eq_propagating l_ntypeclass typardecs_node typed_desc =
+  let rec is_in_typardecs tid typardecs = match typardecs with
+    | [] -> false
+    | h::t ->
+      if (h.t_nametype=tid) then true else is_in_typardecs tid t
+  in
+  
   let rec ty_eq_propagating funs acc t = match t with
     | Tid _ -> t, acc
     | Tprod t_l ->
@@ -1350,6 +1339,8 @@ let typing_eq_propagating l_ntypeclass typed_desc =
         Tarray (t, se), acc
     | Tclasstype (tid, _) ->
       begin
+        (* If the Tclasstype is coming from the node itself, no substitution *)
+        if (is_in_typardecs tid typardecs_node) then t, acc else
         match (find_typeconstrnt tid.name acc) with
           | None -> error (Etypevar_not_found tid)
           | Some (_, _, tyval) -> (* Substitution + recursive call *)
@@ -1368,7 +1359,7 @@ let typing_eq_propagating l_ntypeclass typed_desc =
   typed_desc
 
 
-let rec typing_eq cenv h acc eq =
+let rec typing_eq cenv h typardecs acc eq =
   if (!verbose_debug_typing) then begin
     Compiler_options.full_type_info := true;
     fprintf (formatter_of_out_channel stdout) "eq = %a\n@?" Hept_printer.print_eq eq
@@ -1389,17 +1380,17 @@ let rec typing_eq cenv h acc eq =
           typing_switch_handlers cenv h acc ty switch_handlers in
         Eswitch(typed_e,typed_sh), acc
     | Epresent(present_handlers, b) ->
-        let typed_b, def_names, _ = typing_block cenv h b in
+        let typed_b, def_names, _ = typing_block cenv h typardecs b in
         let typed_ph, acc =
           typing_present_handlers cenv h
             acc def_names present_handlers in
         Epresent(typed_ph,typed_b), acc
     | Ereset(b, e) ->
         let typed_e = expect cenv h (Tid Initial.pbool) e in
-        let typed_b, def_names, _ = typing_block cenv h b in
+        let typed_b, def_names, _ = typing_block cenv h typardecs b in
         Ereset(typed_b, typed_e), Env.union def_names acc
     | Eblock b ->
-        let typed_b, def_names, _ = typing_block cenv h b in
+        let typed_b, def_names, _ = typing_block cenv h typardecs b in
         Eblock typed_b, Env.union def_names acc
     | Eeq(pat, e) ->
         let acc, ty_pat = typing_pat h acc pat in
@@ -1409,6 +1400,11 @@ let rec typing_eq cenv h acc eq =
   
   if (!verbose_debug_typing) then
     fprintf (formatter_of_out_channel stdout) "eq - END recursion\n@?";
+  
+  
+  (* DEBUG
+  fprintf (formatter_of_out_channel stdout) "curr_typeconstrnt = %a@?"
+    print_lntypeclass !curr_typeconstrnt; *)
   
   (* If a type does not have any value associated, takes a default one *)
   let l_ty_constr = List.map
@@ -1421,12 +1417,16 @@ let rec typing_eq cenv h acc eq =
     !curr_typeconstrnt in
   curr_typeconstrnt := [];
   
+  (* DEBUG
+  fprintf (formatter_of_out_channel stdout) "l_ty_constr = %a@?"
+     print_lntypeclass l_ty_constr; *)
+  
   (* Propagation of the constraints found by matching the pattern to the rest of the equation *)
-  let typed_desc = typing_eq_propagating l_ty_constr typed_desc in
+  let typed_desc = typing_eq_propagating l_ty_constr typardecs typed_desc in
   { eq with eq_desc = typed_desc }, acc
 
-and typing_eq_list cenv h acc eq_list =
-  mapfold (typing_eq cenv h) acc eq_list
+and typing_eq_list cenv h typardecs acc eq_list =
+  mapfold (typing_eq cenv h typardecs) acc eq_list
 
 and typing_automaton_handlers cenv h acc state_handlers =
   (* checks unicity of states *)
@@ -1441,7 +1441,7 @@ and typing_automaton_handlers cenv h acc state_handlers =
 
   let handler ({ s_block = b; s_until = e_list1;
                  s_unless = e_list2 } as s) =
-    let typed_b, defined_names, h0 = typing_block cenv h b in
+    let typed_b, defined_names, h0 = typing_block cenv h [] b in
     let typed_e_list1 = List.map (escape h0) e_list1 in
     let typed_e_list2 = List.map (escape h) e_list2 in
     { s with
@@ -1466,7 +1466,7 @@ and typing_switch_handlers cenv h acc ty switch_handlers =
     error (Epartial_switch (fullname (QualSet.choose d)));
 
   let handler ({ w_block = b } as sh) =
-    let typed_b, defined_names, _ = typing_block cenv h b in
+    let typed_b, defined_names, _ = typing_block cenv h [] b in
     { sh with w_block = typed_b }, defined_names in
 
   let typed_switch_handlers, defined_names_list =
@@ -1480,7 +1480,7 @@ and typing_present_handlers cenv h acc def_names
     present_handlers =
   let handler ({ p_cond = e; p_block = b }) =
     let typed_e = expect cenv h (Tid Initial.pbool) e in
-    let typed_b, defined_names, _ = typing_block cenv h b in
+    let typed_b, defined_names, _ = typing_block cenv h [] b in
     { p_cond = typed_e; p_block = typed_b }, defined_names
   in
 
@@ -1491,12 +1491,12 @@ and typing_present_handlers cenv h acc def_names
   (typed_present_handlers,
    (add total (add partial acc)))
 
-and typing_block cenv h
+and typing_block cenv h typardecs
     ({ b_local = l; b_equs = eq_list; b_loc = loc } as b) =
   try
     let typed_l, (local_names, h0) = build cenv h l in
     let typed_eq_list, defined_names =
-      typing_eq_list cenv h0 Env.empty eq_list in
+      typing_eq_list cenv h0 typardecs Env.empty eq_list in
     let defnames = diff_env defined_names local_names in
     { b with
         b_defnames = defnames;
@@ -1551,7 +1551,7 @@ let typing_contract cenv h contract =
               c_assume_loc = e_a_loc;
               c_enforce_loc = e_g_loc;
               c_controllables = c }) ->
-        let typed_b, defined_names, h' = typing_block cenv h b in
+        let typed_b, defined_names, h' = typing_block cenv h [] b in
           (* check that the equations do not define other unexpected names *)
           included_env defined_names Env.empty;
 
@@ -1593,6 +1593,7 @@ let typing_arg cenv a =
 let node ({ n_name = f; n_input = i_list; n_output = o_list;
             n_contract = contract;
             n_block = b; n_loc = loc;
+            n_typeparamdecs = typardecs;
             n_params = node_params; } as n) =
   try
     let typed_params, cenv =
@@ -1603,7 +1604,7 @@ let node ({ n_name = f; n_input = i_list; n_output = o_list;
     (* typing contract *)
     let typed_contract, h = typing_contract cenv h contract in
     
-    let typed_b, defined_names, _ = typing_block cenv h b in
+    let typed_b, defined_names, _ = typing_block cenv h typardecs b in
     
     (* check that the defined names match exactly the outputs and locals *)
     included_env defined_names output_names;
