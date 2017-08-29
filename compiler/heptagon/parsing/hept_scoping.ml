@@ -220,14 +220,14 @@ struct
   
   (** Add a name of type variable to the list of used names/idents *)
   let add_used_name tenv tvd =
-    add tvd.t_nametype tvd tenv
+    add tvd.Heptagon.t_nametype.name tvd tenv
   
   (** Add a type var *)
   let add_typevar loc tenv tvd =
-    if mem tvd.t_nametype tenv then
-      Error.message loc (Etypevar_already_defined tvd.t_nametype)
+    if mem tvd.Heptagon.t_nametype.name tenv then
+      Error.message loc (Etypevar_already_defined tvd.Heptagon.t_nametype.name)
     else
-      add tvd.t_nametype tvd tenv
+      add tvd.Heptagon.t_nametype.name tvd tenv
   
   (** Add a type var declaration *)
   let add loc tenv tvd = add_typevar loc tenv tvd
@@ -313,9 +313,9 @@ let rec translate_type loc tenv ty =
         if (RenameType.mem unqualified_name tenv)  (* Is the type defined locally to the node? *)
           then (
             try
-              let tvd = RenameType.find unqualified_name tenv in
-              let nameclass = tvd.t_nameclass in
-              Types.Tclasstype (current_qual unqualified_name, find_class (qualify_class (ToQ nameclass)))
+              let typaramdec = RenameType.find unqualified_name tenv in
+              let nameclass = typaramdec.Heptagon.t_nameclass in
+              Types.Tclasstype (typaramdec.Heptagon.t_nametype, { tc_name = nameclass})
             with Not_found -> assert false;
           )
           else Types.Tid (qualify_type ln)
@@ -323,14 +323,10 @@ let rec translate_type loc tenv ty =
           let ty = translate_type loc tenv ty in
           Types.Tarray (ty, expect_static_exp e)
       | Tclasstype (ToQ ntype, Q qnclass) ->
-        
-        (* TODO: check tenv and compare it with ntype... :/  *)
-        
-        
-        
-        
-        let qntype = qualify_type (ToQ ntype) in
-        Types.Tclasstype (qntype, { tc_name = qnclass})
+        (try
+          let typaramdec = RenameType.find ntype tenv in
+          Types.Tclasstype (typaramdec.Heptagon.t_nametype, { tc_name = qnclass})
+        with Not_found -> assert false;)
       | Tclasstype (_,_) -> assert false (* Class name should be qualified *)
       | Tinvalid -> Types.Tinvalid
     )
@@ -563,9 +559,11 @@ let args_of_var_decs =
 
 let translate_typeparam_dec loc tenv tparamdec =
   try
-    let tenv = RenameType.add loc tenv tparamdec in (* Add tparamdec to the typing environment *)
-    { Heptagon.t_nametype = current_qual tparamdec.t_nametype;
-      Heptagon.t_nameclass = qualify_class (ToQ tparamdec.t_nameclass) }, tenv
+    let ntparamdec = { Heptagon.t_nametype = current_qual tparamdec.t_nametype;
+      Heptagon.t_nameclass = qualify_class (ToQ tparamdec.t_nameclass) } in
+    
+    let tenv = RenameType.add loc tenv ntparamdec in (* Add tparamdec to the typing environment *)
+    ntparamdec, tenv
   with
     | ScopingError err -> Error.message loc err
 

@@ -586,7 +586,7 @@ and check_type cenv = function
 and typing_static_exp cenv se =
   try
   let desc, ty = match se.se_desc with
-    | Sint v -> Sint v, Tid Initial.pint
+    | Sint v -> Sint v, Tid Initial.pint  (* TODO: Transform that into a num *)
     | Sbool v-> Sbool v, Tid Initial.pbool
     | Sfloat v -> Sfloat v, Tid Initial.pfloat
     | Sstring v -> Sstring v, Tid Initial.pstring
@@ -714,6 +714,10 @@ and typing_operator op cenv se_list =
       (fun tp_dec ->
         (tp_dec.tp_nametype, fresh_typaram_name "op" tp_dec.tp_nametype)
       ) ty_paramnames in
+    List.iter2
+      (fun (_,ty_paramname) typaram ->
+        curr_typeconstrnt := (ty_paramname.name, typaram.tp_nameclass, None)::!curr_typeconstrnt)
+      frname_ty_paramnames ty_paramnames;
     let expected_ty_list = List.map
       (fun exp_ty -> subst_name_typaram frname_ty_paramnames exp_ty)
       expected_ty_list in
@@ -816,8 +820,6 @@ and typing cenv h e =
           
           (* Management of the typarams *)
           let ty_paramnames = List.map (fun typaram -> typaram.tp_nametype) typarams in
-          
-          (* TODO DEBUG *)
           
           (* Creation and propagation of fresh names in the signature *)
           let frname_ty_paramnames = List.map
