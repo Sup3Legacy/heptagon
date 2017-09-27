@@ -229,6 +229,7 @@ let contain_star_type_var = ref false
 %token PROBE
 %token IMPORTED
 %token STATE_OPERATOR
+%token CONDACT
 
 %right AROBASE
 %nonassoc DEFAULT
@@ -781,6 +782,32 @@ _exp:
       { Efby (v0, e) }
   | PRE exp
       { Epre (None, $2) }
+  /* condact to translate to when */
+  | CONDACT LPAREN cond=IDENT COMMA args=exps RPAREN
+      {
+      	(* Condact asks for 3 arguments, however the last field is optional *)
+      	assert((List.length args)<=2);
+      	assert((List.length args)>=1);
+      	
+      	let execTrue = List.hd args in
+      	
+        let edesc_brTrue = Ewhen (execTrue, Q Initial.ptrue, cond) in (* "execTrue when cond" *)
+      	
+      	if ((List.length args)=1) then  (* A single "when" is enough *)
+      	  edesc_brTrue
+      	else
+      	  begin
+      	  let exp_brTrue = mk_exp edesc_brTrue Location.no_location in
+      	  
+      	  let execFalse = List.hd (List.tl args) in
+          let edesc_brFalse = Ewhen (execFalse, Q Initial.pfalse, cond) in (* "execFalse whenot cond" *)
+      	  let exp_brFalse = mk_exp edesc_brFalse Location.no_location in
+      	  
+      	  let lbranchs = (Q Initial.ptrue, exp_brTrue)::(Q Initial.pfalse, exp_brFalse)::[] in
+      	  let edesc_merge = Emerge (cond, lbranchs) in
+      	  edesc_merge
+      	  end
+      }
   /* node call*/
   | n=node_name LPAREN args=exps RPAREN
       { Eapp(n, args) }

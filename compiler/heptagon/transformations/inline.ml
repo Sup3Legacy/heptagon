@@ -40,7 +40,7 @@ exception Output_type_of_node_is_not_product
 
 let to_be_inlined s =
   (!Compiler_options.flatten && not (s.qual = Pervasives))
-  || (List.mem s !Compiler_options.inline)
+    || (List.mem s !Compiler_options.inline)
 
 let fresh = Idents.gen_var "inline"
 
@@ -119,7 +119,7 @@ let exp funs (env, newvars, newequs) exp =
       let add_reset eq = match rso with
         | None -> eq
         | Some x -> mk_equation (Ereset (mk_block [eq], x)) in
-      
+        
       let node_dec = QualEnv.find nn env in
       
       (* Check if the node to be inlined contain some type parameter
@@ -239,3 +239,7 @@ let program p =
   assert (newvars = []);
   assert (newequs = []);
   p
+
+
+
+

@@ -354,120 +354,6 @@ struct
       in
       { p with p_desc = List.fold_right program_desc p.p_desc [] }
   end
-  
-  
-  (* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ *)
-  
-  
-  (** This module only instanciates the type parameters of a node *)
-  (*module Instantiate_type_param =
-  struct
-    (* Substitute the type parameters by their values *)
-    let ty funs env t = match t with
-      | Tid _ -> t, env
-      | Tprod t_l -> let t_l, env = mapfold (ty_it funs) env t_l in Tprod t_l, env
-      | Tarray (t, se) ->
-          let t, env = ty_it funs env t in
-          let se, env = static_exp_it funs env se in
-          Tarray (t, se), env
-      | Tclasstype (tid, cl) ->
-          let find_value_typaram env tid =
-            (try
-              let (_,env2) = env in
-              QualEnv.find tid env2
-             with Not_found ->
-             Misc.internal_error ("callgraph - value of type parameter (" ^ tid.name ^ ") not found in environment")
-           )
-          in
-          let typ = find_value_typaram env tid in
-          let typ, env = ty_it funs env typ in
-          typ, env
-      | Tinvalid -> t, env
-    
-    (** Replaces nodes call with the call to the correct instance. *)
-    let edesc funs env ed =
-      
-      (* TODO: change that *)
-      
-      let ed, _ = Mls_mapfold.edesc funs env ed in
-      let ed = match ed with
-        | Eapp ({ a_op = Efun (ln,tysubst)} as app, e_list, r) ->
-          begin
-            if ((Modules.find_value ln).node_external) then ed else
-            let ty_vals = List.map (fun (_,v) -> v) tysubst in (* tysubst was sorted *)
-            
-            let op = Efun (node_for_params_call ln (instantiate env [] ty_vals),tysubst) in
-            Eapp ({ app with a_op = op }, e_list, r)
-          end
-        | Eapp ({ a_op = Enode (ln,tysubst) } as app, e_list, r) ->
-          begin
-            if ((Modules.find_value ln).node_external) then ed else
-            let ty_vals = List.map (fun (_,v) -> v) tysubst in (* tysubst was sorted *)
-            let op = Enode (node_for_params_call ln (instantiate env [] ty_vals),tysubst) in
-            Eapp ({ app with a_op = op }, e_list, r)
-          end
-        | Eiterator(it, ({ a_op = Efun (ln,tysubst)} as app), n, pe_list, e_list, r) ->
-          begin
-            if ((Modules.find_value ln).node_external) then ed else
-            let ty_vals = List.map (fun (_,v) -> v) tysubst in (* tysubst was sorted *)
-            let op = Efun (node_for_params_call ln (instantiate env [] ty_vals), tysubst) in
-            Eiterator(it, {app with a_op = op }, n, pe_list, e_list, r)
-          end
-        | Eiterator(it, ({ a_op = Enode (ln,tysubst)} as app), n, pe_list, e_list, r) ->
-          begin
-            if ((Modules.find_value ln).node_external) then ed else
-            let ty_vals = List.map (fun (_,v) -> v) tysubst in (* tysubst was sorted *)
-            let op = Enode (node_for_params_call ln (instantiate env [] ty_vals), tysubst) in
-            Eiterator(it,{app with a_op = op }, n, pe_list, e_list, r)
-          end
-        | _ -> ed
-      in
-      ed, env
-    
-    let node_dec_instance n typarams =
-      Idents.enter_node n.n_name;
-      let global_funs = { Global_mapfold.defaults with ty = ty } in
-      let funs = { Mls_mapfold.defaults with edesc = edesc; global_funs = global_funs } in
-      
-      let ntypeparam_name = List.map (fun typaram -> typaram.t_nametype) n.n_typeparams in
-      let env = build_typeparam (QualEnv.empty,QualEnv.empty) ntypeparam_name typarams in
-      (* Note: we do not build the first part of the env (corresponding to params) *)
-      
-      let n, _ = Mls_mapfold.node_dec_it funs env n in
-      
-      (* Add to the global environment the signature of the new instance *)
-      let node_sig = find_value n.n_name in
-      let node_sig, _ = Global_mapfold.node_it global_funs env node_sig in
-      let node_sig = { node_sig with node_typeparams = [] } in
-      
-      (* Find the name that was associated to this instance *)
-      
-      (* TODO manage the name associated to each instance => do this name creation differently ? *)
-      let ln = node_for_params_call n.n_name (params, typarams) in
-        if not (check_value ln) then
-          Modules.add_value ln node_sig;
-      { n with n_name = ln; n_typeparams = []; }
-
-    let node_dec n =
-      let l_insts = get_node_instances n.n_name in
-      
-      (* Just keep the instance information about type parameters *)
-      let l_ty_insts = List.fold_left
-        (fun acc inst ->
-          if (List.mem (snd inst) acc) then acc
-          else (snd inst)::acc
-        ) [] l_insts in
-      List.map (node_dec_instance n) l_insts
-
-    let program p =
-      let program_desc pd acc = match pd with
-        | Pnode n ->
-            let nds = node_dec n in
-            List.fold_left (fun pds n -> Pnode n :: pds) acc nds
-        | _ -> pd :: acc
-      in
-      { p with p_desc = List.fold_right program_desc p.p_desc [] }
-  end*)
 end
 
 open Param_instances
@@ -589,9 +475,14 @@ let rec call_node (ln, inst) =
   List.iter call_node call_list
 
 let program p =
-  (* Find the nodes without static parameters *)
-  let main_nodes = List.filter (function Pnode n -> (is_empty n.n_params && is_empty n.n_typeparams)
-                                        | _ -> false) p.p_desc in
+  let main_nodes = if (!Compiler_options.mainnode=[]) then
+    (* Default option: find the nodes without static parameters *)
+    List.filter (function Pnode n -> (is_empty n.n_params && is_empty n.n_typeparams)
+                                        | _ -> false) p.p_desc
+  else
+    List.filter (function Pnode n -> (List.mem n.n_name !Compiler_options.mainnode)
+                        | _ -> false) p.p_desc
+  in
   let main_nodes = List.map (function Pnode n -> n.n_name, ([],[])
                               | _ -> Misc.internal_error "callgraph") main_nodes in
   info.opened <- ModulEnv.add p.p_modname p ModulEnv.empty;

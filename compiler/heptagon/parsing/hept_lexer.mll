@@ -44,6 +44,7 @@ List.iter (fun (str,tok) -> Hashtbl.add keyword_table str tok) [
  "node", NODE;
  "equa", EQUA;
  "_void", VOID;
+ "condact", CONDACT;
  "fun", FUN;
  "returns", RETURNS;
  "hidden", HIDDEN;
@@ -201,7 +202,7 @@ rule token = parse
         Not_found -> IDENT id
     end
       }
-  | ['0'-'9']+
+  | ['-']? ['0'-'9']+
   | '0' ['x' 'X'] ['0'-'9' 'A'-'F' 'a'-'f']+
   | '0' ['o' 'O'] ['0'-'7']+
   | '0' ['b' 'B'] ['0'-'1']+

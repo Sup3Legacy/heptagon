@@ -123,6 +123,11 @@ let add_inlined_node s = inline := s :: !inline
 
 let flatten = ref false
 
+let mainnode : qualname list ref = ref []
+let add_main_node s = mainnode := s :: !mainnode
+
+let prune = ref false
+
 let deadcode = ref false
 
 let tomato = ref false
@@ -200,6 +205,8 @@ and doc_hepts = "\t\tSimulation for hepts (graphical simulator)"
 and doc_locate_stdlib = "\t\tLocate standard libray"
 and doc_no_pervasives = "\tDo not load the pervasives module"
 and doc_flatten = "\t\tInline everything."
+and doc_mainnode = "\t\tSpecify a main node. The nodes not used by a main node is removed.\n\t\t\tBy default, the parameterless nodes are the main nodes."
+and doc_prune = "\t\tRemove the nodes unused by the main nodes."
 and doc_target =
   "<lang>\tGenerate code in language <lang>\n\t\t\t(with <lang>=c,"
   ^ " java, z3z or ctrln)"

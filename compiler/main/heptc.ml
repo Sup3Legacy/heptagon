@@ -133,10 +133,14 @@ let calculate_deps modname source_f =
   let { Heptagon.p_desc=pds } = p in
   let syms = List.map extract_symbol pds in
   
-  (* Uppercases if needed *)
-  let source_f = uppercase_first source_f in
-  let syms = List.map uppercase_first syms in
-  let deps = List.map uppercase_first deps in
+  (* Uppercases if needed - don't do it for Safran UC, else we are losing some info *)
+  let opt_uppercase_first b str =
+    if b then uppercase_first str else str
+  in
+  
+  let source_f = opt_uppercase_first (not !safran_handling) source_f in
+  let syms = List.map (opt_uppercase_first (not !safran_handling)) syms in
+  let deps = List.map (opt_uppercase_first (not !safran_handling)) deps in
   
   Printf.printf "%s=%s: %s\n" source_f (String.concat " " syms)
                                        (String.concat " " deps)
@@ -240,8 +244,12 @@ let main () =
         "-tomato", Arg.Set tomato, doc_tomato;
         "-tomanode", read_qualname add_tomato_node, doc_tomato;
         "-tomacheck", read_qualname add_tomato_check, "";
+        
         "-inline", read_qualname add_inlined_node, doc_inline;
         "-flatten", Arg.Set flatten, doc_flatten;
+        "-mainnode", read_qualname add_main_node, doc_mainnode;
+        "-prune", Arg.Set prune, doc_prune;
+        
         "-assert", Arg.String add_assert, doc_assert;
         "-nopervasives", Arg.Unit set_no_pervasives, doc_no_pervasives;
         "-target", Arg.String add_target_language, doc_target;

@@ -44,7 +44,10 @@ let compile_program p =
   
   (* Inlining *)
   let p = pass "Inlining" true Inline.program p pp in
-
+  
+  (* Pruning of the uncalled node *)
+  let p = pass "Pruning" !prune Pruning.program p pp in
+  
   (* Contracts handling *)
   let p = pass "Contracts" true Contracts.program p pp in
 

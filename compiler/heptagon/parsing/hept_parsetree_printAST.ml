@@ -272,7 +272,7 @@ let print_node_dec ff {n_name = dname;
 
 (* Constant declaration *)
 let print_const_dec ff { c_name=dname; c_type=typ; c_value=v } =
-  fprintf ff "%a::%a=%a" print_dec_name dname
+  fprintf ff "%a::%a=%a\n" print_dec_name dname
     print_type typ
     print_exp v
 
