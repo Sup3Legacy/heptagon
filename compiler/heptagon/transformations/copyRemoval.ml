@@ -108,27 +108,28 @@ let getContractedLocalVar nd =
   lcontrInfo
 
 
+
 (* Becausethe previously list might have entries like (c,a) (d,c) (e,c)
    where "c" might disappear after the first substitution, we need to propagate 
      this substitution to the later entries *)
 let rec transitivityContrLocVar lLocalVarContracted =
+  (* Propagation of a single substitution *)
   let rec propagate_substitution varId1 varId2 l = match l with
     | [] -> []
     | (vl1, vl2)::rl -> if (vl2=varId1)
       then (vl1,varId2)::(propagate_substitution varId1 varId2 rl)
       else (vl1, vl2)::(propagate_substitution varId1 varId2 rl)
   in
-  match lLocalVarContracted with
-  | [] -> []
-  | (varId1, varId2)::r ->
-    let nr = transitivityContrLocVar r in
-    let nr = propagate_substitution varId1 varId2 r in
-    (varId1, varId2)::nr
+  List.fold_left
+    (fun acc (varId1, varId2) ->
+      propagate_substitution varId1 varId2 acc
+    )
+    lLocalVarContracted lLocalVarContracted
 
 
 (* ======================================================================= *)
 
-(* DEBUG function
+(* DEBUG function *)
 let print_lLocalVarContracted ff lLocalVarContracted =
   let rec print_lLocalVarContracted_aux ff l = match l with
     | [] -> ()
@@ -139,7 +140,6 @@ let print_lLocalVarContracted ff lLocalVarContracted =
   Format.fprintf ff "lLocalVarContracted = [";
   print_lLocalVarContracted_aux ff lLocalVarContracted;
   Format.fprintf ff "]\n@?"
-*)
 
 (* Main function *)
 let program p =
@@ -147,11 +147,8 @@ let program p =
     (fun pdesc -> match pdesc with
       | Pnode nd ->
         let lLocalVarContracted = getContractedLocalVar nd in
-        (* print_lLocalVarContracted (Format.formatter_of_out_channel stdout) lLocalVarContracted; *)
-        
         (* Propagate the earlier substitution to the rest of the list *)
         let lLocalVarContracted = transitivityContrLocVar lLocalVarContracted in
-        
         let nd = List.fold_left contractLocalVar nd lLocalVarContracted in
         Pnode nd
       | _ -> pdesc

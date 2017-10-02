@@ -1,0 +1,11 @@
+node testCopyRemoval1 (e: int) returns (a: int)
+var b : int;
+    c : int;
+    d : int;
+let
+  c = d;
+  d = e;
+  b = c;
+  a = b;
+tel
+
