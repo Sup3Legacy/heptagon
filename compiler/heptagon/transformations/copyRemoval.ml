@@ -112,7 +112,7 @@ let getContractedLocalVar nd =
 (* Becausethe previously list might have entries like (c,a) (d,c) (e,c)
    where "c" might disappear after the first substitution, we need to propagate 
      this substitution to the later entries *)
-let rec transitivityContrLocVar lLocalVarContracted =
+let transitivityContrLocVar lLocalVarContracted =
   (* Propagation of a single substitution *)
   let rec propagate_substitution varId1 varId2 l = match l with
     | [] -> []
@@ -120,11 +120,14 @@ let rec transitivityContrLocVar lLocalVarContracted =
       then (vl1,varId2)::(propagate_substitution varId1 varId2 rl)
       else (vl1, vl2)::(propagate_substitution varId1 varId2 rl)
   in
-  List.fold_left
-    (fun acc (varId1, varId2) ->
-      propagate_substitution varId1 varId2 acc
-    )
-    lLocalVarContracted lLocalVarContracted
+  let rec transitivityContrLocVar prev_l next_l = match next_l with
+    | [] -> prev_l
+    | (varId1, varId2)::rl ->
+      let nprev_l = propagate_substitution varId1 varId2 prev_l in
+      let nrl = propagate_substitution varId1 varId2 rl in
+      transitivityContrLocVar ((varId1, varId2)::nprev_l) nrl
+  in
+  transitivityContrLocVar [] lLocalVarContracted
 
 
 (* ======================================================================= *)
@@ -149,6 +152,10 @@ let program p =
         let lLocalVarContracted = getContractedLocalVar nd in
         (* Propagate the earlier substitution to the rest of the list *)
         let lLocalVarContracted = transitivityContrLocVar lLocalVarContracted in
+        
+        (* TODO DEBUG
+        print_lLocalVarContracted (Format.formatter_of_out_channel stdout) lLocalVarContracted; *)
+        
         let nd = List.fold_left contractLocalVar nd lLocalVarContracted in
         Pnode nd
       | _ -> pdesc
