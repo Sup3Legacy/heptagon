@@ -249,6 +249,7 @@ let main () =
         "-flatten", Arg.Set flatten, doc_flatten;
         "-mainnode", read_qualname add_main_node, doc_mainnode;
         "-prune", Arg.Set prune, doc_prune;
+        "-copyRemoval", Arg.Set copyRemoval, doc_copyRemoval;
         
         "-assert", Arg.String add_assert, doc_assert;
         "-nopervasives", Arg.Unit set_no_pervasives, doc_no_pervasives;

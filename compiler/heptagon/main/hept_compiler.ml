@@ -83,16 +83,20 @@ let compile_program p =
 
   (* Normalization *)
   let p = pass "Normalization" true Normalize.program p pp in
-
+  
   (* Boolean pass *)
   let p = pass "Clocking(Heptagon)" !boolean Hept_clocking.program p pp in
   let p = pass "Boolean" !boolean Boolean.program p pp in
   let p = pass "Normalization" !boolean Normalize.program p pp in
 
-
   (* Block flatten *)
   let p = pass "Block" true Block.program p pp in
-
+  
+  (* Array destruction *)
+  let p = pass "Array destruction" true ArrayDestruct.program p pp in (* TODO: change that as an option *)
+  
+  let p = pass "Copy equation removal" !copyRemoval CopyRemoval.program p pp in
+  
   (* Return the transformed AST *)
   p
 

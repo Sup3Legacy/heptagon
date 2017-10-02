@@ -3,6 +3,9 @@
 (* A main node is either:
      - If (Compiler_option.mainnode=[]) a node without static parameter
      - Else, one of the nodes specified inside this list *)
+
+(* Author: Guillaume I *)
+
 open Names
 open Heptagon
 open Signature

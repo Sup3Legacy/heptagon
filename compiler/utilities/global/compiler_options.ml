@@ -128,6 +128,8 @@ let add_main_node s = mainnode := s :: !mainnode
 
 let prune = ref false
 
+let copyRemoval = ref false
+
 let deadcode = ref false
 
 let tomato = ref false
@@ -207,6 +209,7 @@ and doc_no_pervasives = "\tDo not load the pervasives module"
 and doc_flatten = "\t\tInline everything."
 and doc_mainnode = "\t\tSpecify a main node. The nodes not used by a main node is removed.\n\t\t\tBy default, the parameterless nodes are the main nodes."
 and doc_prune = "\t\tRemove the nodes unused by the main nodes."
+and doc_copyRemoval = "\t\t Remove the local variables defined through a copy equation"
 and doc_target =
   "<lang>\tGenerate code in language <lang>\n\t\t\t(with <lang>=c,"
   ^ " java, z3z or ctrln)"
