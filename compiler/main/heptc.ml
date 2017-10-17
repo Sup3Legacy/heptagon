@@ -250,6 +250,8 @@ let main () =
         "-mainnode", read_qualname add_main_node, doc_mainnode;
         "-prune", Arg.Set prune, doc_prune;
         "-copyRemoval", Arg.Set copyRemoval, doc_copyRemoval;
+        "-arrayDestruct", Arg.Set arrayDestruct, doc_arrayDestruct;
+        
         
         "-assert", Arg.String add_assert, doc_assert;
         "-nopervasives", Arg.Unit set_no_pervasives, doc_no_pervasives;

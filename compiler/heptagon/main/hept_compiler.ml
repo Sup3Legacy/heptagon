@@ -92,10 +92,12 @@ let compile_program p =
   (* Block flatten *)
   let p = pass "Block" true Block.program p pp in
   
-  (* Array destruction *)
-  let p = pass "Array destruction" true ArrayDestruct.program p pp in (* TODO: change that as an option *)
-  
+  (* Copy equation ("VarLoc1 = VarLoc2") removal *)
   let p = pass "Copy equation removal" !copyRemoval CopyRemoval.program p pp in
+  
+  (* Array destruction + copy equation afterward to clean up *)
+  let p = pass "Array destruction" !arrayDestruct ArrayDestruct.program p pp in
+  let p = pass "Copy equation removal - post array destruction" !arrayDestruct CopyRemoval.program p pp in
   
   (* Return the transformed AST *)
   p
