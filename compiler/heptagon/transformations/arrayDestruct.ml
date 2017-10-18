@@ -13,6 +13,7 @@
   *)
 
 open Misc
+open Names
 open Idents
 open Types
 open Heptagon
@@ -243,7 +244,7 @@ let get_array_const_size ty = match ty with
       | _ -> None
     end
   | Tprod _ -> None                 (* TODO: tuple management ? *)
-  | Tid _ -> None                   (* TODO: alias management ? *)
+  | Tid _ -> None                   (* Note: alias management managed previously *)
   | Tclasstype _ | Tinvalid -> None
 
 
@@ -373,8 +374,35 @@ let findArrayToDestroy nd =
 
 (* ============================================================================= *)  
 
+(* Iterate over all local variables and replace their type with the aliased expression, if needed *)
+let aliasSubstitution tyAliasInfo nd =
+  let rec find_aliasInfo tyAliasInfo tid = match tyAliasInfo with
+    | [] -> None
+    | (nty, ty)::r ->
+      if (tid.name = nty.name) then Some ty
+      else find_aliasInfo r tid
+  in
+  let replaceAliasType tyAliasInfo varLoc =
+    let tyVarLoc = varLoc.v_type in
+    match tyVarLoc with
+      | Tid tid ->
+        begin
+        let optTy = find_aliasInfo tyAliasInfo tid in
+        match optTy with
+          | None -> varLoc
+          | Some ty -> { varLoc with v_type = ty }
+        end
+      | _ -> varLoc
+  in
+  let lVarLoc = nd.n_block.b_local in
+  let nlVarLoc = List.map (replaceAliasType tyAliasInfo) lVarLoc in
+  let nbl = { nd.n_block with b_local = nlVarLoc } in
+  { nd with n_block = nbl }
+
+
 (* Main function *)
-let node nd =
+let node tyAliasInfo nd =
+  let nd = aliasSubstitution tyAliasInfo nd in
   let arrToDestroy = findArrayToDestroy nd in
   
   (* DEBUG
@@ -386,9 +414,21 @@ let node nd =
 
 
 let program p =
+  (* Getting infos about aliased type declarations *)
+  (* tyAliasInfo: (qualname * ty) list *)
+  let tyAliasInfo = List.fold_left
+    (fun acc pdesc -> match pdesc with
+      | Ptype td -> begin
+        match td.t_desc with
+          | Type_alias ty -> (td.t_name, ty)::acc
+          | _ -> acc
+        end
+      | _ -> acc
+    ) [] p.p_desc in
+  
   let npdesc = List.map
     (fun pdesc -> match pdesc with
-      | Pnode nd -> Pnode (node nd)
+      | Pnode nd -> Pnode (node tyAliasInfo nd)
       | _ -> pdesc 
     ) p.p_desc in
   { p with p_desc = npdesc }
