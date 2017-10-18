@@ -312,6 +312,12 @@ let is_fun_call exp = match exp.e_desc with
     end
   | _ -> false
 
+
+let is_const_exp exp = match exp.e_desc with
+  | Econst _ -> true
+  | _ -> false
+
+
 let rec extract_varId p = match p with
   | Evarpat vid -> [vid]
   | Etuplepat pl ->
@@ -319,9 +325,11 @@ let rec extract_varId p = match p with
     let lvid = List.flatten llvid in
     lvid
 
+
 let eqdesc_inspect funs acc eqd = match eqd with
   | Eeq (p, rhs) ->
-    if (is_fun_call rhs) then
+    (* Note: const which are arrays are not inlined (but could be) *)
+    if (is_fun_call rhs || is_const_exp rhs) then
       begin
       let _, nacc = Hept_mapfold.eqdesc funs acc eqd in   (* Recursion *)
       let n_remove = extract_varId p in                            (* Remove vars from the lhs *)
