@@ -63,11 +63,12 @@ let print_local_vars ff = function
 
 let print_const_dec ff c =
   if !Compiler_options.full_type_info then
-    fprintf ff "const %a : %a = %a"
-      print_qualname c.c_name print_type c.c_type print_static_exp c.c_value
+    fprintf ff "const %a : %a" print_qualname c.c_name print_type c.c_type
   else
-    fprintf ff "const %a = %a"
-      print_qualname c.c_name print_static_exp c.c_value;
+    fprintf ff "const %a" print_qualname c.c_name;
+  match c.c_value with
+    | None -> ()
+    | Some cval -> fprintf ff " = %a" print_static_exp cval;
   fprintf ff "@."
 
 let print_classtype_dec ff c =

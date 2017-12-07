@@ -53,7 +53,7 @@ type error_kind =
   | Eclockclash of Clocks.ck * Clocks.ck
   | Edefclock
 
-exception CurrentShouldNotHappenHere
+exception StructureShouldHaveBeenRemoved
 
 let error_message loc = function
   | Etypeclash (actual_ct, expected_ct) ->
@@ -121,7 +121,8 @@ let rec typing h pat e =
         let ck = ck_of_name h x in
         List.iter (fun (c,e) -> expect h pat (Ck(Clocks.Con (ck,c,x))) e) c_e_list;
         Ck ck, ck
-    | Ecurrent _ -> raise CurrentShouldNotHappenHere
+    | Ecurrent _ -> raise StructureShouldHaveBeenRemoved
+    | Ebuffer _ -> raise StructureShouldHaveBeenRemoved
     | Estruct l ->
         let ck = fresh_clock () in
         List.iter (fun (_, e) -> expect h pat (Ck ck) e) l;

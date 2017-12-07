@@ -33,7 +33,6 @@ open Names
 open Linearity
 open Hept_parsetree
 
-
 %}
 
 %token DOT LPAREN LESS_LPAREN RPAREN RPAREN_GREATER LBRACE RBRACE COLON COLONCOLON SEMICOL
@@ -70,7 +69,7 @@ open Hept_parsetree
 %token REACHABLE
 %token ATTRACTIVE
 %token WITH
-%token WHEN WHENOT MERGE ON ONOT CURRENT
+%token WHEN WHENOT MERGE ON ONOT CURRENT BUFFER1
 %token INLINED
 %token POWER
 %token LBRACKET LBRACKETGREATER
@@ -163,8 +162,10 @@ program_desc:
 opens: OPEN m=modul { m }
 
 const_dec:
+  | CONST x=IDENT COLON t=ty_ident
+      { mk_const_dec x t None (Loc($startpos,$endpos)) }
   | CONST x=IDENT COLON t=ty_ident EQUAL e=exp
-      { mk_const_dec x t e (Loc($startpos,$endpos)) }
+      { mk_const_dec x t (Some e) (Loc($startpos,$endpos)) }
 ;
 
 ty_id: IDENT  {$1}
@@ -574,6 +575,10 @@ _exp:
       { Ecurrent (c, ce, eInit, e) }
   | CURRENT LPAREN ce=IDENT COMMA eInit=exp COMMA e=exp RPAREN
       { Ecurrent (Q Initial.ptrue, ce, eInit, e) }
+  | BUFFER1 LPAREN c1=constructor_or_bool COMMA ce1=IDENT COMMA
+                   c2=constructor_or_bool COMMA ce2=IDENT COMMA
+                   eInit=exp COMMA e=exp RPAREN
+      { Ebuffer(c1, ce1, c2, ce2, eInit, e) }
   | exp INFIX1 exp
       { mk_op_call $2 [$1; $3] }
   | exp INFIX0 exp

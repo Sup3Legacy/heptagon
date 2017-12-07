@@ -264,8 +264,13 @@ let rec cexpr_of_static_exp se =
                      (cexpr_of_static_exp c) n_list)
     | Svar ln ->
       if !Compiler_options.unroll_loops && se.se_ty = Initial.tint
-      then cexpr_of_static_exp
-        (Static.simplify QualEnv.empty (find_const ln).Signature.c_value)
+      then
+        begin
+        let cDec = find_const ln in
+        match cDec.Signature.c_value with
+          | None -> cexpr_of_static_exp (Types.mk_static_exp cDec.Signature.c_type (Svar ln))
+          | Some cval -> cexpr_of_static_exp (Static.simplify QualEnv.empty cval)
+        end
       else Cvar (cname_of_qn ln)
     | Sop _ ->
         let se' = Static.simplify QualEnv.empty se in
@@ -501,7 +506,12 @@ let generate_function_call out_env var_env obj_env outvl objn args =
 let rec create_affect_const var_env (dest : clhs) c =
   match c.se_desc with
     | Svar ln ->
-        let se = Static.simplify QualEnv.empty (find_const ln).Signature.c_value in
+        let se = begin
+          let cDec = find_const ln in
+          match cDec.Signature.c_value with
+            | None -> Types.mk_static_exp cDec.Signature.c_type (Svar ln)
+            | Some cval -> Static.simplify QualEnv.empty cval
+        end in
         create_affect_const var_env dest se
     | Sarray_power(c, n_list) ->
         let rec make_loop power_list replace = match power_list with
@@ -833,7 +843,10 @@ let cdefs_and_cdecls_of_type_decl otd =
 
 let cdefs_and_cdecls_of_const_decl cd =
   let name = cname_of_qn cd.c_name in
-  let v = cexpr_of_static_exp cd.Obc.c_value in
+  let v = match cd.Obc.c_value with
+    | None -> None
+    | Some v -> Some (cexpr_of_static_exp v)
+  in
   let cty = ctype_of_otype cd.Obc.c_type in
   [], [Cdecl_constant (name, cty, v)]
 

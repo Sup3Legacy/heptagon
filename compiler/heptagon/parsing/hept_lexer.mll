@@ -88,6 +88,7 @@ List.iter (fun (str,tok) -> Hashtbl.add keyword_table str tok) [
  "whenot", WHENOT;
  "merge", MERGE;
  "current", CURRENT;
+ "buffer1", BUFFER1;
  "on", ON;
  "onot", ONOT;
  "map", MAP;
@@ -189,7 +190,7 @@ rule token = parse
         Not_found -> IDENT id
     end
       }
-  | ['0'-'9']+
+  | ['-']? ['0'-'9']+
   | '0' ['x' 'X'] ['0'-'9' 'A'-'F' 'a'-'f']+
   | '0' ['o' 'O'] ['0'-'7']+
   | '0' ['b' 'B'] ['0'-'1']+

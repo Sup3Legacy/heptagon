@@ -4,7 +4,7 @@ type data = int
 
 const v:data = 0
 
-node current (v : data; c : bool; u : data)
+node current_node (v : data; c : bool; u : data)
 returns (o : data)
 let
   o = merge c u ((v fby o) whenot c)
@@ -13,7 +13,7 @@ tel
 node mem (v : data; cw : bool; u : data)
 returns (o : data)
 let
-  o = v fby (current (v, cw, u))
+  o = v fby (current_node (v, cw, u))
 tel
 
 node mcounter (start, limit : int)

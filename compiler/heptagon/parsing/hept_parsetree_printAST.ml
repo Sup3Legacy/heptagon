@@ -145,6 +145,10 @@ and print_edesc ff edesc = match edesc with
      (print_list (print_couple print_const_name print_exp "" "|" "") "" "," "") lconstname_exp
   | Ecurrent (cons_name, var_name, expInit, exp) -> fprintf ff "Ecurrent(%a(%a), %a, %a)"
       print_const_name cons_name  print_var_name var_name  print_exp expInit  print_exp expr
+  Ebuffer (c1, ce1, c2, ce2, eInit, e) -> fprintf ff "Ebuffer(%a(%a), %a(%a), %a, %a)"
+      print_const_name c1  print_var_name ce1
+      print_const_name c2  print_var_name ce2
+      print_exp eInit  print_exp e
   | Esplit (var_name, exp) -> fprintf ff "Esplit %a%a" print_var_name var_name print_exp exp
 
 and print_exp ff { e_desc= edesc; e_ct_annot= optct } =
@@ -269,10 +273,11 @@ let print_node_dec ff {n_name = dname;
 
 
 (* Constant declaration *)
-let print_const_dec ff { c_name=dname; c_type=typ; c_value=v } =
-  fprintf ff "%a::%a=%a" print_dec_name dname
-    print_type typ
-    print_exp v
+let print_const_dec ff { c_name=dname; c_type=typ; c_value=vopt } =
+  fprintf ff "%a::%a" print_dec_name dname  print_type typ;
+  match vopt with
+    | None -> ()
+    | Some v -> fprintf ff "=%a" print_exp v
 
 
 (* Type declaration *)

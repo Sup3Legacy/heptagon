@@ -588,7 +588,10 @@ let const_dec_list cd_l = match cd_l with
         (* name should always keep the shortname unchanged
             since we enter a special node free of existing variables *)
         (* thus [translate_const_name] will gives the right result anywhere it is used. *)
-        let value = Some (static_exp param_env ovalue) in
+        let value = match ovalue with
+          | None -> None (* Note: not sure about that one *)
+          | Some ovalue -> Some (static_exp param_env ovalue)
+        in
         let t = ty param_env otype in
         Java.mk_field ~static: true ~final: true ~value: value t name
       in

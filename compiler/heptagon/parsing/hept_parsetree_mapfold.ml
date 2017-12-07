@@ -134,6 +134,10 @@ and edesc funs acc ed = match ed with
     let ei, acc = exp_it funs acc ei in
     let e, acc = exp_it funs acc e in
       Ecurrent(c, x, ei, e), acc
+  | Ebuffer (c1, ce1, c2, ce2, eInit, e) ->
+    let eInit, acc = exp_it funs acc eInit in
+    let e, acc = exp_it funs acc e in
+      Ebuffer (c1, ce1, c2, ce2, eInit, e), acc
   | Ewhen (e, c, x) ->
     let e, acc = exp_it funs acc e in
       Ewhen (e, c, x), acc
@@ -316,7 +320,10 @@ and ty funs acc t = match t with
 and const_dec_it funs acc c = funs.const_dec funs acc c
 and const_dec funs acc c =
   let c_type, acc = ty_it funs acc c.c_type in
-  let c_value, acc = exp_it funs acc c.c_value in
+  let c_value, acc = match c.c_value with
+    | None -> None, acc
+    | Some cval -> let cval, acc = exp_it funs acc cval in (Some cval), acc
+  in
   { c with c_value = c_value; c_type = c_type }, acc
 
 

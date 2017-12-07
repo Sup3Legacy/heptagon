@@ -221,7 +221,13 @@ and class_def funs acc cd =
 and const_dec_it funs acc c = funs.const_dec funs acc c
 and const_dec funs acc c =
   let ty, acc = ty_it funs.global_funs acc c.c_type in
-  let se, acc = static_exp_it funs.global_funs acc c.c_value in
+  let se, acc =
+    match c.c_value with
+      | None -> None, acc
+      | Some cval ->
+        let cval,acc = static_exp_it funs.global_funs acc cval in
+        (Some cval), acc
+  in
   { c with c_type = ty; c_value = se }, acc
 
 and type_dec_it funs acc t = funs.type_dec funs acc t

@@ -163,6 +163,12 @@ and edesc funs acc ed = match ed with
      let e, acc = exp_it funs acc e in
      let n, acc = var_ident_it funs.global_funs acc n in
      Ecurrent (c, n, eInit, e), acc
+  | Ebuffer (c1, n1, c2, n2, eInit, e) ->
+     let eInit, acc = exp_it funs acc eInit in
+     let e, acc = exp_it funs acc e in
+     let n1, acc = var_ident_it funs.global_funs acc n1 in
+     let n2, acc = var_ident_it funs.global_funs acc n2 in
+     Ebuffer (c1, n1, c2, n2, eInit, e), acc
   | Esplit (e1, e2) ->
       let e1, acc = exp_it funs acc e1 in
       let e2, acc = exp_it funs acc e2 in
@@ -337,7 +343,12 @@ and node_dec funs acc nd =
 and const_dec_it funs acc c = funs.const_dec funs acc c
 and const_dec funs acc c =
   let c_type, acc = ty_it funs.global_funs acc c.c_type in
-  let c_value, acc = static_exp_it funs.global_funs acc c.c_value in
+  let c_value, acc = match c.c_value with
+    | None -> None, acc
+    | Some cval ->
+      let cval, acc = static_exp_it funs.global_funs acc cval in
+      (Some cval), acc
+  in
   { c with c_value = c_value; c_type = c_type }, acc
 
 

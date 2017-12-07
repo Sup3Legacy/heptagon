@@ -39,6 +39,7 @@ let compile_program p =
   let p = pass "Typing" true Typing.program p pp in
   
   (* Remove the "current" construct (syntactic sugar) / we need the typing pass beforehand *)
+  let p = silent_pass "Buffer removal" true BufferRemoval.program p in (* TODO: put this as a compiler option *)
   let p = silent_pass "Current removal" true CurrentRemoval.program p in
   
   (* End of typing*)
@@ -91,7 +92,7 @@ let compile_program p =
 
   (* Block flatten *)
   let p = pass "Block" true Block.program p pp in
-
+  
   (* Return the transformed AST *)
   p
 

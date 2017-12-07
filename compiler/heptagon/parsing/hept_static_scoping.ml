@@ -108,7 +108,7 @@ let const_dec funs local_const cd =
   let c_name = current_qual cd.c_name in
   (* /!\ we need to add the consts to detect all the static_exps,*)
   (* /!\ but we can't qualify their types, scoping will correct this *)
-  add_const c_name (Signature.mk_const_def Types.Tinvalid (Initial.mk_static_string "invalid"));
+  add_const c_name (Signature.mk_const_def Types.Tinvalid (Some (Initial.mk_static_string "invalid")));
   cd, local_const
 
 let program p =

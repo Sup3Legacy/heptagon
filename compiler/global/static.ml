@@ -154,7 +154,11 @@ let rec eval_core partial env se = match se.se_desc with
   | Svar ln ->
       (try (* first try to find in global const env *)
          let cd = find_const ln in
-         eval_core partial env cd.c_value
+         match cd.c_value with
+           | None -> 
+             if partial then se (* No value attributed to this constant => cannot perform simplification *)
+             else raise (Partial_evaluation (Unknown_param ln, se.se_loc))
+           | Some cval -> eval_core partial env cval
        with Not_found -> (* then try to find in local env *)
          (try
             let se = QualEnv.find ln env in

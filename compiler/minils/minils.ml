@@ -180,7 +180,7 @@ type node_dec = {
 type const_dec = {
   c_name : qualname;
   c_type : ty;
-  c_value : static_exp;
+  c_value : static_exp option;
   c_loc : location }
 
 type classtype_dec =

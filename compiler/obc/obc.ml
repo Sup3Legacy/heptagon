@@ -57,7 +57,7 @@ and tdesc =
 
 type const_dec = {
   c_name : qualname;
-  c_value : static_exp;
+  c_value : static_exp option; (* None => value is declared externaly *)
   c_type : ty;
   c_loc : location }
 

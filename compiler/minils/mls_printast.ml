@@ -339,9 +339,13 @@ let print_node ff {n_name = name;
 (************************************************)
 (* Static constant declaration *)
 let print_const_dec ff cdecl =
-  let {c_name = name; c_type = typ; c_value = value} = cdecl in
-  fprintf ff "@[const %a (type: %a)@ = %a@]@\n@."
-      print_full_qualname name    print_type typ     print_static_exp value
+  let {c_name = name; c_type = typ; c_value = vopt} = cdecl in
+  match vopt with
+    | None -> fprintf ff "@[const %a (type: %a)@]@\n@."
+          print_full_qualname name  print_type typ
+    | Some value ->
+      fprintf ff "@[const %a (type: %a)@ = %a@]@\n@."
+          print_full_qualname name  print_type typ  print_static_exp value
 
 
 (* Type declaration *)

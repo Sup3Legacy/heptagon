@@ -81,11 +81,12 @@ let print_local_vars s ff l = match l with
 
 let print_const_dec ff c =
   if !Compiler_options.full_type_info then
-    fprintf ff "const %a : %a = %a@."
-      print_qualname c.c_name print_type c.c_type print_static_exp c.c_value
+    fprintf ff "const %a : %a" print_qualname c.c_name  print_type c.c_type
   else
-    fprintf ff "const %a = %a@."
-      print_qualname c.c_name print_static_exp c.c_value
+    fprintf ff "const %a" print_qualname c.c_name;
+  match c.c_value with
+    | None -> fprintf ff "@."
+    | Some cval -> fprintf ff "= %a@." print_static_exp cval
 
 let print_ct_annot ff = function
   | None -> ()
@@ -171,6 +172,10 @@ and print_exp_desc ff = function
   | Ecurrent (c, n, eInit, e) ->
       fprintf ff "@[<2>current %a(%a)@ %a@ %a@]"
         print_qualname c  print_ident n  print_exp eInit  print_exp e
+  | Ebuffer (c1, n1, c2, n2, eInit, e) ->
+      fprintf ff "@[<2>buffer %a(%a)@ %a(%a)@ %a@ %a@]"
+        print_qualname c1  print_ident n1  print_qualname c2  print_ident n2
+        print_exp eInit  print_exp e
   | Esplit (x, e1) ->
       fprintf ff "@[<2>split %a@ %a@]"
         print_exp x  print_exp e1

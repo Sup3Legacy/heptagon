@@ -161,10 +161,14 @@ let print_interface_type ff (name,tdesc) =
     | Talias t -> fprintf ff "@[<2>type %s = %a@]" name print_type t
 
 let print_interface_const ff (name,c) =
-  fprintf ff "@[<2>const %a : %a = %a@]"
-      print_name name
-      print_type c.Signature.c_type
-      print_static_exp c.Signature.c_value
+  match c.Signature.c_value with
+  | None -> fprintf ff "@[<2>const %a : %a@]"
+          print_name name
+          print_type c.Signature.c_type
+  | Some cval -> fprintf ff "@[<2>const %a : %a = %a@]"
+          print_name name
+          print_type c.Signature.c_type
+          print_static_exp cval
 
 let print_sarg ff arg = match arg.a_name with
     | None ->

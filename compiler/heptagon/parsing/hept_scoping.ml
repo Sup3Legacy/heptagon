@@ -391,11 +391,19 @@ and translate_desc loc env = function
         List.map fun_c_e c_e_list in
       Heptagon.Emerge (x, c_e_list)
   | Ecurrent (c, x, eInit, e) ->
-      let x = Rename.var loc env x in
       let c = qualify_constrs c in
+      let x = Rename.var loc env x in
       let eInit = translate_exp env eInit in
       let e = translate_exp env e in
       Heptagon.Ecurrent (c, x, eInit, e)
+  | Ebuffer (c1, ce1, c2, ce2, eInit, e) ->
+      let c1 = qualify_constrs c1 in
+      let ce1 = Rename.var loc env ce1 in
+      let c2 = qualify_constrs c2 in
+      let ce2 = Rename.var loc env ce2 in
+      let eInit = translate_exp env eInit in
+      let e = translate_exp env e in
+      Heptagon.Ebuffer (c1, ce1, c2, ce2, eInit, e)
   | Esplit (x, e1) ->
      let x = translate_exp env (mk_exp (Evar x) loc) in
      let e1 = translate_exp env e1 in
@@ -627,7 +635,9 @@ let translate_typedec ty =
 let translate_const_dec cd =
   let c_name = current_qual cd.c_name in
   let c_type = translate_type cd.c_loc RenameType.empty cd.c_type in
-  let c_value = expect_static_exp cd.c_value in
+  let c_value = match cd.c_value with
+    | None -> None
+    | Some cval -> Some (expect_static_exp cval) in
   replace_const c_name (Signature.mk_const_def c_type c_value);
   { Heptagon.c_name = c_name;
     Heptagon.c_type = c_type;

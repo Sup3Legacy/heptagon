@@ -66,6 +66,8 @@ and desc =
     (** merge ident (Constructor -> exp)+ *)
   | Ecurrent of constructor_name * var_ident * exp * exp
     (** current( cons(clk), expInit, exp) *)
+  | Ebuffer of constructor_name * var_ident * constructor_name * var_ident * exp * exp
+    (** buffer(cons(clk), cons(clk), expInit, exp) *)
   | Esplit of exp * exp
   | Eapp of app * exp list * exp option
   | Eiterator of iterator_type * app * static_exp list
@@ -198,7 +200,7 @@ type node_dec = {
 type const_dec = {
   c_name  : qualname;
   c_type  : ty;
-  c_value : static_exp;
+  c_value : static_exp option;
   c_loc   : location }
 
 type class_dec =

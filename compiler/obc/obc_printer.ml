@@ -229,8 +229,10 @@ let print_open_module ff name =
   fprintf ff "open %s@." (modul_to_string name)
 
 let print_const_dec ff c =
-  fprintf ff "const %a = %a@." print_qualname c.c_name
-    print_static_exp c.c_value
+  fprintf ff "const %a" print_qualname c.c_name;
+  match c.c_value with
+    | None -> fprintf ff "@."
+    | Some cval -> fprintf ff " = %a@." print_static_exp cval
 
 let print_prog_desc ff pd = match pd with
   | Pclass cd -> print_class_def ff cd; fprintf ff "@\n@\n"

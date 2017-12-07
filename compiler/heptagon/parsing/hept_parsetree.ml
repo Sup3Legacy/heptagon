@@ -109,6 +109,8 @@ and edesc =
   | Ewhen of exp * constructor_name * var_name
   | Emerge of var_name * (constructor_name * exp) list
   | Ecurrent of constructor_name * var_name * exp * exp (* current(cons(clk), eInit, eCurr) *)
+  | Ebuffer of constructor_name * var_name * constructor_name * var_name * exp * exp
+    (* buffer1(c1, ce1, c2, ce2, eInit, e) => buffer of size 1 between the clock c1(ce1) and c2(ce2) *)
   | Esplit of var_name * exp
 
 and app = { a_op: op; a_params: exp list; a_inlined: bool }
@@ -229,7 +231,7 @@ type node_dec =
 type const_dec =
   { c_name  : dec_name;
     c_type  : ty;
-    c_value : exp;
+    c_value : exp option;  (* None : value provided through an external C function *)
     c_loc   : location; }
 
 type class_dec =

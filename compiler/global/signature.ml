@@ -78,7 +78,7 @@ type type_def =
   | Tenum of constructor_name list
   | Tstruct of structure
 
-type const_def = { c_type : ty; c_value : static_exp }
+type const_def = { c_type : ty; c_value : static_exp option}
 
 type class_def = { c_class : name }
 
