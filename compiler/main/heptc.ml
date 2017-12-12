@@ -139,6 +139,9 @@ let main () =
         "-tomacheck", read_qualname add_tomato_check, "";
         "-inline", read_qualname add_inlined_node, doc_inline;
         "-flatten", Arg.Set flatten, doc_flatten;
+        
+        "-bufferremoval", Arg.Set buffer_removal, doc_buffer_removal;
+        
         "-assert", Arg.String add_assert, doc_assert;
         "-nopervasives", Arg.Unit set_no_pervasives, doc_no_pervasives;
         "-target", Arg.String add_target_language, doc_target;

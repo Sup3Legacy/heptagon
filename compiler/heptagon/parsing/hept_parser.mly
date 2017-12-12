@@ -571,6 +571,8 @@ _exp:
       { Ewhen (e, Q Initial.pfalse, ce) }
   | MERGE n=IDENT hs=merge_handlers
       { Emerge (n, hs) }
+  
+  
   | CURRENT LPAREN c=constructor_or_bool LPAREN ce=IDENT RPAREN COMMA eInit=exp COMMA e=exp RPAREN
       { Ecurrent (c, ce, eInit, e) }
   | CURRENT LPAREN ce=IDENT COMMA eInit=exp COMMA e=exp RPAREN
@@ -579,6 +581,8 @@ _exp:
                    c2=constructor_or_bool COMMA ce2=IDENT COMMA
                    eInit=exp COMMA e=exp RPAREN
       { Ebuffer(c1, ce1, c2, ce2, eInit, e) }
+  
+  
   | exp INFIX1 exp
       { mk_op_call $2 [$1; $3] }
   | exp INFIX0 exp
