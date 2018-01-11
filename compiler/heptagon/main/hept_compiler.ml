@@ -98,7 +98,23 @@ let compile_program p =
   (* Array destruction + copy equation afterward to clean up *)
   let p = pass "Array destruction" !arrayDestruct ArrayDestruct.program p pp in
   let p = pass "Copy equation removal - post array destruction" !arrayDestruct CopyRemoval.program p pp in
+
+  (* let p = pass "Dependence graph generation" ((!depgraphGeneration)!=[]) DepGraphGeneration.program p pp in *)
+
+  (* Ad-hoc pass for the Safran usecase, in order to explicit the activation boolean
+    (first argument) as a "when" *)
+  (* let p = pass "Activation exposal" !safran_handling ActivationExposal.program p pp in *)
   
+  (* TODO DEBUG *)
+  (* Hept_printer.print stdout p;
+
+  (* Dirty hyperperiod expansion output for the Safran usecase *)
+  let p = pass "Dirty Hyperperiod expansion" true Dirty_hyperperiod_expansion_Safran.program p pp in
+  (* Note: should not be activated outside of debugging *)
+
+  (* TODO DEBUG *)
+  Hept_printer.print stdout p; *)
+
   (* Return the transformed AST *)
   p
 

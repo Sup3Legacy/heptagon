@@ -1,0 +1,582 @@
+(* Quick and dirty hyperperiod expansion for the Safran usecase *)
+
+(* Valid only if all the equations are on the base clock, like in the Safran usecase *)
+(* Output a code to be parsed by Lopht (with release/deadline) *)
+(* Perform the following modifications:
+     - Var ===> Var_XXX (+ log the different version in a HashTable)
+     - Eq  ===> If not fby, duplicates it, while adding the _XXX at the end of all its equations
+     			If pre, then error (should not remain at that point)
+     			If fby, then do "Var_0 = 0.0 fby Var_(num_period-1)"
+     							"Var_i = Var_(i-1)"
+     - Annotations release/deadline for Safran
+
+  Input/output management => Also duplicate them
+  *)
+open Names
+open Heptagon
+
+exception PreShouldNotAppearHere (* "pre" equations were already removed manually beforehand *)
+exception Equation_not_in_Eeq_form
+exception VariableNotFoundInHashTbl
+exception Empty_list
+exception Sequenceur_call_not_found (* The call to the sequenceur was not found *)
+
+(* Number of times we should unroll *)
+let num_period = 16
+
+
+(* Naming convention for the new variables *)
+let strDelimEnd_varid = "_sh"
+
+let name_varid_instances varId i =
+  let strNameVar = (Idents.name varId) ^ strDelimEnd_varid ^ (string_of_int i) in
+  Idents.gen_var "hyperExpans" strNameVar
+
+
+(* Function which creates the num_period instances of a var *)
+let create_all_var_instances var num_period =
+  let rec create_all_var_instances_aux var i =
+    if (i=num_period) then [] else
+    let tl_res = create_all_var_instances_aux var (i+1) in
+    let nVardec = Hept_utils.mk_var_dec ~last:var.v_last ~clock:var.v_clock
+    (name_varid_instances var.v_ident i) var.v_type ~linearity:var.v_linearity in
+    nVardec :: tl_res
+  in
+  create_all_var_instances_aux var 0
+
+
+(* Clock management *)
+(* SEQ_Seq_B (first arg of  Wfz02_00_seq.wfz02_00_seq) + all outputs of Wfz02_00_seq.wfz02_00_seq *)
+
+type clock_safran = {
+  period : int;           (* 1, 2, 4, 8 or 16 / note: 1 => the clock is the base clock (=true) *)
+  shift : int;            (* 0<= shift < period *)
+  got_InitCmpl_B : bool;  (* true: the clock got a " and InitCmpl_B" in its expression *)
+  special_case : int;    (* SEQ_Idp_B => 1 | SEQ_SelCcr16_4_B => 2 *)
+}
+
+let mk_clock_safran p s init = {period = p; shift = s; got_InitCmpl_B = init; special_case = 0}
+
+let mk_clock_safran_special_case spcase = {period = 16; shift = 0; got_InitCmpl_B=false; special_case = spcase}
+
+(* Correspondance (from the equations of Wfz02_00_seq.wfz02_00_seq)
+00   SEQ_NumHTR_I : int ;             = OSASI_MFCnt_I
+
+01   SEQ_P1MF0_B : bool ;             = InitCmpl_B
+02   SEQ_P2MF0_B : bool ;             = ((OSASI_MFCnt_I - S2S_Prod(OSASI_MFCnt_I , 2) * 2) = 0) and InitCmpl_B
+03   SEQ_P2MF1_B : bool ;             = ((OSASI_MFCnt_I - S2S_Prod(OSASI_MFCnt_I , 2) * 2) = 1) and InitCmpl_B
+04   SEQ_P4MF1_B : bool ;             = ((OSASI_MFCnt_I - S2S_Prod(OSASI_MFCnt_I , 4) * 4) = 1) and InitCmpl_B
+05   SEQ_P4MF2_B : bool ;             = ((OSASI_MFCnt_I - S2S_Prod(OSASI_MFCnt_I , 4) * 4) = 2) and InitCmpl_B
+06   SEQ_P4MF3_B : bool ;             = ((OSASI_MFCnt_I - S2S_Prod(OSASI_MFCnt_I , 4) * 4) = 3) and InitCmpl_B
+07   SEQ_P8MF0_B : bool ;             = ((OSASI_MFCnt_I - S2S_Prod(OSASI_MFCnt_I , 8) * 8) = 0) and InitCmpl_B
+08   SEQ_P8MF1_B : bool ;             = ((OSASI_MFCnt_I - S2S_Prod(OSASI_MFCnt_I , 8) * 8) = 1) and InitCmpl_B
+09   SEQ_P8MF2_B : bool ;             = ((OSASI_MFCnt_I - S2S_Prod(OSASI_MFCnt_I , 8) * 8) = 2) and InitCmpl_B
+10   SEQ_P8MF3_B : bool ;             = ((OSASI_MFCnt_I - S2S_Prod(OSASI_MFCnt_I , 8) * 8) = 3) and InitCmpl_B
+11   SEQ_P8MF5_B : bool ;             = ((OSASI_MFCnt_I - S2S_Prod(OSASI_MFCnt_I , 8) * 8) = 5) and InitCmpl_B
+12   SEQ_P8MF6_B : bool ;             = ((OSASI_MFCnt_I - S2S_Prod(OSASI_MFCnt_I , 8) * 8) = 6) and InitCmpl_B
+13   SEQ_P8MF7_B : bool               = ((OSASI_MFCnt_I - S2S_Prod(OSASI_MFCnt_I , 8) * 8) = 7) and InitCmpl_B
+14   SEQ_P16MF0_B : bool ;            = ((OSASI_MFCnt_I - (S2S_Prod(OSASI_MFCnt_I , 16) * 16)) = 0) and InitCmpl_B
+15   SEQ_P16MF1_B : bool ;            = ((OSASI_MFCnt_I - (S2S_Prod(OSASI_MFCnt_I , 16) * 16)) = 1) and InitCmpl_B
+16   SEQ_P16MF7_B : bool ;            = ((OSASI_MFCnt_I - (S2S_Prod(OSASI_MFCnt_I , 16) * 16)) = 7) and InitCmpl_B
+17   SEQ_P16MF9_B : bool ;            = ((OSASI_MFCnt_I - (S2S_Prod(OSASI_MFCnt_I , 16) * 16)) = 9) and InitCmpl_B
+
+18   SEQ_Xchs_B : bool ;              = true
+19   SEQ_Xchr_B : bool ;              = true
+20   SEQ_Hlth_B : bool ;              = true
+21   SEQ_Pwrsup_B : bool ;            = true
+22   SEQ_Idp_B : bool ;               = (not (InitCmpl_B)) and (OSASI_MFCnt_I = 3)
+
+23   SEQ_P1MF0NoInit_B : bool ;       = true
+24   SEQ_P2MF0NoInit_B : bool ;       = ((OSASI_MFCnt_I - S2S_Prod(OSASI_MFCnt_I , 2) * 2) = 0)
+25   SEQ_P2MF1NoInit_B : bool ;       = ((OSASI_MFCnt_I - S2S_Prod(OSASI_MFCnt_I , 2) * 2) = 1)
+26   SEQ_P4MF1NoInit_B : bool ;       = ((OSASI_MFCnt_I - S2S_Prod(OSASI_MFCnt_I , 4) * 4) = 1)
+27   SEQ_P4MF2NoInit_B : bool ;       = ((OSASI_MFCnt_I - S2S_Prod(OSASI_MFCnt_I , 4) * 4) = 2)
+28   SEQ_P4MF3NoInit_B : bool ;       = ((OSASI_MFCnt_I - S2S_Prod(OSASI_MFCnt_I , 4) * 4) = 3)
+29   SEQ_P8MF0NoInit_B : bool ;       = ((OSASI_MFCnt_I - S2S_Prod(OSASI_MFCnt_I , 8) * 8) = 0)
+30   SEQ_P8MF2NoInit_B : bool ;       = ((OSASI_MFCnt_I - S2S_Prod(OSASI_MFCnt_I , 8) * 8) = 2)
+31   SEQ_P8MF3NoInit_B : bool ;       = ((OSASI_MFCnt_I - S2S_Prod(OSASI_MFCnt_I , 8) * 8) = 3)
+32   SEQ_P8MF4NoInit_B : bool ;       = ((OSASI_MFCnt_I - S2S_Prod(OSASI_MFCnt_I , 8) * 8) = 4)
+33   SEQ_P16MF1NoInit_B : bool ;      = ((OSASI_MFCnt_I - (S2S_Prod(OSASI_MFCnt_I , 16) * 16)) = 1)
+34   SEQ_P16MF2NoInit_B : bool ;      = ((OSASI_MFCnt_I - (S2S_Prod(OSASI_MFCnt_I , 16) * 16)) = 2)
+35   SEQ_P16MF3NoInit_B : bool ;      = ((OSASI_MFCnt_I - (S2S_Prod(OSASI_MFCnt_I , 16) * 16)) = 3)
+36   SEQ_P16MF4NoInit_B : bool ;      = ((OSASI_MFCnt_I - (S2S_Prod(OSASI_MFCnt_I , 16) * 16)) = 4)
+37   SEQ_P16MF9NoInit_B : bool ;      = ((OSASI_MFCnt_I - (S2S_Prod(OSASI_MFCnt_I , 16) * 16)) = 9)
+38   SEQ_SelCcr16_4_B : bool ;        = (((OSASI_MFCnt_I - (S2S_Prod(OSASI_MFCnt_I , 16) * 16)) = 3) and not (InitCmpl_B))
+                                        or (((OSASI_MFCnt_I - (S2S_Prod(OSASI_MFCnt_I , 16) * 16)) = 9) and InitCmpl_B)
+39   SEQ_P16MF8_B : bool ;            = InitCmpl_B and ((OSASI_MFCnt_I - (S2S_Prod(OSASI_MFCnt_I , 16) * 16)) = 8)
+40   SEQ_P16MF11_B : bool ;           = InitCmpl_B and ((OSASI_MFCnt_I - (S2S_Prod(OSASI_MFCnt_I , 16) * 16)) = 11)
+
+41   SEQ_EIUInitInProg_B : bool        = SEQ_EIUInitInProgress(InitWd_PwrUpRst_B, LongInitFlg_B)
+*)
+let correspondance_clock_safran = Array.make 42 None
+
+let base_clock = mk_clock_safran 1 0 false   (* Clock associated to the first argument of the sequenceur *)
+
+let fill_correspondance_clock_array () =
+  Array.set correspondance_clock_safran 0 None;         (* None = never used as a clock *)
+  Array.set correspondance_clock_safran 1 (Some (mk_clock_safran 1 0 true));
+  Array.set correspondance_clock_safran 2 (Some (mk_clock_safran 2 0 true));
+  Array.set correspondance_clock_safran 3 (Some (mk_clock_safran 2 1 true));
+  Array.set correspondance_clock_safran 4 (Some (mk_clock_safran 4 1 true));
+  Array.set correspondance_clock_safran 5 (Some (mk_clock_safran 4 2 true));
+  Array.set correspondance_clock_safran 6 (Some (mk_clock_safran 4 3 true));
+  Array.set correspondance_clock_safran 7 (Some (mk_clock_safran 8 0 true));
+  Array.set correspondance_clock_safran 8 (Some (mk_clock_safran 8 1 true));
+  Array.set correspondance_clock_safran 9 (Some (mk_clock_safran 8 2 true));
+  Array.set correspondance_clock_safran 10 (Some (mk_clock_safran 8 3 true));
+  Array.set correspondance_clock_safran 11 (Some (mk_clock_safran 8 5 true));
+  Array.set correspondance_clock_safran 12 (Some (mk_clock_safran 8 6 true));
+  Array.set correspondance_clock_safran 13 (Some (mk_clock_safran 8 7 true));
+  Array.set correspondance_clock_safran 14 (Some (mk_clock_safran 16 0 true));
+  Array.set correspondance_clock_safran 15 (Some (mk_clock_safran 16 1 true));
+  Array.set correspondance_clock_safran 16 (Some (mk_clock_safran 16 7 true));
+  Array.set correspondance_clock_safran 17 (Some (mk_clock_safran 16 9 true));
+
+  Array.set correspondance_clock_safran 18 (Some (mk_clock_safran 1 0 false));
+  Array.set correspondance_clock_safran 19 (Some (mk_clock_safran 1 0 false));
+  Array.set correspondance_clock_safran 20 (Some (mk_clock_safran 1 0 false));
+  Array.set correspondance_clock_safran 21 (Some (mk_clock_safran 1 0 false));
+  Array.set correspondance_clock_safran 22 (Some (mk_clock_safran_special_case 1));
+
+  Array.set correspondance_clock_safran 23 (Some (mk_clock_safran 1 0 false));
+  Array.set correspondance_clock_safran 24 (Some (mk_clock_safran 2 0 false));
+  Array.set correspondance_clock_safran 25 (Some (mk_clock_safran 2 1 false));
+  Array.set correspondance_clock_safran 26 (Some (mk_clock_safran 4 1 false));
+  Array.set correspondance_clock_safran 27 (Some (mk_clock_safran 4 2 false));
+  Array.set correspondance_clock_safran 28 (Some (mk_clock_safran 4 3 false));
+  Array.set correspondance_clock_safran 29 (Some (mk_clock_safran 8 0 false));
+  Array.set correspondance_clock_safran 30 (Some (mk_clock_safran 8 2 false));
+  Array.set correspondance_clock_safran 31 (Some (mk_clock_safran 8 3 false));
+  Array.set correspondance_clock_safran 32 (Some (mk_clock_safran 8 4 false));
+  Array.set correspondance_clock_safran 33 (Some (mk_clock_safran 16 1 false));
+  Array.set correspondance_clock_safran 34 (Some (mk_clock_safran 16 2 false));
+  Array.set correspondance_clock_safran 35 (Some (mk_clock_safran 16 3 false));
+  Array.set correspondance_clock_safran 36 (Some (mk_clock_safran 16 4 false));
+  Array.set correspondance_clock_safran 37 (Some (mk_clock_safran 16 9 false));
+  Array.set correspondance_clock_safran 38 (Some (mk_clock_safran_special_case 2));
+  Array.set correspondance_clock_safran 39 (Some (mk_clock_safran 16 8 true));
+  Array.set correspondance_clock_safran 40 (Some (mk_clock_safran 16 11 true));
+  Array.set correspondance_clock_safran 41 None         (* None = never used as a clock *)
+
+
+
+let name_seq_call = "wfz02_00_seq"
+
+(* Auxilliary function which extract the list of variable id from a pattern *)
+let rec get_list_vid plhs = match plhs with
+  | Etuplepat pl -> List.fold_left (fun acc p1 -> acc@(get_list_vid p1)) [] pl
+  | Evarpat vid -> vid::[]
+
+let find_seq_call_eq bl =
+  (* Fill the correspondance array now (because it's the initialization) *)
+  fill_correspondance_clock_array ();
+
+  (* Search for the equation corresponding to the sequenceur *)
+  let plhsargsOpt = List.fold_left (fun acc eq -> match eq.eq_desc with
+      | Eeq (plhs, rhs) ->
+        begin
+        match rhs.e_desc with
+        | Eapp (a, el, _) -> begin
+            match a.a_op with
+              | Efun (f,_) | Enode (f,_) ->
+                if (f.name = name_seq_call) then Some (plhs,el) else acc
+              | _ -> acc
+            end
+          | _ -> acc
+        end
+      | _ -> raise Equation_not_in_Eeq_form
+  ) None bl.b_equs in
+  let (plhs, args) = match plhsargsOpt with
+    | None -> raise Sequenceur_call_not_found
+    | Some plhsargs -> plhsargs
+  in
+  
+  (* We match the name of the variable to the corresponding clock *)
+  let htblClocks = Hashtbl.create 43 in
+
+  (* Matching the first argument of the sequenceur call *)
+  let baseclockvarexp = List.hd args in
+  let baseclockvarid = match baseclockvarexp.e_desc with
+    | Evar vid -> vid
+    | _ -> failwith "Unexpected form of the first argument of the sequencer call"
+  in
+  Hashtbl.add htblClocks baseclockvarid base_clock;
+
+  (* Matching the outputs of the sequenceur call*)
+  let lvidOut = get_list_vid plhs in
+  List.iteri (fun k vid ->
+    match correspondance_clock_safran.(k) with
+     | None -> ()
+     | Some ck -> Hashtbl.add htblClocks vid ck
+    ) lvidOut;
+  htblClocks
+
+
+
+(* ================================================================================ *)
+
+(* [[a0, a1, ...], [b0, b1, ...], ...] => [[a0, b0, ...], [a1, b1, ...], ...] *)
+let transpose_list_list lle =
+  let rec create_n_empty_list n = match n with
+    | 0 -> []
+    | _ -> []::(create_n_empty_list (n-1))
+  in
+  let rec transpose_list_list_aux lle nRow = match lle with
+  | [] -> create_n_empty_list nRow
+  | hl::tl ->
+    let llres = transpose_list_list_aux tl nRow in
+    List.map2 (fun helem lres -> helem::lres) hl llres
+  in
+  if (lle=[]) then [] else
+  transpose_list_list_aux lle (List.length (List.hd lle))
+
+(* Find vid in the 3 HashTbls *)
+let search_var_ident varTables vid =
+  let (varTblIn, varTblOut, varTblLoc) = varTables in
+  try Hashtbl.find varTblIn vid
+  with Not_found ->
+    (try Hashtbl.find varTblOut vid
+    with Not_found ->
+      (try Hashtbl.find varTblLoc vid
+       with Not_found -> raise VariableNotFoundInHashTbl
+      )
+    )
+
+(* Separate the last element of a list with the rest *)
+let rec split_end_list l = match l with
+  | [] -> raise Empty_list
+  | a::[] -> ([],a)
+  | a::r ->
+    let (hl,e) = split_end_list r in
+    (a::hl,e)
+
+(* Copy n times an element
+   Note: not valid if there is mutable inside x *)
+let rec copy_n_times n x = match n with
+  | 0 -> []
+  | _ -> x::(copy_n_times (n-1) x)
+
+
+
+(* Note: result is a list of size "num_period", corresponding to all version
+   of the current equation part *)
+let rec edesc_duplEq varTables htblClocks lplhs edesc = match edesc with
+  | Efby (e1, e2) ->
+    (* Special case - produce [e1_0 fby e2_(num_period-1); e2_0; e2_(num_period-2)] *)
+    let le1 = exp_duplEq varTables htblClocks lplhs (e1:Heptagon.exp) in
+    let le2 = exp_duplEq varTables htblClocks lplhs e2 in
+    let e1_0 = List.hd le1 in
+    let (le2_begin, e2_end) = split_end_list le2 in
+    let fby_exp_0 = Efby (e1_0, e2_end) in
+    let ledesc2_begin = List.map (fun e -> e.e_desc) le2_begin in
+    fby_exp_0::ledesc2_begin
+
+  | Epre (None, _) -> raise PreShouldNotAppearHere (* Everybody in on the base clock => should not appear *)
+  | Epre (Some se1, e2) -> (* Same than Efby( Econst se1, e2) *)
+    let le2 = exp_duplEq varTables htblClocks lplhs e2 in
+    let (le2_begin, e2_end) = split_end_list le2 in
+    let pre_exp_0 = Epre (Some se1, e2_end) in
+    let ledesc2_begin = List.map (fun e -> e.e_desc) le2_begin in
+    pre_exp_0::ledesc2_begin
+
+  | Evar v ->
+    let lvardec = search_var_ident varTables v in
+    let ledesc = List.map (fun vd -> Evar vd.v_ident) lvardec in
+    ledesc
+  
+  (* The rest of the cases are just propagation *)
+  | Econst sexp ->
+    let lsexp = copy_n_times num_period sexp in
+    let ledesc = List.map (fun stexp -> Econst stexp) lsexp in
+    ledesc
+  | Elast v ->
+    let lvardec = search_var_ident varTables v in
+    let ledesc = List.map (fun vd -> Elast vd.v_ident) lvardec in
+    ledesc
+  | Estruct lfname_exp ->
+    let llexp = List.map
+      (fun (_, e) -> exp_duplEq varTables htblClocks lplhs e) lfname_exp in
+    let llexp_Transp = transpose_list_list llexp in
+    let ledesc = List.map (fun lexp_Transp ->
+          let nlfname_exp = List.map2 
+            (fun (fname, _) exp -> (fname, exp))
+            lfname_exp lexp_Transp in
+          Estruct nlfname_exp
+       ) llexp_Transp in
+    ledesc
+  | Ewhen (e, cname, vid) ->
+    let le = exp_duplEq varTables htblClocks lplhs e in
+    let lvid = search_var_ident varTables vid in
+    let ledesc = List.map2 (fun ne nvid ->
+      Ewhen (ne, cname, nvid.v_ident)
+    ) le lvid in
+    ledesc
+  | Emerge (vid, lcname_e) ->
+    let lvid = search_var_ident varTables vid in
+    let llexp = List.map
+      (fun (_, e) -> exp_duplEq varTables htblClocks lplhs e)
+      lcname_e in
+    let llexp_Trans = transpose_list_list llexp in
+    let lledesc_right = List.map (fun lexp_Transp ->
+        let nlcname_e = List.map2
+          (fun (cname, _) exp -> (cname, exp))
+          lcname_e lexp_Transp
+        in
+        nlcname_e
+      ) llexp_Trans in
+    let ledesc = List.map2
+      (fun vid ledesc_right-> Emerge (vid.v_ident, ledesc_right))
+      lvid lledesc_right
+    in
+    ledesc
+  | Ecurrent (cname, vid, e) ->
+    let lvid = search_var_ident varTables vid in
+    let le = exp_duplEq varTables htblClocks lplhs e in
+    let ledesc = List.map2 (fun ne nvid ->
+      Ecurrent (cname, nvid.v_ident, ne)
+    ) le lvid in
+    ledesc
+  | Esplit (e1, e2) ->
+    let le1 = exp_duplEq varTables htblClocks lplhs e1 in
+    let le2 = exp_duplEq varTables htblClocks lplhs e2 in
+    let ledesc = List.map2 (fun ne1 ne2 ->
+      Esplit (ne1, ne2)
+    ) le1 le2 in
+    ledesc
+  | Eapp (a, le, eopt) ->
+    begin
+    let ledesc_elem_func_callopt = elementary_func_call_duplEq varTables htblClocks lplhs a le eopt in
+    match ledesc_elem_func_callopt with
+      | Some ledesc_elem_func_call -> ledesc_elem_func_call
+      | None ->
+        (* Default case *)
+        let leopt = match eopt with
+          | None -> copy_n_times num_period None
+          | Some e ->
+            let leSome = exp_duplEq varTables htblClocks lplhs e in
+            List.map (fun eSome -> Some eSome) leSome
+        in
+        let lle = List.map (fun e -> exp_duplEq varTables htblClocks lplhs e) le in
+        let lle_transp = transpose_list_list lle in
+        let ledesc = List.map2 (fun le_transp eopt ->
+          Eapp (a, le_transp, eopt)
+        ) lle_transp leopt in
+        ledesc
+    end
+  | Eiterator (itype, a, lst, le1, le2, eopt) ->
+    let leopt = match eopt with
+      | None -> copy_n_times num_period None
+      | Some e ->
+        let leSome = exp_duplEq varTables htblClocks lplhs e in
+        List.map (fun eSome -> Some eSome) leSome
+    in
+    let lle1 = List.map (fun e1 -> exp_duplEq varTables htblClocks lplhs e1) le1 in
+    let lle2 = List.map (fun e2 -> exp_duplEq varTables htblClocks lplhs e2) le2 in
+    let lle1_transp = transpose_list_list lle1 in
+    let lle2_transp = transpose_list_list lle2 in
+    let lle_tr_ziped = List.map2
+      (fun le1_transp le2_transp -> (le1_transp, le2_transp))
+      lle1_transp lle2_transp
+    in
+    let ledesc = List.map2 (fun (le1_transp, le2_transp) eopt ->
+        Eiterator (itype, a, lst, le1_transp, le2_transp, eopt)
+      ) lle_tr_ziped leopt in
+    ledesc
+
+(* Special function to recognize an elementary function call & to duplicate it accordingly *)
+and elementary_func_call_duplEq varTables htblClocks lplhs a le eopt = match a.a_op with
+  | Efun (fname,_) | Enode (fname,_) ->
+    begin
+    if ((fname.qual=Pervasives) || (fname.qual=LocalModule)) then None else (* External call *)
+
+    (* Checking if the first argument is a clock *)
+    let first_arg = List.hd le in
+    let baseclockvarid = match first_arg.e_desc with
+      | Evar vid -> vid
+      | _ -> failwith "Unexpected form of the first argument - program should be in normal form"
+    in
+    if (not (Hashtbl.mem htblClocks baseclockvarid)) then None else begin (* First argument is not a registered clock *)
+    (* Automatically, the first argument is a boolean *)
+
+    (* At that point, we are now sure that we have an elementary function here *)
+    (* We now create the list of ldesc *)
+    assert(eopt=None);
+    let ck = Hashtbl.find htblClocks baseclockvarid in
+    let period = ck.period in
+    let shift = ck.shift in
+    let special_case = ck.special_case in
+    let activation_vector = Array.make 16 false in
+    (match special_case with
+      | 1 -> (* SEQ_Idp_B : (not (InitCmpl_B)) and (OSASI_MFCnt_I = 3)) *)
+        Array.set activation_vector 3 true
+      | 2 -> (* SEQ_SelCcr16_4_B : (((OSASI_MFCnt_I - (S2S_Prod(OSASI_MFCnt_I , 16) * 16)) = 3) and not (InitCmpl_B))
+                                        or (((OSASI_MFCnt_I - (S2S_Prod(OSASI_MFCnt_I , 16) * 16)) = 9) and InitCmpl_B) *)
+        Array.set activation_vector 3 true;
+        Array.set activation_vector 9 true
+      | 0 -> begin (* General case *)
+        Array.iteri (fun k _ ->
+          if (k mod period = shift) then
+            Array.set activation_vector k true
+          else ()
+        ) activation_vector
+        end
+      | _ -> failwith "Unknown special case value"
+    );
+    let lle1 = List.map (fun e1 -> exp_duplEq varTables htblClocks lplhs e1) le in
+    let lle1_transp = transpose_list_list lle1 in
+    let llvarid_out = List.map get_list_vid lplhs in
+    let lvarid_out_0 = List.map (fun l -> List.hd l) llvarid_out in
+    let lty_var_out = List.map (fun vid ->
+        let lvdec = search_var_ident varTables vid in
+        let lvdec0 = List.hd lvdec in
+        lvdec0.v_type
+      ) lvarid_out_0 in
+    
+    (* Aux function to create an expression which is the Evar/tuple of a list of variable *)
+    let mk_edesc_var_or_tuple lvaridpre ltyvaridpre =
+      if ((List.length lvaridpre)=1) then
+        Evar (List.hd lvaridpre)
+      else
+        let app_tuple = { a_op = Etuple; a_params = []; a_unsafe = false; a_inlined = false } in
+         let levarpre = List.map2 (fun vid tyvaridpre -> Hept_utils.mk_exp (Evar vid) tyvaridpre
+            ~linearity:Linearity.Ltop) lvaridpre ltyvaridpre in 
+         Eapp (app_tuple, levarpre, None)
+    in
+
+    let (ledesc,_) = Array.fold_right (fun act (acc,i) -> 
+        let edesc = if (act) then
+            Eapp (a, (List.nth lle1_transp i), None)
+          else begin
+          (* The function is not activated => we place a "pre" of the output variables *)
+          if (i==0) then
+            let lvaridpre = List.nth llvarid_out (num_period-1) in
+            let subedescPre = mk_edesc_var_or_tuple lvaridpre lty_var_out in
+            let tyexpPre = Types.Tprod lty_var_out in
+            let expPre = Hept_utils.mk_exp subedescPre tyexpPre ~linearity:Linearity.Ltop in
+            Epre(None, expPre)
+          else
+            let lvaridpre = List.nth llvarid_out (i-1) in
+            let subedesc = mk_edesc_var_or_tuple lvaridpre lty_var_out in
+            subedesc
+          end in
+        (edesc::acc,i-1)
+      ) activation_vector ([], num_period-1) in
+    Some ledesc
+    end
+    end
+  | _ -> None
+
+
+
+and exp_duplEq varTables htblClocks lplhs (e:Heptagon.exp) =
+  let ledesc = edesc_duplEq varTables htblClocks lplhs e.e_desc in
+  let lne = List.map (fun edesc ->
+     let ne = Hept_utils.mk_exp edesc ~level_ck:e.e_level_ck
+          ~ct_annot:e.e_ct_annot e.e_ty
+          ~linearity:e.e_linearity in
+     ne
+  ) ledesc in
+  lne
+
+
+and pat_duplEq varTables htblClocks p = match p with
+  | Etuplepat pl ->
+    let llpl = List.map (fun p1 -> pat_duplEq varTables htblClocks p1) pl in
+    let llplTransp = transpose_list_list llpl in
+    let nlp = List.map (fun pl -> Etuplepat pl) llplTransp in
+    nlp
+  | Evarpat vid ->
+    let lvardec = search_var_ident varTables vid in
+    let nlp = List.map (fun vdec -> Evarpat vdec.v_ident) lvardec in
+    nlp
+
+
+and eqdesc_duplEq varTables htblClocks eqdesc = match eqdesc with
+  | Eeq (plhs, rhs) -> 
+    let (lplhs: Heptagon.pat list) = pat_duplEq varTables htblClocks plhs in
+    let (lrhs: Heptagon.exp list) = exp_duplEq varTables htblClocks lplhs rhs in
+    let nlEqDecs = List.map2 (fun pl er -> Eeq (pl, er)) lplhs lrhs in
+    nlEqDecs
+  | _ -> raise Equation_not_in_Eeq_form
+
+
+and eq_duplEq varTables htblClocks eq =
+  let leqdesc = eqdesc_duplEq varTables htblClocks eq.eq_desc in
+  let leq = List.map
+    (fun eqdesc -> Hept_utils.mk_equation eqdesc)
+    leqdesc
+  in
+  leq
+
+
+
+(* ================================================================================ *)
+let get_all_var_decl htbl = Hashtbl.fold (fun _ v acc -> v@acc) htbl []
+
+(* Main functions *)
+let node nd =
+  (* Step 0: get the equation using Wfz02_00_seq.wfz02_00_seq and put it in relation to correspondance_clock_safran *)
+  let htblClocks = find_seq_call_eq nd.n_block in
+
+  (* Step 1: creates all instances of variables *)
+  let varTblIn = Hashtbl.create (List.length nd.n_input) in
+  let varTblOut = Hashtbl.create (List.length nd.n_output) in
+  let varTblLoc = Hashtbl.create (List.length nd.n_block.b_local) in
+  
+  List.iter (fun var ->
+  	let lInstances = create_all_var_instances var num_period in
+  	Hashtbl.add varTblIn var.v_ident lInstances
+    ) nd.n_input;
+  List.iter (fun var ->
+  	let lInstances = create_all_var_instances var num_period in
+  	Hashtbl.add varTblOut var.v_ident lInstances
+    ) nd.n_output;
+  List.iter (fun var ->
+  	let lInstances = create_all_var_instances var num_period in
+  	Hashtbl.add varTblLoc var.v_ident lInstances
+    ) nd.n_block.b_local;
+  let varTables = (varTblIn, varTblOut, varTblLoc) in
+
+  (* Step 2: duplicate equations *)
+  let lneqs = List.fold_left (fun acc eq ->
+      let nleq = eq_duplEq varTables htblClocks eq in
+      nleq @ acc
+    ) [] nd.n_block.b_equs in
+
+  (* TODO: iterate over contracts also? => nContract *)
+  assert(nd.n_contract=None);
+  let nContract = None in
+  
+  (* Step 3: build the new system and return it *)
+  let lnInputs = get_all_var_decl varTblIn in
+  let lnOutputs = get_all_var_decl varTblOut in
+  let lnLocals = get_all_var_decl varTblLoc in
+  let nBl = {
+    b_local = lnLocals;
+    b_equs = lneqs;
+    b_defnames = nd.n_block.b_defnames;
+    b_stateful = nd.n_block.b_stateful;
+    b_loc = nd.n_block.b_loc;
+  } in
+  let n_nd = {
+    n_name = nd.n_name;
+    n_stateful = nd.n_stateful;  (* if fby in nd, then true / else false *)
+    n_unsafe = nd.n_unsafe;
+    n_typeparamdecs = nd.n_typeparamdecs;
+    n_input = lnInputs;
+    n_output = lnOutputs;
+    n_contract = nContract;
+    n_block = nBl;
+    n_loc = nd.n_loc;
+    n_params = nd.n_params;
+    n_param_constraints = nd.n_param_constraints;
+  } in
+  n_nd
+
+let program p =
+  let nlpdesc = List.fold_left
+  (fun acc pdesc -> match pdesc with
+    | Pnode nd -> (Pnode (node nd))::acc
+    | _ -> pdesc::acc
+  ) [] p.p_desc in
+  {p with p_desc = nlpdesc}

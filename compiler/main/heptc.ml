@@ -251,6 +251,8 @@ let main () =
         "-prune", Arg.Set prune, doc_prune;
         "-copyRemoval", Arg.Set copyRemoval, doc_copyRemoval;
         "-arrayDestruct", Arg.Set arrayDestruct, doc_arrayDestruct;
+
+        "-depGraph", Arg.String add_depgraph, doc_depgraphGeneration;
         
         
         "-assert", Arg.String add_assert, doc_assert;

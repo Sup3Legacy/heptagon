@@ -715,6 +715,7 @@ patid:
 
 pat:
   | VOID { Etuplepat [], Linit_tuple [] }
+  | LPAREN pat RPAREN { $2 }
   | pat_init_list=snlist(COMMA, patid)
       { match pat_init_list with
         | [x] -> x
@@ -897,6 +898,8 @@ _exp:
 /* ADDED FOR SAFRAN UC */
   | LBRACKET l=separated_nonempty_list(COMMA, exp) RBRACKET
       { mk_call Earray l }
+  | LBRACKET l=separated_nonempty_list(SEMICOL, exp) RBRACKET
+      { mk_call Earray l }
 ;
 
 call_params:
@@ -936,7 +939,9 @@ constructor:
 
 qualname:
   | i=ident { ToQ i }
-  | q=qualified(ident) { q }
+  | m=IDENT DOT i=IDENT { Q { qual = (Names.Module m); name = i} }
+  | m=modul DOT i=IDENT { Q { qual = m; name = i} }
+/*  | q=qualified(ident) { q }  todo: temp debug (to be restored later) */
 ;
 
 

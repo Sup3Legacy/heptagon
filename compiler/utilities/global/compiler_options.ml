@@ -132,6 +132,9 @@ let copyRemoval = ref false
 
 let arrayDestruct = ref false
 
+let depgraphGeneration : string list ref = ref []
+let add_depgraph s = depgraphGeneration := s :: !depgraphGeneration
+
 let deadcode = ref false
 
 let tomato = ref false
@@ -213,6 +216,7 @@ and doc_mainnode = "\t\tSpecify a main node. The nodes not used by a main node i
 and doc_prune = "\t\tRemove the nodes unused by the main nodes."
 and doc_copyRemoval = "\t\tRemove the local variables defined through a copy equation."
 and doc_arrayDestruct = "\t\tDestruct constant-size arrays by introducing local variable for their cells."
+and doc_depgraphGeneration = "\t\tFile on which the dependence graphs of the nodes are printed-out."
 
 and doc_target =
   "<lang>\tGenerate code in language <lang>\n\t\t\t(with <lang>=c,"

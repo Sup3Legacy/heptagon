@@ -5,6 +5,7 @@
 (* Author: Guillaume I *)
 
 open Heptagon
+open Global_mapfold
 open Hept_mapfold
 
 (* Contract a local variable "var1" in the program, by replacing its occurence by "var2" *)
@@ -14,60 +15,84 @@ let eqdesc_contract funs acc eqdesc = match eqdesc with
     Eeq(p, exp), acc
   | _ -> Hept_mapfold.eqdesc funs acc eqdesc
 
+let edesc_contract funs htblLocalVarContracted edesc = match edesc with
+  | Evar var1 -> begin
+    try
+      let var2 = Hashtbl.find htblLocalVarContracted var1 in
+      Evar var2, htblLocalVarContracted
+    with Not_found -> Evar var1, htblLocalVarContracted
+    end
+  | _ -> Hept_mapfold.edesc funs htblLocalVarContracted edesc
 
-let edesc_contract funs (var1, var2) edesc = match edesc with
-  | Evar v ->
-    if (v=var1) then Evar var2, (var1, var2)
-        else Evar v, (var1, var2)
-  | _ -> Hept_mapfold.edesc funs (var1, var2) edesc
+(* let var_ident_contract _ (var1, var2) vi =
+  if (vi=var1) then var2, (var1,var2) else vi, (var1, var2) *)
 
 
 (* Remove the equation defining "var" from the list of equation of 
       the node declaration "nd" + its declaration (as a local var) *)
-let remove_variable varId bl =
-  let rec remove_local_var varId lvardec = match lvardec with
+let remove_variables htblLocalVarContracted bl =
+  let rec remove_local_vars htblLocalVarContracted lvardec = match lvardec with
     | [] -> []
-    | vd::r -> if (vd.v_ident=varId) then r    (* Removed *)
-               else vd::(remove_local_var varId r)
+    | vd::r -> if (Hashtbl.mem htblLocalVarContracted vd.v_ident) then r    (* Removed *)
+               else vd::(remove_local_vars htblLocalVarContracted r)
   in
-  
-  let rec remove_equation varId lEqs =
-    let rec aux_pattern varId eq r p =  match p with
+  let rec remove_equation htblLocalVarContracted lEqs =
+    let rec aux_pattern htblLocalVarContracted eq r p =  match p with
       | Evarpat v ->
-         if (v=varId) then r               (* Removed *)
-          else eq::(remove_equation varId r)
+         if (Hashtbl.mem htblLocalVarContracted v) then
+            remove_equation htblLocalVarContracted r               (* Removed *)
+          else eq::(remove_equation htblLocalVarContracted r)
       | Etuplepat lp ->
          if ((List.length lp)=1) then
-           aux_pattern varId eq r (List.hd lp)
+           aux_pattern htblLocalVarContracted eq r (List.hd lp)
          else
-           eq::(remove_equation varId r)
+           eq::(remove_equation htblLocalVarContracted r)
     in
     match lEqs with
     | [] -> []
     | eq::r -> begin
       match eq.eq_desc with
-        | Eeq (p, _) -> aux_pattern varId eq r p
-        | _ -> eq::(remove_equation varId r)
+        | Eeq (p, _) -> aux_pattern htblLocalVarContracted eq r p
+        | _ -> eq::(remove_equation htblLocalVarContracted r)
       end
   in
   
   (* Removing the local declaration of nd *)
-  let nlLocVar = remove_local_var varId bl.b_local in
+  let nlLocVar = remove_local_vars htblLocalVarContracted bl.b_local in
   
   (* Removing the equation of nd *)
-  let nEqs = remove_equation varId bl.b_equs in
+  let nEqs = remove_equation htblLocalVarContracted bl.b_equs in
   let nBl = Hept_utils.mk_block ~stateful:bl.b_stateful
           ~defnames:bl.b_defnames ~locals:nlLocVar nEqs in
   nBl
 
 
-
-let contractLocalVar nd (var1, var2) =
+(*let contractLocalVar nd (var1, var2) =
   let funs = {Hept_mapfold.defaults with
                         eqdesc = eqdesc_contract;
-                        edesc = edesc_contract} in
+                        edesc = edesc_contract;
+(*                        global_funs = {Global_mapfold.defaults with var_ident = var_ident_contract} *)} in
   let nd, _ = Hept_mapfold.node_dec funs (var1, var2) nd in
   let nbl = remove_variable var1 nd.n_block in
+  {nd with n_block = nbl } *)
+
+
+
+let contractLocalVars nd lLocalVarContracted =
+  let list_to_htbl l =
+    let h = Hashtbl.create (List.length l) in
+    List.iter (fun (var1, var2) -> Hashtbl.add h var1 var2) l;
+    h
+  in
+
+  (* Can be done in parallel instead of in sequence *)
+  let htblLocalVarContracted = list_to_htbl lLocalVarContracted in
+  let funs = {Hept_mapfold.defaults with
+                       eqdesc = eqdesc_contract;
+                       edesc = edesc_contract;
+(*                     global_funs = {Global_mapfold.defaults with var_ident = var_ident_contract} *)} in
+  let nd, _ = Hept_mapfold.node_dec funs htblLocalVarContracted nd in
+  let nbl = remove_variables htblLocalVarContracted nd.n_block in
   {nd with n_block = nbl }
 
 
@@ -156,7 +181,7 @@ let program p =
         (* TODO DEBUG
         print_lLocalVarContracted (Format.formatter_of_out_channel stdout) lLocalVarContracted; *)
         
-        let nd = List.fold_left contractLocalVar nd lLocalVarContracted in
+        let nd = contractLocalVars nd lLocalVarContracted in
         Pnode nd
       | _ -> pdesc
     ) p.p_desc in

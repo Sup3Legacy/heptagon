@@ -118,13 +118,13 @@ let eq_subst_array mArrayVar funs acc eq =
                | Sarray lsexp | Stuple lsexp ->
                  let nlexp = List.map
                     (fun stexp -> Hept_utils.mk_exp (Econst stexp) ~level_ck:rhs.e_level_ck
-                                     ~ct_annot:rhs.e_ct_annot  ~loc:rhs.e_loc rhs.e_ty ~linearity:rhs.e_linearity 
+                                     ~ct_annot:None  ~loc:rhs.e_loc rhs.e_ty ~linearity:rhs.e_linearity 
                     ) lsexp in
                  eq, (create_new_eq_from_tuple vidLhs mArrayVar nlexp)@acc
                | Sarray_power (sexp_value, lsexp_power) ->
                  let numDupl = List.length (IdentMap.find vidLhs mArrayVar) in
                  let exp_value = Hept_utils.mk_exp (Econst sexp_value) ~level_ck:rhs.e_level_ck
-                                     ~ct_annot:rhs.e_ct_annot  ~loc:rhs.e_loc rhs.e_ty ~linearity:rhs.e_linearity in
+                                     ~ct_annot:None  ~loc:rhs.e_loc rhs.e_ty ~linearity:rhs.e_linearity in
                  let nlexp = duplicate_k_times exp_value numDupl in
                  eq, (create_new_eq_from_tuple vidLhs mArrayVar nlexp)@acc
                | _ -> Format.fprintf (Format.formatter_of_out_channel stdout)
@@ -142,11 +142,21 @@ let eq_subst_array mArrayVar funs acc eq =
     | _ -> eq, eq::acc
 
 
+(*let var_ident_subst_array mArrayVar funs acc vid =
+  try
+    let lvd = IdentMap.find vid mArrayVar in
+    let (_,vd) = List.hd lvd in
+    vd.v_ident, acc
+  with
+  | Not_found -> vid, acc
+  *)
+  
 
 let subst_array_var mArrayVar lequs =
   let funs_subst_array = { Hept_mapfold.defaults with
       eq = (eq_subst_array mArrayVar);         (* A = [ .... ] => A_0 = ... / A_1 = ... / ... *)
       edesc = (edesc_subst_array mArrayVar);   (* A[k] -> A_k *)
+(*      global_funs = {Global_mapfold.defaults with var_ident = (var_ident_subst_array mArrayVar)} *)
     }
   in
   let subst_array_var_eq acc equ =
@@ -176,6 +186,22 @@ let print_mArrayVar ff mArrayVar =
         )
       mArrVar)
     mArrayVar
+
+
+let rec remove_local_vars larrIdToDestroy res lvdLoc =
+  let rec remove_varid vid res larrIdToDestroy = match larrIdToDestroy with
+    | [] -> (res, false)
+    | h::t ->
+      let (vid_h, _, _) = h in
+      if (vid_h.v_ident=vid) then (t@res, true) else
+      remove_varid vid (h::res) t
+  in
+  match lvdLoc with
+  | [] -> res
+  | vdLoc :: r ->
+    let (larrIdToDestroy, isRemoved) = remove_varid vdLoc.v_ident [] larrIdToDestroy in
+    if (isRemoved) then remove_local_vars larrIdToDestroy res r
+      else remove_local_vars larrIdToDestroy (vdLoc::res) r
 
 
 let destroyArrays nd larrIdToDestroy =
@@ -210,15 +236,24 @@ let destroyArrays nd larrIdToDestroy =
     ) (mArrayVar,[]) larrIdToDestroy in
   
   
-  (* DEBUG *)
-  (* print_mArrayVar (Format.formatter_of_out_channel stdout) mArrayVar; *)
+  (* DEBUG
+  print_mArrayVar (Format.formatter_of_out_channel stdout) mArrayVar; *)
   
   (* Substitution of these variables in the program *)
   let nleqs = subst_array_var mArrayVar bl.b_equs in
-  
+
   (* Updating the data structures *)
-  let nlLocVar = lnew_loc_var @ bl.b_local in
-  
+  let nlLocVar = remove_local_vars larrIdToDestroy [] bl.b_local in (* TODO: issue of clocking while replacing *)
+  let nlLocVar = nlLocVar @ lnew_loc_var in
+
+  (* TODO DEBUG *)
+  let num_var_created = List.fold_left (fun acc (_, sizeArr, _) -> sizeArr + acc ) 0 larrIdToDestroy in
+
+  Format.fprintf (Format.formatter_of_out_channel stdout) "num_var_created = %i\n@?" num_var_created;
+  Format.fprintf (Format.formatter_of_out_channel stdout) "bl.b_local.lenght = %i\n@?" (List.length bl.b_local);
+  Format.fprintf (Format.formatter_of_out_channel stdout) "l_new_loc_var.lenght = %i\n@?" (List.length lnew_loc_var);
+  Format.fprintf (Format.formatter_of_out_channel stdout) "nlLocVar.lenght = %i\n@?" (List.length nlLocVar);
+
   let nbl = { bl with
          b_local = nlLocVar;
          b_equs = nleqs } in
@@ -413,7 +448,7 @@ let node tyAliasInfo nd =
   let nd = aliasSubstitution tyAliasInfo nd in
   let arrToDestroy = findArrayToDestroy nd in
   
-  (* DEBUG
+  (* DEBUG 
   Format.fprintf (Format.formatter_of_out_channel stdout) "arrToDestroy = %a\n@?"
     print_arrToDestroy arrToDestroy; *)
   

@@ -43,7 +43,7 @@ open Pp_tools
 open Format
 
 
-let verbose_debug_typing = ref false; (* DEBUG *)
+let verbose_debug_typing = ref false; (* TODO DEBUG *)
 
 type value = { vd: var_dec; mutable last: bool }
 
@@ -500,7 +500,11 @@ let rec _unify cenv t1 t2 =
     | Tclasstype (tn1, _), _ ->
       begin
       match (find_typeconstrnt tn1.name !curr_typeconstrnt) with
-        | None -> error (EconstrOnClassType (tn1,t2))
+        | None -> begin
+          Format.fprintf (Format.formatter_of_out_channel stdout) "curr_typeconstrnt =\n%a\n@?"
+                    print_lntypeclass !curr_typeconstrnt;
+           error (EconstrOnClassType (tn1,t2))
+           end
         | Some (_,_,None) ->
           curr_typeconstrnt := replace_typeconstrnt tn1.name (Some t2) !curr_typeconstrnt;
         | Some (_,_,Some tyval) -> _unify cenv t2 tyval
@@ -1255,7 +1259,7 @@ and typing_array_subscript cenv h idx_list ty  =
           if (!Compiler_options.safran_handling) then exp else
           mk_static_int_op (mk_pervasives "-") [exp; mk_static_int 1]
         in
-        add_constraint_leq cenv idx bound;
+        add_constraint_leq cenv typed_idx bound;
         let typed_idx_list, ty = typing_array_subscript cenv h idx_list ty in
         typed_idx::typed_idx_list, ty
     | _, _ -> raise (TypingError (Esubscripted_value_not_an_array ty))

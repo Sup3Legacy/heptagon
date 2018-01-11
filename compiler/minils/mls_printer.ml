@@ -50,6 +50,7 @@ let iterator_to_string i =
 let rec print_pat ff = function
   | Evarpat n -> print_ident ff n
   | Etuplepat pat_list ->
+      if (pat_list=[]) then fprintf ff "@[_void@]" else
       fprintf ff "@[<2>(%a)@]" (print_list_r print_pat """,""") pat_list
 
 let print_vd ?(show_ck=false) ff { v_ident = n; v_type = ty; v_linearity = lin; v_clock = ck } =
@@ -66,8 +67,8 @@ let print_const_dec ff c =
     fprintf ff "const %a : %a = %a"
       print_qualname c.c_name print_type c.c_type print_static_exp c.c_value
   else
-    fprintf ff "const %a = %a"
-      print_qualname c.c_name print_static_exp c.c_value;
+    fprintf ff "const %a : %a = %a"                   (* We always need the type in order to reparse it *)
+      print_qualname c.c_name print_type c.c_type print_static_exp c.c_value;
   fprintf ff "@."
 
 let print_classtype_dec ff c =
