@@ -30,6 +30,10 @@
 open Compiler_options
 open Compiler_utils
 
+open Global_mapfold
+open Heptagon
+open Hept_mapfold
+
 let pp p = if !verbose then Hept_printer.print stdout p
 
 let compile_program p =

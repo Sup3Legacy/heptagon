@@ -24,8 +24,11 @@ let edesc_contract funs htblLocalVarContracted edesc = match edesc with
     end
   | _ -> Hept_mapfold.edesc funs htblLocalVarContracted edesc
 
-(* let var_ident_contract _ (var1, var2) vi =
-  if (vi=var1) then var2, (var1,var2) else vi, (var1, var2) *)
+(* let var_ident_contract _ htblLocalVarContracted vi =
+  try
+    let var2 = Hashtbl.find htblLocalVarContracted vi in
+    var2, htblLocalVarContracted
+  with Not_found -> vi, htblLocalVarContracted *)
 
 
 (* Remove the equation defining "var" from the list of equation of 
@@ -33,7 +36,8 @@ let edesc_contract funs htblLocalVarContracted edesc = match edesc with
 let remove_variables htblLocalVarContracted bl =
   let rec remove_local_vars htblLocalVarContracted lvardec = match lvardec with
     | [] -> []
-    | vd::r -> if (Hashtbl.mem htblLocalVarContracted vd.v_ident) then r    (* Removed *)
+    | vd::r -> if (Hashtbl.mem htblLocalVarContracted vd.v_ident) then
+                  remove_local_vars htblLocalVarContracted r          (* Removed *)
                else vd::(remove_local_vars htblLocalVarContracted r)
   in
   let rec remove_equation htblLocalVarContracted lEqs =
@@ -67,17 +71,6 @@ let remove_variables htblLocalVarContracted bl =
   nBl
 
 
-(*let contractLocalVar nd (var1, var2) =
-  let funs = {Hept_mapfold.defaults with
-                        eqdesc = eqdesc_contract;
-                        edesc = edesc_contract;
-(*                        global_funs = {Global_mapfold.defaults with var_ident = var_ident_contract} *)} in
-  let nd, _ = Hept_mapfold.node_dec funs (var1, var2) nd in
-  let nbl = remove_variable var1 nd.n_block in
-  {nd with n_block = nbl } *)
-
-
-
 let contractLocalVars nd lLocalVarContracted =
   let list_to_htbl l =
     let h = Hashtbl.create (List.length l) in
@@ -90,7 +83,8 @@ let contractLocalVars nd lLocalVarContracted =
   let funs = {Hept_mapfold.defaults with
                        eqdesc = eqdesc_contract;
                        edesc = edesc_contract;
-(*                     global_funs = {Global_mapfold.defaults with var_ident = var_ident_contract} *)} in
+                       (* global_funs = {Global_mapfold.defaults with var_ident = var_ident_contract } *)
+            } in
   let nd, _ = Hept_mapfold.node_dec funs htblLocalVarContracted nd in
   let nbl = remove_variables htblLocalVarContracted nd.n_block in
   {nd with n_block = nbl }
@@ -182,6 +176,7 @@ let program p =
         print_lLocalVarContracted (Format.formatter_of_out_channel stdout) lLocalVarContracted; *)
         
         let nd = contractLocalVars nd lLocalVarContracted in
+
         Pnode nd
       | _ -> pdesc
     ) p.p_desc in

@@ -117,14 +117,14 @@ let eq_subst_array mArrayVar funs acc eq =
              | Econst sexpRhs -> begin match sexpRhs.se_desc with
                | Sarray lsexp | Stuple lsexp ->
                  let nlexp = List.map
-                    (fun stexp -> Hept_utils.mk_exp (Econst stexp) ~level_ck:rhs.e_level_ck
-                                     ~ct_annot:None  ~loc:rhs.e_loc rhs.e_ty ~linearity:rhs.e_linearity 
+                    (fun stexp -> Hept_utils.mk_exp (Econst stexp) (* ~level_ck:rhs.e_level_ck *)
+                                     rhs.e_ty ~linearity:rhs.e_linearity 
                     ) lsexp in
                  eq, (create_new_eq_from_tuple vidLhs mArrayVar nlexp)@acc
                | Sarray_power (sexp_value, lsexp_power) ->
                  let numDupl = List.length (IdentMap.find vidLhs mArrayVar) in
-                 let exp_value = Hept_utils.mk_exp (Econst sexp_value) ~level_ck:rhs.e_level_ck
-                                     ~ct_annot:None  ~loc:rhs.e_loc rhs.e_ty ~linearity:rhs.e_linearity in
+                 let exp_value = Hept_utils.mk_exp (Econst sexp_value) (* ~level_ck:rhs.e_level_ck *)
+                                     rhs.e_ty ~linearity:rhs.e_linearity in
                  let nlexp = duplicate_k_times exp_value numDupl in
                  eq, (create_new_eq_from_tuple vidLhs mArrayVar nlexp)@acc
                | _ -> Format.fprintf (Format.formatter_of_out_channel stdout)
@@ -142,14 +142,13 @@ let eq_subst_array mArrayVar funs acc eq =
     | _ -> eq, eq::acc
 
 
-(*let var_ident_subst_array mArrayVar funs acc vid =
+let var_ident_subst_array mArrayVar funs acc vid =
   try
     let lvd = IdentMap.find vid mArrayVar in
     let (_,vd) = List.hd lvd in
     vd.v_ident, acc
   with
   | Not_found -> vid, acc
-  *)
   
 
 let subst_array_var mArrayVar lequs =
@@ -243,22 +242,27 @@ let destroyArrays nd larrIdToDestroy =
   let nleqs = subst_array_var mArrayVar bl.b_equs in
 
   (* Updating the data structures *)
-  let nlLocVar = remove_local_vars larrIdToDestroy [] bl.b_local in (* TODO: issue of clocking while replacing *)
+  let nlLocVar = remove_local_vars larrIdToDestroy [] bl.b_local in
   let nlLocVar = nlLocVar @ lnew_loc_var in
 
-  (* TODO DEBUG *)
+  (* TODO DEBUG
   let num_var_created = List.fold_left (fun acc (_, sizeArr, _) -> sizeArr + acc ) 0 larrIdToDestroy in
-
   Format.fprintf (Format.formatter_of_out_channel stdout) "num_var_created = %i\n@?" num_var_created;
   Format.fprintf (Format.formatter_of_out_channel stdout) "bl.b_local.lenght = %i\n@?" (List.length bl.b_local);
   Format.fprintf (Format.formatter_of_out_channel stdout) "l_new_loc_var.lenght = %i\n@?" (List.length lnew_loc_var);
-  Format.fprintf (Format.formatter_of_out_channel stdout) "nlLocVar.lenght = %i\n@?" (List.length nlLocVar);
+  Format.fprintf (Format.formatter_of_out_channel stdout) "nlLocVar.lenght = %i\n@?" (List.length nlLocVar); *)
 
   let nbl = { bl with
          b_local = nlLocVar;
          b_equs = nleqs } in
   let nd = { nd with n_block = nbl } in
-  
+
+  (* Replace all instances of the removed variables by one of the new ones *)
+  let funs_subst_vid = { Hept_mapfold.defaults with
+      global_funs = {Global_mapfold.defaults with var_ident = (var_ident_subst_array mArrayVar)}
+      } in
+  let nd, _ = funs_subst_vid.node_dec funs_subst_vid mArrayVar nd in
+
   (* DEBUG
   Hept_printer.print_node (Format.formatter_of_out_channel stdout) nd; *)
   
