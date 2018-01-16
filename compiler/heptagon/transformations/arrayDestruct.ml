@@ -19,6 +19,19 @@ open Types
 open Heptagon
 open Hept_mapfold
 
+(* Determine if a type is an array of constant size (or a tuple) *)
+let get_array_const_size ty = match ty with
+  | Tarray (tyarr, size) -> begin
+    match size.se_desc with
+      | Sint i -> Some (i, tyarr)             (* Array of constant size detected! *)
+      | _ -> None
+    end
+  | Tprod _ -> None                 (* TODO: tuple management ? *)
+  | Tid _ -> None                   (* Note: alias management managed previously *)
+  | Tclasstype _ | Tinvalid -> None
+
+
+
 (* Type of map whose key is a var_ident *)
 module IdentMap = Map.Make (struct type t = var_ident let compare = compare end)
 
@@ -202,13 +215,60 @@ let rec remove_local_vars larrIdToDestroy res lvdLoc =
     if (isRemoved) then remove_local_vars larrIdToDestroy res r
       else remove_local_vars larrIdToDestroy (vdLoc::res) r
 
+let get_var_rhs eq = match eq.eq_desc with
+  | Eeq (plhs, erhs) -> begin
+      match erhs.e_desc with
+      | Evar vid -> Some vid
+      | _ -> None
+    end
+  | _ -> None
+
+let get_array_rhs eq = match eq.eq_desc with
+  | Eeq (plhs, erhs) -> begin
+      match erhs.e_desc with
+        | Eapp (a, le, _) -> begin
+          match a.a_op with
+          | Eselect ->
+            let expArr = List.hd le in
+            begin match expArr.e_desc with
+              | Evar vid -> Some vid
+              | _ -> None
+            end
+          | _ -> None
+        end
+        | _ -> None
+    end
+  | _ -> None
+
+let rec search_equation vid leqs =
+  let rec pattern_contain vid p = match p with
+    | Etuplepat pl ->
+      List.fold_left (fun acc p1 ->
+        acc || (pattern_contain vid p1)
+      ) false pl
+    | Evarpat vidp -> (vidp=vid)
+  in
+  let eq_defines vid eq = match eq.eq_desc with
+    | Eeq (prhs,_) -> pattern_contain vid prhs
+    | _ -> false
+  in
+  match leqs with
+  | [] -> failwith "search_equation : equation not found"
+  | h::t ->
+    if (eq_defines vid h) then h
+    else search_equation vid t
+
+let rec replace_equation eq nEq leq = match leq with
+  | [] -> failwith "replace_equation : Equation not found"
+  | h::t -> if (h=eq) then nEq::t else h::(replace_equation eq nEq t)
+
 
 let destroyArrays nd larrIdToDestroy =
   let rec create_var_decl_aux arrId sizeArr tyArr = match sizeArr with
     | 0 -> []
     | _ -> begin
       assert(sizeArr>0);
-      let strNameVarDec = (Idents.name arrId) ^ (string_of_int sizeArr) in
+      let strNameVarDec = (Idents.name arrId) ^ "__" ^ (string_of_int sizeArr) in
       let nameVarDec = Idents.gen_var "arrayDestruct" (strNameVarDec) in
       
       let vardec = Hept_utils.mk_var_dec nameVarDec tyArr ~linearity:Linearity.Ltop in
@@ -259,9 +319,48 @@ let destroyArrays nd larrIdToDestroy =
 
   (* Replace all instances of the removed variables by one of the new ones *)
   let funs_subst_vid = { Hept_mapfold.defaults with
-      global_funs = {Global_mapfold.defaults with var_ident = (var_ident_subst_array mArrayVar)}
+      Hept_mapfold.global_funs = {Global_mapfold.defaults with Global_mapfold.var_ident = (var_ident_subst_array mArrayVar)}
       } in
   let nd, _ = funs_subst_vid.node_dec funs_subst_vid mArrayVar nd in
+
+  (* Output arrays (might have been modified by prev array - TODO SPECIFIC TO SAFRAN !!! ) *)
+  (* Out = var_elem / var_elem = arr[...]  (wrong)  ===> Out = arr *)
+  
+  (* OLD
+  let nd = List.fold_left (fun nd outvd ->
+
+    if ((get_array_const_size outvd.v_type)=None) then nd else
+    (* The output is an array *)
+    let eqOut = search_equation outvd.v_ident nd.n_block.b_equs in
+
+    let varrhsOpt = get_var_rhs eqOut in
+    match varrhsOpt with
+      | None -> nd
+      | Some varrhs ->
+    (* The rhs of the equation defining the output is a variable *)
+    (* => job to do here! *)
+
+    (* TODO: DEBUG *)
+    Format.fprintf (Format.formatter_of_out_channel stdout) "varrhs = %a\n@?"
+      Global_printer.print_ident varrhs;
+
+    let eqVarElem = search_equation varrhs nd.n_block.b_equs in
+    let varArrOpt = get_array_rhs eqVarElem in
+    match varArrOpt with
+      | None ->
+        (* TODO: DEBUG *)
+        Format.fprintf (Format.formatter_of_out_channel stdout) "\t ... rhs not valid\n@?";
+        nd
+      (* Not a recognized structure of equation *)
+      | Some varArr ->
+      let rhsEdesc = Evar varArr in
+      let rhsNEq = Hept_utils.mk_exp rhsEdesc outvd.v_type ~linearity:Linearity.Ltop in
+      let nEqOut = Hept_utils.mk_simple_equation (Evarpat outvd.v_ident) rhsNEq in
+      let nleqs = replace_equation eqOut nEqOut nd.n_block.b_equs in
+      let nbl = {bl with b_equs = nleqs} in
+      {nd with n_block = nbl}
+  ) nd nd.n_output in
+  *)
 
   (* DEBUG
   Hept_printer.print_node (Format.formatter_of_out_channel stdout) nd; *)
@@ -274,19 +373,6 @@ let destroyArrays nd larrIdToDestroy =
 
 (* ============================================================================= *)
 (* Selection part of the transformation *)
-
-(* Determine if a type is an array of constant size (or a tuple) *)
-let get_array_const_size ty = match ty with
-  | Tarray (tyarr, size) -> begin
-    match size.se_desc with
-      | Sint i -> Some (i, tyarr)             (* Array of constant size detected! *)
-      | _ -> None
-    end
-  | Tprod _ -> None                 (* TODO: tuple management ? *)
-  | Tid _ -> None                   (* Note: alias management managed previously *)
-  | Tclasstype _ | Tinvalid -> None
-
-
 
 (* Get the local arrays with no linearity *)
 let get_local_arrays nd =
@@ -399,6 +485,29 @@ let remove_if_in_func_call_or_not_Eselect nd lArrVarDecl =
   in
   lArrVarDecl
 
+(* Remove the variable declaration inside "lArrVarDecl" which
+    is used in a copy equation, with an output on the lhs *)
+let remove_if_used_as_output nd lArrVarDecl =
+  let lToRemove = List.fold_left (fun acc outvd ->
+    if ((get_array_const_size outvd.v_type)=None) then acc else
+    (* The output is an array *)
+    let eqOut = search_equation outvd.v_ident nd.n_block.b_equs in
+
+    let varrhsOpt = get_var_rhs eqOut in
+    match varrhsOpt with
+      | None -> acc
+      | Some varrhs ->
+      (* The rhs of the equation defining the output is a variable *)
+      varrhs::acc
+  ) [] nd.n_output in
+  let lArrVarDecl = List.filter
+    (fun (varDecl,_,_) -> not (List.mem varDecl.v_ident lToRemove))
+    lArrVarDecl
+  in
+  lArrVarDecl
+  (* TODO *)
+
+
 
 (* Pretty-printer for debugging *)
 let print_arrToDestroy ff arrToDestroy =
@@ -416,6 +525,8 @@ let print_arrToDestroy ff arrToDestroy =
 let findArrayToDestroy nd =
   let lArrVarDecl = get_local_arrays nd in
   let lArrVarDecl = remove_if_in_func_call_or_not_Eselect nd lArrVarDecl in
+  let lArrVarDecl = remove_if_used_as_output nd lArrVarDecl in
+
   lArrVarDecl
 
 
@@ -444,15 +555,18 @@ let aliasSubstitution tyAliasInfo nd =
   let lVarLoc = nd.n_block.b_local in
   let nlVarLoc = List.map (replaceAliasType tyAliasInfo) lVarLoc in
   let nbl = { nd.n_block with b_local = nlVarLoc } in
-  { nd with n_block = nbl }
 
+  let nlVarIn = List.map (replaceAliasType tyAliasInfo) nd.n_input in
+  let nlVarOut = List.map (replaceAliasType tyAliasInfo) nd.n_output in
+
+  { nd with n_block = nbl; n_input = nlVarIn; n_output = nlVarOut }
 
 (* Main function *)
 let node tyAliasInfo nd =
   let nd = aliasSubstitution tyAliasInfo nd in
   let arrToDestroy = findArrayToDestroy nd in
   
-  (* DEBUG 
+  (* DEBUG
   Format.fprintf (Format.formatter_of_out_channel stdout) "arrToDestroy = %a\n@?"
     print_arrToDestroy arrToDestroy; *)
   

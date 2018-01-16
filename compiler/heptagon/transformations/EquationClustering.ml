@@ -4,10 +4,15 @@
     * If an equation uses only one data, merge it with the producer equation
     * If the output of an equation is only used once, merge it with the consumer equation
   *)
+open Idents
 open Heptagon
 open Hept_mapfold
 
 exception Equation_not_in_Eeq_form
+exception ListEmpty
+exception Data_produced_twice
+exception GroupEqNotFound
+
 
 let debug_info = true (* TODO DEBUG *)
 
@@ -58,7 +63,7 @@ let name_counter = ref 0
 
 let new_group_name s inst =
   name_counter := !name_counter +1;
-  (s ^ (string_of_int !name_counter) ^ "_sh" ^ inst)
+  (s ^ (string_of_int !name_counter) ^ "_sh" ^ (string_of_int inst))
 
 (* Get a variable from the lhs. If it is void, returns None *)
 let rec get_lhs_var p = match p with
@@ -67,14 +72,14 @@ let rec get_lhs_var p = match p with
 
 (* Get a variable from the rhs. Only called then the lhs is void.
    If there is no variable on the rhs either, throw an error *)
-let rec get_rhs_var e =
+let get_rhs_var e =
   (* TODO: not enough !!! (ex: if there is a pre) BUT, because of normalization, works if lhs is void *)
   let edesc_get_rhs funs acc ed = match ed with
     | Evar vid -> ed, Some vid
-    | _ -> Hept_mapfold.edesc funs acc edesc
+    | _ -> Hept_mapfold.edesc funs acc ed
   in
   let funs_get_rhs_var = {Hept_mapfold.defaults with edesc = edesc_get_rhs} in
-  let _,acc = funs_get_rhs_var.exp e in
+  let _,acc = funs_get_rhs_var.exp funs_get_rhs_var None e in
   match acc with
    | None -> failwith "Equation does not have any variable on the lhs and rhs"
    | Some vid -> vid
@@ -83,10 +88,10 @@ let rec get_rhs_var e =
 let rec get_last l = match l with
  | [] -> raise ListEmpty
  | x::[] -> x
- | h::t -> get_last t
+ | _::t -> get_last t
 
 (* Getter to pattern-match an equation *)
-let get_lhs_rhs_eq e = match e with
+let get_lhs_rhs_eq e = match e.eq_desc with
   | Eeq (lhs, rhs) -> (lhs, rhs)
   | _ -> raise Equation_not_in_Eeq_form
 
@@ -96,22 +101,24 @@ let get_instance_num e =
   let (lhs,rhs) = get_lhs_rhs_eq e in
   let vidopt = get_lhs_var lhs in
   let vid = match vidopt with
-    | None -> get_rhs_var rhs in
+    | None -> get_rhs_var rhs
     | Some vlhs -> vlhs
   in
   (* Instance number currently encoded at the end of vid *)
   let strDelimEnd = Dirty_hyperperiod_expansion_Safran.strDelimEnd_varid in (* = "_sh" *)
-  let lstrSplit = Str.split (Str.regex strDelimEnd) (Names.name vid) in
+  let lstrSplit = Str.split (Str.regexp strDelimEnd) (Idents.name vid) in
   let strNum = get_last lstrSplit in
-  let instNum =int_of_string strNum in
+  let instNum = int_of_string strNum in
   instNum
 
 
-(* Initial construction of lgroupEq *)
+(* Initial construction of lgroupEq
+   Note: inputs/outputs/locals not extracted*)
 let build_group_single_eq e =
   let i = get_instance_num e in
   let n = new_group_name "group_" i in
-  mk_group_eq n [e] i
+  let gr = mk_group_eq n [e] i in
+  gr
 
 (* -------------- *)
 
@@ -123,7 +130,7 @@ let extract_data_in eq =
   in
   let (_, rhs) = get_lhs_rhs_eq eq in
   let funs_data_in = { Hept_mapfold.defaults with edesc = edesc_extract_data_in} in
-  let _, acc = funs_data_in.eq funs_data_in [] eq in
+  let _, acc = funs_data_in.exp funs_data_in [] rhs in
   acc
 
 (* Get all the data_out of an equation *)
@@ -137,15 +144,15 @@ let extract_data_out eq =
 
 (* Build datainoutEq and depTable, associating the equation with the data & vice versa *)
 let buildDataTable nd lgroupEq =
-  let depTable = Hashtbl.create (List.length nd.n_block.b_local) in
-  let datainoutEq = Hashtbl.create (List.length nd.n_block.b_equs) in
+ (* let depTable = Hashtbl.create (List.length nd.n_block.b_local) in
+  let datainoutEq = Hashtbl.create (List.length nd.n_block.b_equs) in *)
   let lgroupEq = List.fold_left (fun acc gr ->
     let eq = List.hd gr.lequ in
     let eqDataIn = extract_data_in eq in
     let eqDataOut = extract_data_out eq in
 
     (* Log information per equations*)
-    Hashtbl.add datainoutEq (eqDataIn, eqDataOut);
+  (*  Hashtbl.add datainoutEq eq (eqDataIn, eqDataOut);
 
     (* Update inforamtion per variables *)
     List.iter (fun nvarin ->
@@ -162,14 +169,11 @@ let buildDataTable nd lgroupEq =
         Hashtbl.add depTable nvarout (eq::[],info_cons)
       with Not_found ->
        Hashtbl.add depTable nvarout (eq::[],[])
-    ) eqDataOut;
+    ) eqDataOut; *)
     { gr with l_inp = eqDataIn; l_out = eqDataOut }::acc
-  ) lgroupEq;
-  (lgroupEq, depTable, datainoutEq)
-
-
-(* TODO: replace searchs by dataTable usage ??? *)
-
+  ) [] lgroupEq in
+  lgroupEq
+  (*(lgroupEq, depTable, datainoutEq) *)
 
 (* ------------- *)
 
@@ -179,7 +183,7 @@ let heuristic_merge_single_use lgroupEq =
     | [] -> (false, result)
     | hgr::tgr ->
       if (List.mem dataOut hgr.l_inp) then
-        result@((merge_group_eq hgr grToMerge)::tgr)
+        (true, result@((merge_group_eq hgr grToMerge)::tgr))
       else
         search_merge_group_single_use dataOut grToMerge (hgr::result) tgr 
   in
@@ -195,8 +199,12 @@ let heuristic_merge_single_use lgroupEq =
         let (found, lgroupRes) = search_merge_group_single_use dataOut gr [] lgroupRes in
         if (found) then heuristic_merge_single_use_aux lgroupRes rest else
         (* The searched group is inside the list of group which was not treated yet *)
-        let (found, rest) = search_merge_group_single_use dataOut gr [] rest in
-        assert(found);
+        let (found, rest) = search_merge_group_single_use dataOut gr [] rest in
+
+        if (not found) then (
+          Format.eprintf "Group of equation not found, for dataOut = %s\n@?" (Idents.name dataOut);
+          raise GroupEqNotFound
+        ) else
         heuristic_merge_single_use_aux lgroupRes rest
     end
   in
@@ -209,7 +217,7 @@ let heuristic_merge_single_prod lgroupEq =
     | [] -> (false, result)
     | hgr::tgr ->
       if (List.mem dataIn hgr.l_out) then
-        result@((merge_group_eq hgr grToMerge)::tgr)
+        (true, result@((merge_group_eq hgr grToMerge)::tgr))
       else
        search_merge_group_single_prod dataIn grToMerge (hgr::result) tgr
   in
@@ -235,37 +243,45 @@ let heuristic_merge_single_prod lgroupEq =
 
 (* First step: grouping equations together *)
 let group_equation nd =
+  if (debug_info) then
+    Format.fprintf (Format.formatter_of_out_channel stdout) "lEq.size = %i\n@?" (List.length nd.n_block.b_equs)
+  else ();
+
   (* Init *)
   let lgroupEq = List.map (fun eq ->
     build_group_single_eq eq 
   ) nd.n_block.b_equs in
 
   (* Build dataTable - associate each varId to the equations interacting which them *)
-  let (lgroupEq, depTable, dataInOutEq) = buildDataTable nd lgroupEq in
-  let vidOut = List.map (fun vd -> vd.v_ident) nd.n_output in
+  (* let (lgroupEq, depTable, dataInOutEq) = buildDataTable nd lgroupEq in
+  let vidOut = List.map (fun vd -> vd.v_ident) nd.n_output in *)
+  let lgroupEq = buildDataTable nd lgroupEq in
 
   if (debug_info) then
-    Format.fprintf "lgroupEq.size (avant heuristique 1) = %i" (List.length lgroupEq);
+    Format.fprintf (Format.formatter_of_out_channel stdout) "lgroupEq.size (avant heuristique 1) = %i\n@?" (List.length lgroupEq)
+  else ();
 
   (* First heuristic: merge if an eq use a single variable *)
-  let lgroupEq = heuristic_merge_single_use vidOut lgroupEq in
+  let lgroupEq = heuristic_merge_single_use lgroupEq in
 
   if (debug_info) then
-    Format.fprintf "lgroupEq.size (heuristique 1) = %i" (List.length lgroupEq);
+    Format.fprintf (Format.formatter_of_out_channel stdout) "lgroupEq.size (heuristique 1) = %i\n@?" (List.length lgroupEq)
+  else ();
 
   (* Second heuristic: merge if an eq produce a single variable *)
-  let lgroupEq = heuristic_merge_single_prod vidOut lgroupEq in
+  let lgroupEq = heuristic_merge_single_prod lgroupEq in
 
   if (debug_info) then
-    Format.fprintf "lgroupEq.size (heuristique 2) = %i" (List.length lgroupEq);
+    Format.fprintf (Format.formatter_of_out_channel stdout) "lgroupEq.size (heuristique 2) = %i\n@?" (List.length lgroupEq)
+  else ();
 
   (* We now deal with potential output variable of the program,
       which might have become a local variable of a group *)
-  let lglobalOut = List.map (fun vd -> v.v_ident) nd.n_output in
+  let lglobalOut = List.map (fun vd -> vd.v_ident) nd.n_output in
   let lgroupEq = List.map (fun grEq ->
       let (lvid_newout, lvid_loc) = List.partition
         (fun vid -> List.mem vid lglobalOut) grEq.l_loc in
-      { grEq with l_out = lvid_newout@grEq.l_out, l_loc = lvid_loc}
+      { grEq with l_out = lvid_newout@grEq.l_out; l_loc = lvid_loc}
     ) lgroupEq in
 
   lgroupEq
@@ -292,7 +308,7 @@ let get_vardecl nd lvid =
     let vdecopt = search_for_vardecl nd.n_block.b_local vid in
     match vdecopt with
       | Some vdec -> vdec
-      | None -> failwith ("EquationClustering :: get_vardecl => vid " ^ vid ^ " was not found in the node")
+      | None -> failwith ("EquationClustering :: get_vardecl => vid " ^ (Idents.name vid) ^ " was not found in the node")
   ) lvid
 
 
@@ -309,17 +325,18 @@ let build_subnodes lgroupEq nd =
     let lVarloc = get_vardecl nd lvidLoc in
 
     (* Creating the objects *)
-    let bl = Hept_utils.mk_block ~stateful:nd:stateful ~locals:lVarloc grEq.lequ in
-    let sn = Hept_utils.mk_node ~typeparamdesc:nd.typeparamdecs ~input:lVarin ~output:lVarout
-      ~stateful:nd.stateful grEq.name bl in
-    sn
-  ) lgroupEq in
+    let bl = Hept_utils.mk_block ~stateful:nd.n_stateful ~locals:lVarloc grEq.lequ in
+    let sn = Hept_utils.mk_node ~typeparamdecs:nd.n_typeparamdecs ~input:lVarin ~output:lVarout
+      ~stateful:nd.n_stateful ~param:nd.n_params (Modules.qualify_value grEq.name) bl in
+    sn::acc
+  ) [] lgroupEq in
   subnodes
+
 
 (* Note: if we want the signatures of these subnodes, Hept_utils.signature_of_node *)
 
 let rec remove_all_list lToRemove res l = match l with
- | [] -> res
+ | [] -> res
  | h::t ->
   if (List.mem h lToRemove) then (remove_all_list lToRemove res t)
   else (remove_all_list lToRemove (h::res) t)
@@ -331,34 +348,36 @@ let build_mainnode subnodes nd =
   let lVarlocOutmainNode = List.fold_left (fun acc snd ->
     (snd.n_output)@acc (* No duplication *)
   ) [] subnodes in
-  let lVarloc = remove_all_list nd.n_output lVarlocOutmainNode in
+  let lVarloc = remove_all_list nd.n_output [] lVarlocOutmainNode in
 
   let lequ = List.fold_left (fun acc sn ->
     
     (* rhs of equation *)
-    let app_rhs = Efun (sn.name,[]) in
+    let op_rhs = Efun (sn.n_name,[]) in
+    let app_rhs = Hept_utils.mk_app op_rhs in
     let lin_rhs = List.map (fun vd ->
       let edesc_in_rhs = Evar vd.v_ident in
-      Hept_utils.mk_exp edesc_in_rhs vd.v_type ~linearity:Linearity.LTop
-    ) snd.n_input in
+      Hept_utils.mk_exp edesc_in_rhs vd.v_type ~linearity:Linearity.Ltop
+    ) sn.n_input in
     let rhs_edesc = Eapp (app_rhs, lin_rhs, None) in
     let ty_rhs = Types.Tprod (List.map (fun vd -> vd.v_type) sn.n_output) in
-    let rhs = Hept_utils.mk_exp rhs_edesc ty_rhs ~linearity:Linearity.LTop in
+    let rhs = Hept_utils.mk_exp rhs_edesc ty_rhs ~linearity:Linearity.Ltop in
 
     (* lhs of equation *)
     let snOutvid = List.map (fun vd -> vd.v_ident) sn.n_output in
     let plhs = if ((List.length sn.n_output)=1) then
-      Evarpat (List.hd snOutvid) else Etuplepat snOutvid
+      (Evarpat (List.hd snOutvid)) else (Etuplepat (List.map (fun vid -> Evarpat vid) snOutvid))
     in
 
-    let neq = Hept_utils.mk_simple_eq plhs rhs in
+    let neq = Hept_utils.mk_simple_equation plhs rhs in
     neq::acc
-  ) subnodes in
+  ) [] subnodes in
 
-  let bl = Hept_utils.mk_block ~stateful:nd.stateful ~locals:lVarloc lequ in
+  let bl = Hept_utils.mk_block ~stateful:nd.n_stateful ~locals:lVarloc lequ in
 
-  let mn = Hept_utils.mk_node ~typeparamdesc:nd.typeparamdecs ~input:nd.input ~output:nd.output
-    ~stateful:nd.stateful mainnode_name bl in
+  let mn = Hept_utils.mk_node ~typeparamdecs:nd.n_typeparamdecs ~input:nd.n_input ~output:nd.n_output
+    ~stateful:nd.n_stateful nd.n_name bl in
+  mn
 
 
 (* ======================================================================= *)
@@ -366,16 +385,22 @@ let build_mainnode subnodes nd =
 (* Main functions *)
 let node nd =
   let lgroupEq = group_equation nd in
+
+  (* TODO DEBUG *)
+  Format.fprintf (Format.formatter_of_out_channel stdout) "ping - group equation obtained\n@?";
+
   let subnodes = build_subnodes lgroupEq nd in
   let new_nd = build_mainnode subnodes nd in
   new_nd :: subnodes
 
-
 let program p =
   let npdesc = List.fold_left (fun acc pdesc ->
   	 match pdesc with
-  	   | Pnode nd -> (node nd)@acc
+  	   | Pnode nd ->
+        let new_nd = node nd in
+        let new_pnode = List.map (fun nd1 -> Pnode nd1) new_nd in
+        new_pnode@acc
   	   | _ -> pdesc::acc
-  	) [] p.p_desc in
+  	) [] p.p_desc in
 
   { p with p_desc = npdesc }

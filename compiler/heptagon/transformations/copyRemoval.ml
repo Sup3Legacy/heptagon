@@ -182,5 +182,5 @@ let program p =
     ) p.p_desc in
   { p with p_desc = npdesc }
 
-
+(* TODO: copy equation on outputs to be managed *)
 

@@ -18,6 +18,7 @@ open Heptagon
 exception PreShouldNotAppearHere (* "pre" equations were already removed manually beforehand *)
 exception Equation_not_in_Eeq_form
 exception VariableNotFoundInHashTbl
+exception VariableNotFoundInLVarDec
 exception Empty_list
 exception Sequenceur_call_not_found (* The call to the sequenceur was not found *)
 
@@ -31,6 +32,16 @@ let strDelimEnd_varid = "_sh"
 let name_varid_instances varId i =
   let strNameVar = (Idents.name varId) ^ strDelimEnd_varid ^ (string_of_int i) in
   Idents.gen_var "hyperExpans" strNameVar
+
+(* Reverse function of the previous convention *)
+let remove_suffix_hypexp vid =
+  let lstrSplit = Str.split (Str.regexp strDelimEnd_varid) (Idents.name vid) in
+  List.hd lstrSplit
+
+let rec search_in_lvardec str lvid = match lvid with
+  | [] -> raise VariableNotFoundInLVarDec
+  | h::t -> if ((Idents.name h.v_ident)=str) then h else
+    search_in_lvardec str t
 
 
 (* Function which creates the num_period instances of a var *)
@@ -47,7 +58,6 @@ let create_all_var_instances var num_period =
 
 (* Clock management *)
 (* SEQ_Seq_B (first arg of  Wfz02_00_seq.wfz02_00_seq) + all outputs of Wfz02_00_seq.wfz02_00_seq *)
-
 type clock_safran = {
   period : int;           (* 1, 2, 4, 8 or 16 / note: 1 => the clock is the base clock (=true) *)
   shift : int;            (* 0<= shift < period *)
@@ -60,53 +70,53 @@ let mk_clock_safran p s init = {period = p; shift = s; got_InitCmpl_B = init; sp
 let mk_clock_safran_special_case spcase = {period = 16; shift = 0; got_InitCmpl_B=false; special_case = spcase}
 
 (* Correspondance (from the equations of Wfz02_00_seq.wfz02_00_seq)
-00   SEQ_NumHTR_I : int ;             = OSASI_MFCnt_I
+  00   SEQ_NumHTR_I : int ;             = OSASI_MFCnt_I
 
-01   SEQ_P1MF0_B : bool ;             = InitCmpl_B
-02   SEQ_P2MF0_B : bool ;             = ((OSASI_MFCnt_I - S2S_Prod(OSASI_MFCnt_I , 2) * 2) = 0) and InitCmpl_B
-03   SEQ_P2MF1_B : bool ;             = ((OSASI_MFCnt_I - S2S_Prod(OSASI_MFCnt_I , 2) * 2) = 1) and InitCmpl_B
-04   SEQ_P4MF1_B : bool ;             = ((OSASI_MFCnt_I - S2S_Prod(OSASI_MFCnt_I , 4) * 4) = 1) and InitCmpl_B
-05   SEQ_P4MF2_B : bool ;             = ((OSASI_MFCnt_I - S2S_Prod(OSASI_MFCnt_I , 4) * 4) = 2) and InitCmpl_B
-06   SEQ_P4MF3_B : bool ;             = ((OSASI_MFCnt_I - S2S_Prod(OSASI_MFCnt_I , 4) * 4) = 3) and InitCmpl_B
-07   SEQ_P8MF0_B : bool ;             = ((OSASI_MFCnt_I - S2S_Prod(OSASI_MFCnt_I , 8) * 8) = 0) and InitCmpl_B
-08   SEQ_P8MF1_B : bool ;             = ((OSASI_MFCnt_I - S2S_Prod(OSASI_MFCnt_I , 8) * 8) = 1) and InitCmpl_B
-09   SEQ_P8MF2_B : bool ;             = ((OSASI_MFCnt_I - S2S_Prod(OSASI_MFCnt_I , 8) * 8) = 2) and InitCmpl_B
-10   SEQ_P8MF3_B : bool ;             = ((OSASI_MFCnt_I - S2S_Prod(OSASI_MFCnt_I , 8) * 8) = 3) and InitCmpl_B
-11   SEQ_P8MF5_B : bool ;             = ((OSASI_MFCnt_I - S2S_Prod(OSASI_MFCnt_I , 8) * 8) = 5) and InitCmpl_B
-12   SEQ_P8MF6_B : bool ;             = ((OSASI_MFCnt_I - S2S_Prod(OSASI_MFCnt_I , 8) * 8) = 6) and InitCmpl_B
-13   SEQ_P8MF7_B : bool               = ((OSASI_MFCnt_I - S2S_Prod(OSASI_MFCnt_I , 8) * 8) = 7) and InitCmpl_B
-14   SEQ_P16MF0_B : bool ;            = ((OSASI_MFCnt_I - (S2S_Prod(OSASI_MFCnt_I , 16) * 16)) = 0) and InitCmpl_B
-15   SEQ_P16MF1_B : bool ;            = ((OSASI_MFCnt_I - (S2S_Prod(OSASI_MFCnt_I , 16) * 16)) = 1) and InitCmpl_B
-16   SEQ_P16MF7_B : bool ;            = ((OSASI_MFCnt_I - (S2S_Prod(OSASI_MFCnt_I , 16) * 16)) = 7) and InitCmpl_B
-17   SEQ_P16MF9_B : bool ;            = ((OSASI_MFCnt_I - (S2S_Prod(OSASI_MFCnt_I , 16) * 16)) = 9) and InitCmpl_B
+  01   SEQ_P1MF0_B : bool ;             = InitCmpl_B
+  02   SEQ_P2MF0_B : bool ;             = ((OSASI_MFCnt_I - S2S_Prod(OSASI_MFCnt_I , 2) * 2) = 0) and InitCmpl_B
+  03   SEQ_P2MF1_B : bool ;             = ((OSASI_MFCnt_I - S2S_Prod(OSASI_MFCnt_I , 2) * 2) = 1) and InitCmpl_B
+  04   SEQ_P4MF1_B : bool ;             = ((OSASI_MFCnt_I - S2S_Prod(OSASI_MFCnt_I , 4) * 4) = 1) and InitCmpl_B
+  05   SEQ_P4MF2_B : bool ;             = ((OSASI_MFCnt_I - S2S_Prod(OSASI_MFCnt_I , 4) * 4) = 2) and InitCmpl_B
+  06   SEQ_P4MF3_B : bool ;             = ((OSASI_MFCnt_I - S2S_Prod(OSASI_MFCnt_I , 4) * 4) = 3) and InitCmpl_B
+  07   SEQ_P8MF0_B : bool ;             = ((OSASI_MFCnt_I - S2S_Prod(OSASI_MFCnt_I , 8) * 8) = 0) and InitCmpl_B
+  08   SEQ_P8MF1_B : bool ;             = ((OSASI_MFCnt_I - S2S_Prod(OSASI_MFCnt_I , 8) * 8) = 1) and InitCmpl_B
+  09   SEQ_P8MF2_B : bool ;             = ((OSASI_MFCnt_I - S2S_Prod(OSASI_MFCnt_I , 8) * 8) = 2) and InitCmpl_B
+  10   SEQ_P8MF3_B : bool ;             = ((OSASI_MFCnt_I - S2S_Prod(OSASI_MFCnt_I , 8) * 8) = 3) and InitCmpl_B
+  11   SEQ_P8MF5_B : bool ;             = ((OSASI_MFCnt_I - S2S_Prod(OSASI_MFCnt_I , 8) * 8) = 5) and InitCmpl_B
+  12   SEQ_P8MF6_B : bool ;             = ((OSASI_MFCnt_I - S2S_Prod(OSASI_MFCnt_I , 8) * 8) = 6) and InitCmpl_B
+  13   SEQ_P8MF7_B : bool               = ((OSASI_MFCnt_I - S2S_Prod(OSASI_MFCnt_I , 8) * 8) = 7) and InitCmpl_B
+  14   SEQ_P16MF0_B : bool ;            = ((OSASI_MFCnt_I - (S2S_Prod(OSASI_MFCnt_I , 16) * 16)) = 0) and InitCmpl_B
+  15   SEQ_P16MF1_B : bool ;            = ((OSASI_MFCnt_I - (S2S_Prod(OSASI_MFCnt_I , 16) * 16)) = 1) and InitCmpl_B
+  16   SEQ_P16MF7_B : bool ;            = ((OSASI_MFCnt_I - (S2S_Prod(OSASI_MFCnt_I , 16) * 16)) = 7) and InitCmpl_B
+  17   SEQ_P16MF9_B : bool ;            = ((OSASI_MFCnt_I - (S2S_Prod(OSASI_MFCnt_I , 16) * 16)) = 9) and InitCmpl_B
 
-18   SEQ_Xchs_B : bool ;              = true
-19   SEQ_Xchr_B : bool ;              = true
-20   SEQ_Hlth_B : bool ;              = true
-21   SEQ_Pwrsup_B : bool ;            = true
-22   SEQ_Idp_B : bool ;               = (not (InitCmpl_B)) and (OSASI_MFCnt_I = 3)
+  18   SEQ_Xchs_B : bool ;              = true
+  19   SEQ_Xchr_B : bool ;              = true
+  20   SEQ_Hlth_B : bool ;              = true
+  21   SEQ_Pwrsup_B : bool ;            = true
+  22   SEQ_Idp_B : bool ;               = (not (InitCmpl_B)) and (OSASI_MFCnt_I = 3)
 
-23   SEQ_P1MF0NoInit_B : bool ;       = true
-24   SEQ_P2MF0NoInit_B : bool ;       = ((OSASI_MFCnt_I - S2S_Prod(OSASI_MFCnt_I , 2) * 2) = 0)
-25   SEQ_P2MF1NoInit_B : bool ;       = ((OSASI_MFCnt_I - S2S_Prod(OSASI_MFCnt_I , 2) * 2) = 1)
-26   SEQ_P4MF1NoInit_B : bool ;       = ((OSASI_MFCnt_I - S2S_Prod(OSASI_MFCnt_I , 4) * 4) = 1)
-27   SEQ_P4MF2NoInit_B : bool ;       = ((OSASI_MFCnt_I - S2S_Prod(OSASI_MFCnt_I , 4) * 4) = 2)
-28   SEQ_P4MF3NoInit_B : bool ;       = ((OSASI_MFCnt_I - S2S_Prod(OSASI_MFCnt_I , 4) * 4) = 3)
-29   SEQ_P8MF0NoInit_B : bool ;       = ((OSASI_MFCnt_I - S2S_Prod(OSASI_MFCnt_I , 8) * 8) = 0)
-30   SEQ_P8MF2NoInit_B : bool ;       = ((OSASI_MFCnt_I - S2S_Prod(OSASI_MFCnt_I , 8) * 8) = 2)
-31   SEQ_P8MF3NoInit_B : bool ;       = ((OSASI_MFCnt_I - S2S_Prod(OSASI_MFCnt_I , 8) * 8) = 3)
-32   SEQ_P8MF4NoInit_B : bool ;       = ((OSASI_MFCnt_I - S2S_Prod(OSASI_MFCnt_I , 8) * 8) = 4)
-33   SEQ_P16MF1NoInit_B : bool ;      = ((OSASI_MFCnt_I - (S2S_Prod(OSASI_MFCnt_I , 16) * 16)) = 1)
-34   SEQ_P16MF2NoInit_B : bool ;      = ((OSASI_MFCnt_I - (S2S_Prod(OSASI_MFCnt_I , 16) * 16)) = 2)
-35   SEQ_P16MF3NoInit_B : bool ;      = ((OSASI_MFCnt_I - (S2S_Prod(OSASI_MFCnt_I , 16) * 16)) = 3)
-36   SEQ_P16MF4NoInit_B : bool ;      = ((OSASI_MFCnt_I - (S2S_Prod(OSASI_MFCnt_I , 16) * 16)) = 4)
-37   SEQ_P16MF9NoInit_B : bool ;      = ((OSASI_MFCnt_I - (S2S_Prod(OSASI_MFCnt_I , 16) * 16)) = 9)
-38   SEQ_SelCcr16_4_B : bool ;        = (((OSASI_MFCnt_I - (S2S_Prod(OSASI_MFCnt_I , 16) * 16)) = 3) and not (InitCmpl_B))
-                                        or (((OSASI_MFCnt_I - (S2S_Prod(OSASI_MFCnt_I , 16) * 16)) = 9) and InitCmpl_B)
-39   SEQ_P16MF8_B : bool ;            = InitCmpl_B and ((OSASI_MFCnt_I - (S2S_Prod(OSASI_MFCnt_I , 16) * 16)) = 8)
-40   SEQ_P16MF11_B : bool ;           = InitCmpl_B and ((OSASI_MFCnt_I - (S2S_Prod(OSASI_MFCnt_I , 16) * 16)) = 11)
+  23   SEQ_P1MF0NoInit_B : bool ;       = true
+  24   SEQ_P2MF0NoInit_B : bool ;       = ((OSASI_MFCnt_I - S2S_Prod(OSASI_MFCnt_I , 2) * 2) = 0)
+  25   SEQ_P2MF1NoInit_B : bool ;       = ((OSASI_MFCnt_I - S2S_Prod(OSASI_MFCnt_I , 2) * 2) = 1)
+  26   SEQ_P4MF1NoInit_B : bool ;       = ((OSASI_MFCnt_I - S2S_Prod(OSASI_MFCnt_I , 4) * 4) = 1)
+  27   SEQ_P4MF2NoInit_B : bool ;       = ((OSASI_MFCnt_I - S2S_Prod(OSASI_MFCnt_I , 4) * 4) = 2)
+  28   SEQ_P4MF3NoInit_B : bool ;       = ((OSASI_MFCnt_I - S2S_Prod(OSASI_MFCnt_I , 4) * 4) = 3)
+  29   SEQ_P8MF0NoInit_B : bool ;       = ((OSASI_MFCnt_I - S2S_Prod(OSASI_MFCnt_I , 8) * 8) = 0)
+  30   SEQ_P8MF2NoInit_B : bool ;       = ((OSASI_MFCnt_I - S2S_Prod(OSASI_MFCnt_I , 8) * 8) = 2)
+  31   SEQ_P8MF3NoInit_B : bool ;       = ((OSASI_MFCnt_I - S2S_Prod(OSASI_MFCnt_I , 8) * 8) = 3)
+  32   SEQ_P8MF4NoInit_B : bool ;       = ((OSASI_MFCnt_I - S2S_Prod(OSASI_MFCnt_I , 8) * 8) = 4)
+  33   SEQ_P16MF1NoInit_B : bool ;      = ((OSASI_MFCnt_I - (S2S_Prod(OSASI_MFCnt_I , 16) * 16)) = 1)
+  34   SEQ_P16MF2NoInit_B : bool ;      = ((OSASI_MFCnt_I - (S2S_Prod(OSASI_MFCnt_I , 16) * 16)) = 2)
+  35   SEQ_P16MF3NoInit_B : bool ;      = ((OSASI_MFCnt_I - (S2S_Prod(OSASI_MFCnt_I , 16) * 16)) = 3)
+  36   SEQ_P16MF4NoInit_B : bool ;      = ((OSASI_MFCnt_I - (S2S_Prod(OSASI_MFCnt_I , 16) * 16)) = 4)
+  37   SEQ_P16MF9NoInit_B : bool ;      = ((OSASI_MFCnt_I - (S2S_Prod(OSASI_MFCnt_I , 16) * 16)) = 9)
+  38   SEQ_SelCcr16_4_B : bool ;        = (((OSASI_MFCnt_I - (S2S_Prod(OSASI_MFCnt_I , 16) * 16)) = 3) and not (InitCmpl_B))
+                                          or (((OSASI_MFCnt_I - (S2S_Prod(OSASI_MFCnt_I , 16) * 16)) = 9) and InitCmpl_B)
+  39   SEQ_P16MF8_B : bool ;            = InitCmpl_B and ((OSASI_MFCnt_I - (S2S_Prod(OSASI_MFCnt_I , 16) * 16)) = 8)
+  40   SEQ_P16MF11_B : bool ;           = InitCmpl_B and ((OSASI_MFCnt_I - (S2S_Prod(OSASI_MFCnt_I , 16) * 16)) = 11)
 
-41   SEQ_EIUInitInProg_B : bool        = SEQ_EIUInitInProgress(InitWd_PwrUpRst_B, LongInitFlg_B)
+  41   SEQ_EIUInitInProg_B : bool        = SEQ_EIUInitInProgress(InitWd_PwrUpRst_B, LongInitFlg_B)
 *)
 let correspondance_clock_safran = Array.make 42 None
 
@@ -238,7 +248,10 @@ let search_var_ident varTables vid =
     (try Hashtbl.find varTblOut vid
     with Not_found ->
       (try Hashtbl.find varTblLoc vid
-       with Not_found -> raise VariableNotFoundInHashTbl
+       with Not_found ->
+          Format.fprintf (Format.formatter_of_out_channel stdout)
+            "Variable not found : %s\n@?" (Idents.name vid);
+          raise VariableNotFoundInHashTbl
       )
     )
 
@@ -257,23 +270,27 @@ let rec copy_n_times n x = match n with
   | _ -> x::(copy_n_times (n-1) x)
 
 
+(* DEBUG *)
+let verbose_duplEq = false
 
 (* Note: result is a list of size "num_period", corresponding to all version
    of the current equation part *)
-let rec edesc_duplEq varTables htblClocks lplhs edesc = match edesc with
+let rec edesc_duplEq varTables lvardec htblClocks lplhs edesc = match edesc with
   | Efby (e1, e2) ->
     (* Special case - produce [e1_0 fby e2_(num_period-1); e2_0; e2_(num_period-2)] *)
-    let le1 = exp_duplEq varTables htblClocks lplhs (e1:Heptagon.exp) in
-    let le2 = exp_duplEq varTables htblClocks lplhs e2 in
+    let le1 = exp_duplEq varTables lvardec htblClocks lplhs (e1:Heptagon.exp) in
+    let le2 = exp_duplEq varTables lvardec htblClocks lplhs e2 in
     let e1_0 = List.hd le1 in
     let (le2_begin, e2_end) = split_end_list le2 in
     let fby_exp_0 = Efby (e1_0, e2_end) in
     let ledesc2_begin = List.map (fun e -> e.e_desc) le2_begin in
     fby_exp_0::ledesc2_begin
 
-  | Epre (None, _) -> raise PreShouldNotAppearHere (* Everybody in on the base clock => should not appear *)
+  | Epre (None, _) ->
+      Format.eprintf "PreShouldNotAppearHere : edesc = %a\n@?" Hept_printer.print_exp_desc edesc;
+      raise PreShouldNotAppearHere (* Everybody in on the base clock => should not appear *)
   | Epre (Some se1, e2) -> (* Same than Efby( Econst se1, e2) *)
-    let le2 = exp_duplEq varTables htblClocks lplhs e2 in
+    let le2 = exp_duplEq varTables lvardec htblClocks lplhs e2 in
     let (le2_begin, e2_end) = split_end_list le2 in
     let pre_exp_0 = Epre (Some se1, e2_end) in
     let ledesc2_begin = List.map (fun e -> e.e_desc) le2_begin in
@@ -295,7 +312,7 @@ let rec edesc_duplEq varTables htblClocks lplhs edesc = match edesc with
     ledesc
   | Estruct lfname_exp ->
     let llexp = List.map
-      (fun (_, e) -> exp_duplEq varTables htblClocks lplhs e) lfname_exp in
+      (fun (_, e) -> exp_duplEq varTables lvardec htblClocks lplhs e) lfname_exp in
     let llexp_Transp = transpose_list_list llexp in
     let ledesc = List.map (fun lexp_Transp ->
           let nlfname_exp = List.map2 
@@ -305,7 +322,7 @@ let rec edesc_duplEq varTables htblClocks lplhs edesc = match edesc with
        ) llexp_Transp in
     ledesc
   | Ewhen (e, cname, vid) ->
-    let le = exp_duplEq varTables htblClocks lplhs e in
+    let le = exp_duplEq varTables lvardec htblClocks lplhs e in
     let lvid = search_var_ident varTables vid in
     let ledesc = List.map2 (fun ne nvid ->
       Ewhen (ne, cname, nvid.v_ident)
@@ -314,7 +331,7 @@ let rec edesc_duplEq varTables htblClocks lplhs edesc = match edesc with
   | Emerge (vid, lcname_e) ->
     let lvid = search_var_ident varTables vid in
     let llexp = List.map
-      (fun (_, e) -> exp_duplEq varTables htblClocks lplhs e)
+      (fun (_, e) -> exp_duplEq varTables lvardec htblClocks lplhs e)
       lcname_e in
     let llexp_Trans = transpose_list_list llexp in
     let lledesc_right = List.map (fun lexp_Transp ->
@@ -331,47 +348,49 @@ let rec edesc_duplEq varTables htblClocks lplhs edesc = match edesc with
     ledesc
   | Ecurrent (cname, vid, e) ->
     let lvid = search_var_ident varTables vid in
-    let le = exp_duplEq varTables htblClocks lplhs e in
+    let le = exp_duplEq varTables lvardec htblClocks lplhs e in
     let ledesc = List.map2 (fun ne nvid ->
       Ecurrent (cname, nvid.v_ident, ne)
     ) le lvid in
     ledesc
   | Esplit (e1, e2) ->
-    let le1 = exp_duplEq varTables htblClocks lplhs e1 in
-    let le2 = exp_duplEq varTables htblClocks lplhs e2 in
+    let le1 = exp_duplEq varTables lvardec htblClocks lplhs e1 in
+    let le2 = exp_duplEq varTables lvardec htblClocks lplhs e2 in
     let ledesc = List.map2 (fun ne1 ne2 ->
       Esplit (ne1, ne2)
     ) le1 le2 in
     ledesc
   | Eapp (a, le, eopt) ->
     begin
-    let ledesc_elem_func_callopt = elementary_func_call_duplEq varTables htblClocks lplhs a le eopt in
+    let ledesc_elem_func_callopt = elementary_func_call_duplEq varTables lvardec htblClocks lplhs a le eopt in
     match ledesc_elem_func_callopt with
       | Some ledesc_elem_func_call -> ledesc_elem_func_call
       | None ->
+        begin
         (* Default case *)
         let leopt = match eopt with
           | None -> copy_n_times num_period None
           | Some e ->
-            let leSome = exp_duplEq varTables htblClocks lplhs e in
+            let leSome = exp_duplEq varTables lvardec htblClocks lplhs e in
             List.map (fun eSome -> Some eSome) leSome
         in
-        let lle = List.map (fun e -> exp_duplEq varTables htblClocks lplhs e) le in
+        let lle = List.map (fun e -> exp_duplEq varTables lvardec htblClocks lplhs e) le in
         let lle_transp = transpose_list_list lle in
         let ledesc = List.map2 (fun le_transp eopt ->
           Eapp (a, le_transp, eopt)
         ) lle_transp leopt in
         ledesc
+      end
     end
   | Eiterator (itype, a, lst, le1, le2, eopt) ->
     let leopt = match eopt with
       | None -> copy_n_times num_period None
       | Some e ->
-        let leSome = exp_duplEq varTables htblClocks lplhs e in
+        let leSome = exp_duplEq varTables lvardec htblClocks lplhs e in
         List.map (fun eSome -> Some eSome) leSome
     in
-    let lle1 = List.map (fun e1 -> exp_duplEq varTables htblClocks lplhs e1) le1 in
-    let lle2 = List.map (fun e2 -> exp_duplEq varTables htblClocks lplhs e2) le2 in
+    let lle1 = List.map (fun e1 -> exp_duplEq varTables lvardec htblClocks lplhs e1) le1 in
+    let lle2 = List.map (fun e2 -> exp_duplEq varTables lvardec htblClocks lplhs e2) le2 in
     let lle1_transp = transpose_list_list lle1 in
     let lle2_transp = transpose_list_list lle2 in
     let lle_tr_ziped = List.map2
@@ -384,7 +403,7 @@ let rec edesc_duplEq varTables htblClocks lplhs edesc = match edesc with
     ledesc
 
 (* Special function to recognize an elementary function call & to duplicate it accordingly *)
-and elementary_func_call_duplEq varTables htblClocks lplhs a le eopt = match a.a_op with
+and elementary_func_call_duplEq varTables (lvardec:var_dec list) htblClocks lplhs a le eopt = match a.a_op with
   | Efun (fname,_) | Enode (fname,_) ->
     begin
     if ((fname.qual=Pervasives) || (fname.qual=LocalModule)) then None else (* External call *)
@@ -422,14 +441,14 @@ and elementary_func_call_duplEq varTables htblClocks lplhs a le eopt = match a.a
         end
       | _ -> failwith "Unknown special case value"
     );
-    let lle1 = List.map (fun e1 -> exp_duplEq varTables htblClocks lplhs e1) le in
+    let lle1 = List.map (fun e1 -> exp_duplEq varTables lvardec htblClocks lplhs e1) le in
     let lle1_transp = transpose_list_list lle1 in
     let llvarid_out = List.map get_list_vid lplhs in
-    let lvarid_out_0 = List.map (fun l -> List.hd l) llvarid_out in
+    let lvarid_out_0 = List.hd llvarid_out in
     let lty_var_out = List.map (fun vid ->
-        let lvdec = search_var_ident varTables vid in
-        let lvdec0 = List.hd lvdec in
-        lvdec0.v_type
+        let str_no_dupl = remove_suffix_hypexp vid in
+        let vdec = search_in_lvardec str_no_dupl lvardec in
+        vdec.v_type
       ) lvarid_out_0 in
     
     (* Aux function to create an expression which is the Evar/tuple of a list of variable *)
@@ -445,19 +464,22 @@ and elementary_func_call_duplEq varTables htblClocks lplhs a le eopt = match a.a
 
     let (ledesc,_) = Array.fold_right (fun act (acc,i) -> 
         let edesc = if (act) then
+            (* Activated function *)
             Eapp (a, (List.nth lle1_transp i), None)
           else begin
-          (* The function is not activated => we place a "pre" of the output variables *)
-          if (i==0) then
-            let lvaridpre = List.nth llvarid_out (num_period-1) in
-            let subedescPre = mk_edesc_var_or_tuple lvaridpre lty_var_out in
-            let tyexpPre = Types.Tprod lty_var_out in
-            let expPre = Hept_utils.mk_exp subedescPre tyexpPre ~linearity:Linearity.Ltop in
-            Epre(None, expPre)
-          else
-            let lvaridpre = List.nth llvarid_out (i-1) in
-            let subedesc = mk_edesc_var_or_tuple lvaridpre lty_var_out in
-            subedesc
+            (* The function is not activated => we place a "pre" of the output variables *)
+            (* NOTE! In both side of this "if" statement, the resulting expression is not normalized
+               => we need to split the tuples in different equations at the eqdesc level *)
+            if (i==0) then
+              let lvaridpre = List.nth llvarid_out (num_period-1) in
+              let subedescPre = mk_edesc_var_or_tuple lvaridpre lty_var_out in
+              let tyexpPre = Types.Tprod lty_var_out in
+              let expPre = Hept_utils.mk_exp subedescPre tyexpPre ~linearity:Linearity.Ltop in
+              Epre(None, expPre)
+            else
+              let lvaridpre = List.nth llvarid_out (i-1) in
+              let subedesc = mk_edesc_var_or_tuple lvaridpre lty_var_out in
+              subedesc
           end in
         (edesc::acc,i-1)
       ) activation_vector ([], num_period-1) in
@@ -466,10 +488,13 @@ and elementary_func_call_duplEq varTables htblClocks lplhs a le eopt = match a.a
     end
   | _ -> None
 
+and exp_duplEq varTables lvardec htblClocks lplhs (e:Heptagon.exp) =
+  if (verbose_duplEq) then
+    Format.fprintf (Format.formatter_of_out_channel stdout) "*** e = %a\n@?"
+      Hept_printer.print_exp e
+  else ();
 
-
-and exp_duplEq varTables htblClocks lplhs (e:Heptagon.exp) =
-  let ledesc = edesc_duplEq varTables htblClocks lplhs e.e_desc in
+  let ledesc = edesc_duplEq varTables lvardec htblClocks lplhs e.e_desc in
   let lne = List.map (fun edesc ->
      let ne = Hept_utils.mk_exp edesc ~level_ck:e.e_level_ck
           ~ct_annot:e.e_ct_annot e.e_ty
@@ -483,7 +508,9 @@ and pat_duplEq varTables htblClocks p = match p with
   | Etuplepat pl ->
     let llpl = List.map (fun p1 -> pat_duplEq varTables htblClocks p1) pl in
     let llplTransp = transpose_list_list llpl in
-    let nlp = List.map (fun pl -> Etuplepat pl) llplTransp in
+    let nlp = if (pl=[]) then
+      copy_n_times num_period (Etuplepat [])
+    else List.map (fun pl -> Etuplepat pl) llplTransp in
     nlp
   | Evarpat vid ->
     let lvardec = search_var_ident varTables vid in
@@ -491,17 +518,53 @@ and pat_duplEq varTables htblClocks p = match p with
     nlp
 
 
-and eqdesc_duplEq varTables htblClocks eqdesc = match eqdesc with
+and eqdesc_duplEq varTables lvardec htblClocks eqdesc = match eqdesc with
   | Eeq (plhs, rhs) -> 
     let (lplhs: Heptagon.pat list) = pat_duplEq varTables htblClocks plhs in
-    let (lrhs: Heptagon.exp list) = exp_duplEq varTables htblClocks lplhs rhs in
-    let nlEqDecs = List.map2 (fun pl er -> Eeq (pl, er)) lplhs lrhs in
+    let (lrhs: Heptagon.exp list) = exp_duplEq varTables lvardec htblClocks lplhs rhs in
+
+    (* Detection of tuples (as output of elementary function management)
+        => check the lrhs: if Epre of tuple / tuple then need to do smthing *)
+    let nllEqDecs = List.map2 (fun pl er ->
+      (* Check the nature of the rhs (er) *)
+      let (exp_ignorePre, is_a_pre) = match er.e_desc with
+        | Epre(x,epre) -> (assert(x=None); (epre, true))
+        | _ -> (er, false)
+      in
+      let (is_not_tuple, tuple_args) = match exp_ignorePre.e_desc with
+        | Eapp(a, le, _) -> begin match a.a_op with
+          | Etuple -> (false, le)
+          | _ -> (true, [])
+        end
+        | _ -> (true, [])
+      in
+
+      (* Default case -> not a tuple -> no need of normalization *)
+      if (is_not_tuple) then [Eeq (pl, er)] else
+
+      (* TODO: clocking issues for the next newly build expression *)
+
+      (* Normalization needed: we split the tuple into several equations *)
+      let l_lhsvarid = get_list_vid plhs in
+      assert((List.length l_lhsvarid) = (List.length tuple_args));
+      let leq = List.map2 (fun lhs erhs ->
+        if (is_a_pre) then
+          let edescRhsPre = Epre(None, erhs) in
+          let tyexpPre = er.e_ty in
+          let erhspre = Hept_utils.mk_exp edescRhsPre tyexpPre ~linearity:Linearity.Ltop in
+          Eeq((Evarpat lhs), erhspre)
+        else
+          Eeq((Evarpat lhs), erhs)
+      ) l_lhsvarid tuple_args in
+      leq
+    ) lplhs lrhs in
+    let nlEqDecs = List.concat nllEqDecs in
     nlEqDecs
   | _ -> raise Equation_not_in_Eeq_form
 
 
-and eq_duplEq varTables htblClocks eq =
-  let leqdesc = eqdesc_duplEq varTables htblClocks eq.eq_desc in
+and eq_duplEq varTables lvardec htblClocks eq =
+  let leqdesc = eqdesc_duplEq varTables lvardec htblClocks eq.eq_desc in
   let leq = List.map
     (fun eqdesc -> Hept_utils.mk_equation eqdesc)
     leqdesc
@@ -538,19 +601,21 @@ let node nd =
   let varTables = (varTblIn, varTblOut, varTblLoc) in
 
   (* Step 2: duplicate equations *)
+  let lvardec = nd.n_input @ nd.n_output @ nd.n_block.b_local in
   let lneqs = List.fold_left (fun acc eq ->
-      let nleq = eq_duplEq varTables htblClocks eq in
+      let nleq = eq_duplEq varTables lvardec htblClocks eq in
       nleq @ acc
     ) [] nd.n_block.b_equs in
 
   (* TODO: iterate over contracts also? => nContract *)
   assert(nd.n_contract=None);
   let nContract = None in
-  
+
   (* Step 3: build the new system and return it *)
   let lnInputs = get_all_var_decl varTblIn in
   let lnOutputs = get_all_var_decl varTblOut in
   let lnLocals = get_all_var_decl varTblLoc in
+
   let nBl = {
     b_local = lnLocals;
     b_equs = lneqs;
