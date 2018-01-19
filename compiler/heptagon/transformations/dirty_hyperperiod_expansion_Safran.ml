@@ -49,7 +49,7 @@ let create_all_var_instances var num_period =
   let rec create_all_var_instances_aux var i =
     if (i=num_period) then [] else
     let tl_res = create_all_var_instances_aux var (i+1) in
-    let nVardec = Hept_utils.mk_var_dec ~last:var.v_last ~clock:var.v_clock
+    let nVardec = Hept_utils.mk_var_dec ~last:var.v_last ~clock:Clocks.Cbase (* NOTE! do not do a copy here *)
     (name_varid_instances var.v_ident i) var.v_type ~linearity:var.v_linearity in
     nVardec :: tl_res
   in
@@ -497,7 +497,7 @@ and exp_duplEq varTables lvardec htblClocks lplhs (e:Heptagon.exp) =
   let ledesc = edesc_duplEq varTables lvardec htblClocks lplhs e.e_desc in
   let lne = List.map (fun edesc ->
      let ne = Hept_utils.mk_exp edesc ~level_ck:e.e_level_ck
-          ~ct_annot:e.e_ct_annot e.e_ty
+          ~ct_annot:None e.e_ty
           ~linearity:e.e_linearity in
      ne
   ) ledesc in
@@ -542,16 +542,15 @@ and eqdesc_duplEq varTables lvardec htblClocks eqdesc = match eqdesc with
       (* Default case -> not a tuple -> no need of normalization *)
       if (is_not_tuple) then [Eeq (pl, er)] else
 
-      (* TODO: clocking issues for the next newly build expression *)
-
       (* Normalization needed: we split the tuple into several equations *)
-      let l_lhsvarid = get_list_vid plhs in
+      let l_lhsvarid = get_list_vid pl in
       assert((List.length l_lhsvarid) = (List.length tuple_args));
       let leq = List.map2 (fun lhs erhs ->
         if (is_a_pre) then
           let edescRhsPre = Epre(None, erhs) in
           let tyexpPre = er.e_ty in
-          let erhspre = Hept_utils.mk_exp edescRhsPre tyexpPre ~linearity:Linearity.Ltop in
+          let erhspre = Hept_utils.mk_exp edescRhsPre tyexpPre ~ct_annot:(Some (Clocks.Ck Clocks.Cbase))
+                ~linearity:Linearity.Ltop in
           Eeq((Evarpat lhs), erhspre)
         else
           Eeq((Evarpat lhs), erhs)
@@ -636,6 +635,28 @@ let node nd =
     n_params = nd.n_params;
     n_param_constraints = nd.n_param_constraints;
   } in
+
+  (* Visitor to set all level_ck to Clocks.Cbase *)
+  let exp_clockbase funs acc exp =
+    let exp, _ = Hept_mapfold.exp funs acc exp in
+    let ct_annot = match exp.e_ty with
+      | Tprod lty -> Clocks.Cprod (List.map (fun _ -> Clocks.Ck Clocks.Cbase) lty)
+  (*  | Tarray (_,se) -> begin match se.se_desc with 
+          | Sint i ->
+            let lcbasei = copy_n_times i (Clocks.Ck Clocks.Cbase) in
+            Clocks.Cprod lcbasei
+          | _ -> failwith "Array size not an integer"
+        end *)
+      | _ -> Clocks.Ck Clocks.Cbase
+    in
+     {exp with e_level_ck = Clocks.Cbase;
+               e_ct_annot = Some ct_annot
+     }, acc
+  in
+  let var_dec_clockbase _ acc vd = {vd with v_clock = Clocks.Cbase}, acc in
+  let funs_clockbase = { Hept_mapfold.defaults with
+          Hept_mapfold.exp = exp_clockbase; Hept_mapfold.var_dec = var_dec_clockbase} in
+  let n_nd, _ = funs_clockbase.Hept_mapfold.node_dec funs_clockbase [] n_nd in
   n_nd
 
 let program p =
