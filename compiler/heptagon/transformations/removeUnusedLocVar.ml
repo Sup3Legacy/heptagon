@@ -1,6 +1,7 @@
 
 open Idents
 open Names
+open Types
 open Heptagon
 open Hept_mapfold
 
@@ -16,6 +17,15 @@ let rec remove_all_list lToRemove res l = match l with
 (* ============================================================================= *)
 (* DataTable construction*)
 
+(* Copy n times an element
+   Note: not valid if there is mutable inside x *)
+let rec copy_n_times n x = match n with
+  | 0 -> []
+  | _ -> x::(copy_n_times (n-1) x)
+
+let assert_int stexp = match stexp.se_desc with
+  | Sint i -> i
+  | _ -> failwith "assert_int : not an integer"
 
 (* Getter to pattern-match an equation *)
 let get_lhs_rhs_eq e = match e.eq_desc with
@@ -32,11 +42,11 @@ let extract_data_in eq =
   let _, acc = funs_data_in.exp funs_data_in [] rhs in
   acc
 
+let rec get_list_vid plhs = match plhs with
+  | Etuplepat pl -> List.fold_left (fun acc p1 -> acc@(get_list_vid p1)) [] pl
+  | Evarpat vid -> vid::[]
+
 let extract_data_out eq =
-  let rec get_list_vid plhs = match plhs with
-    | Etuplepat pl -> List.fold_left (fun acc p1 -> acc@(get_list_vid p1)) [] pl
-    | Evarpat vid -> vid::[]
-  in
   let (lhs, _) = get_lhs_rhs_eq eq in
   get_list_vid lhs
 
@@ -141,18 +151,193 @@ let rec closure_useless_locvar_removal nd =
   let nd = remove_varNotUsed varNotUsed nd in
   closure_useless_locvar_removal nd
 
+(* ============================================================================= *)
+(* Constant propagation, inclusing array accessed to these constants *)
+
+(* constmap : string -> const_dec *)
+module MapString = Map.Make(struct type t = string let compare = Pervasives.compare end)
+module MapVarId = Map.Make(struct type t = var_ident let compare = Pervasives.compare end)
+
+
+let rec extract_mem_cell_value stexpArr lindstExp = match lindstExp with
+  | [] -> stexpArr
+  | ind::rIndStExp ->
+    let i = match ind.se_desc with
+      | Sint si -> si
+      | _ -> failwith "Static indice not an integer"
+    in
+    let lstelem = match stexpArr.se_desc with
+      | Sarray lstelem | Stuple lstelem -> lstelem
+      | _ -> failwith "Not an array or a tuple"
+    in
+    extract_mem_cell_value (List.nth lstelem i) rIndStExp
+
+let edesc_const_prop_array funs acc edesc = match edesc with
+  | Econst stexp -> begin
+    match stexp.se_desc with
+    | Svar cname ->
+      let cdec = MapString.find cname.name acc in
+      (Econst cdec.c_value), acc
+    | _ -> Hept_mapfold.edesc funs acc edesc
+    end
+  | Eapp (a, le, _) -> begin
+    match a.a_op with
+    | Eselect -> (
+     let eArr = Misc.assert_1 le in
+     (* We check if eArr is a constant *)
+     match eArr.e_desc with
+       | Econst stexp -> begin
+        match stexp.se_desc with
+          | Svar cname ->
+            let cdec = MapString.find cname.name acc in
+            (* Get the corresponding array cell from cdec.c_value *)
+            let arrCellVal = extract_mem_cell_value cdec.c_value a.a_params in
+            (Econst arrCellVal), acc
+          | _ -> Hept_mapfold.edesc funs acc edesc
+        end
+        | _ -> Hept_mapfold.edesc funs acc edesc
+      )
+    | _ -> Hept_mapfold.edesc funs acc edesc
+  end
+  | _ -> Hept_mapfold.edesc funs acc edesc
+
+(* --- *)
+
+let detect_const_array_power leq =
+  let mVarArr = List.fold_left (fun acc eq ->
+    let (lhs,rhs) = get_lhs_rhs_eq eq in
+    
+    (* Do we have a single output *)
+    let lvidLhs = get_list_vid lhs in
+    if ((List.length lvidLhs)!=1) then acc else
+    let vidLhs = List.hd lvidLhs in
+
+    (* Is the rhs of the form "const^size" *)
+    match rhs.e_desc with
+    | Econst stexp -> begin
+      match stexp.se_desc with
+        | Sarray_power (const, sizes) ->
+          MapVarId.add vidLhs (const, sizes) acc
+        | _ -> acc
+      end
+    | _ -> acc
+  ) MapVarId.empty leq in
+  mVarArr
+
+let edesc_const_array_power_repl funs acc edesc = match edesc with
+ | Eapp (a, le, _) -> begin
+    match a.a_op with
+    | Eselect -> (
+      let eArr = Misc.assert_1 le in
+      (* We check if eArr is a var inside acc *)
+      match eArr.e_desc with
+        | Evar vid ->
+          if (MapVarId.mem vid acc) then
+            let (elem, _ ) = MapVarId.find vid acc in
+            (Econst elem), acc
+          else Hept_mapfold.edesc funs acc edesc
+        | _ -> Hept_mapfold.edesc funs acc edesc
+      )
+    | _ -> Hept_mapfold.edesc funs acc edesc
+  end
+  | _ -> Hept_mapfold.edesc funs acc edesc
+
+
+(* --- *)
+let detect_const_array_tuple leq =
+  let mVarArr = List.fold_left (fun acc eq ->
+    let (lhs,rhs) = get_lhs_rhs_eq eq in
+    
+    (* Do we have a single output *)
+    let lvidLhs = get_list_vid lhs in
+    if ((List.length lvidLhs)!=1) then acc else
+    let vidLhs = List.hd lvidLhs in
+
+    (* Is the rhs of the form "const^size" *)
+    match rhs.e_desc with
+    | Econst stexp -> begin
+      match stexp.se_desc with
+         | Stuple lelem | Sarray lelem ->
+          MapVarId.add vidLhs lelem acc
+        | _ -> acc
+      end
+    | _ -> acc
+  ) MapVarId.empty leq in
+  mVarArr
+
+let edesc_const_array_tuple funs acc edesc = match edesc with
+ | Eapp (a, le, _) -> begin
+    match a.a_op with
+    | Eselect -> (
+      let eArr = Misc.assert_1 le in
+      (* We check if eArr is a var inside acc *)
+      match eArr.e_desc with
+        | Evar vid ->
+          if (MapVarId.mem vid acc) then
+            let lelem = MapVarId.find vid acc in
+            let access_int = assert_int (Misc.assert_1 a.a_params) in
+            let elem = List.nth lelem (access_int-1) in (* NOTE! Safran numerotation !!! *)
+            (Econst elem), acc
+          else Hept_mapfold.edesc funs acc edesc
+        | _ -> Hept_mapfold.edesc funs acc edesc
+      )
+    | _ -> Hept_mapfold.edesc funs acc edesc
+  end
+  | _ -> Hept_mapfold.edesc funs acc edesc
+
+
+
+(* Propagate the constants, and in particular the array ones *)
+let const_propagation_array constmap nd =
+  (* Propagating the constant from the constant definition *)
+  let funs_const_prop_array = {Hept_mapfold.defaults with
+        edesc = edesc_const_prop_array;
+      } in
+  let nd, _ = funs_const_prop_array.node_dec funs_const_prop_array constmap nd in
+
+  (* VarArr = const^size / replace "VarElem = VarArr[ind]" by "VarElem=const" *)
+  (* mVarArr : var_ident -> (const, size) *)
+  let mVarArr = detect_const_array_power nd.n_block.b_equs in
+  let funs_const_array_power_repl = {Hept_mapfold.defaults with
+        edesc = edesc_const_array_power_repl;
+      } in
+  let nd, _ = funs_const_array_power_repl.node_dec funs_const_array_power_repl mVarArr nd in
+
+  (* VarArr = [ ... ] / replace "VarElem = VarArr[ind]" by "VarElem=elemVarArr" *)
+  (* mVarArr : var_ident -> lelem *)
+  let mVarArr = detect_const_array_tuple nd.n_block.b_equs in
+  let funs_const_array_tuple = {Hept_mapfold.defaults with
+        edesc = edesc_const_array_tuple;
+      } in
+  let nd, _ = funs_const_array_tuple.node_dec funs_const_array_tuple mVarArr nd in
+
+  (* Constant propagation - WARNING: remove normalization property *)
+
+  (* TODO *)
+
+
+  nd
+
 
 
 (* ============================================================================= *)
-
-let node nd =
+(* Main functions *)
+let node constmap nd =
+  let nd = closure_useless_locvar_removal nd in
+  let nd = const_propagation_array constmap nd in
   let nd = closure_useless_locvar_removal nd in
   nd
 
 let program p =
+  (* Gather the constant definition inside a map *)
+  let constmap = List.fold_left (fun acc pdesc-> match pdesc with
+    | Pconst cd -> MapString.add cd.c_name.name cd acc
+    | _ -> acc
+  ) MapString.empty p.p_desc in
+  
   let nlpdesc = List.fold_left
   (fun acc pdesc -> match pdesc with
-    | Pnode nd -> (Pnode (node nd))::acc
+    | Pnode nd -> (Pnode (node constmap nd))::acc
     | _ -> pdesc::acc
   ) [] p.p_desc in
   {p with p_desc = nlpdesc}

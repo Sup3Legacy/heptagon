@@ -44,6 +44,13 @@ let rec get_last l = match l with
  | x::[] -> x
  | _::t -> get_last t
 
+(* Concatenation of l1 and l2, while avoiding duplicate element from l1 and l2 *)
+let rec concat_no_dupl l1 l2 = match l2 with
+  | [] -> l1
+  | h::t -> if (List.mem h l1) then
+      concat_no_dupl l1 t
+    else concat_no_dupl (h::l1) t
+
 
 (* -----------------------------------------------------------  *)
 
@@ -59,16 +66,8 @@ type group_eq = {
   l_loc : var_ident list;                (* Local var of a group of equation *)
 }
 
-let mk_group_eq n leq i = { name = n; lequ = leq; instance = i; wfz = None;
+let mk_group_eq n leq i wfzOpt = { name = n; lequ = leq; instance = i; wfz = wfzOpt;
     l_inp = []; l_out = []; l_loc = [] }
-
-(* let print_group_eq ff geq =
-  let print_varideq ff =
-  Format.fprintf ff "[[in: (%a) | out: (%a) | num_loc: %i | num_eq: %i ]]\n@?"
-  (Pp_tools.print_list Global_printer.print_ident "" "" "") l_inp
-  print_list_varideql l_out
-  (List.length l_loc) (List.length lequ) *)
-
 
 (* Hashtbl maintained through the transformation: *)
 (*  * dataTable : var_ident --> ( leq_Prod_data , leq_Cons_data ) *)
@@ -94,12 +93,12 @@ let merge_group_eq eq2grTable gEq1 gEq2 =
        loc3 = loc1 + loc2 + [(out1 + out2) not used outside of the group]
        NOTE: global output are managed at the very end
     *)
-    let lin12 = gEq1.l_inp @ gEq2.l_inp in
+    let lin12 = concat_no_dupl gEq1.l_inp gEq2.l_inp in
     let lout12 = gEq1.l_out @ gEq2.l_out in
     let lEqu3 = gEq1.lequ @ gEq2.lequ in
-    let wfz3 = match gEq1.wfz with
-      | None -> gEq2.wfz
-      | Some w -> Some w
+    let (name3, wfz3) = match gEq1.wfz with
+      | None -> (gEq2.name, gEq2.wfz)
+      | Some _ -> (gEq1.name, gEq1.wfz)
     in
     let lin3 = List.filter (fun vid ->
       not (is_varid_in_l_out vid lout12)
@@ -112,7 +111,7 @@ let merge_group_eq eq2grTable gEq1 gEq2 =
       else ((vid, lConsRem)::acc_out, acc_loc)
     ) ([],[]) lout12 in
 
-    let gr3 = { name = gEq1.name; lequ = lEqu3;
+    let gr3 = { name = name3; lequ = lEqu3;
       instance = gEq1.instance; wfz = wfz3;
       l_inp = lin3;
       l_out = lout3;
@@ -128,9 +127,13 @@ let merge_group_eq eq2grTable gEq1 gEq2 =
 (* Name management*)
 let name_counter = ref 0
 
-let new_group_name s inst =
+let new_group_name inst wfz =
   name_counter := !name_counter +1;
-  (s ^ (string_of_int !name_counter) ^ "_sh" ^ (string_of_int inst))
+  match wfz with
+  | None -> ("group_" ^ (string_of_int !name_counter))
+  | Some wfzName ->
+     ("groupwfz_" ^ (string_of_int !name_counter) ^
+        "_" ^ (string_of_int inst) ^ "_" ^ (string_of_int (inst+1)) ^ "_" ^ wfzName)
 
 (* Get a variable from the lhs. If it is void, returns None *)
 let rec get_lhs_var p = match p with
@@ -190,11 +193,9 @@ let extract_wfz e =
    Note: inputs/outputs/locals not extracted*)
 let build_group_single_eq e =
   let i = get_instance_num e in
-  let n = new_group_name "group_" i in
-  let gr = mk_group_eq n [e] i in
-
   let wfz = extract_wfz e in
-  let gr = { gr with wfz = wfz} in
+  let n = new_group_name i wfz in
+  let gr = mk_group_eq n [e] i wfz in
   gr
 
 (* -------------- *)
@@ -283,6 +284,8 @@ let heuristic_merge_single_use _ eq2grTable lgroupEq =
       if (not ((List.length infoCons) = 1)) then
         heuristic_merge_single_use_aux (gr::lgroupRes) rest
       else
+        (* Remark: this is an over-approximation of the real criterion *)
+
         (* Merging ! *)
         let eqCons = List.hd infoCons in
         let grToMerge = try Hashtbl.find eq2grTable eqCons
@@ -348,6 +351,28 @@ let heuristic_merge_single_prod dataTable eq2grTable lgroupEq =
   in
   heuristic_merge_single_prod_aux [] lgroupEq
 
+(* Applying heuristics until stability *)
+let rec heuristic_run dataTable eq2grTable lgroupEq =
+  let origSize = List.length lgroupEq in
+
+  (* First heuristic: merge if an eq use a single variable *)
+  let lgroupEq = heuristic_merge_single_use dataTable eq2grTable lgroupEq in
+  if (debug_info) then
+    Format.fprintf (Format.formatter_of_out_channel stdout) "lgroupEq.size (heuristique 1) = %i\n@?" (List.length lgroupEq)
+  else ();
+
+  (* Second heuristic: merge if an eq produce a single variable *)
+  let lgroupEq = heuristic_merge_single_prod dataTable eq2grTable lgroupEq in
+  if (debug_info) then
+    Format.fprintf (Format.formatter_of_out_channel stdout) "lgroupEq.size (heuristique 2) = %i\n@?" (List.length lgroupEq)
+  else ();
+
+  let finalSize = List.length lgroupEq in
+  if (finalSize < origSize) then
+    heuristic_run dataTable eq2grTable lgroupEq
+  else
+    lgroupEq
+
 
 (* First step: grouping equations together *)
 let group_equation nd =
@@ -372,19 +397,14 @@ let group_equation nd =
     Format.fprintf (Format.formatter_of_out_channel stdout) "lgroupEq.size (avant heuristique 1) = %i\n@?" (List.length lgroupEq)
   else ();
 
-  (* First heuristic: merge if an eq use a single variable *)
-  let lgroupEq = heuristic_merge_single_use dataTable eq2grTable lgroupEq in
+  let lgroupEq = heuristic_run dataTable eq2grTable lgroupEq in
 
-  if (debug_info) then
-    Format.fprintf (Format.formatter_of_out_channel stdout) "lgroupEq.size (heuristique 1) = %i\n@?" (List.length lgroupEq)
-  else ();
+  (* TODO DEBUG *)
+  let num_non_wfz = List.fold_left (fun acc gr ->
+    if (gr.wfz=None) then acc+1 else acc
+  ) 0 lgroupEq in
+  Format.fprintf (Format.formatter_of_out_channel stdout) "num_non_wfz = %i\n@?" num_non_wfz;
 
-  (* Second heuristic: merge if an eq produce a single variable *)
-  let lgroupEq = heuristic_merge_single_prod dataTable eq2grTable lgroupEq in
-
-  if (debug_info) then
-    Format.fprintf (Format.formatter_of_out_channel stdout) "lgroupEq.size (heuristique 2) = %i\n@?" (List.length lgroupEq)
-  else ();
 
   (* We now deal with potential output variable of the program,
       which might have become a local variable of a group *)
@@ -414,6 +434,7 @@ let get_vardecl tblvdNd lvid =
       failwith ("EquationClustering :: get_vardecl => vid "
                 ^ (Idents.name vid) ^ " was not found in the node")
   ) lvid
+
 
 (* For each group of equation lgroupEq, build the corresponding subnode *)
 let build_subnodes lgroupEq nd =
