@@ -1,5 +1,7 @@
 (* Equation clustering - group equation together, in order to coarsen the granularity of the application *)
 
+(* Author: Guillaume I *)
+
 (** Heuristics:
     * If an equation uses only one data, merge it with the producer equation
     * If the output of an equation is only used once, merge it with the consumer equation
@@ -15,6 +17,8 @@ exception GroupEqNotFound
 
 
 let debug_info = true (* TODO DEBUG *)
+let merge_only_same_instance = false
+let merge_no_wfz = true
 
 
 (* Remove all elements of lToRemove in l and concatene it to res *)
@@ -47,6 +51,7 @@ type group_eq = {
   name : string;    (* Name of the group of equation *)
   lequ : eq list;   (* List of equations contained inside this group *)
   instance : int;   (* Number of the instance (we cannot merge different instances) *)
+  wfz : string option; (* Does the group_eq contain a wfz? *)
 
   (* The two next field are temporary values, computed only after the dataTable *)
   l_inp : var_ident list;                (* Inputs of a group of equation *)
@@ -54,7 +59,7 @@ type group_eq = {
   l_loc : var_ident list;                (* Local var of a group of equation *)
 }
 
-let mk_group_eq n leq i = { name = n; lequ = leq; instance = i;
+let mk_group_eq n leq i = { name = n; lequ = leq; instance = i; wfz = None;
     l_inp = []; l_out = []; l_loc = [] }
 
 (* let print_group_eq ff geq =
@@ -74,8 +79,10 @@ let merge_group_eq eq2grTable gEq1 gEq2 =
    | (hid,_)::t -> if (vid=hid) then true else is_varid_in_l_out vid t 
   in
 
-  if (gEq1.instance != gEq2.instance) then
-    failwith "Merging with 2 different instances not allowed"
+  if (merge_only_same_instance && (gEq1.instance != gEq2.instance)) then
+    failwith "Merging with 2 different instances not allowed" else
+  if (merge_no_wfz && ((gEq1.wfz!=None) && (gEq2.wfz!=None))) then
+    failwith "Merging groups with 2 wfz not allowed"
   else
     (* Input : variable not produced, but used by the group
        Output: variable produced, but used outside of the group
@@ -90,7 +97,10 @@ let merge_group_eq eq2grTable gEq1 gEq2 =
     let lin12 = gEq1.l_inp @ gEq2.l_inp in
     let lout12 = gEq1.l_out @ gEq2.l_out in
     let lEqu3 = gEq1.lequ @ gEq2.lequ in
-
+    let wfz3 = match gEq1.wfz with
+      | None -> gEq2.wfz
+      | Some w -> Some w
+    in
     let lin3 = List.filter (fun vid ->
       not (is_varid_in_l_out vid lout12)
     ) lin12 in
@@ -102,7 +112,8 @@ let merge_group_eq eq2grTable gEq1 gEq2 =
       else ((vid, lConsRem)::acc_out, acc_loc)
     ) ([],[]) lout12 in
 
-    let gr3 = { name = gEq1.name; lequ = lEqu3; instance = gEq1.instance;
+    let gr3 = { name = gEq1.name; lequ = lEqu3;
+      instance = gEq1.instance; wfz = wfz3;
       l_inp = lin3;
       l_out = lout3;
       l_loc = gEq1.l_loc @ gEq2.l_loc @ l_new_loc;
@@ -161,12 +172,29 @@ let get_instance_num e =
   let instNum = int_of_string strNum in
   instNum
 
+let extract_wfz e =
+  let (_,rhs) = get_lhs_rhs_eq e in
+  match rhs.e_desc with
+  | Eapp (a, el, _) -> begin
+    match a.a_op with
+    | Efun (fname,_) | Enode (fname, _) -> begin
+      (* External call *)
+      if ((fname.qual=Pervasives) || (fname.qual=LocalModule)) then None
+      else Some fname.name
+    end
+    | _ -> None
+  end
+  | _ -> None
+
 (* Initial construction of lgroupEq
    Note: inputs/outputs/locals not extracted*)
 let build_group_single_eq e =
   let i = get_instance_num e in
   let n = new_group_name "group_" i in
   let gr = mk_group_eq n [e] i in
+
+  let wfz = extract_wfz e in
+  let gr = { gr with wfz = wfz} in
   gr
 
 (* -------------- *)
@@ -204,7 +232,7 @@ let buildDataTable nd lgroupEq =
     List.iter (fun nvarin ->
       try
         let (info_prod, info_cons) = Hashtbl.find depTable nvarin in
-        Hashtbl.add depTable nvarin (info_prod, eq::info_cons)
+        Hashtbl.replace depTable nvarin (info_prod, eq::info_cons)
       with Not_found ->
        Hashtbl.add depTable nvarin ([],eq::[])
     ) eqDataIn;
@@ -212,7 +240,7 @@ let buildDataTable nd lgroupEq =
       try
         let (info_prod, info_cons) = Hashtbl.find depTable nvarout in
         if (info_prod!=[]) then raise Data_produced_twice else
-        Hashtbl.add depTable nvarout (eq::[],info_cons)
+        Hashtbl.replace depTable nvarout (eq::[],info_cons)
       with Not_found ->
        Hashtbl.add depTable nvarout (eq::[],[])
     ) eqDataOut;
@@ -262,8 +290,11 @@ let heuristic_merge_single_use _ eq2grTable lgroupEq =
            Format.eprintf "Group of equation not found, for dataOut = %s\n@?" (Idents.name dataOut);
           raise GroupEqNotFound)
         in
-        (* Merge not allowed in the instance is different *)
-        if (grToMerge.instance != gr.instance) then
+        (* Merge not allowed if the instance is different *)
+        if (merge_only_same_instance && (grToMerge.instance != gr.instance)) then
+          heuristic_merge_single_use_aux (gr::lgroupRes) rest else
+        (* Merge not allowed if both groups contain a wfz *)
+        if (merge_no_wfz && ((grToMerge.wfz!=None) && (gr.wfz!=None))) then
           heuristic_merge_single_use_aux (gr::lgroupRes) rest else
 
         let ngr = merge_group_eq eq2grTable gr grToMerge in
@@ -300,8 +331,11 @@ let heuristic_merge_single_prod dataTable eq2grTable lgroupEq =
           raise GroupEqNotFound
         ) in
 
-        (* Merge not allowed in the instance is different *)
-        if (grToMerge.instance != gr.instance) then
+        (* Merge not allowed if the instance is different *)
+        if (merge_only_same_instance && (grToMerge.instance != gr.instance)) then
+          heuristic_merge_single_prod_aux (gr::lgroupRes) rest else
+        (* Merge not allowed if both groups contain a wfz *)
+        if (merge_no_wfz && ((grToMerge.wfz!=None) && (gr.wfz!=None))) then
           heuristic_merge_single_prod_aux (gr::lgroupRes) rest else
 
         let ngr = merge_group_eq eq2grTable gr grToMerge in
@@ -330,6 +364,9 @@ let group_equation nd =
   (* dataTable : var_ident --> ( leq_Prod_data , leq_Cons_data ) *)
   (* eq2grTable : eq --> group_eq *)
   let (lgroupEq, dataTable, eq2grTable) = buildDataTable nd lgroupEq in
+
+  (* Other optims *)
+  (* let (lgroupEq, dataTable, eq2grTable, nd) = optimize lgroupEq dataTable eq2grTable nd in *)
 
   if (debug_info) then
     Format.fprintf (Format.formatter_of_out_channel stdout) "lgroupEq.size (avant heuristique 1) = %i\n@?" (List.length lgroupEq)
@@ -378,12 +415,14 @@ let get_vardecl tblvdNd lvid =
                 ^ (Idents.name vid) ^ " was not found in the node")
   ) lvid
 
-
 (* For each group of equation lgroupEq, build the corresponding subnode *)
 let build_subnodes lgroupEq nd =
   let sizeTblvdNd = (List.length nd.n_input) + (List.length nd.n_output)
             + (List.length nd.n_block.b_local) in
   let tblvdNd = Hashtbl.create sizeTblvdNd in
+  List.iter (fun vd -> Hashtbl.add tblvdNd vd.v_ident vd) nd.n_input;
+  List.iter (fun vd -> Hashtbl.add tblvdNd vd.v_ident vd) nd.n_output;
+  List.iter (fun vd -> Hashtbl.add tblvdNd vd.v_ident vd) nd.n_block.b_local;
 
   let subnodes = List.fold_left (fun acc grEq ->
     let lvidIn = grEq.l_inp in
@@ -395,8 +434,6 @@ let build_subnodes lgroupEq nd =
     let lVarout = get_vardecl tblvdNd lvidOut in
     let lVarloc = get_vardecl tblvdNd lvidLoc in
 
-    (* TODO: improve that? *)
-
     (* Creating the objects *)
     let bl = Hept_utils.mk_block ~stateful:nd.n_stateful ~locals:lVarloc grEq.lequ in
     let snname = Modules.fresh_value "clustering" grEq.name in
@@ -407,9 +444,7 @@ let build_subnodes lgroupEq nd =
   ) [] lgroupEq in
   subnodes
 
-
 (* Note: if we want the signatures of these subnodes, Hept_utils.signature_of_node *)
-
 
 (* Building the main node *)
 let build_mainnode subnodes nd =
@@ -431,19 +466,20 @@ let build_mainnode subnodes nd =
     let rhs_edesc = Eapp (app_rhs, lin_rhs, None) in
     let ty_rhs = Types.Tprod (List.map (fun vd -> vd.v_type) sn.n_output) in
     let rhs = Hept_utils.mk_exp rhs_edesc ty_rhs ~linearity:Linearity.Ltop in
-
+    
     (* lhs of equation *)
     let snOutvid = List.map (fun vd -> vd.v_ident) sn.n_output in
     let plhs = if ((List.length sn.n_output)=1) then
       (Evarpat (List.hd snOutvid)) else (Etuplepat (List.map (fun vid -> Evarpat vid) snOutvid))
     in
 
-    let neq = Hept_utils.mk_simple_equation plhs rhs in
+    let neq_desc = Eeq (plhs, rhs) in
+    let neq = { eq_desc = neq_desc; eq_stateful = true;      (* stateful = true ===> overapprox, but we are exiting early *)
+        eq_inits = Lno_init; eq_loc = Location.no_location; } in
     neq::acc
   ) [] subnodes in
 
   let bl = Hept_utils.mk_block ~stateful:nd.n_stateful ~locals:lVarloc lequ in
-
   let mn = Hept_utils.mk_node ~typeparamdecs:nd.n_typeparamdecs ~input:nd.n_input ~output:nd.n_output
     ~stateful:nd.n_stateful nd.n_name bl in
   mn

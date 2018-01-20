@@ -1,5 +1,7 @@
 (* Array destruction transformation *)
 
+(* Author: Guillaume I *)
+
 (* Criterion of which array should we destruct:
    - Must be a local variable
    - Must not have an associated Linearity (i.e., a specific reused memory location for the array)

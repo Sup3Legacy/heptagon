@@ -1,5 +1,7 @@
 (* Quick and dirty hyperperiod expansion for the Safran usecase *)
 
+(* Author: Guillaume I *)
+
 (* Valid only if all the equations are on the base clock, like in the Safran usecase *)
 (* Output a code to be parsed by Lopht (with release/deadline) *)
 (* Perform the following modifications:
@@ -12,8 +14,10 @@
 
   Input/output management => Also duplicate them
   *)
+open Idents
 open Names
 open Heptagon
+open Hept_mapfold
 
 exception PreShouldNotAppearHere (* "pre" equations were already removed manually beforehand *)
 exception Equation_not_in_Eeq_form
@@ -575,6 +579,9 @@ and eq_duplEq varTables lvardec htblClocks eq =
 (* ================================================================================ *)
 let get_all_var_decl htbl = Hashtbl.fold (fun _ v acc -> v@acc) htbl []
 
+
+(* ================================================================================ *)
+
 (* Main functions *)
 let node nd =
   (* Step 0: get the equation using Wfz02_00_seq.wfz02_00_seq and put it in relation to correspondance_clock_safran *)
@@ -637,7 +644,7 @@ let node nd =
   } in
 
   (* Visitor to set all level_ck to Clocks.Cbase *)
-  let exp_clockbase funs acc exp =
+  (* let exp_clockbase funs acc exp =
     let exp, _ = Hept_mapfold.exp funs acc exp in
     let ct_annot = match exp.e_ty with
       | Tprod lty -> Clocks.Cprod (List.map (fun _ -> Clocks.Ck Clocks.Cbase) lty)
@@ -656,7 +663,7 @@ let node nd =
   let var_dec_clockbase _ acc vd = {vd with v_clock = Clocks.Cbase}, acc in
   let funs_clockbase = { Hept_mapfold.defaults with
           Hept_mapfold.exp = exp_clockbase; Hept_mapfold.var_dec = var_dec_clockbase} in
-  let n_nd, _ = funs_clockbase.Hept_mapfold.node_dec funs_clockbase [] n_nd in
+  let n_nd, _ = funs_clockbase.Hept_mapfold.node_dec funs_clockbase [] n_nd in *)
   n_nd
 
 let program p =
