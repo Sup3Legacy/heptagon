@@ -129,11 +129,16 @@ let add_main_node s = mainnode := s :: !mainnode
 let prune = ref false
 
 let copyRemoval = ref false
-
 let arrayDestruct = ref false
 
 let depgraphGeneration : string list ref = ref []
 let add_depgraph s = depgraphGeneration := s :: !depgraphGeneration
+
+let hyperperiod = ref false
+let removeUnusedLocVar = ref false
+let copyEqRemoval = ref false
+let safran_clustering = ref false
+
 
 let deadcode = ref false
 
@@ -217,6 +222,11 @@ and doc_prune = "\t\tRemove the nodes unused by the main nodes."
 and doc_copyRemoval = "\t\tRemove the local variables defined through a copy equation."
 and doc_arrayDestruct = "\t\tDestruct constant-size arrays by introducing local variable for their cells."
 and doc_depgraphGeneration = "\t\tFile on which the dependence graphs of the nodes are printed-out."
+
+and doc_hyperperiod = "\t\tDirty hyperperiod extension (specific to Safran UC)."
+and doc_removeUnusedLocVar = "\t\tRemove all unused local variable of a program, and perform constant propagation."
+and doc_copyEqRemoval = "\t\tRemove all copy equation from the program."
+and doc_safran_clustering = "\t\tRegroup the equation of a system into subnodes, according to a set of heuristic (specific to Safan UC)."
 
 and doc_target =
   "<lang>\tGenerate code in language <lang>\n\t\t\t(with <lang>=c,"

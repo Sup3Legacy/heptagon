@@ -253,6 +253,11 @@ let main () =
         "-arrayDestruct", Arg.Set arrayDestruct, doc_arrayDestruct;
 
         "-depGraph", Arg.String add_depgraph, doc_depgraphGeneration;
+
+        "-hyperperiod", Arg.Set hyperperiod, doc_hyperperiod;
+        "-remUnusedLocVar", Arg.Set removeUnusedLocVar, doc_removeUnusedLocVar;
+        "-copyEqRemoval", Arg.Set copyEqRemoval, doc_copyEqRemoval;
+        "-safranClustering", Arg.Set safran_clustering, doc_safran_clustering;
         
         
         "-assert", Arg.String add_assert, doc_assert;

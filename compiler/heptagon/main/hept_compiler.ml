@@ -30,10 +30,6 @@
 open Compiler_options
 open Compiler_utils
 
-open Global_mapfold
-open Heptagon
-open Hept_mapfold
-
 let pp p = if !verbose then Hept_printer.print stdout p
 
 let compile_program p =
@@ -96,6 +92,8 @@ let compile_program p =
   (* Block flatten *)
   let p = pass "Block" true Block.program p pp in
   
+
+  
   (* Copy equation ("VarLoc1 = VarLoc2") removal *)
   let p = pass "Copy equation removal" !copyRemoval CopyRemoval.program p pp in
   
@@ -105,19 +103,24 @@ let compile_program p =
 
   (* let p = pass "Dependence graph generation" ((!depgraphGeneration)!=[]) DepGraphGeneration.program p pp in *)
 
-  (* Ad-hoc pass for the Safran usecase, in order to explicit the activation boolean
-    (first argument) as a "when" *)
+  (* Ad-hoc pass for the Safran usecase, in order to explicit the activation boolean (first argument) as a "when" *)
   (* let p = pass "Activation exposal" !safran_handling ActivationExposal.program p pp in *)
   
-  (* TODO DEBUG *)
-  (* Hept_printer.print stdout p;
 
   (* Dirty hyperperiod expansion output for the Safran usecase *)
-  let p = pass "Dirty Hyperperiod expansion" true Dirty_hyperperiod_expansion_Safran.program p pp in
-  (* Note: should not be activated outside of debugging *)
+  let p = silent_pass "Dirty Hyperperiod expansion" !hyperperiod Dirty_hyperperiod_expansion_Safran.program p in
 
-  (* TODO DEBUG *)
-  Hept_printer.print stdout p; *)
+  let p = silent_pass "Remove unused locvar" !removeUnusedLocVar RemoveUnusedLocVar.program p in
+  let p = silent_pass "Copy equation removal" !copyEqRemoval CopyRemoval.program p in
+  
+  (* Hept_printer.print stdout p; *)
+  let p = pass "Equation clustering" !safran_clustering EquationClustering.program p pp in
+  
+  (* Note: should not be activated outside of debugging *)
+  if (!safran_clustering) then
+    let oc = open_out "all_mls_clustered.mls" in
+    Hept_printer.print oc p
+  else ();
 
   (* Return the transformed AST *)
   p
