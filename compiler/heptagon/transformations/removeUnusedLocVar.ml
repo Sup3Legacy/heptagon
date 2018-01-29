@@ -154,6 +154,8 @@ let rec closure_useless_locvar_removal nd =
 (* ============================================================================= *)
 (* Constant propagation, inclusing array accessed to these constants *)
 
+(* TODO: put that on a separated transformation *)
+
 (* constmap : string -> const_dec *)
 module MapString = Map.Make(struct type t = string let compare = Pervasives.compare end)
 module MapVarId = Map.Make(struct type t = var_ident let compare = Pervasives.compare end)
@@ -286,6 +288,7 @@ let edesc_const_array_tuple funs acc edesc = match edesc with
   | _ -> Hept_mapfold.edesc funs acc edesc
 
 
+(* --- *)
 
 (* Propagate the constants, and in particular the array ones *)
 let const_propagation_array constmap nd =
@@ -303,6 +306,10 @@ let const_propagation_array constmap nd =
       } in
   let nd, _ = funs_const_array_power_repl.node_dec funs_const_array_power_repl mVarArr nd in
 
+  (* TODO DEBUG *)
+  Format.fprintf (Format.formatter_of_out_channel stdout) "const_array_power : mVarArr.size = %i\n@?"
+    (MapVarId.cardinal mVarArr);
+
   (* VarArr = [ ... ] / replace "VarElem = VarArr[ind]" by "VarElem=elemVarArr" *)
   (* mVarArr : var_ident -> lelem *)
   let mVarArr = detect_const_array_tuple nd.n_block.b_equs in
@@ -311,13 +318,63 @@ let const_propagation_array constmap nd =
       } in
   let nd, _ = funs_const_array_tuple.node_dec funs_const_array_tuple mVarArr nd in
 
-  (* Constant propagation - WARNING: remove normalization property *)
-
-  (* TODO *)
-
+  (* TODO DEBUG *)
+  Format.fprintf (Format.formatter_of_out_channel stdout) "const_array_tuple : mVarArr.size = %i\n@?"
+    (MapVarId.cardinal mVarArr);
 
   nd
 
+
+(* ============================================================================= *)
+
+(* WARNING! Reverse partially the normalization *)
+let detect_const_var leq =
+  let (mVarConst, lneq) = List.fold_left (fun (macc,lneq) eq ->
+    let (lhs,rhs) = get_lhs_rhs_eq eq in
+    
+    (* Do we have a single output *)
+    let lvidLhs = get_list_vid lhs in
+    if ((List.length lvidLhs)!=1) then (macc, eq::lneq) else
+    let vidLhs = List.hd lvidLhs in
+
+    (* Is the rhs of the form "const^size" *)
+    match rhs.e_desc with
+    | Econst _ ->
+      let nmacc = MapVarId.add vidLhs rhs.e_desc macc in
+      nmacc, lneq
+    | _ -> macc, eq::lneq
+  ) (MapVarId.empty, []) leq in
+  (mVarConst, lneq)
+
+let edesc_const_var funs acc edesc = match edesc with
+  | Evar vid ->
+    if (MapVarId.mem vid acc) then
+      let nedesc = MapVarId.find vid acc in
+      nedesc, acc
+    else
+      Hept_mapfold.edesc funs acc edesc
+  | _ -> Hept_mapfold.edesc funs acc edesc
+
+let const_var_propagation nd =
+  (* Constant propagation - WARNING: remove normalization property *)
+  let mVarConst, lneq = detect_const_var nd.n_block.b_equs in
+  let funs_const_var = {Hept_mapfold.defaults with
+        edesc = edesc_const_var;
+      } in
+  let bl = { nd.n_block with b_equs = lneq } in
+  let bl, _ = funs_const_var.block funs_const_var mVarConst bl in
+
+  (* TODO DEBUG *)
+  Format.fprintf (Format.formatter_of_out_channel stdout) "const_var : mVarConst.size = %i\n@?"
+    (MapVarId.cardinal mVarConst);
+
+  { nd with n_block = bl }
+
+let rec closure_const_var_propagation nd =
+  let nEqInit = List.length nd.n_block.b_equs in
+  let nd = const_var_propagation nd in
+  let nEqEnd = List.length nd.n_block.b_equs in
+  if (nEqEnd<nEqInit) then closure_const_var_propagation nd else nd
 
 
 (* ============================================================================= *)
@@ -325,6 +382,7 @@ let const_propagation_array constmap nd =
 let node constmap nd =
   let nd = closure_useless_locvar_removal nd in
   let nd = const_propagation_array constmap nd in
+  let nd = closure_const_var_propagation nd in
   let nd = closure_useless_locvar_removal nd in
   nd
 

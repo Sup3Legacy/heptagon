@@ -7,6 +7,7 @@
     * If the output of an equation is only used once, merge it with the consumer equation
   *)
 open Idents
+open Names
 open Heptagon
 open Hept_mapfold
 
@@ -59,6 +60,7 @@ type group_eq = {
   lequ : eq list;   (* List of equations contained inside this group *)
   instance : int;   (* Number of the instance (we cannot merge different instances) *)
   wfz : string option; (* Does the group_eq contain a wfz? *)
+  is_pre : bool;      (* Is the group a single "pre" equation (not to be merged) *)
 
   (* The two next field are temporary values, computed only after the dataTable *)
   l_inp : var_ident list;                (* Inputs of a group of equation *)
@@ -66,7 +68,8 @@ type group_eq = {
   l_loc : var_ident list;                (* Local var of a group of equation *)
 }
 
-let mk_group_eq n leq i wfzOpt = { name = n; lequ = leq; instance = i; wfz = wfzOpt;
+let mk_group_eq n leq i wfzOpt isPre = { name = n; lequ = leq; instance = i;
+    wfz = wfzOpt; is_pre = isPre;
     l_inp = []; l_out = []; l_loc = [] }
 
 (* Hashtbl maintained through the transformation: *)
@@ -81,7 +84,9 @@ let merge_group_eq eq2grTable gEq1 gEq2 =
   if (merge_only_same_instance && (gEq1.instance != gEq2.instance)) then
     failwith "Merging with 2 different instances not allowed" else
   if (merge_no_wfz && ((gEq1.wfz!=None) && (gEq2.wfz!=None))) then
-    failwith "Merging groups with 2 wfz not allowed"
+    failwith "Merging groups with 2 wfz not allowed" else
+  if ((gEq1.is_pre) || (gEq2.is_pre)) then
+    failwith "Merging pre groups not allowed"
   else
     (* Input : variable not produced, but used by the group
        Output: variable produced, but used outside of the group
@@ -112,7 +117,7 @@ let merge_group_eq eq2grTable gEq1 gEq2 =
     ) ([],[]) lout12 in
 
     let gr3 = { name = name3; lequ = lEqu3;
-      instance = gEq1.instance; wfz = wfz3;
+      instance = gEq1.instance; wfz = wfz3; is_pre = false;
       l_inp = lin3;
       l_out = lout3;
       l_loc = gEq1.l_loc @ gEq2.l_loc @ l_new_loc;
@@ -183,19 +188,27 @@ let extract_wfz e =
     | Efun (fname,_) | Enode (fname, _) -> begin
       (* External call *)
       if ((fname.qual=Pervasives) || (fname.qual=LocalModule)) then None
-      else Some fname.name
+      else Some fname.Names.name
     end
     | _ -> None
   end
   | _ -> None
+
+let extract_is_pre e =
+  let (_,rhs) = get_lhs_rhs_eq e in
+  match rhs.e_desc with
+  | Epre _ | Efby _ -> true
+  | _ -> false
+
 
 (* Initial construction of lgroupEq
    Note: inputs/outputs/locals not extracted*)
 let build_group_single_eq e =
   let i = get_instance_num e in
   let wfz = extract_wfz e in
+  let is_pre = extract_is_pre e in
   let n = new_group_name i wfz in
-  let gr = mk_group_eq n [e] i wfz in
+  let gr = mk_group_eq n [e] i wfz is_pre in
   gr
 
 (* -------------- *)
@@ -275,6 +288,10 @@ let heuristic_merge_single_use _ eq2grTable lgroupEq =
   let rec heuristic_merge_single_use_aux lgroupRes lgroupRem = match lgroupRem with
     | [] -> lgroupRes
     | gr::rest -> begin
+      (* Don't do anything with pre/fby *)
+      if (gr.is_pre) then
+        heuristic_merge_single_use_aux (gr::lgroupRes) rest
+      else
       (* Default case: more than one output , or output used more than once *)
       if (not ((List.length gr.l_out) = 1)) then
         heuristic_merge_single_use_aux (gr::lgroupRes) rest
@@ -299,7 +316,9 @@ let heuristic_merge_single_use _ eq2grTable lgroupEq =
         (* Merge not allowed if both groups contain a wfz *)
         if (merge_no_wfz && ((grToMerge.wfz!=None) && (gr.wfz!=None))) then
           heuristic_merge_single_use_aux (gr::lgroupRes) rest else
-
+        (* Merge not allowed if the other group is a pre *)
+        if (grToMerge.is_pre) then
+          heuristic_merge_single_use_aux (gr::lgroupRes) rest else
         let ngr = merge_group_eq eq2grTable gr grToMerge in
         
         let (found, lgroupRes) = remove_list true lgroupRes grToMerge in
@@ -310,13 +329,16 @@ let heuristic_merge_single_use _ eq2grTable lgroupEq =
   in
   heuristic_merge_single_use_aux [] lgroupEq
 
-
 (* Heuristic #2 *)
 let heuristic_merge_single_prod dataTable eq2grTable lgroupEq =
   let rec heuristic_merge_single_prod_aux lgroupRes lgroupRem = match lgroupRem with
     | [] -> lgroupRes
     | gr::rest -> begin
-      (* Defautl case*)
+      (* Don't do anything with pre/fby *)
+      if (gr.is_pre) then
+        heuristic_merge_single_prod_aux (gr::lgroupRes) rest
+      else
+      (* Default case*)
       if (not ((List.length gr.l_inp) = 1)) then
         heuristic_merge_single_prod_aux (gr::lgroupRes) rest
       else
@@ -340,6 +362,10 @@ let heuristic_merge_single_prod dataTable eq2grTable lgroupEq =
         (* Merge not allowed if both groups contain a wfz *)
         if (merge_no_wfz && ((grToMerge.wfz!=None) && (gr.wfz!=None))) then
           heuristic_merge_single_prod_aux (gr::lgroupRes) rest else
+        (* Merge not allowed if the other group is a pre *)
+        if (grToMerge.is_pre) then
+          heuristic_merge_single_prod_aux (gr::lgroupRes) rest else
+
 
         let ngr = merge_group_eq eq2grTable gr grToMerge in
 
@@ -445,7 +471,8 @@ let build_subnodes lgroupEq nd =
   List.iter (fun vd -> Hashtbl.add tblvdNd vd.v_ident vd) nd.n_output;
   List.iter (fun vd -> Hashtbl.add tblvdNd vd.v_ident vd) nd.n_block.b_local;
 
-  let subnodes = List.fold_left (fun acc grEq ->
+  let subnodesgr = List.fold_left (fun acc grEq ->
+    (* Note: even if it is a pre, we still build the corresponding subnode *)
     let lvidIn = grEq.l_inp in
     let lvidOut = List.map (fun (vid,_) -> vid) grEq.l_out in
     let lvidLoc = grEq.l_loc in
@@ -461,44 +488,47 @@ let build_subnodes lgroupEq nd =
     let sn = Hept_utils.mk_node ~typeparamdecs:nd.n_typeparamdecs ~input:lVarin ~output:lVarout
       ~stateful:nd.n_stateful ~param:nd.n_params snname bl in
 
-    sn::acc
+    (sn,grEq)::acc
   ) [] lgroupEq in
-  subnodes
+  subnodesgr
 
 (* Note: if we want the signatures of these subnodes, Hept_utils.signature_of_node *)
 
 (* Building the main node *)
-let build_mainnode subnodes nd =
-  (* Note: all equations are inside the subnodes/lgroupEq *)
-  let lVarlocOutmainNode = List.fold_left (fun acc snd ->
+let build_mainnode subnodesgr nd =
+  (* Note: all equations are inside the subnodes/lgroupEq, expect for pre *)
+  let lVarlocOutmainNode = List.fold_left (fun acc (snd,_) ->
     (snd.n_output)@acc (* No duplication *)
-  ) [] subnodes in
+  ) [] subnodesgr in
   let lVarloc = remove_all_list nd.n_output [] lVarlocOutmainNode in
 
-  let lequ = List.fold_left (fun acc sn ->
-    
-    (* rhs of equation *)
-    let op_rhs = Efun (sn.n_name,[]) in
-    let app_rhs = Hept_utils.mk_app op_rhs in
-    let lin_rhs = List.map (fun vd ->
-      let edesc_in_rhs = Evar vd.v_ident in
-      Hept_utils.mk_exp edesc_in_rhs vd.v_type ~linearity:Linearity.Ltop
-    ) sn.n_input in
-    let rhs_edesc = Eapp (app_rhs, lin_rhs, None) in
-    let ty_rhs = Types.Tprod (List.map (fun vd -> vd.v_type) sn.n_output) in
-    let rhs = Hept_utils.mk_exp rhs_edesc ty_rhs ~linearity:Linearity.Ltop in
-    
-    (* lhs of equation *)
-    let snOutvid = List.map (fun vd -> vd.v_ident) sn.n_output in
-    let plhs = if ((List.length sn.n_output)=1) then
-      (Evarpat (List.hd snOutvid)) else (Etuplepat (List.map (fun vid -> Evarpat vid) snOutvid))
-    in
+  let lequ = List.fold_left (fun acc (sn,geq) ->
+    if (geq.is_pre) then
+      (* Pre => we just put the equation at the top level *)
+      geq.lequ@acc
+    else
+      (* rhs of equation *)
+      let op_rhs = Efun (sn.n_name,[]) in
+      let app_rhs = Hept_utils.mk_app op_rhs in
+      let lin_rhs = List.map (fun vd ->
+        let edesc_in_rhs = Evar vd.v_ident in
+        Hept_utils.mk_exp edesc_in_rhs vd.v_type ~linearity:Linearity.Ltop
+      ) sn.n_input in
+      let rhs_edesc = Eapp (app_rhs, lin_rhs, None) in
+      let ty_rhs = Types.Tprod (List.map (fun vd -> vd.v_type) sn.n_output) in
+      let rhs = Hept_utils.mk_exp rhs_edesc ty_rhs ~linearity:Linearity.Ltop in
+      
+      (* lhs of equation *)
+      let snOutvid = List.map (fun vd -> vd.v_ident) sn.n_output in
+      let plhs = if ((List.length sn.n_output)=1) then
+        (Evarpat (List.hd snOutvid)) else (Etuplepat (List.map (fun vid -> Evarpat vid) snOutvid))
+      in
 
-    let neq_desc = Eeq (plhs, rhs) in
-    let neq = { eq_desc = neq_desc; eq_stateful = true;      (* stateful = true ===> overapprox, but we are exiting early *)
-        eq_inits = Lno_init; eq_loc = Location.no_location; } in
-    neq::acc
-  ) [] subnodes in
+      let neq_desc = Eeq (plhs, rhs) in
+      let neq = { eq_desc = neq_desc; eq_stateful = true;      (* stateful = true ===> overapprox, but we are exiting early *)
+          eq_inits = Lno_init; eq_loc = Location.no_location; } in
+      neq::acc
+  ) [] subnodesgr in
 
   let bl = Hept_utils.mk_block ~stateful:nd.n_stateful ~locals:lVarloc lequ in
   let mn = Hept_utils.mk_node ~typeparamdecs:nd.n_typeparamdecs ~input:nd.n_input ~output:nd.n_output
@@ -515,12 +545,16 @@ let node nd =
   (* TODO DEBUG *)
   Format.fprintf (Format.formatter_of_out_channel stdout) "ping - group equation obtained\n@?";
 
-  let subnodes = build_subnodes lgroupEq nd in
+  let subnodesgr = build_subnodes lgroupEq nd in
 
   (* TODO DEBUG *)
   Format.fprintf (Format.formatter_of_out_channel stdout) "ping - subnodes built\n@?";
 
-  let new_nd = build_mainnode subnodes nd in
+  let new_nd = build_mainnode subnodesgr nd in
+  
+  let subnodes = List.fold_left (fun acc (sn,gr) ->
+   if (gr.is_pre) then acc else sn::acc
+  ) [] subnodesgr in
   new_nd :: subnodes
 
 let program p =

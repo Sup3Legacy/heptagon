@@ -11,7 +11,7 @@
   Substitution performed:
    - For each cell of the array A, introduce a new local variable A_k
    - On the rhs, replace A[k] by A_k
-   - On the lhs, replace the definition of A as a tuple by size(A) equations
+   - On the lhs, replace the definition of A as a tuple, by size(A) equations (one per elements)
   *)
 
 open Misc
@@ -509,8 +509,6 @@ let remove_if_used_as_output nd lArrVarDecl =
   lArrVarDecl
   (* TODO *)
 
-
-
 (* Pretty-printer for debugging *)
 let print_arrToDestroy ff arrToDestroy =
   Format.fprintf ff "[\n";
@@ -533,6 +531,20 @@ let findArrayToDestroy nd =
 
 
 (* ============================================================================= *)  
+
+(* Getting infos about aliased type declarations *)
+(* tyAliasInfo: (qualname * ty) list *)
+let getTyAliasInfo p =
+  let tyAliasInfo = List.fold_left
+    (fun acc pdesc -> match pdesc with
+      | Ptype td -> begin
+        match td.t_desc with
+          | Type_alias ty -> (td.t_name, ty)::acc
+          | _ -> acc
+        end
+      | _ -> acc
+    ) [] p.p_desc in
+  tyAliasInfo
 
 (* Iterate over all local variables and replace their type with the aliased expression, if needed *)
 let aliasSubstitution tyAliasInfo nd =
@@ -575,19 +587,8 @@ let node tyAliasInfo nd =
   let nd = destroyArrays nd arrToDestroy in
   nd
 
-
 let program p =
-  (* Getting infos about aliased type declarations *)
-  (* tyAliasInfo: (qualname * ty) list *)
-  let tyAliasInfo = List.fold_left
-    (fun acc pdesc -> match pdesc with
-      | Ptype td -> begin
-        match td.t_desc with
-          | Type_alias ty -> (td.t_name, ty)::acc
-          | _ -> acc
-        end
-      | _ -> acc
-    ) [] p.p_desc in
+  let tyAliasInfo = getTyAliasInfo p in
   
   let npdesc = List.map
     (fun pdesc -> match pdesc with

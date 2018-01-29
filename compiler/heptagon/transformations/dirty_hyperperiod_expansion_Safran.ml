@@ -16,8 +16,8 @@
   *)
 open Idents
 open Names
+open Types
 open Heptagon
-open Hept_mapfold
 
 exception PreShouldNotAppearHere (* "pre" equations were already removed manually beforehand *)
 exception Equation_not_in_Eeq_form
@@ -273,6 +273,63 @@ let rec copy_n_times n x = match n with
   | 0 -> []
   | _ -> x::(copy_n_times (n-1) x)
 
+let rec list_map3 f l1 l2 l3 = match (l1, l2, l3) with
+  | ([],[],[]) -> []
+  | (h1::t1, h2::t2, h3::t3) ->
+    let h4 = f h1 h2 h3 in
+    h4::(list_map3 f t1 t2 t3)
+  | _ -> failwith "list_map3 : uneven list size"
+
+(* Produce a static expression "0" (for the left size of a fby) of type "ty" *)
+(*let tyAliasInfoRef = ref []
+let rec find_aliasInfo tyAliasInfo strTyid = match tyAliasInfo with
+  | [] -> None
+  | (nty, ty)::r ->
+    if (strTyid = nty.name) then Some ty
+    else find_aliasInfo r strTyid *)
+
+let rec init_stexp_fby t = match t with
+  | Tid qname ->
+    let name = qname.name in
+    let se_desc = match name with
+    | "int" -> Sint 0
+    | "real" -> Sfloat 0.0
+    | "float" -> Sfloat 0.0
+    | "string" -> Sstring ""
+    | "bool" -> Sbool false
+    | _ ->
+      (* We use Safran type naming convention to get the type => DIRTY ! *)
+      if ( (String.sub name 0 7)="Vector_") then
+        let l = String.length name in
+        let stri = String.sub name 7 (l-8) in
+        let num_array = int_of_string stri in
+        let sexp_numarray = mk_static_exp (Tid Initial.pint) (Sint num_array) in
+        let sexp_ty = match (String.get name (l-1)) with
+          | 'i' -> mk_static_exp (Tid Initial.pint) (Sint 0)
+          | 'r' -> mk_static_exp (Tid Initial.pfloat) (Sfloat 0.0)
+          | 'b' -> mk_static_exp (Tid Initial.pbool) (Sbool false)
+          | _ -> failwith "unrecognized last char"
+        in
+        Sarray_power (sexp_ty, [sexp_numarray])
+      else failwith "get_dummy_st_expr - unrecognized type"
+    in
+    mk_static_exp t se_desc
+  | Tarray (ty, sexpr) ->
+    let st_exp_ty = init_stexp_fby ty in
+    let se_desc = Sarray_power (st_exp_ty, [sexpr]) in
+    mk_static_exp t se_desc
+  | Tprod lty ->
+    let lst_exp = List.map init_stexp_fby lty in
+    let se_desc = Stuple lst_exp in
+    mk_static_exp t se_desc
+  | Tclasstype _ -> failwith "init_stexp_fby : Classtype not managed."
+  | Tinvalid -> failwith "init_stexp_fby : Constant declaration with Tinvalid type."
+
+
+let rec extract_ty_elem t = match t with
+  | Tprod lty -> lty
+  | _ -> failwith "extract_ty_elem : type is not a Tprod"
+
 
 (* DEBUG *)
 let verbose_duplEq = false
@@ -479,7 +536,7 @@ and elementary_func_call_duplEq varTables (lvardec:var_dec list) htblClocks lplh
               let subedescPre = mk_edesc_var_or_tuple lvaridpre lty_var_out in
               let tyexpPre = Types.Tprod lty_var_out in
               let expPre = Hept_utils.mk_exp subedescPre tyexpPre ~linearity:Linearity.Ltop in
-              Epre(None, expPre)
+              Epre(Some (init_stexp_fby tyexpPre), expPre)
             else
               let lvaridpre = List.nth llvarid_out (i-1) in
               let subedesc = mk_edesc_var_or_tuple lvaridpre lty_var_out in
@@ -532,7 +589,7 @@ and eqdesc_duplEq varTables lvardec htblClocks eqdesc = match eqdesc with
     let nllEqDecs = List.map2 (fun pl er ->
       (* Check the nature of the rhs (er) *)
       let (exp_ignorePre, is_a_pre) = match er.e_desc with
-        | Epre(x,epre) -> (assert(x=None); (epre, true))
+        | Epre(x,epre) -> ((*assert(x=None);*) (epre, true))
         | _ -> (er, false)
       in
       let (is_not_tuple, tuple_args) = match exp_ignorePre.e_desc with
@@ -546,19 +603,21 @@ and eqdesc_duplEq varTables lvardec htblClocks eqdesc = match eqdesc with
       (* Default case -> not a tuple -> no need of normalization *)
       if (is_not_tuple) then [Eeq (pl, er)] else
 
+      let tyTuple = er.e_ty in (* Type of the tuple *)
+      let ltyTuple = extract_ty_elem tyTuple in
+
       (* Normalization needed: we split the tuple into several equations *)
       let l_lhsvarid = get_list_vid pl in
       assert((List.length l_lhsvarid) = (List.length tuple_args));
-      let leq = List.map2 (fun lhs erhs ->
+      let leq = list_map3 (fun lhs erhs tyElem ->
         if (is_a_pre) then
-          let edescRhsPre = Epre(None, erhs) in
-          let tyexpPre = er.e_ty in
-          let erhspre = Hept_utils.mk_exp edescRhsPre tyexpPre ~ct_annot:(Some (Clocks.Ck Clocks.Cbase))
+          let edescRhsPre = Epre(Some (init_stexp_fby tyElem), erhs) in
+          let erhspre = Hept_utils.mk_exp edescRhsPre tyElem ~ct_annot:(Some (Clocks.Ck Clocks.Cbase))
                 ~linearity:Linearity.Ltop in
           Eeq((Evarpat lhs), erhspre)
         else
           Eeq((Evarpat lhs), erhs)
-      ) l_lhsvarid tuple_args in
+      ) l_lhsvarid tuple_args ltyTuple in
       leq
     ) lplhs lrhs in
     let nlEqDecs = List.concat nllEqDecs in
@@ -667,6 +726,9 @@ let node nd =
   n_nd
 
 let program p =
+  (* Dirty fix to correct the type of constants *)
+  (*tyAliasInfoRef := ArrayDestruct.getTyAliasInfo p; *)
+
   let nlpdesc = List.fold_left
   (fun acc pdesc -> match pdesc with
     | Pnode nd -> (Pnode (node nd))::acc
