@@ -22,13 +22,16 @@ open Heptagon
 open Hept_mapfold
 
 (* Determine if a type is an array of constant size (or a tuple) *)
-let get_array_const_size ty = match ty with
+let rec get_array_const_size ty = match ty with
   | Tarray (tyarr, size) -> begin
     match size.se_desc with
       | Sint i -> Some (i, tyarr)             (* Array of constant size detected! *)
       | _ -> None
     end
-  | Tprod _ -> None                 (* TODO: tuple management ? *)
+  | Tprod lty ->
+    if (List.length lty = 1) then
+      get_array_const_size (List.hd lty)
+    else None                        (* TODO: tuple management ? *)
   | Tid _ -> None                   (* Note: alias management managed previously *)
   | Tclasstype _ | Tinvalid -> None
 

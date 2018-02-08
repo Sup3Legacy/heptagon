@@ -436,6 +436,7 @@ let rec translate_eq env tenv eq =
   { Heptagon.eq_desc = translate_eq_desc eq.eq_loc env tenv eq.eq_desc ;
     Heptagon.eq_stateful = false;
     Heptagon.eq_inits = init;
+    Heptagon.eq_annot = None;
     Heptagon.eq_loc = eq.eq_loc; }
 
 and translate_eq_desc loc env tenv = function

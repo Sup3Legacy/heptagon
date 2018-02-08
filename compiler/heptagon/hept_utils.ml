@@ -51,11 +51,12 @@ let mk_op_app ?(params=[]) ?(unsafe=false) ?(reset=None) op args =
 let mk_type_dec name desc =
   { t_name = name; t_desc = desc; t_loc = no_location; }
 
-let mk_equation ?(loc=no_location) desc =
+let mk_equation ?(loc=no_location) ?(ann=None) desc =
   let _, s = Stateful.eqdesc Stateful.funs false desc in
   { eq_desc = desc;
     eq_stateful = s;
     eq_inits = Lno_init;
+    eq_annot = None;
     eq_loc = loc; }
 
 let mk_var_dec ?(last = Var) ?(clock = fresh_clock()) name ty ~linearity =

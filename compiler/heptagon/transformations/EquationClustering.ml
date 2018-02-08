@@ -1,4 +1,5 @@
-(* Equation clustering - group equation together, in order to coarsen the granularity of the application *)
+(* Equation clustering - group equation together,
+    in order to coarsen the granularity of the application *)
 
 (* Author: Guillaume I *)
 
@@ -8,6 +9,7 @@
   *)
 open Idents
 open Names
+open Types
 open Heptagon
 open Hept_mapfold
 
@@ -63,9 +65,9 @@ type group_eq = {
   is_pre : bool;      (* Is the group a single "pre" equation (not to be merged) *)
 
   (* The two next field are temporary values, computed only after the dataTable *)
-  l_inp : var_ident list;                (* Inputs of a group of equation *)
-  l_out : (var_ident * (eq list)) list;  (* Outputs of a group of equation + equations outside of the group using it *)
-  l_loc : var_ident list;                (* Local var of a group of equation *)
+  l_inp : var_ident list;               (* Inputs of a group of equation *)
+  l_out : (var_ident * (eq list)) list; (* Outputs of a group of equation + equs outside of the group using it *)
+  l_loc : var_ident list;               (* Local var of a group of equation *)
 }
 
 let mk_group_eq n leq i wfzOpt isPre = { name = n; lequ = leq; instance = i;
@@ -105,6 +107,10 @@ let merge_group_eq eq2grTable gEq1 gEq2 =
       | None -> (gEq2.name, gEq2.wfz)
       | Some _ -> (gEq1.name, gEq1.wfz)
     in
+    let instance3 = match gEq1.wfz with
+      | None -> gEq2.instance       (* Improve that by having an interval? *)
+      | Some _ -> gEq1.instance
+    in
     let lin3 = List.filter (fun vid ->
       not (is_varid_in_l_out vid lout12)
     ) lin12 in
@@ -117,7 +123,7 @@ let merge_group_eq eq2grTable gEq1 gEq2 =
     ) ([],[]) lout12 in
 
     let gr3 = { name = name3; lequ = lEqu3;
-      instance = gEq1.instance; wfz = wfz3; is_pre = false;
+      instance = instance3; wfz = wfz3; is_pre = false;
       l_inp = lin3;
       l_out = lout3;
       l_loc = gEq1.l_loc @ gEq2.l_loc @ l_new_loc;
@@ -137,8 +143,7 @@ let new_group_name inst wfz =
   match wfz with
   | None -> ("group_" ^ (string_of_int !name_counter))
   | Some wfzName ->
-     ("groupwfz_" ^ (string_of_int !name_counter) ^
-        "_" ^ (string_of_int inst) ^ "_" ^ (string_of_int (inst+1)) ^ "_" ^ wfzName)
+     ("groupwfz_" ^ (string_of_int !name_counter) ^ "_" ^ wfzName)
 
 (* Get a variable from the lhs. If it is void, returns None *)
 let rec get_lhs_var p = match p with
@@ -183,7 +188,7 @@ let get_instance_num e =
 let extract_wfz e =
   let (_,rhs) = get_lhs_rhs_eq e in
   match rhs.e_desc with
-  | Eapp (a, el, _) -> begin
+  | Eapp (a, _, _) -> begin
     match a.a_op with
     | Efun (fname,_) | Enode (fname, _) -> begin
       (* External call *)
@@ -494,6 +499,9 @@ let build_subnodes lgroupEq nd =
 
 (* Note: if we want the signatures of these subnodes, Hept_utils.signature_of_node *)
 
+let get_eq_annot instance = "release(" ^ (string_of_int instance)
+      ^ ") deadline(" ^ (string_of_int (instance+1)) ^ ")"
+
 (* Building the main node *)
 let build_mainnode subnodesgr nd =
   (* Note: all equations are inside the subnodes/lgroupEq, expect for pre *)
@@ -524,9 +532,13 @@ let build_mainnode subnodesgr nd =
         (Evarpat (List.hd snOutvid)) else (Etuplepat (List.map (fun vid -> Evarpat vid) snOutvid))
       in
 
+      let annotEq = if (geq.wfz=None) then None else Some (get_eq_annot geq.instance) in
+
       let neq_desc = Eeq (plhs, rhs) in
-      let neq = { eq_desc = neq_desc; eq_stateful = true;      (* stateful = true ===> overapprox, but we are exiting early *)
-          eq_inits = Lno_init; eq_loc = Location.no_location; } in
+      (* stateful = true => overapprox, but we are exiting early *)
+      let neq = { eq_desc = neq_desc; eq_stateful = true;   
+          eq_inits = Linearity.Lno_init; eq_loc = Location.no_location;
+          eq_annot = annotEq } in
       neq::acc
   ) [] subnodesgr in
 
@@ -534,6 +546,329 @@ let build_mainnode subnodesgr nd =
   let mn = Hept_utils.mk_node ~typeparamdecs:nd.n_typeparamdecs ~input:nd.n_input ~output:nd.n_output
     ~stateful:nd.n_stateful nd.n_name bl in
   mn
+
+
+(* ======================================================================= *)
+
+(* Change the input/output of the subnodes such that all of them are scalars *)
+(* Communications between subnodes is preserved by the renaming convention *)
+
+(* Create an ordered list from the association list of (pos, elem for position pos) *)
+let get_list_vardecl_from_assoc_list lassoc =
+  let rec get_list_vardecl_from_assoc_list_aux pos res lassoc = match pos with
+    | 0 -> res
+    | _ ->
+      assert(pos>0);
+      let elem = try
+        List.assoc pos lassoc
+      with Not_found -> failwith ("get_list_vardecl_from_assoc_list_aux - pos "
+            ^ (string_of_int pos) ^ " not found")
+      in
+      get_list_vardecl_from_assoc_list_aux (pos-1) (elem::res) lassoc
+  in
+  get_list_vardecl_from_assoc_list_aux (List.length lassoc) [] lassoc
+
+
+(* Replace the arrays in the interface of a subnode by its elements *)
+(* It includes the global inputs/outputs *)
+(* isMainNode = true ===> We are currently doing that for the main node (slight modif) *)
+let scalar_subnodes_interface isMainNode htblScalarVar subnodesgr =
+  let rec create_var_decl_aux arrId sizeArr tyArr = match sizeArr with
+    | 0 -> []
+    | _ -> begin
+      assert(sizeArr>0);
+      let strNameVarDec = (Idents.name arrId) ^ "__" ^ (string_of_int sizeArr) in
+      let nameVarDec = Idents.gen_var "equationClustering" (strNameVarDec) in
+      
+      let vardec = Hept_utils.mk_var_dec nameVarDec tyArr ~linearity:Linearity.Ltop in
+      (sizeArr, vardec)::(create_var_decl_aux arrId (sizeArr-1) tyArr)
+    end
+  in
+
+  (* Filling htblScalarVar : varIdIn/Out -> (vardecl list) option *)
+  List.iter (fun (snode, _) ->
+    let lvdIn = snode.n_input in
+    let lvdOut = snode.n_output in
+
+    (* Detect if a given variable declaration is a destructible array *)
+    List.iter (fun vd ->
+      let optSizeTyArr = ArrayDestruct.get_array_const_size vd.v_type in
+      match optSizeTyArr with
+        | None -> Hashtbl.replace htblScalarVar vd.v_ident None
+        | Some (size, tyElem) -> begin
+          (* Work already done for this variable? *)
+          if (Hashtbl.mem htblScalarVar vd.v_ident) then () else
+          let lnScalVar = create_var_decl_aux vd.v_ident size tyElem in
+          Hashtbl.replace htblScalarVar vd.v_ident (Some lnScalVar)
+        end
+    ) (List.rev_append lvdIn lvdOut);
+  ) subnodesgr;
+
+  (* Change the subnodes:                                 *)
+  (*  - Move the array input/output into the local vardec *)
+  (*       and replace them with the new scalar vardecs   *)
+  (*  - Add equations to rebuilt input arrays             *)
+  (*  - Add equations to select elements of output arrays *)
+  let subnodesgr = List.map (fun (snode, grEq) ->
+    (* Variable declaration management *)
+    let linput = snode.n_input in
+    let loutput = snode.n_output in
+
+    let lninput = List.fold_left (fun acc vdIn ->
+      let optlVarscal = 
+        try Hashtbl.find htblScalarVar vdIn.v_ident
+        with Not_found -> failwith "Input element not found in htblScalarVar"
+      in
+      match optlVarscal with 
+        | None -> vdIn::acc
+        | Some lVarscal ->
+          let lVarscal = List.map (fun (_,vd) -> vd) lVarscal in
+          List.rev_append lVarscal acc
+    ) [] linput in
+
+    let lnoutput = List.fold_left (fun acc vdOut ->
+      let optlVarscal = 
+        try Hashtbl.find htblScalarVar vdOut.v_ident
+        with Not_found -> failwith "Output element not found in htblScalarVar"
+      in
+      match optlVarscal with 
+        | None -> vdOut::acc
+        | Some lVarscal ->
+          let lVarscal = List.map (fun (_,vd) -> vd) lVarscal in
+          List.rev_append lVarscal acc
+    ) [] loutput in
+
+    let lnlocal = if (isMainNode) then snode.n_block.b_local else
+      List.fold_left (fun acc vdInOut ->
+        if (Hashtbl.mem htblScalarVar vdInOut.v_ident) then
+          vdInOut::acc
+        else acc
+      ) snode.n_block.b_local (List.rev_append linput loutput) in
+
+    (* Equations management *)
+    (* Input: OldVardeclIn = Earray [ lScalarVarDecl ] *)
+    let nEqIn =
+      if (isMainNode) then [] else List.fold_left (fun acc vdIn ->
+      let optlVarscal = try Hashtbl.find htblScalarVar vdIn.v_ident
+        with Not_found -> failwith "Input element not found in htblScalarVar"
+      in
+      match optlVarscal with 
+        | None -> acc
+        | Some lVarscal ->
+          (* lVarscal is an association list for (i, varDecl_i), starting from i=1 *)
+          let lScalarVarDecl = get_list_vardecl_from_assoc_list lVarscal in
+          let lexpVarScal = List.map (fun vdecl ->
+            Hept_utils.mk_exp (Evar vdecl.v_ident) vdecl.v_type ~linearity:Linearity.Ltop
+          ) lScalarVarDecl in
+          let appTuple = Hept_utils.mk_app Earray in
+          let edescrhs = Eapp (appTuple, lexpVarScal, None) in
+          let erhs = Hept_utils.mk_exp edescrhs vdIn.v_type ~linearity:Linearity.Ltop in
+
+          let plhs = Evarpat vdIn.v_ident in
+          let neq = Hept_utils.mk_simple_equation plhs erhs in 
+          neq::acc
+    ) [] linput in
+
+    (* Output: Etuplepat[ lScalarVarDecl ] = OldVardeclOut *)
+    let nEqOut =
+      if (isMainNode) then [] else List.fold_left (fun acc vdOut ->
+      let optlVarscal = try Hashtbl.find htblScalarVar vdOut.v_ident
+        with Not_found -> failwith "Output element not found in htblScalarVar"
+      in
+      match optlVarscal with
+        | None -> acc
+        | Some lVarscal ->
+          let lScalarVarDecl = get_list_vardecl_from_assoc_list lVarscal in
+          let plhs = Etuplepat (List.map (fun vd -> Evarpat vd.v_ident) lScalarVarDecl) in
+
+          let edescrhs = Evar vdOut.v_ident in
+          let erhs = Hept_utils.mk_exp edescrhs vdOut.v_type ~linearity:Linearity.Ltop in
+
+          let neq = Hept_utils.mk_simple_equation plhs erhs in 
+          neq::acc
+    ) [] loutput in
+
+    let lnequs = nEqIn @ nEqOut @ snode.n_block.b_equs in
+
+    let nbl = { snode.n_block with b_local = lnlocal; b_equs = lnequs } in
+    let nsnode = {snode with n_input = lninput; n_output = lnoutput; n_block = nbl } in
+    (nsnode, grEq)
+  ) subnodesgr in
+
+  (subnodesgr, htblScalarVar)
+
+(* Note: the signature of the main node changes too *)
+let scalar_mainnode htblScalarVar mainnode =
+  let scalar_new_nd, htblScalarVar = scalar_subnodes_interface true htblScalarVar [(mainnode,[])] in
+  let (mainnode, _) = List.hd scalar_new_nd in
+
+  (* fby management (which are still with arrays at that point *)
+  let nEqs = List.fold_left (fun acc eq ->
+    (* Is the equation a fby? *)
+    let (_, erhs) = get_lhs_rhs_eq eq in
+    match erhs.e_desc with
+      | Efby (_, _) ->
+        failwith "scalar_mainnode: Efby expression here ??? oO "
+      | Epre (Some st_exp, ePre) -> 
+        begin
+        (* Is the fby on array or scalar? *)
+        let optSizeTyArr = ArrayDestruct.get_array_const_size ePre.e_ty in
+        match optSizeTyArr with
+        | None -> eq::acc (* fby on a scalar *)
+        | Some (_, tyElem) ->
+        let lvarlhs = extract_data_out eq in
+        let varIdlhs = Misc.assert_1 lvarlhs in
+
+        let varIdPre = match ePre.e_desc with
+          | Evar vid -> vid
+          | _ -> failwith "Right part of a fby is not a variable"
+        in
+
+        (* Assumption - Safran: ePre is a variable and eConst is const^N *)
+        (*let valstexpConst = match eConst.e_desc with
+          | Econst st_exp -> (match st_exp.se_desc with
+              | Sarray_power (se, _) -> se
+              | _ -> failwith "Left part of a fby is not in const^size form"
+            )
+          | _ -> failwith "Left part of a fby is not a constant"
+        in*)
+        let rec get_valstexpConst st_exp = match st_exp.se_desc with
+          | Sarray_power (se, _) -> se
+          | Stuple l ->
+            if (List.length l = 1) then
+              get_valstexpConst (List.hd l)
+            else failwith "Left part of a fby is not in const^size form"
+          | _ -> failwith "Left part of a fby is not in const^size form"
+        in
+        let valstexpConst = get_valstexpConst st_exp in
+
+        let optlIndVarScalLhs = try
+          Hashtbl.find htblScalarVar varIdlhs
+        with Not_found -> failwith ("varIdlhs = " ^ (Idents.name varIdlhs) ^ " not found")
+        in
+        let lIndVarScalLhs = match optlIndVarScalLhs with
+          | None -> failwith ("Variable " ^ (Idents.name varIdlhs) ^ "is associated with nothing in htblScalarVar");
+          | Some l -> l
+        in
+        let lVarScalLhs = get_list_vardecl_from_assoc_list lIndVarScalLhs in
+        let optlIndVarScalPre = try
+          Hashtbl.find htblScalarVar varIdPre
+        with Not_found -> failwith ("varIdPre = " ^ (Idents.name varIdPre) ^ " not found")
+        in
+        let lIndVarScalPre = match optlIndVarScalPre with
+          | None -> failwith ("Variable " ^ (Idents.name varIdlhs) ^ "is associated with nothing in htblScalarVar");
+          | Some l -> l
+        in
+        let lVarScalPre = get_list_vardecl_from_assoc_list lIndVarScalPre in
+        assert((List.length lVarScalPre) = (List.length lVarScalLhs));
+
+        (* We build the equations *)
+        let lEqs = List.map2 (fun varLhs varPre ->
+          let eConstScal = Hept_utils.mk_exp (Econst valstexpConst)
+            tyElem ~linearity:Linearity.Ltop in
+          let eScalVarrhs = Hept_utils.mk_exp (Evar varPre.v_ident)
+            tyElem ~linearity:Linearity.Ltop in
+          let eScalFbyrhs = Hept_utils.mk_exp (Efby (eConstScal, eScalVarrhs))
+            tyElem ~linearity:Linearity.Ltop in
+
+          let eqdesc = Eeq(Evarpat varLhs.v_ident, eScalFbyrhs) in
+          { eq_desc = eqdesc;
+            eq_stateful = true;         (* fby *)
+            eq_inits = Linearity.Lno_init;
+            eq_annot = None;
+            eq_loc = Location.no_location; }
+        ) lVarScalLhs lVarScalPre in
+        List.rev_append lEqs acc
+      end
+      | _ -> eq::acc  (* Not a fby *)
+  ) [] mainnode.n_block.b_equs in
+
+  (* Put these equation back into the mainnode *)
+  let nBl = { mainnode.n_block with b_equs = nEqs } in
+  let mainnode = { mainnode with n_block = nBl } in
+  mainnode
+
+
+(* ======================================================================= *)
+
+(* Option to add "Var = read_int/float() | () = write_int/float(Var)"
+    instead of having inputs and outputs - needed for Lopht *)
+let option_generate_read_write_int_float = true
+
+let read_int_qname = { qual = Pervasives; name = "read_int" }
+let read_float_qname = { qual = Pervasives; name = "read_float" }
+let write_int_qname = { qual = Pervasives; name = "write_int" }
+let write_float_qname = { qual = Pervasives; name = "write_float" }
+
+(* If/then/else : res1 is return if ty is an int/bool, else res2 is returned *)
+let ifte_int ty res1 res2 = match ty with
+  | Tid x ->
+    if ((x.name = "int") || (x.name="bool")) then res1 else
+    if ((x.name="float") || (x.name="real")) then res2 else
+    failwith ("ifte_int : Tid type unknown " ^ x.name)
+  | _ -> failwith "ifte_int : type unknown"
+
+(* Find the instance of an input/output variable, from the naming convention *)
+(*    and produce the correct release/deadline tag from it *)
+let get_tag vd =
+  let strDelimEnd = Dirty_hyperperiod_expansion_Safran.strDelimEnd_varid in (* = "_sh" *)
+  let lstrSplit = Str.split (Str.regexp strDelimEnd) (Idents.name vd.v_ident) in
+  let strAftersh = List.hd (List.tl lstrSplit) in
+  let lstrAftersh = Str.split (Str.regexp "_") strAftersh in
+  let strNumInstance = List.hd lstrAftersh in
+  let inst = int_of_string strNumInstance in
+  "release(" ^ (string_of_int inst) ^ ") deadline(" ^ (string_of_int (inst+1)) ^ ")"
+
+(* Transform the input/output of the main node into local var + add equations read/write_int/float *)
+let add_read_write_int_float mainnode =
+  let linput = mainnode.n_input in
+  let loutput = mainnode.n_output in
+
+  (* var = read_int() / var = read_float() *)
+  let nEqs = List.fold_left (fun acc invd ->
+      let fname = ifte_int invd.v_type read_int_qname read_float_qname in
+      let apprhs = Hept_utils.mk_app (Efun (fname,[])) in
+      let erhsdesc = Eapp(apprhs, [], None) in
+      let erhs = Hept_utils.mk_exp erhsdesc invd.v_type ~linearity:Linearity.Ltop in
+
+      (* Tag *)
+      let realeasedeadline = get_tag invd in
+
+      let plhs = Evarpat invd.v_ident in
+      let eqdesc = Eeq (plhs, erhs) in
+      let nEqin = { eq_desc = eqdesc; eq_stateful = false;
+                   eq_inits = Lno_init; eq_annot = Some realeasedeadline; eq_loc = Location.no_location } in
+      nEqin::acc
+    ) mainnode.n_block.b_equs linput in
+
+  (* () = write_int(var) / () = write_float(var) *)
+  let void_type = Tprod [] in
+  let nEqs = List.fold_left (fun acc outvd ->
+      let fname = ifte_int outvd.v_type write_int_qname write_float_qname in
+      let expArg = Hept_utils.mk_exp (Evar outvd.v_ident) outvd.v_type ~linearity:Linearity.Ltop in
+      let lexpArg = expArg::[] in
+
+      let apprhs = Hept_utils.mk_app (Efun (fname,[])) in
+      let erhsdesc = Eapp(apprhs, lexpArg, None) in
+      let erhs = Hept_utils.mk_exp erhsdesc void_type ~linearity:Linearity.Ltop in
+
+      (* Tag *)
+      let realeasedeadline = get_tag outvd in
+
+      let plhs = Etuplepat [] in
+      let eqdesc = Eeq (plhs, erhs) in
+      let nEqout = { eq_desc = eqdesc; eq_stateful = false;
+                   eq_inits = Lno_init; eq_annot = Some realeasedeadline; eq_loc = Location.no_location } in
+      nEqout::acc
+    ) nEqs loutput in
+
+  (* Build the new main node *)
+  let nLoc = List.rev_append mainnode.n_output
+    (List.rev_append mainnode.n_input mainnode.n_block.b_local) in
+
+  let nBl = {mainnode.n_block with b_local = nLoc; b_equs = nEqs } in
+  let new_nd = { mainnode with n_input = []; n_output = []; n_block = nBl } in
+  new_nd
 
 
 (* ======================================================================= *)
@@ -549,12 +884,25 @@ let node nd =
 
   (* TODO DEBUG *)
   Format.fprintf (Format.formatter_of_out_channel stdout) "ping - subnodes built\n@?";
-
-  let new_nd = build_mainnode subnodesgr nd in
   
+  (* Creating the hashtable associating a input/output with a potential list of new scalar var decl *)
+  let numInOutVar = List.fold_left (fun acc (sn,_) -> 
+    acc + (List.length sn.n_input) + (List.length sn.n_output)
+  ) 0 subnodesgr in
+  let htblScalarVar = Hashtbl.create numInOutVar in
+
+  let (subnodesgr, htblScalarVar) = scalar_subnodes_interface false htblScalarVar subnodesgr in
+  let new_nd = build_mainnode subnodesgr nd in
+  let new_nd = scalar_mainnode htblScalarVar new_nd in
+  let new_nd = if (option_generate_read_write_int_float) then
+      add_read_write_int_float new_nd
+    else new_nd in
+
+  (* Don't add the "pre" subnodes, whose equation is already in the main node *)
   let subnodes = List.fold_left (fun acc (sn,gr) ->
    if (gr.is_pre) then acc else sn::acc
   ) [] subnodesgr in
+
   new_nd :: subnodes
 
 let program p =

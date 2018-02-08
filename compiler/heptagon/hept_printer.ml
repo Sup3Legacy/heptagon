@@ -251,11 +251,16 @@ and print_app ff (app, args) =
     | Ereinit ->
         fprintf ff "@[split@,%a@]" print_exp_tuple args
 
+let print_annot_eq ff annopt = match annopt with
+  | None -> ()
+  | Some annot -> fprintf ff "%s" annot
+
 let rec print_eq ff eq =
   print_stateful ff eq.eq_stateful;
   match eq.eq_desc with
     | Eeq(p, e) ->
-      fprintf ff "@[<2>%a =@ %a@]" print_pat_init (p, eq.eq_inits)  print_exp e
+      fprintf ff "@[<2>%a%a =@ %a@]" print_annot_eq eq.eq_annot
+          print_pat_init (p, eq.eq_inits)  print_exp e
     | Eautomaton(state_handler_list) ->
       fprintf ff "@[<v>@[<hv 2>automaton @ %a@]@,end@]"
         print_state_handler_list state_handler_list
