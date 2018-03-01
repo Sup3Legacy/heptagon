@@ -105,6 +105,7 @@ type eq = {
   eq_desc      : eqdesc;
   eq_stateful  : bool;
   eq_inits     : init;
+  eq_annot     : string option;
   eq_loc       : location; }
 
 and eqdesc =
