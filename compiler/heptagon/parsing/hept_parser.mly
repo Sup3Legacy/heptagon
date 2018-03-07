@@ -144,9 +144,26 @@ let rec get_dummy_st_expr t = match t with
             | 'b' -> mk_static_exp (Sbool false) no_location
             | _ -> failwith "unrecognized last char"
           in
-          Sarray_power (sexp_ty, [sexp_numarray])
-          
-        else failwith "get_dummy_st_expr - unrecognized type"
+          Sarray_power (sexp_ty, [sexp_numarray])  
+        else if ((String.sub name 0 7)="Matrix_") then
+          let l = String.length name in
+          let strSizes = String.sub name 7 (l-8) in
+          let lstrSplit = Str.split (Str.regexp "x") strSizes in
+          let (str_num_array1, str_num_array2) = Misc.assert_2 lstrSplit in
+          let num_array1 = int_of_string str_num_array1 in
+          let num_array2 = int_of_string str_num_array2 in
+          let sexp_numarray1 = mk_static_exp (Sint num_array1) no_location in
+          let sexp_numarray2 = mk_static_exp (Sint num_array2) no_location in
+
+          let sexp_ty = match (String.get name (l-1)) with
+            | 'i' -> mk_static_exp (Sint 0) no_location
+            | 'r' -> mk_static_exp (Sfloat 0.0) no_location
+            | 'b' -> mk_static_exp (Sbool false) no_location
+            | _ -> failwith "unrecognized last char"
+          in
+          Sarray_power(sexp_ty, sexp_numarray1::sexp_numarray2::[])
+        else
+          failwith ("get_dummy_st_expr - unrecognized type " ^ name)
     end
   | _ -> failwith "get_dummy_st_expr - Case should not happen."
 
@@ -230,6 +247,7 @@ let contain_star_type_var = ref false
 %token IMPORTED
 %token STATE_OPERATOR
 %token CONDACT
+%token CASE
 
 %right AROBASE
 %nonassoc DEFAULT
@@ -783,11 +801,32 @@ _exp:
       { Efby (v0, e) }
   | PRE exp
       { Epre (None, $2) }
+  | CASE varCase=simple_exp OF lcaseCond=l_case_cond
+      {
+        (* lcaseCond : (exp opt, exp) list / none = default  *)
+        let default_case = List.hd (List.fold_left (fun acc (expopt, exp) ->
+            if (expopt=None) then exp::acc else acc) [] lcaseCond) in
+        
+        let lcaseCond = List.fold_left (fun acc (expopt,exp) -> match expopt with
+            | None -> acc
+            | Some e -> (e, exp)::acc
+          ) [] lcaseCond in
+
+        (* Build the ifte *)
+        let exp_ife = List.fold_left (fun acc (expCond, expInstr) ->
+          (* Build "if (expCond) then expInstr else acc" *)
+          let appifte = mk_app Eifthenelse [] false in
+          let largifte = expCond::expInstr::acc::[] in
+          let edesc = Eapp (appifte, largifte) in
+          mk_exp edesc no_location
+
+          ) default_case lcaseCond in
+
+        exp_ife.e_desc
+      }
   /* condact to translate to when */
   | CONDACT LPAREN cond=IDENT COMMA args=exps RPAREN
-      {
-      	(* Condact asks for 3 arguments, however the last field is optional *)
-      	assert((List.length args)<=2);
+      { (* Condact asks for 3 arguments, however the last field is optional *)
       	assert((List.length args)>=1);
       	
       	let execTrue = List.hd args in
@@ -797,10 +836,17 @@ _exp:
       	if ((List.length args)=1) then  (* A single "when" is enough *)
       	  edesc_brTrue
       	else
-      	  begin
+          begin
       	  let exp_brTrue = mk_exp edesc_brTrue Location.no_location in
       	  
-      	  let execFalse = List.hd (List.tl args) in
+          let argsFalse = List.tl args in (* Note: might have more than one !!! *)
+          let execFalse =
+            if ((List.length argsFalse)=1) then List.hd argsFalse
+            else
+              let appFalse = mk_app Etuple [] false in
+              let edescFalse = Eapp (appFalse, argsFalse) in
+              mk_exp edescFalse Location.no_location
+          in
           let edesc_brFalse = Ewhen (execFalse, Q Initial.pfalse, cond) in (* "execFalse whenot cond" *)
       	  let exp_brFalse = mk_exp edesc_brFalse Location.no_location in
       	  
@@ -809,6 +855,7 @@ _exp:
       	  edesc_merge
       	  end
       }
+
   /* node call*/
   | n=node_name LPAREN args=exps RPAREN
       { Eapp(n, args) }
@@ -900,6 +947,11 @@ _exp:
       { mk_call Earray l }
   | LBRACKET l=separated_nonempty_list(SEMICOL, exp) RBRACKET
       { mk_call Earray l }
+;
+
+l_case_cond:
+  | DEFAULT COLON LPAREN exp RPAREN                  { (None, $4)::[] }
+  | simple_exp COLON LPAREN exp RPAREN l_case_cond   { (Some $1, $4)::$6 }
 ;
 
 call_params:
@@ -1060,8 +1112,8 @@ nonmt_params_signature:
 ;
 
 param_signature:
-  | IDENT COLON located_ty_ident ck=ck_annot { mk_arg (Some $1) $3 ck }
-  | located_ty_ident ck=ck_annot { mk_arg None $1 ck }
+  | param_qualifier IDENT COLON located_ty_ident ck=ck_annot { mk_arg (Some $2) $4 ck }
+  | param_qualifier located_ty_ident ck=ck_annot { mk_arg None $2 ck }
   | THREE_DOTS ck=ck_annot { mk_arg None (Tinvalid, Linearity.Ltop) ck }
 ;
 

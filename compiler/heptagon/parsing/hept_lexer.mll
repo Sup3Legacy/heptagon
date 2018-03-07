@@ -120,6 +120,7 @@ List.iter (fun (str,tok) -> Hashtbl.add keyword_table str tok) [
  "probe", PROBE;
  "imported", IMPORTED;
  "state_operator", STATE_OPERATOR;
+ "case", CASE;
 ]
 
 
