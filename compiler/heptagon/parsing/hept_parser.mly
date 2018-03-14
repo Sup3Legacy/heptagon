@@ -811,10 +811,14 @@ _exp:
             | None -> acc
             | Some e -> (e, exp)::acc
           ) [] lcaseCond in
-
+        
         (* Build the ifte *)
-        let exp_ife = List.fold_left (fun acc (expCond, expInstr) ->
-          (* Build "if (expCond) then expInstr else acc" *)
+        let exp_ife = List.fold_left (fun acc (expValCond, expInstr) ->
+          (* Build "if (varCase=expValCond) then expInstr else acc" *)
+          let appcond = mk_app (Efun (ToQ "=")) [] false in
+          let largcond = varCase::expValCond::[] in
+          let expCond = mk_exp (Eapp (appcond, largcond)) no_location in
+
           let appifte = mk_app Eifthenelse [] false in
           let largifte = expCond::expInstr::acc::[] in
           let edesc = Eapp (appifte, largifte) in
@@ -829,31 +833,25 @@ _exp:
       { (* Condact asks for 3 arguments, however the last field is optional *)
       	assert((List.length args)>=1);
       	
-      	let execTrue = List.hd args in
-      	
-        let edesc_brTrue = Ewhen (execTrue, Q Initial.ptrue, cond) in (* "execTrue when cond" *)
-      	
-      	if ((List.length args)=1) then  (* A single "when" is enough *)
-      	  edesc_brTrue
-      	else
-          begin
-      	  let exp_brTrue = mk_exp edesc_brTrue Location.no_location in
-      	  
-          let argsFalse = List.tl args in (* Note: might have more than one !!! *)
-          let execFalse =
-            if ((List.length argsFalse)=1) then List.hd argsFalse
-            else
-              let appFalse = mk_app Etuple [] false in
-              let edescFalse = Eapp (appFalse, argsFalse) in
-              mk_exp edescFalse Location.no_location
-          in
-          let edesc_brFalse = Ewhen (execFalse, Q Initial.pfalse, cond) in (* "execFalse whenot cond" *)
-      	  let exp_brFalse = mk_exp edesc_brFalse Location.no_location in
-      	  
-      	  let lbranchs = (Q Initial.ptrue, exp_brTrue)::(Q Initial.pfalse, exp_brFalse)::[] in
-      	  let edesc_merge = Emerge (cond, lbranchs) in
-      	  edesc_merge
-      	  end
+        let appifte = mk_app Eifthenelse [] false in
+
+        let exp_cond = mk_exp (Evar cond) Location.no_location in
+        let exp_then = List.hd args in
+
+        let argsFalse = List.tl args in
+
+        let exp_else = if ((List.length argsFalse)=1) then
+            List.hd argsFalse
+          else begin
+            let appTuple = mk_app Etuple [] false in
+            let edesc_else = Eapp (appTuple, argsFalse) in
+            mk_exp edesc_else Location.no_location
+            end
+        in
+        let largifte = exp_cond::exp_then::exp_else::[] in
+
+        let edesc_final = Eapp (appifte, largifte) in
+        edesc_final
       }
 
   /* node call*/

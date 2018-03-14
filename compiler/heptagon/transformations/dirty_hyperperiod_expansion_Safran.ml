@@ -298,6 +298,9 @@ let rec init_stexp_fby t = match t with
     | "string" -> Sstring ""
     | "bool" -> Sbool false
     | _ ->
+
+      (* TODO: do it in a cleaner way (using the type declarations) *)
+
       (* We use Safran type naming convention to get the type => DIRTY ! *)
       if ( (String.sub name 0 7)="Vector_") then
         let l = String.length name in
@@ -311,7 +314,25 @@ let rec init_stexp_fby t = match t with
           | _ -> failwith "unrecognized last char"
         in
         Sarray_power (sexp_ty, [sexp_numarray])
-      else failwith "get_dummy_st_expr - unrecognized type"
+      else if ((String.sub name 0 7)="Matrix_") then
+        let l = String.length name in
+        let strSizes = String.sub name 7 (l-8) in
+        let lstrSplit = Str.split (Str.regexp "x") strSizes in
+        let (str_num_array1, str_num_array2) = Misc.assert_2 lstrSplit in
+        let num_array1 = int_of_string str_num_array1 in
+        let num_array2 = int_of_string str_num_array2 in
+        let sexp_numarray1 = mk_static_exp (Tid Initial.pint) (Sint num_array1) in
+        let sexp_numarray2 = mk_static_exp (Tid Initial.pint) (Sint num_array2) in
+
+        let sexp_ty = match (String.get name (l-1)) with
+          | 'i' -> mk_static_exp (Tid Initial.pint) (Sint 0)
+          | 'r' -> mk_static_exp (Tid Initial.pfloat) (Sfloat 0.0)
+          | 'b' -> mk_static_exp (Tid Initial.pbool) (Sbool false)
+          | _ -> failwith "unrecognized last char"
+        in
+        Sarray_power(sexp_ty, sexp_numarray1::sexp_numarray2::[])
+      else
+        failwith ("get_dummy_st_expr - unrecognized type " ^ name)
     in
     mk_static_exp t se_desc
   | Tarray (ty, sexpr) ->

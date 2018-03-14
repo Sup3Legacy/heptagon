@@ -31,7 +31,7 @@ let rec get_array_const_size ty = match ty with
   | Tprod lty ->
     if (List.length lty = 1) then
       get_array_const_size (List.hd lty)
-    else None                        (* TODO: tuple management ? *)
+    else None   (* TODO: tuple management ? *)
   | Tid _ -> None                   (* Note: alias management managed previously *)
   | Tclasstype _ | Tinvalid -> None
 
@@ -92,6 +92,13 @@ let create_new_eq_from_tuple vidLhs mArrayVar lexp =
   in
   let lkVar = IdentMap.find vidLhs mArrayVar in
   
+
+  (* TODO: not 1D anymore => need to add the dimensions here ??? Or linearisation is fine? *)
+  (* Can do a max directly => ok *)
+  (* lexp => cf subfunction : nested *)
+
+  (* TODO: OTHER idea => instead of trying to get the 2D case directly, apply this transformation twice? *)
+
   (* We use the "k" to build the list in the right order *)
   let arrTemp = Array.make (List.length lkVar) None in
   let arrTemp = List.fold_left
@@ -190,9 +197,12 @@ let subst_array_var mArrayVar lequs =
 
 (* Pretty-printer for debug *)
 let print_mArrayVar ff mArrayVar =
+  let print_int ff i = Format.fprintf ff "%i" i in
   let rec print_lvarDecl ff lv = match lv with
     | [] -> ()
-    | (k, vd)::r -> Format.fprintf ff "(%i, %a), " k Global_printer.print_ident vd.v_ident;
+    | (lk, vd)::r -> Format.fprintf ff "(%a, %a), "
+          (Pp_tools.print_list print_int "(" " * " ")") lk
+          Global_printer.print_ident vd.v_ident;
        print_lvarDecl ff r
   in
   Format.fprintf ff "mArrayVar =\n%a\n@?"
@@ -269,16 +279,27 @@ let rec replace_equation eq nEq leq = match leq with
 
 
 let destroyArrays nd larrIdToDestroy =
-  let rec create_var_decl_aux arrId sizeArr tyArr = match sizeArr with
+
+  (* Creation of the new variable declaration *)
+  let rec get_new_names i name = match i with
     | 0 -> []
-    | _ -> begin
-      assert(sizeArr>0);
-      let strNameVarDec = (Idents.name arrId) ^ "__" ^ (string_of_int sizeArr) in
-      let nameVarDec = Idents.gen_var "arrayDestruct" (strNameVarDec) in
-      
+    | _ -> assert(i>0);
+      ( i, (name ^ "__" ^ (string_of_int i)) )
+        :: (get_new_names (i-1) name)
+  in
+  let get_all_var_names arrId sizeArr =
+    let name = Idents.name arrId in
+    let lname = get_new_names sizeArr name in
+    lname
+  in
+  let create_var_decl_aux arrId sizeArr tyArr =
+    let lnames = get_all_var_names arrId sizeArr in
+    let lvardecl = List.map (fun (sizeArr, strNameVarDec) ->
+      let nameVarDec = Idents.gen_var "arrayDestruct" strNameVarDec in
       let vardec = Hept_utils.mk_var_dec nameVarDec tyArr ~linearity:Linearity.Ltop in
-      (sizeArr, vardec)::(create_var_decl_aux arrId (sizeArr-1) tyArr)
-    end
+      (sizeArr, vardec)
+    ) lnames in
+    lvardecl
   in
   
   let bl = nd.n_block in
@@ -293,15 +314,21 @@ let destroyArrays nd larrIdToDestroy =
       let lnVarDecl = create_var_decl_aux arrVarDecl.v_ident sizeArr tyArr in
       
       let addlnVar = List.map (fun (_,vdec) -> vdec) lnVarDecl in
-      let lnVar = addlnVar@lnVar in
+      let lnVar = List.rev_append addlnVar lnVar in
       let mArrVar = IdentMap.add arrVarDecl.v_ident lnVarDecl mArrVar in
       
       (mArrVar,lnVar)
     ) (mArrayVar,[]) larrIdToDestroy in
   
-  
   (* DEBUG
   print_mArrayVar (Format.formatter_of_out_channel stdout) mArrayVar; *)
+  
+
+  (* TODO: adapt usage of mArrayVar (type did change) !!! *)
+
+
+
+
   
   (* Substitution of these variables in the program *)
   let nleqs = subst_array_var mArrayVar bl.b_equs in
@@ -324,7 +351,8 @@ let destroyArrays nd larrIdToDestroy =
 
   (* Replace all instances of the removed variables by one of the new ones *)
   let funs_subst_vid = { Hept_mapfold.defaults with
-      Hept_mapfold.global_funs = {Global_mapfold.defaults with Global_mapfold.var_ident = (var_ident_subst_array mArrayVar)}
+      Hept_mapfold.global_funs = {Global_mapfold.defaults
+                  with Global_mapfold.var_ident = (var_ident_subst_array mArrayVar)}
       } in
   let nd, _ = funs_subst_vid.node_dec funs_subst_vid mArrayVar nd in
 
@@ -510,21 +538,21 @@ let remove_if_used_as_output nd lArrVarDecl =
     lArrVarDecl
   in
   lArrVarDecl
-  (* TODO *)
 
 (* Pretty-printer for debugging *)
 let print_arrToDestroy ff arrToDestroy =
+  let print_int ff i = Format.fprintf ff "%i" i in
   Format.fprintf ff "[\n";
-  List.iter (fun (arrName, arrSize, arrTy) ->
-      Format.fprintf ff "\t* %a (%a ^ %i)\n"
+  List.iter (fun (arrName, larrSize, arrTy) ->
+      Format.fprintf ff "\t* %a (%a ^ %a)\n"
         Global_printer.print_ident arrName.v_ident
         Global_printer.print_type arrTy
-        arrSize
+        (Pp_tools.print_list print_int "(" " * " ")") larrSize
     ) arrToDestroy;
   Format.fprintf ff "]\n"
 
 
-(* Get the list of (array_name, size, ty) which can be removed *)
+(* Get the list of (array_name, size list, ty) which can be removed *)
 let findArrayToDestroy nd =
   let lArrVarDecl = get_local_arrays nd in
   let lArrVarDecl = remove_if_in_func_call_or_not_Eselect nd lArrVarDecl in
@@ -578,16 +606,22 @@ let aliasSubstitution tyAliasInfo nd =
 
   { nd with n_block = nbl; n_input = nlVarIn; n_output = nlVarOut }
 
-(* Main function *)
-let node tyAliasInfo nd =
-  let nd = aliasSubstitution tyAliasInfo nd in
+
+let rec findAndDestroyArrays nd =
   let arrToDestroy = findArrayToDestroy nd in
-  
+  if ((List.length arrToDestroy)=0) then nd else
   (* DEBUG
   Format.fprintf (Format.formatter_of_out_channel stdout) "arrToDestroy = %a\n@?"
     print_arrToDestroy arrToDestroy; *)
-  
   let nd = destroyArrays nd arrToDestroy in
+  findAndDestroyArrays nd
+  
+
+
+(* Main function *)
+let node tyAliasInfo nd =
+  let nd = aliasSubstitution tyAliasInfo nd in
+  let nd = findAndDestroyArrays nd in
   nd
 
 let program p =

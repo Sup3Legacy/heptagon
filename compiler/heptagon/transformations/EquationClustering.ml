@@ -602,6 +602,15 @@ let scalar_subnodes_interface isMainNode htblScalarVar subnodesgr =
           Hashtbl.replace htblScalarVar vd.v_ident (Some lnScalVar)
         end
     ) (List.rev_append lvdIn lvdOut);
+
+
+
+    
+    (* TODO: appel récursif à ce niveau pour gérer les matrices??? *)
+
+
+
+
   ) subnodesgr;
 
   (* Change the subnodes:                                 *)
