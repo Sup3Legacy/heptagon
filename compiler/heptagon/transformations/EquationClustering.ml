@@ -209,7 +209,9 @@ let extract_is_pre e =
 (* Initial construction of lgroupEq
    Note: inputs/outputs/locals not extracted*)
 let build_group_single_eq e =
-  let i = get_instance_num e in
+  let i = if (!Compiler_options.hyperperiod) then
+    get_instance_num e
+  else 0 in
   let wfz = extract_wfz e in
   let is_pre = extract_is_pre e in
   let n = new_group_name i wfz in
@@ -828,6 +830,9 @@ let get_tag vd =
   let inst = int_of_string strNumInstance in
   "release(" ^ (string_of_int inst) ^ ") deadline(" ^ (string_of_int (inst+1)) ^ ")"
 
+
+(* TODO: bug here !!! *)
+
 (* Transform the input/output of the main node into local var + add equations read/write_int/float *)
 let add_read_write_int_float mainnode =
   let linput = mainnode.n_input in
@@ -841,12 +846,16 @@ let add_read_write_int_float mainnode =
       let erhs = Hept_utils.mk_exp erhsdesc invd.v_type ~linearity:Linearity.Ltop in
 
       (* Tag *)
-      let realeasedeadline = get_tag invd in
+      let annotReleaseDeadline =
+        if (!Compiler_options.hyperperiod) then
+          Some (get_tag invd)
+        else None
+      in
 
       let plhs = Evarpat invd.v_ident in
       let eqdesc = Eeq (plhs, erhs) in
       let nEqin = { eq_desc = eqdesc; eq_stateful = false;
-                   eq_inits = Lno_init; eq_annot = Some realeasedeadline; eq_loc = Location.no_location } in
+                   eq_inits = Lno_init; eq_annot = annotReleaseDeadline ; eq_loc = Location.no_location } in
       nEqin::acc
     ) mainnode.n_block.b_equs linput in
 
@@ -860,14 +869,17 @@ let add_read_write_int_float mainnode =
       let apprhs = Hept_utils.mk_app (Efun (fname,[])) in
       let erhsdesc = Eapp(apprhs, lexpArg, None) in
       let erhs = Hept_utils.mk_exp erhsdesc void_type ~linearity:Linearity.Ltop in
-
+      
       (* Tag *)
-      let realeasedeadline = get_tag outvd in
-
+      let annotReleaseDeadline =
+        if (!Compiler_options.hyperperiod) then
+          Some (get_tag outvd)
+        else None
+      in
       let plhs = Etuplepat [] in
       let eqdesc = Eeq (plhs, erhs) in
       let nEqout = { eq_desc = eqdesc; eq_stateful = false;
-                   eq_inits = Lno_init; eq_annot = Some realeasedeadline; eq_loc = Location.no_location } in
+                   eq_inits = Lno_init; eq_annot = annotReleaseDeadline; eq_loc = Location.no_location } in
       nEqout::acc
     ) nEqs loutput in
 

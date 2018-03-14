@@ -106,6 +106,7 @@ let compile_program p =
   (* Ad-hoc pass for the Safran usecase, in order to explicit the activation boolean (first argument) as a "when" *)
   (* let p = pass "Activation exposal" !safran_handling ActivationExposal.program p pp in *)
   
+  let p = silent_pass "Elimination of pre" !preElimination EliminationPre.program p in
 
   (* Dirty hyperperiod expansion output for the Safran usecase *)
   let p = silent_pass "Dirty Hyperperiod expansion" !hyperperiod Dirty_hyperperiod_expansion_Safran.program p in

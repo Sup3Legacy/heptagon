@@ -174,6 +174,7 @@ let fill_correspondance_clock_array () =
 
 
 
+(* Name of the sequenceur for the Safran usecase (AS) *)
 let name_seq_call = "wfz02_00_seq"
 
 (* Auxilliary function which extract the list of variable id from a pattern *)
@@ -224,6 +225,16 @@ let find_seq_call_eq bl =
      | Some ck -> Hashtbl.add htblClocks vid ck
     ) lvidOut;
   htblClocks
+
+
+
+(* Name of the sequenceur for the ecas usecase *)
+let name_ecas_seq = ""
+
+
+(* TODO *)
+
+
 
 
 
@@ -300,6 +311,7 @@ let rec init_stexp_fby t = match t with
     | _ ->
 
       (* TODO: do it in a cleaner way (using the type declarations) *)
+
 
       (* We use Safran type naming convention to get the type => DIRTY ! *)
       if ( (String.sub name 0 7)="Vector_") then
