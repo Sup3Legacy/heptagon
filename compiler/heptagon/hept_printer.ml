@@ -80,12 +80,15 @@ let print_local_vars s ff l = match l with
       fprintf ff "@[<4>%a@]%s@\n" (print_list_r print_vd "var "";"";") l s
 
 let print_const_dec ff c =
-  if !Compiler_options.full_type_info then
+  (* Guillaume: We should always have type information here *)
+  fprintf ff "const %a : %a = %a@."
+    print_qualname c.c_name print_type c.c_type print_static_exp c.c_value
+  (* if !Compiler_options.full_type_info then
     fprintf ff "const %a : %a = %a@."
       print_qualname c.c_name print_type c.c_type print_static_exp c.c_value
   else
     fprintf ff "const %a = %a@."
-      print_qualname c.c_name print_static_exp c.c_value
+      print_qualname c.c_name print_static_exp c.c_value *)
 
 let print_ct_annot ff = function
   | None -> ()

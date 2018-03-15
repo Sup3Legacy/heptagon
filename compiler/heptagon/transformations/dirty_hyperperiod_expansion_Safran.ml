@@ -24,7 +24,6 @@ exception Equation_not_in_Eeq_form
 exception VariableNotFoundInHashTbl
 exception VariableNotFoundInLVarDec
 exception Empty_list
-exception Sequenceur_call_not_found (* The call to the sequenceur was not found *)
 
 (* Number of times we should unroll *)
 let num_period = 16
@@ -172,8 +171,6 @@ let fill_correspondance_clock_array () =
   Array.set correspondance_clock_safran 40 (Some (mk_clock_safran 16 11 true));
   Array.set correspondance_clock_safran 41 None         (* None = never used as a clock *)
 
-
-
 (* Name of the sequenceur for the Safran usecase (AS) *)
 let name_seq_call = "wfz02_00_seq"
 
@@ -182,10 +179,7 @@ let rec get_list_vid plhs = match plhs with
   | Etuplepat pl -> List.fold_left (fun acc p1 -> acc@(get_list_vid p1)) [] pl
   | Evarpat vid -> vid::[]
 
-let find_seq_call_eq bl =
-  (* Fill the correspondance array now (because it's the initialization) *)
-  fill_correspondance_clock_array ();
-
+let find_seq_call_eq htblClocks n_seq_call corr_clock bl =
   (* Search for the equation corresponding to the sequenceur *)
   let plhsargsOpt = List.fold_left (fun acc eq -> match eq.eq_desc with
       | Eeq (plhs, rhs) ->
@@ -194,21 +188,22 @@ let find_seq_call_eq bl =
         | Eapp (a, el, _) -> begin
             match a.a_op with
               | Efun (f,_) | Enode (f,_) ->
-                if (f.name = name_seq_call) then Some (plhs,el) else acc
+                if (f.name = n_seq_call) then Some (plhs,el) else acc
               | _ -> acc
             end
           | _ -> acc
         end
       | _ -> raise Equation_not_in_Eeq_form
   ) None bl.b_equs in
+
+  (* This sequenceur was not found -> no update of htblClocks *)
+  if (plhsargsOpt=None) then htblClocks else
   let (plhs, args) = match plhsargsOpt with
-    | None -> raise Sequenceur_call_not_found
+    | None -> failwith "Case just matched in the previous line"
     | Some plhsargs -> plhsargs
   in
   
   (* We match the name of the variable to the corresponding clock *)
-  let htblClocks = Hashtbl.create 43 in
-
   (* Matching the first argument of the sequenceur call *)
   let baseclockvarexp = List.hd args in
   let baseclockvarid = match baseclockvarexp.e_desc with
@@ -220,22 +215,63 @@ let find_seq_call_eq bl =
   (* Matching the outputs of the sequenceur call*)
   let lvidOut = get_list_vid plhs in
   List.iteri (fun k vid ->
-    match correspondance_clock_safran.(k) with
+    match corr_clock.(k) with
      | None -> ()
      | Some ck -> Hashtbl.add htblClocks vid ck
     ) lvidOut;
   htblClocks
 
 
+(* ~~~~~ *)
+
+(* Correspondance (from the equations of Wfz01_00_scm)
+  00  SCM_GDE1_B : bool ;               = [0 , 1 , 2 , 3 , 4 , 5 , 6 , 7 , 8 , 9 , 10 , 11 , 12 , 13 , 14 , 15] ; 
+  01  SCM_VSV1_B : bool ;               = [0 , 1 , 2 , 3 , 4 , 5 , 6 , 7 , 8 , 9 , 10 , 11 , 12 , 13 , 14 , 15] ; 
+  02  SCM_TFD2_B : bool ;               = [1 , 3 , 5 , 7 , 9 , 11 , 13 , 15] ; 
+  03  SCM_TBV2_B : bool ;               = [0 , 2 , 4 , 6 , 8 , 10 , 12 , 14] ; 
+  04  SCM_WFM2_B : bool ;               = [1 , 3 , 5 , 7 , 9 , 11 , 13 , 15] ;
+  05  SCM_VBV2_B : bool ;               = [0 , 2 , 4 , 6 , 8 , 10 , 12 , 14] ; 
+  06  SCM_PWM2_B : bool ;               = [0 , 2 , 4 , 6 , 8 , 10 , 12 , 14] ; 
+  07  SCM_GDE2_B : bool ;               = [0 , 2 , 4 , 6 , 8 , 10 , 12 , 14] ; 
+  08  SCM_DEM2_B : bool ;               = [0 , 2 , 4 , 6 , 8 , 10 , 12 , 14] ; 
+  09  SCM_REV8_B : bool ;               = [5 , 13] ; 
+  10  SCM_GDE8_B : bool ;               = [5 , 13] ; 
+  11  SCM_PWM8_B : bool ;               = [5 , 13] ; 
+  12  SCM_GDE16_B : bool ;              = 9
+  13  SCM_HPT16_B : bool ;              = 15
+
+  14  SCM_BLOP8_B : bool ;              = [0 , 8] ; 
+  15  SCM_BLOP2_B : bool ;              = [0 , 2 , 4 , 6 , 8 , 10 , 12 , 14] ; 
+  16  SCM_BLOP4_B : bool ;              = [0 , 4 , 8 , 12] ;
+  17  SCM_BLOP16_B : bool ;             = 0
+*)
+
 
 (* Name of the sequenceur for the ecas usecase *)
-let name_ecas_seq = ""
+let name_seq_call_ecas = "wfz01_00_scm"
 
+let correspondance_clock_ecas = Array.make 18 None
 
-(* TODO *)
+let fill_correspondance_clock_array_ecas () =
+  Array.set correspondance_clock_ecas 0 (Some (mk_clock_safran 1 0 false));
+  Array.set correspondance_clock_ecas 1 (Some (mk_clock_safran 1 0 false));
+  Array.set correspondance_clock_ecas 2 (Some (mk_clock_safran 2 1 false));
+  Array.set correspondance_clock_ecas 3 (Some (mk_clock_safran 2 0 false));
+  Array.set correspondance_clock_ecas 4 (Some (mk_clock_safran 2 1 false));
+  Array.set correspondance_clock_ecas 5 (Some (mk_clock_safran 2 0 false));
+  Array.set correspondance_clock_ecas 6 (Some (mk_clock_safran 2 0 false));
+  Array.set correspondance_clock_ecas 7 (Some (mk_clock_safran 2 0 false));
+  Array.set correspondance_clock_ecas 8 (Some (mk_clock_safran 2 0 false));
+  Array.set correspondance_clock_ecas 9 (Some (mk_clock_safran 8 5 false));
+  Array.set correspondance_clock_ecas 10 (Some (mk_clock_safran 8 5 false));
+  Array.set correspondance_clock_ecas 11 (Some (mk_clock_safran 8 5 false));
+  Array.set correspondance_clock_ecas 12 (Some (mk_clock_safran 16 9 false));
+  Array.set correspondance_clock_ecas 13 (Some (mk_clock_safran 16 15 false));
 
-
-
+  Array.set correspondance_clock_ecas 14 (Some (mk_clock_safran 8 0 false));
+  Array.set correspondance_clock_ecas 15 (Some (mk_clock_safran 2 0 false));
+  Array.set correspondance_clock_ecas 16 (Some (mk_clock_safran 4 0 false));
+  Array.set correspondance_clock_ecas 17 (Some (mk_clock_safran 16 0 false))
 
 
 (* ================================================================================ *)
@@ -677,7 +713,14 @@ let get_all_var_decl htbl = Hashtbl.fold (fun _ v acc -> v@acc) htbl []
 (* Main functions *)
 let node nd =
   (* Step 0: get the equation using Wfz02_00_seq.wfz02_00_seq and put it in relation to correspondance_clock_safran *)
-  let htblClocks = find_seq_call_eq nd.n_block in
+  let htblClocks = Hashtbl.create 43 in
+  (* Fill the correspondance array now (because it's the initialization) *)
+  fill_correspondance_clock_array ();
+  let htblClocks = find_seq_call_eq htblClocks name_seq_call correspondance_clock_safran nd.n_block in
+
+  (* Do the same with the clock from the ecas *)
+  fill_correspondance_clock_array_ecas ();
+  let htblClocks = find_seq_call_eq htblClocks name_seq_call_ecas correspondance_clock_ecas nd.n_block in
 
   (* Step 1: creates all instances of variables *)
   let varTblIn = Hashtbl.create (List.length nd.n_input) in

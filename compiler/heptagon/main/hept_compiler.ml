@@ -93,6 +93,13 @@ let compile_program p =
   let p = pass "Block" true Block.program p pp in
   
 
+  (* TODO: DEBUG (in order to merge the as and the ecas
+  if (true) then
+    let oc = open_out "all_ept_pre_merging.mls" in
+    Hept_printer.print oc p
+  else ();
+  *)
+
   
   (* Copy equation ("VarLoc1 = VarLoc2") removal *)
   let p = pass "Copy equation removal" !copyRemoval CopyRemoval.program p pp in
