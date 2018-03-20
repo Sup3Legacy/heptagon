@@ -132,6 +132,7 @@ let copyRemoval = ref false
 let arrayDestruct = ref false
 
 let preElimination = ref false
+let slicing_nominal = ref false
 
 let depgraphGeneration : string list ref = ref []
 let add_depgraph s = depgraphGeneration := s :: !depgraphGeneration
@@ -224,6 +225,7 @@ and doc_prune = "\t\tRemove the nodes unused by the main nodes."
 and doc_copyRemoval = "\t\tRemove the local variables defined through a copy equation."
 and doc_arrayDestruct = "\t\tDestruct constant-size arrays by introducing local variable for their cells."
 and doc_preElimination = "\t\tReplace all pre of the programs by a corresponding fby."
+and doc_slicingNom = "\t\tIgnore the initialization part of the program in order to remove fby whose right part is a constant."
 and doc_depgraphGeneration = "\t\tFile on which the dependence graphs of the nodes are printed-out."
 
 and doc_hyperperiod = "\t\tDirty hyperperiod extension (specific to Safran UC)."

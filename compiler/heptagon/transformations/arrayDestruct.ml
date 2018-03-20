@@ -32,8 +32,11 @@ let rec get_array_const_size ty = match ty with
     if (List.length lty = 1) then
       get_array_const_size (List.hd lty)
     else None   (* TODO: tuple management ? *)
-  | Tid _ -> None                   (* Note: alias management managed previously *)
+  | Tid tid -> None                   (* Note: alias management managed previously *)
   | Tclasstype _ | Tinvalid -> None
+
+(* TODO: does not detect matrices... :/ *)
+
 
 
 
@@ -257,7 +260,6 @@ let subst_array_var mArrayVar lequs =
 
 (* Pretty-printer for debug *)
 let print_mArrayVar ff mArrayVar =
-  let print_int ff i = Format.fprintf ff "%i" i in
   let rec print_lvarDecl ff lv = match lv with
     | [] -> ()
     | (k, vd)::r -> Format.fprintf ff "(%i, %a), "
@@ -525,8 +527,11 @@ let is_fun_call exp = match exp.e_desc with
   | _ -> false
 
 
-let is_const_exp exp = match exp.e_desc with
-  | Econst _ -> true
+let is_const_var exp = match exp.e_desc with
+  | Econst stexp -> begin match stexp.se_desc with
+      | Svar v -> true
+      | _ -> false
+    end
   | _ -> false
 
 
@@ -540,8 +545,8 @@ let rec extract_varId p = match p with
 
 let eqdesc_inspect funs acc eqd = match eqd with
   | Eeq (p, rhs) ->
-    (* Note: const which are arrays are not inlined (but could be) *)
-    if (is_fun_call rhs || is_const_exp rhs) then
+    (* Note: const var which are arrays are not inlined (but could be) *)
+    if (is_fun_call rhs || is_const_var rhs) then
       begin
       let _, nacc = Hept_mapfold.eqdesc funs acc eqd in   (* Recursion *)
       let n_remove = extract_varId p in                            (* Remove vars from the lhs *)
@@ -595,13 +600,12 @@ let remove_if_used_as_output nd lArrVarDecl =
 
 (* Pretty-printer for debugging *)
 let print_arrToDestroy ff arrToDestroy =
-  let print_int ff i = Format.fprintf ff "%i" i in
   Format.fprintf ff "[\n";
-  List.iter (fun (arrName, larrSize, arrTy) ->
-      Format.fprintf ff "\t* %a (%a ^ %a)\n"
+  List.iter (fun (arrName, arrSize, arrTy) ->
+      Format.fprintf ff "\t* %a (%a ^ %i)\n"
         Global_printer.print_ident arrName.v_ident
         Global_printer.print_type arrTy
-        (Pp_tools.print_list print_int "(" " * " ")") larrSize
+        arrSize
     ) arrToDestroy;
   Format.fprintf ff "]\n"
 
@@ -609,6 +613,9 @@ let print_arrToDestroy ff arrToDestroy =
 (* Get the list of (array_name, size list, ty) which can be removed *)
 let findArrayToDestroy nd =
   let lArrVarDecl = get_local_arrays nd in
+  (* DEBUG
+  Format.fprintf (Format.formatter_of_out_channel stdout) "lArrVarDecl = %a\n@?"
+    print_arrToDestroy lArrVarDecl; *)
   let lArrVarDecl = remove_if_in_func_call_or_not_Eselect nd lArrVarDecl in
   let lArrVarDecl = remove_if_used_as_output nd lArrVarDecl in
 
@@ -663,12 +670,17 @@ let aliasSubstitution tyAliasInfo nd =
 
 let rec findAndDestroyArrays nd =
   let arrToDestroy = findArrayToDestroy nd in
-  if ((List.length arrToDestroy)=0) then nd else
+  
+  (* DEBUG
+  Format.fprintf (Format.formatter_of_out_channel stdout) "arrToDestroy.length = %i\n@?"
+    (List.length arrToDestroy); *)
+  if ((List.length arrToDestroy)=0) then nd else (
   (* DEBUG
   Format.fprintf (Format.formatter_of_out_channel stdout) "arrToDestroy = %a\n@?"
     print_arrToDestroy arrToDestroy; *)
+
   let nd = destroyArrays nd arrToDestroy in
-  findAndDestroyArrays nd
+  findAndDestroyArrays nd)
   
 
 

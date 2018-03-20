@@ -206,11 +206,16 @@ let find_seq_call_eq htblClocks n_seq_call corr_clock bl =
   (* We match the name of the variable to the corresponding clock *)
   (* Matching the first argument of the sequenceur call *)
   let baseclockvarexp = List.hd args in
-  let baseclockvarid = match baseclockvarexp.e_desc with
-    | Evar vid -> vid
-    | _ -> failwith "Unexpected form of the first argument of the sequencer call"
+  let optBaseclockvarid = match baseclockvarexp.e_desc with
+    | Evar vid -> Some vid
+    | Econst se -> None (* Clock was already eliminated and is replaced by a boolean *)
+    | _ -> (
+      Format.eprintf "baseclockvarexp = %a\n@?" Hept_printer.print_exp baseclockvarexp;
+      failwith "Unexpected form of the first argument of the sequencer call")
   in
-  Hashtbl.add htblClocks baseclockvarid base_clock;
+  (match optBaseclockvarid with
+    | None -> ()
+    | Some baseclockvarid -> Hashtbl.add htblClocks baseclockvarid base_clock);
 
   (* Matching the outputs of the sequenceur call*)
   let lvidOut = get_list_vid plhs in
@@ -540,17 +545,28 @@ and elementary_func_call_duplEq varTables (lvardec:var_dec list) htblClocks lplh
 
     (* Checking if the first argument is a clock *)
     let first_arg = List.hd le in
-    let baseclockvarid = match first_arg.e_desc with
-      | Evar vid -> vid
+    let optbaseclockvarid = match first_arg.e_desc with
+      | Evar vid -> Some vid
+      | Econst se -> None  (* TODO: assert that "se" is true ? *)
       | _ -> failwith "Unexpected form of the first argument - program should be in normal form"
     in
+
+    (* Note: optbaseclockvarid = None ==> we are on the base clock => we can return "None" *)
+    match optbaseclockvarid with
+    | None -> None
+    | Some baseclockvarid ->
+    
     if (not (Hashtbl.mem htblClocks baseclockvarid)) then None else begin (* First argument is not a registered clock *)
     (* Automatically, the first argument is a boolean *)
 
     (* At that point, we are now sure that we have an elementary function here *)
     (* We now create the list of ldesc *)
     assert(eopt=None);
-    let ck = Hashtbl.find htblClocks baseclockvarid in
+    let ck = (match optbaseclockvarid with
+      | None -> base_clock (* true *)
+      | Some baseclockvarid -> Hashtbl.find htblClocks baseclockvarid
+    ) in
+
     let period = ck.period in
     let shift = ck.shift in
     let special_case = ck.special_case in

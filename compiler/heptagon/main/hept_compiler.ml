@@ -93,27 +93,34 @@ let compile_program p =
   let p = pass "Block" true Block.program p pp in
   
 
-  (* TODO: DEBUG (in order to merge the as and the ecas
+  (* Temp pass - make a real compiler option for that *)
+  let p = pass "Inline all constant" true InlineConstant.program p pp in
+  let p = silent_pass "Elimination of pre" !preElimination EliminationPre.program p in
+ 
+  (* Copy equation ("VarLoc1 = VarLoc2") removal *)
+  let p = pass "Copy equation removal" !copyRemoval CopyRemoval.program p pp in
+  
+  (* TODO: DEBUG (in order to merge the as and the ecas *)
   if (true) then
     let oc = open_out "all_ept_pre_merging.mls" in
     Hept_printer.print oc p
   else ();
-  *)
+  (* *)
 
-  
-  (* Copy equation ("VarLoc1 = VarLoc2") removal *)
-  let p = pass "Copy equation removal" !copyRemoval CopyRemoval.program p pp in
-  
   (* Array destruction + copy equation afterward to clean up *)
   let p = pass "Array destruction" !arrayDestruct ArrayDestruct.program p pp in
   let p = pass "Copy equation removal - post array destruction" !arrayDestruct CopyRemoval.program p pp in
+  let p = silent_pass "Slicing nominal" !slicing_nominal Slicing.program p in
+  let p = pass "Copy equation removal - post slicing" !slicing_nominal CopyRemoval.program p pp in
+
+  (* TODO: DEBUG (in order to merge the as and the ecas
+  if (true) then
+    let oc = open_out "all_ept_post_arrdestr.mls" in
+    Hept_printer.print oc p
+  else ();
+  *)
 
   (* let p = pass "Dependence graph generation" ((!depgraphGeneration)!=[]) DepGraphGeneration.program p pp in *)
-
-  (* Ad-hoc pass for the Safran usecase, in order to explicit the activation boolean (first argument) as a "when" *)
-  (* let p = pass "Activation exposal" !safran_handling ActivationExposal.program p pp in *)
-  
-  let p = silent_pass "Elimination of pre" !preElimination EliminationPre.program p in
 
   (* Dirty hyperperiod expansion output for the Safran usecase *)
   let p = silent_pass "Dirty Hyperperiod expansion" !hyperperiod Dirty_hyperperiod_expansion_Safran.program p in

@@ -35,10 +35,22 @@ let rec remove_all_list lToRemove res l = match l with
 let remove_list actbool l elem =
   let rec remove_list_aux res l elem = match l with
     | [] -> (false,res)
-    | h::t -> if (h=elem) then (true,res@t)
+    | h::t -> if (h=elem) then (true, List.rev_append res t)
       else remove_list_aux (h::res) t elem
   in
   if (actbool) then remove_list_aux [] l elem else (true,l)
+
+(* Remove all list for variable declaration, by looking at its vid to be sure *)
+let rec mem_list_vid vid lvd = match lvd with
+  | [] -> false
+  | h::t -> if (Idents.name h = Idents.name vid) then true
+    else mem_list_vid vid t
+
+let rec remove_all_list_vid lToRemove res l = match l with
+ | [] -> res
+ | h::t ->
+  if (mem_list_vid h lToRemove) then (remove_all_list_vid lToRemove res t)
+  else (remove_all_list_vid lToRemove (h::res) t)
 
 
 (* Get the last element of a list *)
@@ -101,8 +113,8 @@ let merge_group_eq eq2grTable gEq1 gEq2 =
        NOTE: global output are managed at the very end
     *)
     let lin12 = concat_no_dupl gEq1.l_inp gEq2.l_inp in
-    let lout12 = gEq1.l_out @ gEq2.l_out in
-    let lEqu3 = gEq1.lequ @ gEq2.lequ in
+    let lout12 = List.rev_append gEq1.l_out gEq2.l_out in
+    let lEqu3 = List.rev_append gEq1.lequ gEq2.lequ in
     let (name3, wfz3) = match gEq1.wfz with
       | None -> (gEq2.name, gEq2.wfz)
       | Some _ -> (gEq1.name, gEq1.wfz)
@@ -122,11 +134,14 @@ let merge_group_eq eq2grTable gEq1 gEq2 =
       else ((vid, lConsRem)::acc_out, acc_loc)
     ) ([],[]) lout12 in
 
+    let lloc3 = List.rev_append (List.rev_append gEq1.l_loc gEq2.l_loc) l_new_loc in
+    let lloc3 = remove_all_list_vid lin3 [] lloc3 in
+
     let gr3 = { name = name3; lequ = lEqu3;
       instance = instance3; wfz = wfz3; is_pre = false;
       l_inp = lin3;
       l_out = lout3;
-      l_loc = gEq1.l_loc @ gEq2.l_loc @ l_new_loc;
+      l_loc = lloc3;
     } in
 
     (* Update of eq2grTable *)
@@ -169,6 +184,10 @@ let get_lhs_rhs_eq e = match e.eq_desc with
   | Eeq (lhs, rhs) -> (lhs, rhs)
   | _ -> raise Equation_not_in_Eeq_form
 
+let is_Evar e = match e.e_desc with
+  | Evar vid -> Some vid
+  | _ -> None
+
 
 (* Examine the equation to figure out which instance of duplication we are talking about *)
 let get_instance_num e =
@@ -205,6 +224,16 @@ let extract_is_pre e =
   | Epre _ | Efby _ -> true
   | _ -> false
 
+let extract_is_ithe e =
+  let (_,rhs) = get_lhs_rhs_eq e in
+  match rhs.e_desc with
+  | Eapp (ap, lsexp, _) -> (
+      match ap.a_op with
+      | Eifthenelse -> Some (List.hd (List.tl lsexp)) (* Second element = then *)
+      | _ -> None
+    )
+  | _ -> None
+
 
 (* Initial construction of lgroupEq
    Note: inputs/outputs/locals not extracted*)
@@ -234,7 +263,7 @@ let extract_data_in eq =
 (* Get all the data_out of an equation *)
 let extract_data_out eq =
   let rec get_list_vid plhs = match plhs with
-    | Etuplepat pl -> List.fold_left (fun acc p1 -> acc@(get_list_vid p1)) [] pl
+    | Etuplepat pl -> List.fold_left (fun acc p1 -> List.rev_append acc (get_list_vid p1)) [] pl
     | Evarpat vid -> vid::[]
   in
   let (lhs, _) = get_lhs_rhs_eq eq in
@@ -244,6 +273,7 @@ let extract_data_out eq =
 let buildDataTable nd lgroupEq =
   let depTable = Hashtbl.create (List.length nd.n_block.b_local) in
   let eq2grTable = Hashtbl.create (List.length nd.n_block.b_equs) in
+
   let lgroupEq = List.fold_left (fun acc gr ->
     let eq = List.hd gr.lequ in
     let eqDataIn = extract_data_in eq in
@@ -265,13 +295,13 @@ let buildDataTable nd lgroupEq =
       with Not_found ->
        Hashtbl.add depTable nvarout (eq::[],[])
     ) eqDataOut;
-    let incomplete_dataOut = List.map (fun eq -> (eq,[])) eqDataOut in
+    let incomplete_dataOut = List.rev_map (fun eq -> (eq,[])) eqDataOut in
     { gr with l_inp = eqDataIn; l_out = incomplete_dataOut}::acc
   ) [] lgroupEq in
 
   (* Now that "depTable" is completed, we fill the missing dataOut info *)
-  let lgroupEq = List.map (fun grEq ->
-    let complete_dataOut = List.map
+  let lgroupEq = List.rev_map (fun grEq ->
+    let complete_dataOut = List.rev_map
       (fun (varOutId,_) ->
         let (_, infoCons) = Hashtbl.find depTable varOutId in
         (varOutId, infoCons)
@@ -289,6 +319,54 @@ let buildDataTable nd lgroupEq =
   (lgroupEq, depTable, eq2grTable)
 
 (* ------------- *)
+
+(* Heuristic #0.5 - applicable only to single groups *)
+let heuristic_ifte dataTable eq2grTable lgroupEq =
+  let rec heuristic_ifte_aux lgroupRes lgroupRem = match lgroupRem with
+    | [] -> lgroupRes 
+    | gr::rest -> begin
+      (* Heuristic should be applied only to single group *)
+      assert((List.length gr.lequ) = 1);
+      let eq = List.hd gr.lequ in
+
+      let opteThen = extract_is_ithe eq in
+      match opteThen with
+      | None -> heuristic_ifte_aux (gr::lgroupRes) rest
+      | Some eThen ->
+        (* Merge it with the group issuing the var from the "then" *)
+        match (is_Evar eThen) with
+        | None -> heuristic_ifte_aux (gr::lgroupRes) rest
+        | Some varIdThen ->
+        let (infoProd,_) = try Hashtbl.find dataTable varIdThen
+          with Not_found -> (
+            Format.eprintf "Cons/prod info not found, for varIdThen = %s\n@?" (Idents.name varIdThen);
+            raise GroupEqNotFound)
+        in
+        (* If the "then" variable is an input of the program => no merge *)
+        if (infoProd=[]) then heuristic_ifte_aux (gr::lgroupRes) rest else
+        let eqThen = List.hd infoProd in
+        let grToMerge = try Hashtbl.find eq2grTable eqThen
+          with Not_found -> (
+            Format.eprintf "Group of equation not found, for varIdThen = %s\n@?" (Idents.name varIdThen);
+            raise GroupEqNotFound)
+        in
+        (* Merge not allowed if the instance is different *)
+        if (merge_only_same_instance && (grToMerge.instance != gr.instance)) then
+          heuristic_ifte_aux (gr::lgroupRes) rest else
+        (* Merge not allowed if the other group is a pre *)
+        if (grToMerge.is_pre) then
+          heuristic_ifte_aux (gr::lgroupRes) rest else
+        (* Other non-merge cases are irrelevant because this equation is a ithe *)
+        let ngr = merge_group_eq eq2grTable gr grToMerge in
+
+        let (found, lgroupRes) = remove_list true lgroupRes grToMerge in
+        let (found, rest) = remove_list (not found) rest grToMerge in
+        assert(found);
+        heuristic_ifte_aux (ngr::lgroupRes) rest
+    end
+  in
+  heuristic_ifte_aux [] lgroupEq
+
 
 (* Heuristic #1 *)
 let heuristic_merge_single_use _ eq2grTable lgroupEq =
@@ -414,7 +492,7 @@ let group_equation nd =
   else ();
 
   (* Init *)
-  let lgroupEq = List.map (fun eq ->
+  let lgroupEq = List.rev_map (fun eq ->
     build_group_single_eq eq 
   ) nd.n_block.b_equs in
 
@@ -425,6 +503,14 @@ let group_equation nd =
 
   (* Other optims *)
   (* let (lgroupEq, dataTable, eq2grTable, nd) = optimize lgroupEq dataTable eq2grTable nd in *)
+
+  if (debug_info) then
+    Format.fprintf (Format.formatter_of_out_channel stdout) "lgroupEq.size (avant heuristique 0.5) = %i\n@?" (List.length lgroupEq)
+  else ();
+
+  (* Heuristic 0.5: if an equation is a ifte, merge its group with the "then" *)
+  (*    => Works in Safran case because these ifte are transformed "condact" *)
+  let lgroupEq = heuristic_ifte dataTable eq2grTable lgroupEq in
 
   if (debug_info) then
     Format.fprintf (Format.formatter_of_out_channel stdout) "lgroupEq.size (avant heuristique 1) = %i\n@?" (List.length lgroupEq)
@@ -441,12 +527,12 @@ let group_equation nd =
 
   (* We now deal with potential output variable of the program,
       which might have become a local variable of a group *)
-  let lglobalOut = List.map (fun vd -> vd.v_ident) nd.n_output in
-  let lgroupEq = List.map (fun grEq ->
+  let lglobalOut = List.rev_map (fun vd -> vd.v_ident) nd.n_output in
+  let lgroupEq = List.rev_map (fun grEq ->
       let (lvid_newout, lvid_loc) = List.partition
         (fun vid -> List.mem vid lglobalOut) grEq.l_loc in
-      let lvid_newout = List.map (fun vid -> (vid,[])) lvid_newout in
-      { grEq with l_out = lvid_newout@grEq.l_out; l_loc = lvid_loc}
+      let lvid_newout = List.rev_map (fun vid -> (vid,[])) lvid_newout in
+      { grEq with l_out = List.rev_append lvid_newout grEq.l_out; l_loc = lvid_loc}
     ) lgroupEq in
 
   lgroupEq
@@ -508,14 +594,14 @@ let get_eq_annot instance = "release(" ^ (string_of_int instance)
 let build_mainnode subnodesgr nd =
   (* Note: all equations are inside the subnodes/lgroupEq, expect for pre *)
   let lVarlocOutmainNode = List.fold_left (fun acc (snd,_) ->
-    (snd.n_output)@acc (* No duplication *)
+    List.rev_append (snd.n_output) acc (* No duplication *)
   ) [] subnodesgr in
   let lVarloc = remove_all_list nd.n_output [] lVarlocOutmainNode in
 
   let lequ = List.fold_left (fun acc (sn,geq) ->
     if (geq.is_pre) then
       (* Pre => we just put the equation at the top level *)
-      geq.lequ@acc
+      List.rev_append geq.lequ acc
     else
       (* rhs of equation *)
       let op_rhs = Efun (sn.n_name,[]) in
@@ -554,6 +640,7 @@ let build_mainnode subnodesgr nd =
 
 (* Change the input/output of the subnodes such that all of them are scalars *)
 (* Communications between subnodes is preserved by the renaming convention *)
+let option_generate_scalar_interfaces = true (* TODO *)
 
 (* Create an ordered list from the association list of (pos, elem for position pos) *)
 let get_list_vardecl_from_assoc_list lassoc =
@@ -620,7 +707,7 @@ let scalar_subnodes_interface isMainNode htblScalarVar subnodesgr =
   (*       and replace them with the new scalar vardecs   *)
   (*  - Add equations to rebuilt input arrays             *)
   (*  - Add equations to select elements of output arrays *)
-  let subnodesgr = List.map (fun (snode, grEq) ->
+  let subnodesgr = List.rev_map (fun (snode, grEq) ->
     (* Variable declaration management *)
     let linput = snode.n_input in
     let loutput = snode.n_output in
@@ -634,7 +721,7 @@ let scalar_subnodes_interface isMainNode htblScalarVar subnodesgr =
         | None -> vdIn::acc
         | Some lVarscal ->
           let lVarscal = List.map (fun (_,vd) -> vd) lVarscal in
-          List.rev_append lVarscal acc
+          List.append lVarscal acc
     ) [] linput in
 
     let lnoutput = List.fold_left (fun acc vdOut ->
@@ -646,7 +733,7 @@ let scalar_subnodes_interface isMainNode htblScalarVar subnodesgr =
         | None -> vdOut::acc
         | Some lVarscal ->
           let lVarscal = List.map (fun (_,vd) -> vd) lVarscal in
-          List.rev_append lVarscal acc
+          List.append lVarscal acc
     ) [] loutput in
 
     let lnlocal = if (isMainNode) then snode.n_block.b_local else
@@ -699,7 +786,7 @@ let scalar_subnodes_interface isMainNode htblScalarVar subnodesgr =
           neq::acc
     ) [] loutput in
 
-    let lnequs = nEqIn @ nEqOut @ snode.n_block.b_equs in
+    let lnequs = List.rev_append (List.rev_append nEqIn nEqOut) snode.n_block.b_equs in
 
     let nbl = { snode.n_block with b_local = lnlocal; b_equs = lnequs } in
     let nsnode = {snode with n_input = lninput; n_output = lnoutput; n_block = nbl } in
@@ -774,7 +861,7 @@ let scalar_mainnode htblScalarVar mainnode =
         assert((List.length lVarScalPre) = (List.length lVarScalLhs));
 
         (* We build the equations *)
-        let lEqs = List.map2 (fun varLhs varPre ->
+        let lEqs = List.rev_map2 (fun varLhs varPre ->
           let eConstScal = Hept_utils.mk_exp (Econst valstexpConst)
             tyElem ~linearity:Linearity.Ltop in
           let eScalVarrhs = Hept_utils.mk_exp (Evar varPre.v_ident)
@@ -804,7 +891,7 @@ let scalar_mainnode htblScalarVar mainnode =
 
 (* Option to add "Var = read_int/float() | () = write_int/float(Var)"
     instead of having inputs and outputs - needed for Lopht *)
-let option_generate_read_write_int_float = true
+let option_generate_read_write_int_float = true (* TODO *)
 
 let read_int_qname = { qual = Pervasives; name = "read_int" }
 let read_float_qname = { qual = Pervasives; name = "read_float" }
@@ -914,7 +1001,11 @@ let node nd =
 
   let (subnodesgr, htblScalarVar) = scalar_subnodes_interface false htblScalarVar subnodesgr in
   let new_nd = build_mainnode subnodesgr nd in
-  let new_nd = scalar_mainnode htblScalarVar new_nd in
+
+  (* TODO *)
+  let new_nd = if (option_generate_scalar_interfaces) then
+      scalar_mainnode htblScalarVar new_nd
+    else new_nd in
   let new_nd = if (option_generate_read_write_int_float) then
       add_read_write_int_float new_nd
     else new_nd in
@@ -931,8 +1022,8 @@ let program p =
   	 match pdesc with
   	   | Pnode nd ->
         let new_nd = node nd in
-        let new_pnode = List.map (fun nd1 -> Pnode nd1) new_nd in
-        new_pnode@acc
+        let new_pnode = List.rev_map (fun nd1 -> Pnode nd1) new_nd in
+        List.rev_append new_pnode acc
   	   | _ -> pdesc::acc
   	) [] p.p_desc in
 

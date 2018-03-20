@@ -252,6 +252,7 @@ let main () =
         "-copyRemoval", Arg.Set copyRemoval, doc_copyRemoval;
         "-arrayDestruct", Arg.Set arrayDestruct, doc_arrayDestruct;
         "-preElimination", Arg.Set preElimination, doc_preElimination;
+        "-slicingNom", Arg.Set slicing_nominal, doc_slicingNom;
 
         "-depGraph", Arg.String add_depgraph, doc_depgraphGeneration;
 
