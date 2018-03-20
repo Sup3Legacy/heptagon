@@ -331,7 +331,7 @@ let rec search_equation vid leqs =
     | _ -> false
   in
   match leqs with
-  | [] -> failwith "search_equation : equation not found"
+  | [] -> failwith ("search_equation for vid " ^ (Idents.name vid) ^ ": equation not found")
   | h::t ->
     if (eq_defines vid h) then h
     else search_equation vid t
@@ -347,7 +347,7 @@ let destroyArrays nd larrIdToDestroy =
   let rec get_new_names i name = match i with
     | 0 -> []
     | _ -> assert(i>0);
-      ( i, (name ^ "__" ^ (string_of_int i)) )
+      ( i, (name ^ "_" ^ (string_of_int i)) )
         :: (get_new_names (i-1) name)
   in
   let get_all_var_names arrId sizeArr =

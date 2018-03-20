@@ -666,7 +666,7 @@ let scalar_subnodes_interface isMainNode htblScalarVar subnodesgr =
     | 0 -> []
     | _ -> begin
       assert(sizeArr>0);
-      let strNameVarDec = (Idents.name arrId) ^ "__" ^ (string_of_int sizeArr) in
+      let strNameVarDec = (Idents.name arrId) ^ "_" ^ (string_of_int sizeArr) in
       let nameVarDec = Idents.gen_var "equationClustering" (strNameVarDec) in
       
       let vardec = Hept_utils.mk_var_dec nameVarDec tyArr ~linearity:Linearity.Ltop in
@@ -854,7 +854,7 @@ let scalar_mainnode htblScalarVar mainnode =
         with Not_found -> failwith ("varIdPre = " ^ (Idents.name varIdPre) ^ " not found")
         in
         let lIndVarScalPre = match optlIndVarScalPre with
-          | None -> failwith ("Variable " ^ (Idents.name varIdlhs) ^ "is associated with nothing in htblScalarVar");
+          | None -> failwith ("Variable " ^ (Idents.name varIdPre) ^ "is associated with nothing in htblScalarVar");
           | Some l -> l
         in
         let lVarScalPre = get_list_vardecl_from_assoc_list lIndVarScalPre in
@@ -1002,13 +1002,14 @@ let node nd =
   let (subnodesgr, htblScalarVar) = scalar_subnodes_interface false htblScalarVar subnodesgr in
   let new_nd = build_mainnode subnodesgr nd in
 
-  (* TODO *)
   let new_nd = if (option_generate_scalar_interfaces) then
       scalar_mainnode htblScalarVar new_nd
     else new_nd in
   let new_nd = if (option_generate_read_write_int_float) then
       add_read_write_int_float new_nd
     else new_nd in
+
+  
 
   (* Don't add the "pre" subnodes, whose equation is already in the main node *)
   let subnodes = List.fold_left (fun acc (sn,gr) ->
