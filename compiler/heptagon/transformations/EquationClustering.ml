@@ -333,6 +333,18 @@ let heuristic_ifte dataTable eq2grTable lgroupEq =
       match opteThen with
       | None -> heuristic_ifte_aux (gr::lgroupRes) rest
       | Some eThen ->
+
+
+        (* TODO: modify heuristic here => no merge if double-var ? => nope... :/ *)
+        (*    grep => else is always a constant *)
+        (* ===> issue if with the variable, which might depend (on a cyclic fashion) with the then? *)
+        (* NOTE: no obvious criterion on which one to fold => DESACTIVATE THAT OPTIM BY DEFAULT *)
+
+
+
+
+
+
         (* Merge it with the group issuing the var from the "then" *)
         match (is_Evar eThen) with
         | None -> heuristic_ifte_aux (gr::lgroupRes) rest
@@ -510,7 +522,8 @@ let group_equation nd =
 
   (* Heuristic 0.5: if an equation is a ifte, merge its group with the "then" *)
   (*    => Works in Safran case because these ifte are transformed "condact" *)
-  let lgroupEq = heuristic_ifte dataTable eq2grTable lgroupEq in
+  (* let lgroupEq = heuristic_ifte dataTable eq2grTable lgroupEq in *)
+  (* Desactivated - not valid (causality issues afterward) *)
 
   if (debug_info) then
     Format.fprintf (Format.formatter_of_out_channel stdout) "lgroupEq.size (avant heuristique 1) = %i\n@?" (List.length lgroupEq)

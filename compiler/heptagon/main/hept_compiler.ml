@@ -97,8 +97,8 @@ let compile_program p =
   let p = pass "Inline all constant" true InlineConstant.program p pp in
   
   
-  (* For script adaptation with Lopht ===> Should be disabled afterward
-  let p = silent_pass "Variable renaming" true Varname_change.program p in *)
+  (* For script adaptation with Lopht ===> Should be disabled afterward *)
+  (* let p = silent_pass "Variable renaming" true Varname_change.program p in *)
 
 
   let p = silent_pass "Elimination of pre" !preElimination EliminationPre.program p in
@@ -121,12 +121,12 @@ let compile_program p =
   let p = silent_pass "Slicing nominal" !slicing_nominal Slicing.program p in
   let p = pass "Copy equation removal - post slicing" !slicing_nominal CopyRemoval.program p pp in
 
-  (* TODO: DEBUG (in order to merge the as and the ecas
+  (* TODO: DEBUG (in order to merge the as and the ecas *)
   if (true) then
     let oc = open_out "all_ept_post_arrdestr.mls" in
     Hept_printer.print oc p
   else ();
-  *)
+  (* *)
 
   (* let p = pass "Dependence graph generation" ((!depgraphGeneration)!=[]) DepGraphGeneration.program p pp in *)
 
@@ -136,9 +136,17 @@ let compile_program p =
   let p = silent_pass "Remove unused locvar" !removeUnusedLocVar RemoveUnusedLocVar.program p in
   let p = silent_pass "Copy equation removal" !copyEqRemoval CopyRemoval.program p in
   
-  (* Hept_printer.print stdout p; *)
+
   let p = pass "Equation clustering" !safran_clustering EquationClustering.program p pp in
   
+  (* TODO DEBUG: still causal at that point *)
+
+  
+  (* TODO DEBUG Causality check *)
+  let p = silent_pass "Causality check" !causality Causality.program p in
+  Format.fprintf (Format.formatter_of_out_channel stdout) "CAUSALITY PASSED\n@?";
+  
+
   (* Note: should not be activated outside of debugging *)
   if (!safran_clustering) then
     let oc = open_out "all_mls_clustered.mls" in
