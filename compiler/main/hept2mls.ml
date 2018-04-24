@@ -226,19 +226,20 @@ let translate_typeparamdecs { Heptagon.t_nametype = tname; Heptagon.t_nameclass 
 
 let node n =
   enter_node n.Heptagon.n_name;
-  { n_name = n.Heptagon.n_name;
+  let n_node = { n_name = n.Heptagon.n_name;
     n_stateful = n.Heptagon.n_stateful;
     n_unsafe = n.Heptagon.n_unsafe;
     n_typeparams = List.map translate_typeparamdecs n.Heptagon.n_typeparamdecs;
     n_input = List.map translate_var n.Heptagon.n_input;
     n_output = List.map translate_var n.Heptagon.n_output;
     n_contract = translate_contract n.Heptagon.n_contract;
-    n_local = List.map translate_var n.Heptagon.n_block.Heptagon.b_local;
+    n_local = List.rev_map translate_var n.Heptagon.n_block.Heptagon.b_local;
     n_equs = List.map translate_eq n.Heptagon.n_block.Heptagon.b_equs;
     n_loc = n.Heptagon.n_loc ;
     n_params = n.Heptagon.n_params;
     n_param_constraints = n.Heptagon.n_param_constraints;
-    n_mem_alloc = [] }
+    n_mem_alloc = [] } in
+  n_node
 
 
 let typedec
