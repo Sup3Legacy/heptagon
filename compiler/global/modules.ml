@@ -291,7 +291,7 @@ let _dep_qualify name =
     _qualify g_env.values name
   with Not_found ->
     unknown_nodes := name :: !unknown_nodes;
-    { qual = Pervasives; name = name }
+    { qual = LocalModule; name = name }
 
 let qualify_value name =
   if !calc_deps then _dep_qualify name

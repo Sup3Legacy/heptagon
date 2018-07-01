@@ -50,36 +50,35 @@ module IdentMap = Map.Make (struct type t = var_ident let compare = compare end)
 (* A[k] -> A_k if A is a valid to-be-destroyed array *)
 let edesc_subst_array mArrayVar funs acc ed = match ed with
   | Eapp (ap, lsexpr, _) -> begin
-     match ap.a_op with
-       | Eselect ->          (* We have a A[i] here ! *)
-         begin
-         let expArr = assert_1 lsexpr in
-         let stExpIndex = assert_1 ap.a_params in
-         
-         let arrId = match expArr.e_desc with
-           | Evar vId -> vId
-           | _ -> failwith "ArrayDestruct: subexpression of a Eselect is not a variable."
-         in
-         
-         (* If the array is not to be destroyed... *)
-         if (not (IdentMap.mem arrId mArrayVar)) then
-           Hept_mapfold.edesc funs acc ed
-         else
-         
-         let index = match stExpIndex.se_desc with
-           | Sint i -> i
-           | _ -> failwith "ArrayDestruct: parameter of a Eselect is not an integer."
-         in
-         (* Getting the associated local variable *)
-         try
-           let lAssoc = IdentMap.find arrId mArrayVar in
-           let varDecl = List.assoc index lAssoc in
-           (Evar varDecl.v_ident), acc
-         with Not_found ->
-           failwith ("ArrayDestruct: " ^ (Idents.name arrId) ^
-           "[" ^ (string_of_int index) ^ "] does not have a corresponding entry in the map.")
-         end
-       | _ -> Hept_mapfold.edesc funs acc ed
+    match ap.a_op with
+    | Eselect ->          (* We have a A[i] here ! *)
+      begin
+        let expArr = assert_1 lsexpr in
+        let stExpIndex = assert_1 ap.a_params in
+        match expArr.e_desc with
+        | Econst _ -> Hept_mapfold.edesc funs acc ed (* Exported const here => do nothing here *)
+        | Evar arrId -> begin
+          (* If the array is not to be destroyed... *)
+          if (not (IdentMap.mem arrId mArrayVar)) then
+            Hept_mapfold.edesc funs acc ed
+          else
+          
+          let index = match stExpIndex.se_desc with
+            | Sint i -> i
+            | _ -> failwith "ArrayDestruct: parameter of a Eselect is not an integer."
+          in
+          (* Getting the associated local variable *)
+          try
+            let lAssoc = IdentMap.find arrId mArrayVar in
+            let varDecl = List.assoc index lAssoc in
+            (Evar varDecl.v_ident), acc
+          with Not_found ->
+            failwith ("ArrayDestruct: " ^ (Idents.name arrId) ^
+            "[" ^ (string_of_int index) ^ "] does not have a corresponding entry in the map.")
+          end
+        | _ -> failwith "ArrayDestruct: subexpression of a Eselect is not a variable."
+      end
+    | _ -> Hept_mapfold.edesc funs acc ed
     end
   | _ -> Hept_mapfold.edesc funs acc ed
 
@@ -170,45 +169,64 @@ let eq_subst_array mArrayVar funs acc eq =
                 let (econd, ethen, eelse) = Misc.assert_3 lexp in
                 let numDupl = List.length lkVarLhs in
 
-                (* Because of normalization, ethen and eelse must be Evar (not Econst?) *)
+
+                (* Because of normalization, ethen and eelse must be Evar or Econst *)
                 (* Depending on if ethen/eelse are array to be destroyed or not,
                     we get either the corresponding new scalar variable or build an array access *)
-                let vIdEthen = assert_Evar ethen in
-                let nlethen = if (IdentMap.mem vIdEthen mArrayVar) then
-                    let lkVarThen = IdentMap.find vIdEthen mArrayVar in
-                    let lvidThen = create_list_from_idelem_list lkVarThen in
-                    List.map (fun vid ->
-                      Hept_utils.mk_exp (Evar vid) tyScal ~linearity:rhs.e_linearity
-                    ) lvidThen
-                  else
-                    List.mapi (fun i _ ->
-                      let ihandl = if (!Compiler_options.safran_handling) then (i+1) else i in
-                      let se_i = Types.mk_static_exp Initial.tint (Sint ihandl) in
-                      let apThen = Hept_utils.mk_app Eselect ~params:(se_i::[]) in
-                      let arrExp = Hept_utils.mk_exp (Evar vIdEthen) rhs.e_ty ~linearity:rhs.e_linearity in
-                      let eThen = Hept_utils.mk_exp (Eapp (apThen, arrExp::[], None))
+                let nlethen = match ethen.e_desc with
+                  | Econst stexp ->
+                    List.map (fun _ ->
+                      let eThenConst = Hept_utils.mk_exp (Econst stexp)
                         tyScal ~linearity:rhs.e_linearity in
-                      eThen
+                      eThenConst
                     ) (duplicate_k_times [] numDupl)
+                  | Evar vIdEthen -> begin
+                    if (IdentMap.mem vIdEthen mArrayVar) then
+                      let lkVarThen = IdentMap.find vIdEthen mArrayVar in
+                      let lvidThen = create_list_from_idelem_list lkVarThen in
+                      List.map (fun vid ->
+                        Hept_utils.mk_exp (Evar vid) tyScal ~linearity:rhs.e_linearity
+                      ) lvidThen
+                    else
+                      List.mapi (fun i _ ->
+                        let ihandl = if (!Compiler_options.safran_handling) then (i+1) else i in
+                        let se_i = Types.mk_static_exp Initial.tint (Sint ihandl) in
+                        let apThen = Hept_utils.mk_app Eselect ~params:(se_i::[]) in
+                        let arrExp = Hept_utils.mk_exp (Evar vIdEthen) rhs.e_ty ~linearity:rhs.e_linearity in
+                        let eThen = Hept_utils.mk_exp (Eapp (apThen, arrExp::[], None))
+                          tyScal ~linearity:rhs.e_linearity in
+                        eThen
+                      ) (duplicate_k_times [] numDupl)
+                  end
+                  | _ -> failwith "arrayDestruct - ifte : Not a Evar or a Econst failed"
                 in
 
-                let vIdEelse = assert_Evar eelse in
-                let nleelse = if (IdentMap.mem vIdEelse mArrayVar) then
-                    let lkVarElse = IdentMap.find vIdEelse mArrayVar in
-                    let lvidElse = create_list_from_idelem_list lkVarElse in
-                    List.map (fun vid ->
-                      Hept_utils.mk_exp (Evar vid) tyScal ~linearity:rhs.e_linearity
-                    ) lvidElse
-                  else
-                    List.mapi (fun i _ ->
-                      let ihandl = if (!Compiler_options.safran_handling) then (i+1) else i in
-                      let se_i = Types.mk_static_exp Initial.tint (Sint ihandl) in
-                      let apElse = Hept_utils.mk_app Eselect ~params:(se_i::[]) in
-                      let arrExp = Hept_utils.mk_exp (Evar vIdEelse) rhs.e_ty ~linearity:rhs.e_linearity in
-                      let eElse = Hept_utils.mk_exp (Eapp (apElse, arrExp::[], None))
+                let nleelse = match eelse.e_desc with
+                  | Econst stexp ->
+                    List.map (fun _ ->
+                      let eElseConst = Hept_utils.mk_exp (Econst stexp)
                         tyScal ~linearity:rhs.e_linearity in
-                      eElse
+                      eElseConst
                     ) (duplicate_k_times [] numDupl)
+                  | Evar vIdEelse -> begin
+                    if (IdentMap.mem vIdEelse mArrayVar) then
+                      let lkVarElse = IdentMap.find vIdEelse mArrayVar in
+                      let lvidElse = create_list_from_idelem_list lkVarElse in
+                      List.map (fun vid ->
+                        Hept_utils.mk_exp (Evar vid) tyScal ~linearity:rhs.e_linearity
+                      ) lvidElse
+                    else
+                      List.mapi (fun i _ ->
+                        let ihandl = if (!Compiler_options.safran_handling) then (i+1) else i in
+                        let se_i = Types.mk_static_exp Initial.tint (Sint ihandl) in
+                        let apElse = Hept_utils.mk_app Eselect ~params:(se_i::[]) in
+                        let arrExp = Hept_utils.mk_exp (Evar vIdEelse) rhs.e_ty ~linearity:rhs.e_linearity in
+                        let eElse = Hept_utils.mk_exp (Eapp (apElse, arrExp::[], None))
+                          tyScal ~linearity:rhs.e_linearity in
+                        eElse
+                      ) (duplicate_k_times [] numDupl)
+                  end
+                  | _ -> failwith "arrayDestruct - ifte : Not a Evar or a Econst failed"
                 in
 
                 let nlrhs = List.map2 (fun nethen neelse ->
@@ -227,7 +245,6 @@ let eq_subst_array mArrayVar funs acc eq =
          else eq, eq::acc
       end
     | _ -> eq, eq::acc
-
 
 
 let var_ident_subst_array mArrayVar funs acc vid =

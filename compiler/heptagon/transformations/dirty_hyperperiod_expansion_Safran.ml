@@ -14,7 +14,6 @@
 
   Input/output management => Also duplicate them
   *)
-open Idents
 open Names
 open Types
 open Heptagon
@@ -24,6 +23,12 @@ exception Equation_not_in_Eeq_form
 exception VariableNotFoundInHashTbl
 exception VariableNotFoundInLVarDec
 exception Empty_list
+
+
+(* Activation of the nominal slicing: assume that Initcmpl_B = 1, to simplify clocks
+  => allow to consider output of seq/scm as stream of constants *)
+let nominal_slicing = true
+
 
 (* Number of times we should unroll *)
 let num_period = 16
@@ -47,13 +52,24 @@ let rec search_in_lvardec str lvid = match lvid with
     search_in_lvardec str t
 
 
+let get_lhs_rhs_eq e = match e.eq_desc with
+  | Eeq (lhs, rhs) -> (lhs, rhs)
+  | _ -> raise Equation_not_in_Eeq_form
+
+(* Function which get the first variable of a pattern *)
+(* Quick assumption: no "Etyplepat []" randomly in the tree of pattern *)
+let rec getfirstFromPat p = match p with
+  | Evarpat vid -> vid
+  | Etuplepat pl -> getfirstFromPat (List.hd pl)
+
+
 (* Function which creates the num_period instances of a var *)
 let create_all_var_instances var num_period =
   let rec create_all_var_instances_aux var i =
     if (i=num_period) then [] else
     let tl_res = create_all_var_instances_aux var (i+1) in
     let nVardec = Hept_utils.mk_var_dec ~last:var.v_last ~clock:Clocks.Cbase (* NOTE! do not do a copy here *)
-    (name_varid_instances var.v_ident i) var.v_type ~linearity:var.v_linearity in
+      (name_varid_instances var.v_ident i) var.v_type ~linearity:var.v_linearity in
     nVardec :: tl_res
   in
   create_all_var_instances_aux var 0
@@ -71,6 +87,15 @@ type clock_safran = {
 let mk_clock_safran p s init = {period = p; shift = s; got_InitCmpl_B = init; special_case = 0}
 
 let mk_clock_safran_special_case spcase = {period = 16; shift = 0; got_InitCmpl_B=false; special_case = spcase}
+
+(* Is the clock currently active on instance number "instNum", starting from 0 *)
+(* Nominal => we ignore got_InitCmpl_B*)
+let clk_is_active_nominal clk instNum = match clk.special_case with
+  | 0 -> (clk.shift==(instNum mod clk.period))   (* Normal case *)
+  | 1 -> false
+  | 2 -> ((instNum mod 16)==9) (* 9 mod 16 *)
+  | _ -> failwith "clk_is_active_nominal: special_case unknown"
+
 
 (* Correspondance (from the equations of Wfz02_00_seq.wfz02_00_seq)
   00   SEQ_NumHTR_I : int ;             = OSASI_MFCnt_I
@@ -208,7 +233,7 @@ let find_seq_call_eq htblClocks n_seq_call corr_clock bl =
   let baseclockvarexp = List.hd args in
   let optBaseclockvarid = match baseclockvarexp.e_desc with
     | Evar vid -> Some vid
-    | Econst se -> None (* Clock was already eliminated and is replaced by a boolean *)
+    | Econst _ -> None (* Clock was already eliminated and is replaced by a boolean *)
     | _ -> (
       Format.eprintf "baseclockvarexp = %a\n@?" Hept_printer.print_exp baseclockvarexp;
       failwith "Unexpected form of the first argument of the sequencer call")
@@ -277,6 +302,86 @@ let fill_correspondance_clock_array_ecas () =
   Array.set correspondance_clock_ecas 15 (Some (mk_clock_safran 2 0 false));
   Array.set correspondance_clock_ecas 16 (Some (mk_clock_safran 4 0 false));
   Array.set correspondance_clock_ecas 17 (Some (mk_clock_safran 16 0 false))
+
+
+(* Build the 16 constant edesc produced for the sequenceur of the AS/ECAS *)
+(* is_as : boolean to know if we are in the case of the AS (in order to generate the special case for its first arg) *)
+let get_nominal_slicing_seq lplhs corr_array is_as =
+  let rec get_nominal_slicing_seq_aux lplhs corr_array is_as res instNum =
+    if (instNum<0) then res else   (* Termination condition *)
+
+    (* Build the constants of the tuple *)
+    let lsexpTuple = Array.fold_right (fun elem acc ->
+      let nelem = (match elem with
+      | None -> mk_static_exp Initial.tbool (Sbool false)  (* Will be changed for the AS first argument *)
+      | Some clk ->
+        (* Slicing nominal: assume that Initcmpl_B = 1 always, and that Seq_EIUInitInProgress = false *)
+        (* Here: get the value of the clock for the instance number instNum *)
+        if (clk_is_active_nominal clk instNum) then
+          mk_static_exp Initial.tbool (Sbool true)
+        else
+          mk_static_exp Initial.tbool (Sbool false)
+      ) in
+      nelem::acc
+    ) corr_array [] in
+    let lexpTuple = List.map (fun sexp ->
+      Hept_utils.mk_exp (Econst sexp) Initial.tbool ~linearity:Linearity.Ltop
+    ) lsexpTuple in
+
+
+    (* First argument of the AS is an integer which is a counter (num of cycle) *)
+    (* We build a fby/adder here, while begin careful about propagating between the 16 instances *)
+    let lexpTuple = if (is_as) then
+      (* Change the first argument to "var = 0 fby (var+1)", with hyperperiod expansion *)
+      (* Use the variable name already in lplhs for that (Etuplepat => get first var of pattern / lplhs is of size 16) *)
+      let edescCounter = if (instNum=0) then
+          let plhsinstLast = List.nth lplhs (num_period-1) in
+          let edescRecvar = Evar (getfirstFromPat plhsinstLast) in
+          let expRecVar = Hept_utils.mk_exp edescRecvar Initial.tint ~linearity:Linearity.Ltop in
+
+          let edescOne = Econst (mk_static_exp Initial.tint (Sint 1)) in
+          let expOne = Hept_utils.mk_exp edescOne Initial.tint ~linearity:Linearity.Ltop in
+
+          let lsexpPlusOne = expRecVar::expOne::[] in
+          let nameAddition = { qual = Pervasives; name = "+" } in
+          let edescPlusOne = Eapp (Hept_utils.mk_app (Efun (nameAddition,[])), lsexpPlusOne, None ) in
+          let expPlusOne = Hept_utils.mk_exp edescPlusOne Initial.tint ~linearity:Linearity.Ltop in
+
+          (* Note: will need to normalize that later: cf normalization_counter *)
+
+          let edescFby = Epre (Some (mk_static_exp Initial.tint (Sint 0)), expPlusOne) in
+          edescFby
+        else
+          let plhsinstMin1 = List.nth lplhs (instNum-1) in
+          let edescRecvar = Evar (getfirstFromPat plhsinstMin1) in
+          let expRecVar = Hept_utils.mk_exp edescRecvar Initial.tint ~linearity:Linearity.Ltop in
+
+          let edescOne = Econst (mk_static_exp Initial.tint (Sint 1)) in
+          let expOne = Hept_utils.mk_exp edescOne Initial.tint ~linearity:Linearity.Ltop in
+
+          let lsexpPlusOne = expRecVar::expOne::[] in
+          let nameAddition = { qual = Pervasives; name = "+" } in
+          let edescPlusOne = Eapp (Hept_utils.mk_app (Efun (nameAddition,[])), lsexpPlusOne, None ) in
+          edescPlusOne
+      in
+      let expCounter = Hept_utils.mk_exp edescCounter Initial.tint ~linearity:Linearity.Ltop in
+      expCounter::(List.tl lexpTuple)
+    else lexpTuple in
+
+    let ntupleexp = (Eapp ((Hept_utils.mk_app Etuple), lexpTuple, None)) in
+    let nres = ntupleexp::res in
+
+    (* DEBUG
+    Format.fprintf (Format.formatter_of_out_channel stdout) "get_nominal_slicing_seq :: nres (instNum = %i)= %a\n@?"
+      instNum  Hept_printer.print_exp_desc ntupleexp; *)
+
+
+
+    get_nominal_slicing_seq_aux lplhs corr_array is_as nres (instNum-1)
+  in
+  get_nominal_slicing_seq_aux lplhs corr_array is_as [] (num_period-1)
+
+
 
 
 (* ================================================================================ *)
@@ -400,7 +505,7 @@ let rec init_stexp_fby t = match t with
   | Tinvalid -> failwith "init_stexp_fby : Constant declaration with Tinvalid type."
 
 
-let rec extract_ty_elem t = match t with
+let extract_ty_elem t = match t with
   | Tprod lty -> lty
   | _ -> failwith "extract_ty_elem : type is not a Tprod"
 
@@ -537,11 +642,17 @@ let rec edesc_duplEq varTables lvardec htblClocks lplhs edesc = match edesc with
       ) lle_tr_ziped leopt in
     ledesc
 
+
 (* Special function to recognize an elementary function call & to duplicate it accordingly *)
 and elementary_func_call_duplEq varTables (lvardec:var_dec list) htblClocks lplhs a le eopt = match a.a_op with
   | Efun (fname,_) | Enode (fname,_) ->
     begin
     if ((fname.qual=Pervasives) || (fname.qual=LocalModule)) then None else (* External call *)
+
+    (* Check if the function is one of the sequenceur *)
+    if (nominal_slicing && (fname.name=name_seq_call)) then (Some (get_nominal_slicing_seq lplhs correspondance_clock_safran true)) else
+    if (nominal_slicing && (fname.name=name_seq_call_ecas)) then (Some (get_nominal_slicing_seq lplhs correspondance_clock_ecas false)) else
+
 
     (* Checking if the first argument is a clock *)
     let first_arg = List.hd le in
@@ -724,6 +835,52 @@ and eq_duplEq varTables lvardec htblClocks eq =
 let get_all_var_decl htbl = Hashtbl.fold (fun _ v acc -> v@acc) htbl []
 
 
+
+(* ================================================================================ *)
+
+
+
+(* Quick normalization of the "var1 = 0 fby (var2+1)" equation we had to add in the system (nominal) *)
+(* "var1 = 0 fby (var2+1)" => "var1 = 0 fby var3" + "var3 = (var2+1)" *)
+let normalization_counter nd =
+  let bl = nd.n_block in
+
+  let (nleq, nlocvid) = List.fold_left (fun (leqacc,llocvidacc) eq ->
+    let (plhs, erhs) = get_lhs_rhs_eq eq in
+    match erhs.e_desc with
+    | Epre(Some stexp, subexp) -> (match subexp.e_desc with
+      | Eapp _ -> begin
+        
+        (* Got it !*)
+        let vidLhs = getfirstFromPat plhs in
+        let lstrSplit = Str.split (Str.regexp strDelimEnd_varid) (Idents.name vidLhs) in
+        let lstrSplit = ("norm_" ^ (List.hd lstrSplit)) :: (List.tl lstrSplit) in
+        let strNameVar = List.fold_left (fun acc str -> acc ^ strDelimEnd_varid ^ str) "" lstrSplit in
+        let varid3 = Idents.gen_var "hyperExpans" strNameVar in
+
+        let pvar3 = Evarpat varid3 in
+        let eq1 = Hept_utils.mk_equation (Eeq (pvar3,subexp)) in
+
+        let expVar3 = Hept_utils.mk_exp (Evar varid3) erhs.e_ty ~linearity:Linearity.Ltop in
+        let rhseq2 = Hept_utils.mk_exp (Epre(Some stexp, expVar3)) erhs.e_ty ~linearity:Linearity.Ltop in
+        let eq2 = Hept_utils.mk_equation (Eeq (plhs, rhseq2)) in
+
+        (eq1::eq2::leqacc, varid3::llocvidacc)
+      end
+      | _ -> (eq::leqacc,llocvidacc)
+    )
+    | _ -> (eq::leqacc,llocvidacc)
+  ) ([],[]) bl.b_equs in
+
+  let nlocvd = List.map (fun vid ->
+    Hept_utils.mk_var_dec vid Initial.tint ~linearity:Linearity.Ltop
+  ) nlocvid in
+
+  let nbl = { bl with b_equs = nleq; b_local = List.rev_append nlocvd bl.b_local} in
+  { nd with n_block = nbl }
+
+
+
 (* ================================================================================ *)
 
 (* Main functions *)
@@ -793,6 +950,9 @@ let node nd =
     n_params = nd.n_params;
     n_param_constraints = nd.n_param_constraints;
   } in
+
+  (* Quick normalization of the "var1 = 0 fby (var2+1)" equation we had to add in the system *)
+  let n_nd = if (nominal_slicing) then (normalization_counter n_nd) else n_nd in
 
   (* Visitor to set all level_ck to Clocks.Cbase *)
   (* let exp_clockbase funs acc exp =

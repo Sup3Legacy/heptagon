@@ -53,7 +53,7 @@ let parse_program modname lexbuf =
   
   (* Fuse static exps together *)
   let p = do_silent_pass "Static Scoping" Hept_static_scoping.program p in
-  
+
   (* Convert the parse tree to Heptagon AST *)
   let p = do_pass "Scoping" Hept_scoping.translate_program p pp in
   p

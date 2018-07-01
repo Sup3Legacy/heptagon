@@ -98,7 +98,7 @@ let compile_program p =
   
   
   (* For script adaptation with Lopht ===> Should be disabled afterward *)
-  (* let p = silent_pass "Variable renaming" true Varname_change.program p in *)
+  let p = silent_pass "Variable renaming" true Varname_change.program p in (* TODO: disable that *)
 
 
   let p = silent_pass "Elimination of pre" !preElimination EliminationPre.program p in
@@ -116,6 +116,7 @@ let compile_program p =
   (* *)
 
   (* Array destruction + copy equation afterward to clean up *)
+  let p = silent_pass "Remove unused locvar - pre arraydestruction" !removeUnusedLocVar RemoveUnusedLocVar.program p in
   let p = pass "Array destruction" !arrayDestruct ArrayDestruct.program p pp in
   let p = pass "Copy equation removal - post array destruction" !arrayDestruct CopyRemoval.program p pp in
   let p = silent_pass "Slicing nominal" !slicing_nominal Slicing.program p in
@@ -132,21 +133,29 @@ let compile_program p =
 
   (* Dirty hyperperiod expansion output for the Safran usecase *)
   let p = silent_pass "Dirty Hyperperiod expansion" !hyperperiod Dirty_hyperperiod_expansion_Safran.program p in
+  (* let p = pass "Normalization" !hyperperiod Normalize.program p pp in For counter in hyperperiod expansion for sequenceur ??? *)
 
-  let p = silent_pass "Remove unused locvar" !removeUnusedLocVar RemoveUnusedLocVar.program p in
-  let p = silent_pass "Copy equation removal" !copyEqRemoval CopyRemoval.program p in
+  let p = silent_pass "Tuple breaking" !hyperperiod TupleBreaking.program p in
+  let p = silent_pass "Remove unused locvar - post hyperperiod expansion" !removeUnusedLocVar RemoveUnusedLocVar.program p in
+
+
+  (* TODO: check program here ??? (to see if equations from group here) *)
+
+
+  let p = silent_pass "Copy equation removal (3)" !copyEqRemoval CopyRemoval.program p in
+  let p = silent_pass "Slicing nominal (2)" !slicing_nominal Slicing.program p in
+  let p = pass "Copy equation removal - post slicing (2)" !slicing_nominal CopyRemoval.program p pp in
   
+
+  (* TODO: DEBUG (in order to check the program before the equation clustering *)
+  if (true) then
+    let oc = open_out "all_mls_before_eq_clustering.mls" in
+    Hept_printer.print oc p
+  else ();
+
 
   let p = pass "Equation clustering" !safran_clustering EquationClustering.program p pp in
   
-  (* TODO DEBUG: still causal at that point *)
-
-  
-  (* TODO DEBUG Causality check *)
-  let p = silent_pass "Causality check" !causality Causality.program p in
-  Format.fprintf (Format.formatter_of_out_channel stdout) "CAUSALITY PASSED\n@?";
-  
-
   (* Note: should not be activated outside of debugging *)
   if (!safran_clustering) then
     let oc = open_out "all_mls_clustered.mls" in

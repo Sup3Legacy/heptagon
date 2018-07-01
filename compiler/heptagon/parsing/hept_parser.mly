@@ -34,13 +34,12 @@ open Linearity
 open Hept_parsetree
 open Modules
 
+
+(*
 let get_sexp_from_exp e = match e.e_desc with
   | Econst se -> se
   | _ -> failwith "This is not a static expression."
 
-
-
-(*
 let rec sexp_desc_to_parsetree_sexp_desc dsexp = match dsexp with
   | Types.Svar cst_name -> Hept_parsetree.Svar (Q cst_name)
   | Types.Sint i -> Hept_parsetree.Sint i
@@ -117,7 +116,12 @@ let get_dummy_expr t =
   mk_exp (Econst sexp) no_location 
 *)
 
-(* TODO: ad-hoc solution for Safran UC *)
+
+(* TODO: ad-hoc solution for Safran UC => Dirty (berk), and should be improved by the previously commented code *)
+
+(* TODO: constant external (ie, sans valeurs => mettre dans des ".epi") *)
+
+
 let rec get_dummy_st_expr t = match t with
   | Tid qname ->
     begin
@@ -174,15 +178,11 @@ let get_dummy_expr t =
   mk_exp (Econst sexp) no_location 
 
 
-(* TODO: hacky solution to manage the "*" types as a type variable (cf NamedNVM in Safran UC) *)
+(* TODO: hacky solution to manage the "*" types as a type variable (cf NamedNVM.saofd in Safran UC) *)
 let default_type_var_string = "t_default"
-
 let default_type_var_name = ToQ default_type_var_string
-
 let default_class_name = "intbool"
-
 let default_class_type = Q Initial.pintbool
-
 let contain_star_type_var = ref false
 
 
@@ -326,14 +326,14 @@ opens: OPEN m=modul { m }
 
 const_dec:
   | CONST x=IDENT COLON t=ty_ident EQUAL e=exp
-      { mk_const_dec x t e (Loc($startpos,$endpos)) }
+      { mk_const_dec x t e false (Loc($startpos,$endpos)) }
 ;
 
 const_dec2:
   | x=IDENT COLON t=ty_ident EQUAL e=exp
-      { mk_const_dec x t e (Loc($startpos,$endpos)) }
+      { mk_const_dec x t e false (Loc($startpos,$endpos)) }
   | IMPORTED x=IDENT COLON t=ty_ident
-      { mk_const_dec x t (get_dummy_expr t) (Loc($startpos,$endpos)) }
+      { mk_const_dec x t (get_dummy_expr t) true (Loc($startpos,$endpos)) }
 ;
 
 const_decs:

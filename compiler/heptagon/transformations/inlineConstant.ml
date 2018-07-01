@@ -19,8 +19,12 @@ let sedesc_const_node htbl_cstdef funs acc sedesc = match sedesc with
     match cdecopt with
       | None ->
         (Svar cname), acc
-      | Some cd ->
-        cd.c_value.se_desc, acc
+      | Some cd -> 
+        if (cd.c_imported) then
+          (* Constant is imported: no value available *)
+          (Svar cname), acc
+        else
+          cd.c_value.se_desc, acc
     end
   | _ -> Global_mapfold.static_exp_desc funs acc sedesc
 
@@ -48,10 +52,10 @@ let program p =
       | _ -> pdesc
     ) p.p_desc in
 
-  (* Flush all constants declaration *)
+  (* Flush all non-imported constants declaration *)
   let nlpdesc = List.filter
     (fun pdesc -> match pdesc with
-      | Pconst _ -> false
+      | Pconst cdec -> cdec.c_imported
       | _ -> true
     ) nlpdesc in
 	{ p with p_desc = nlpdesc }

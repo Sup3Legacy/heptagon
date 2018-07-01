@@ -81,8 +81,12 @@ let print_local_vars s ff l = match l with
 
 let print_const_dec ff c =
   (* Guillaume: We should always have type information here *)
-  fprintf ff "const %a : %a = %a@."
-    print_qualname c.c_name print_type c.c_type print_static_exp c.c_value
+  if (c.c_imported) then
+    fprintf ff "imported const %a : %a@."
+      print_qualname c.c_name print_type c.c_type
+  else
+    fprintf ff "const %a : %a = %a@."
+      print_qualname c.c_name print_type c.c_type print_static_exp c.c_value
   (* if !Compiler_options.full_type_info then
     fprintf ff "const %a : %a = %a@."
       print_qualname c.c_name print_type c.c_type print_static_exp c.c_value

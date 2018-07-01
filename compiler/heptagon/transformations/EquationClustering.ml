@@ -20,8 +20,9 @@ exception GroupEqNotFound
 
 
 let debug_info = true (* TODO DEBUG *)
-let merge_only_same_instance = false
-let merge_no_wfz = true
+let merge_only_same_instance = true   (* Force group fusion to be performed between equations of the same instance *)
+let merge_only_same_instance_wfz = false (* Previous policy only applies on wfz groups *)
+let merge_no_wfz = true                (* wfz groups should not be merged together *)
 
 
 (* Remove all elements of lToRemove in l and concatene it to res *)
@@ -94,7 +95,6 @@ let merge_group_eq eq2grTable gEq1 gEq2 =
    | [] -> false
    | (hid,_)::t -> if (vid=hid) then true else is_varid_in_l_out vid t 
   in
-
   if (merge_only_same_instance && (gEq1.instance != gEq2.instance)) then
     failwith "Merging with 2 different instances not allowed" else
   if (merge_no_wfz && ((gEq1.wfz!=None) && (gEq2.wfz!=None))) then
@@ -123,6 +123,7 @@ let merge_group_eq eq2grTable gEq1 gEq2 =
       | None -> gEq2.instance       (* Improve that by having an interval? *)
       | Some _ -> gEq1.instance
     in
+
     let lin3 = List.filter (fun vid ->
       not (is_varid_in_l_out vid lout12)
     ) lin12 in
@@ -145,7 +146,7 @@ let merge_group_eq eq2grTable gEq1 gEq2 =
     } in
 
     (* Update of eq2grTable *)
-    List.iter (fun eq -> Hashtbl.add eq2grTable eq gr3) lEqu3;
+    List.iter (fun eq -> Hashtbl.replace eq2grTable eq gr3) lEqu3;
     gr3
 
 (* -------------- *)
@@ -380,6 +381,73 @@ let heuristic_ifte dataTable eq2grTable lgroupEq =
   heuristic_ifte_aux [] lgroupEq
 
 
+(* Version of Heuristic #1 for equation of the form Var = Arr[...]
+  where Arr is another variable (not constant) *)
+let heuristic_merge_array_accesses dataTable eq2grTable lgroupEq =
+
+  let rec heuristic_merge_array_accesses_aux lgroupRes lgroupRem = match lgroupRem with
+    | [] -> lgroupRes
+    | gr::rest -> begin
+      (* First application ever => all groups of correct form should be of size 1, except *)
+      if ((List.length gr.lequ) != 1) then
+        heuristic_merge_array_accesses_aux (gr::lgroupRes) rest
+      else
+      let eqGr = List.hd gr.lequ in
+      let (plhs, erhs) = get_lhs_rhs_eq eqGr in
+      match erhs.e_desc with
+      | Eapp (app, lsexp, _) -> begin
+        match app.a_op with
+        | Eselect -> begin
+          let eArr = Misc.assert_1 lsexp in
+          match eArr.e_desc with
+          | Evar dataIn -> begin
+            let (leqProd,_) = Hashtbl.find dataTable dataIn in
+            if (leqProd=[]) then
+              (* Input array access *)
+              heuristic_merge_array_accesses_aux (gr::lgroupRes) rest
+            else
+            let eqProd = List.hd leqProd in
+
+            (* Merging! *)
+            let grToMerge = try Hashtbl.find eq2grTable eqProd
+            with Not_found -> (
+              Format.eprintf "Group of equation not found, for dataIn = %s\n@?" (Idents.name dataIn);
+              raise GroupEqNotFound
+            ) in
+
+            (* Merge not allowed if the instance is different *)
+            if (merge_only_same_instance && (grToMerge.instance != gr.instance)) then
+              heuristic_merge_array_accesses_aux (gr::lgroupRes) rest else
+            (* Merge not allowed if one of the group is a wfz and instance is different *)
+            if (merge_only_same_instance_wfz && (grToMerge.instance != gr.instance))
+                    && (grToMerge.wfz!=None || gr.wfz!=None) then
+              heuristic_merge_array_accesses_aux (gr::lgroupRes) rest else
+            (* Merge not allowed if both groups contain a wfz *)
+            if (merge_no_wfz && ((grToMerge.wfz!=None) && (gr.wfz!=None))) then
+              heuristic_merge_array_accesses_aux (gr::lgroupRes) rest else
+            (* Merge not allowed if the other group is a pre *)
+            if (grToMerge.is_pre) then
+              heuristic_merge_array_accesses_aux (gr::lgroupRes) rest else
+
+
+            let ngr = merge_group_eq eq2grTable gr grToMerge in
+
+            let (found, lgroupRes) = remove_list true lgroupRes grToMerge in
+            let (found, rest) = remove_list (not found) rest grToMerge in
+            assert(found);
+            heuristic_merge_array_accesses_aux (ngr::lgroupRes) rest
+          end
+          | _ -> (* Econst probably *)
+            heuristic_merge_array_accesses_aux (gr::lgroupRes) rest
+        end
+        | _ -> heuristic_merge_array_accesses_aux (gr::lgroupRes) rest
+      end
+      | _ -> heuristic_merge_array_accesses_aux (gr::lgroupRes) rest
+    end
+  in
+  heuristic_merge_array_accesses_aux [] lgroupEq
+
+
 (* Heuristic #1 *)
 let heuristic_merge_single_use _ eq2grTable lgroupEq =
   let rec heuristic_merge_single_use_aux lgroupRes lgroupRem = match lgroupRem with
@@ -397,9 +465,8 @@ let heuristic_merge_single_use _ eq2grTable lgroupEq =
       let (dataOut, infoCons) = List.hd gr.l_out in
       if (not ((List.length infoCons) = 1)) then
         heuristic_merge_single_use_aux (gr::lgroupRes) rest
-      else
+      else (
         (* Remark: this is an over-approximation of the real criterion *)
-
         (* Merging ! *)
         let eqCons = List.hd infoCons in
         let grToMerge = try Hashtbl.find eq2grTable eqCons
@@ -410,18 +477,26 @@ let heuristic_merge_single_use _ eq2grTable lgroupEq =
         (* Merge not allowed if the instance is different *)
         if (merge_only_same_instance && (grToMerge.instance != gr.instance)) then
           heuristic_merge_single_use_aux (gr::lgroupRes) rest else
+        (* Merge not allowed if one of the group is a wfz and instance is different *)
+        if (merge_only_same_instance_wfz && (grToMerge.instance != gr.instance))
+                && (grToMerge.wfz!=None || gr.wfz!=None) then
+          heuristic_merge_single_use_aux (gr::lgroupRes) rest else
         (* Merge not allowed if both groups contain a wfz *)
         if (merge_no_wfz && ((grToMerge.wfz!=None) && (gr.wfz!=None))) then
           heuristic_merge_single_use_aux (gr::lgroupRes) rest else
         (* Merge not allowed if the other group is a pre *)
         if (grToMerge.is_pre) then
-          heuristic_merge_single_use_aux (gr::lgroupRes) rest else
+          heuristic_merge_single_use_aux (gr::lgroupRes) rest else (
+
         let ngr = merge_group_eq eq2grTable gr grToMerge in
-        
+
         let (found, lgroupRes) = remove_list true lgroupRes grToMerge in
         let (found, rest) = remove_list (not found) rest grToMerge in
         assert(found);
+
         heuristic_merge_single_use_aux (ngr::lgroupRes) rest
+        )
+      )
     end
   in
   heuristic_merge_single_use_aux [] lgroupEq
@@ -455,6 +530,10 @@ let heuristic_merge_single_prod dataTable eq2grTable lgroupEq =
 
         (* Merge not allowed if the instance is different *)
         if (merge_only_same_instance && (grToMerge.instance != gr.instance)) then
+          heuristic_merge_single_prod_aux (gr::lgroupRes) rest else
+        (* Merge not allowed if one of the group is a wfz and instance is different *)
+        if (merge_only_same_instance_wfz && (grToMerge.instance != gr.instance))
+                && (grToMerge.wfz!=None || gr.wfz!=None) then
           heuristic_merge_single_prod_aux (gr::lgroupRes) rest else
         (* Merge not allowed if both groups contain a wfz *)
         if (merge_no_wfz && ((grToMerge.wfz!=None) && (gr.wfz!=None))) then
@@ -524,6 +603,8 @@ let group_equation nd =
   (*    => Works in Safran case because these ifte are transformed "condact" *)
   (* let lgroupEq = heuristic_ifte dataTable eq2grTable lgroupEq in *)
   (* Desactivated - not valid (causality issues afterward) *)
+  let lgroupEq = heuristic_merge_array_accesses dataTable eq2grTable lgroupEq in
+  (* Note: no effect on the result for AS... :/ *)
 
   if (debug_info) then
     Format.fprintf (Format.formatter_of_out_channel stdout) "lgroupEq.size (avant heuristique 1) = %i\n@?" (List.length lgroupEq)
@@ -532,10 +613,13 @@ let group_equation nd =
   let lgroupEq = heuristic_run dataTable eq2grTable lgroupEq in
 
   (* TODO DEBUG *)
-  let num_non_wfz = List.fold_left (fun acc gr ->
-    if (gr.wfz=None) then acc+1 else acc
-  ) 0 lgroupEq in
-  Format.fprintf (Format.formatter_of_out_channel stdout) "num_non_wfz = %i\n@?" num_non_wfz;
+  let (num_non_wfz, num_pre, num_wfz) = List.fold_left (fun (accNwfz,accPre,accWfz) gr ->
+    if (gr.is_pre) then (accNwfz,accPre+1,accWfz) else
+    if (gr.wfz!=None) then (accNwfz,accPre,accWfz+1) else
+    (accNwfz+1,accPre,accWfz)
+  ) (0,0,0) lgroupEq in
+  Format.fprintf (Format.formatter_of_out_channel stdout)
+    "num_non_wfz = %i | num_pre = %i | num_wfz = %i\n@?" num_non_wfz num_pre num_wfz;
 
 
   (* We now deal with potential output variable of the program,
@@ -587,13 +671,12 @@ let build_subnodes lgroupEq nd =
     let lVarin = get_vardecl tblvdNd lvidIn in
     let lVarout = get_vardecl tblvdNd lvidOut in
     let lVarloc = get_vardecl tblvdNd lvidLoc in
-
+    
     (* Creating the objects *)
     let bl = Hept_utils.mk_block ~stateful:nd.n_stateful ~locals:lVarloc grEq.lequ in
     let snname = Modules.fresh_value "clustering" grEq.name in
     let sn = Hept_utils.mk_node ~typeparamdecs:nd.n_typeparamdecs ~input:lVarin ~output:lVarout
       ~stateful:nd.n_stateful ~param:nd.n_params snname bl in
-
     (sn,grEq)::acc
   ) [] lgroupEq in
   subnodesgr
@@ -615,7 +698,7 @@ let build_mainnode subnodesgr nd =
     if (geq.is_pre) then
       (* Pre => we just put the equation at the top level *)
       List.rev_append geq.lequ acc
-    else
+    else (
       (* rhs of equation *)
       let op_rhs = Efun (sn.n_name,[]) in
       let app_rhs = Hept_utils.mk_app op_rhs in
@@ -641,6 +724,7 @@ let build_mainnode subnodesgr nd =
           eq_inits = Linearity.Lno_init; eq_loc = Location.no_location;
           eq_annot = annotEq } in
       neq::acc
+      )
   ) [] subnodesgr in
 
   let bl = Hept_utils.mk_block ~stateful:nd.n_stateful ~locals:lVarloc lequ in
@@ -704,15 +788,6 @@ let scalar_subnodes_interface isMainNode htblScalarVar subnodesgr =
           Hashtbl.replace htblScalarVar vd.v_ident (Some lnScalVar)
         end
     ) (List.rev_append lvdIn lvdOut);
-
-
-
-    
-    (* TODO: appel récursif à ce niveau pour gérer les matrices??? *)
-
-
-
-
   ) subnodesgr;
 
   (* Change the subnodes:                                 *)

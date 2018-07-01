@@ -643,6 +643,7 @@ let translate_const_dec cd =
   { Heptagon.c_name = c_name;
     Heptagon.c_type = c_type;
     Heptagon.c_value = c_value;
+    Heptagon.c_imported = cd.c_imported;
     Heptagon.c_loc = cd.c_loc; }
 
 

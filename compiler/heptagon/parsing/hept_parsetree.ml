@@ -231,6 +231,7 @@ type const_dec =
   { c_name  : dec_name;
     c_type  : ty;
     c_value : exp;
+    c_imported : bool;
     c_loc   : location; }
 
 type class_dec =
@@ -335,8 +336,8 @@ let mk_block locals eqs loc =
 let mk_objective kind exp =
   { o_kind = kind; o_exp = exp }
 
-let mk_const_dec id ty e loc =
-  { c_name = id; c_type = ty; c_value = e; c_loc = loc }
+let mk_const_dec id ty e i loc =
+  { c_name = id; c_type = ty; c_value = e; c_imported = i; c_loc = loc }
 
 let mk_arg name (ty,lin) ck =
   { a_type = ty; a_linearity = lin; a_name = name; a_clock = ck }

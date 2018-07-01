@@ -201,6 +201,7 @@ type const_dec = {
   c_name  : qualname;
   c_type  : ty;
   c_value : static_exp;
+  c_imported : bool;    (* Is the constant imported (a dummy value is still given, but should not be used) *)
   c_loc   : location }
 
 type class_dec =

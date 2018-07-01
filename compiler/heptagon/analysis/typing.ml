@@ -1637,7 +1637,12 @@ let node ({ n_name = f; n_input = i_list; n_output = o_list;
 
 let typing_const_dec cd =
   let ty = check_type QualEnv.empty cd.Heptagon.c_type in
-  let se = expect_static_exp QualEnv.empty ty cd.Heptagon.c_value in
+  let se = 
+    if (cd.Heptagon.c_imported) then
+      cd.Heptagon.c_value (* Dummy value*)
+    else
+      expect_static_exp QualEnv.empty ty cd.Heptagon.c_value
+  in
   let const_def = { Signature.c_type = ty; Signature.c_value = se } in
     Modules.replace_const cd.c_name const_def;
     { cd with Heptagon.c_value = se; Heptagon.c_type = ty }

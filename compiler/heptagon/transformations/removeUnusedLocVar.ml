@@ -177,9 +177,14 @@ let rec extract_mem_cell_value stexpArr lindstExp = match lindstExp with
 let edesc_const_prop_array funs acc edesc = match edesc with
   | Econst stexp -> begin
     match stexp.se_desc with
-    | Svar cname ->
+    | Svar cname -> begin
       let cdec = MapString.find cname.name acc in
-      (Econst cdec.c_value), acc
+      if (cdec.c_imported) then
+        (* Constant is imported => cannot inline *)
+        Hept_mapfold.edesc funs acc edesc
+      else
+        (Econst cdec.c_value), acc
+    end
     | _ -> Hept_mapfold.edesc funs acc edesc
     end
   | Eapp (a, le, _) -> begin
@@ -190,11 +195,16 @@ let edesc_const_prop_array funs acc edesc = match edesc with
      match eArr.e_desc with
        | Econst stexp -> begin
         match stexp.se_desc with
-          | Svar cname ->
+          | Svar cname -> begin
             let cdec = MapString.find cname.name acc in
-            (* Get the corresponding array cell from cdec.c_value *)
-            let arrCellVal = extract_mem_cell_value cdec.c_value a.a_params in
-            (Econst arrCellVal), acc
+            if (cdec.c_imported) then
+              (* Constant is imported => cannot inline *)
+              Hept_mapfold.edesc funs acc edesc
+            else
+              (* Get the corresponding array cell from cdec.c_value *)
+              let arrCellVal = extract_mem_cell_value cdec.c_value a.a_params in
+              (Econst arrCellVal), acc
+          end
           | _ -> Hept_mapfold.edesc funs acc edesc
         end
         | _ -> Hept_mapfold.edesc funs acc edesc
@@ -378,12 +388,105 @@ let rec closure_const_var_propagation nd =
 
 
 (* ============================================================================= *)
+
+
+(* Function to check the wfz *)
+let extract_wfz e =
+  let (_,rhs) = get_lhs_rhs_eq e in
+  match rhs.e_desc with
+  | Eapp (a, _, _) -> begin
+    match a.a_op with
+    | Efun (fname,_) | Enode (fname, _) -> begin
+      (* External call - in particular check Terminator *)
+      if ((fname.qual=Pervasives) || (fname.qual=LocalModule)) then None
+      else Some fname.Names.name
+    end
+    | _ -> None
+  end
+  | _ -> None
+
+let is_wfz_call e =
+  let wfzNameopt = extract_wfz e in
+  (wfzNameopt!=None)
+
+
+(* Remove the equations non-wfz returning "void" *)
+let remove_void_equation nd =
+  let bl = nd.n_block in
+
+  let nleqs = List.fold_left (fun acc eq ->
+    (* If wfz keep it *)
+    if (is_wfz_call eq) then eq::acc else
+
+    let (plhs,_) = get_lhs_rhs_eq eq in
+    let lvidlhs = get_list_vid plhs in
+    if ((List.length lvidlhs)=0) then acc else eq::acc
+  ) [] bl.b_equs in
+  let nbl = { bl with b_equs = nleqs } in
+  { nd with n_block = nbl }
+
+
+
+(* ============================================================================= *)
+
+(* "v = const fby v" ===> "v = const" *)
+let const_fby_removal nd =
+  let bl = nd.n_block in
+
+  let nleqs = List.fold_left (fun acc eq ->
+    let (plhs, erhs) = get_lhs_rhs_eq eq in
+    
+    (* Only one var on the left *)
+    let lvidlhs = get_list_vid plhs in
+    if ((List.length lvidlhs)>1) then eq::acc else
+    let vidlhs = List.hd lvidlhs in
+
+    (* rhs is a fby *)
+    match erhs.e_desc with
+    | Epre (Some se, subexp) -> begin
+      match subexp.e_desc with
+      | Evar vidsubexp ->
+        if (vidsubexp!=vidlhs) then eq::acc else
+        (* Substitution of the equation *)
+        let nerhs = Hept_utils.mk_exp (Econst se) erhs.e_ty ~linearity:Linearity.Ltop in
+        let neq = Hept_utils.mk_equation (Eeq (plhs, nerhs)) in
+        neq::acc
+      | _ -> eq::acc
+      end
+    | _ -> eq::acc (* Note: ignore Efby, because we should not have it when the lhs of the fby is a constant *)
+  ) [] bl.b_equs in
+  
+  let nbl = { bl with b_equs = nleqs } in
+  { nd with n_block = nbl }
+
+
+(* ============================================================================= *)
+
+(* Remove the outputs of the equation and consider them as local (optim for Lopht) *)
+let remove_outputs = true
+
+let remove_outputs_to_local nd =
+  let lvdoutput = nd.n_output in
+  let bl = nd.n_block in
+  
+  let nloc = List.rev_append lvdoutput bl.b_local in
+
+  let nbl = { bl with b_local = nloc } in
+  { nd with n_block = nbl; n_output = [] }
+
+
+
+
+(* ============================================================================= *)
 (* Main functions *)
 let node constmap nd =
+  let nd = remove_void_equation nd in
+  let nd = if (remove_outputs) then (remove_outputs_to_local nd) else nd in
   let nd = closure_useless_locvar_removal nd in
   let nd = const_propagation_array constmap nd in
   let nd = closure_const_var_propagation nd in
   let nd = closure_useless_locvar_removal nd in
+  let nd = const_fby_removal nd in
   nd
 
 let program p =
@@ -392,7 +495,6 @@ let program p =
     | Pconst cd -> MapString.add cd.c_name.name cd acc
     | _ -> acc
   ) MapString.empty p.p_desc in
-  
   let nlpdesc = List.fold_left
   (fun acc pdesc -> match pdesc with
     | Pnode nd -> (Pnode (node constmap nd))::acc
