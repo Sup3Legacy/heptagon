@@ -584,11 +584,19 @@ ty_ident:
       { Tid $1 }
   | ty_ident POWER simple_exp
       { Tarray ($1, $3) }
+  | LBRACKET ty_ident_list RBRACKET
+      { Tprod $2 }
   | STAR
       { contain_star_type_var := true;
         Tclasstype (default_type_var_name, default_class_type)
       }
 ;
+
+ty_ident_list:
+  | ty_ident   { [$1] }
+  | ty_ident COMMA ty_ident_list { $1 :: $3 }
+;
+
 
 ct_annot:
   | /*empty */        { None }
