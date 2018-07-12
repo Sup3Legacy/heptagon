@@ -180,10 +180,19 @@ let _check_not_defined env f =
   if QualEnv.mem f env then raise Already_defined
 
 let add_value f v =
-  _check_not_defined g_env.values f;
+  (try
+    _check_not_defined g_env.values f
+  with Already_defined -> 
+    Format.fprintf (Format.formatter_of_out_channel stderr) "Value %s already defined\n@?" f.name;
+    raise Already_defined);
   g_env.values <- QualEnv.add f v g_env.values
+
 let add_type f v =
-  _check_not_defined g_env.types f;
+  (try
+    _check_not_defined g_env.types f;
+  with Already_defined -> 
+    Format.fprintf (Format.formatter_of_out_channel stderr) "Type %s already defined\n@?" f.name;
+    raise Already_defined);
   g_env.types <- QualEnv.add f v g_env.types
 let add_class f v =
   _check_not_defined g_env.classes f;
@@ -195,7 +204,11 @@ let add_field f v =
   _check_not_defined g_env.fields f;
   g_env.fields <- QualEnv.add f v g_env.fields
 let add_const f v =
-  _check_not_defined g_env.consts f;
+  (try
+    _check_not_defined g_env.consts f;
+  with Already_defined -> 
+    Format.fprintf (Format.formatter_of_out_channel stderr) "Const %s already defined\n@?" f.name;
+    raise Already_defined);
   g_env.consts <- QualEnv.add f v g_env.consts
 
 let add_instance k v =
