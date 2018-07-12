@@ -2,6 +2,8 @@
 (* Transformation which breaks the tuple:
  "(Var1, Var2, ..., VarN) = (exp1, ... , expN)"
 	=> Var1 = exp1 / ... / VarN = expN
+
+  Tuple might be added from HE expansion in particular (ex: sequenceur management)
 	*)
 (* Author: Guillaume I *)
 
@@ -51,7 +53,6 @@ let rec break_tuple_leq lres leq = match leq with
     )
     end
   | _ -> break_tuple_leq (eq::lres) t 
-
 
 
 (* ============================================================================= *)

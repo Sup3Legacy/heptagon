@@ -15,6 +15,7 @@
   Input/output management => Also duplicate them
   *)
 open Names
+open Idents
 open Types
 open Heptagon
 
@@ -27,7 +28,7 @@ exception Empty_list
 
 (* Activation of the nominal slicing: assume that Initcmpl_B = 1, to simplify clocks
   => allow to consider output of seq/scm as stream of constants *)
-let nominal_slicing = true
+let nominal_slicing = !Compiler_options.slicing_nominal
 
 
 (* Number of times we should unroll *)
@@ -883,6 +884,232 @@ let normalization_counter nd =
 
 (* ================================================================================ *)
 
+(* Search function in lArrDestructable *)
+let is_in_lArrDestructable vid lArrDestructable =
+  let infoOpt = try
+    Some (List.find (fun elem ->
+     let (vdec, _ , _) = elem in (vdec.v_ident = vid)
+    ) lArrDestructable)
+  with Not_found -> None
+  in
+  infoOpt
+
+(* Get the list of arrays inside a "fby", which is not used as an input/output of a node *)
+let get_fby_array_not_node lArrDestructable nd =
+
+  (* Extract information about the fby equation on arrays *)
+  let (lInfoeqFby, lresteq) = List.fold_left (fun (acc,accrest) eq ->
+    let (plhs,erhs) = get_lhs_rhs_eq eq in
+    match erhs.e_desc with
+    | Efby _ -> failwith "Efby forbidden at that point of the program (should be Epre)"
+    | Epre (stexpopt, sexp) -> (
+      let vlhs = Misc.assert_1 (get_list_vid plhs) in
+      match stexpopt with
+      | None -> (acc,eq::accrest)
+      | Some stexp -> (match stexp.se_desc with
+        | Sarray_power (sebase, _) ->
+          (match sexp.e_desc with
+          | Evar vidSexpRhs ->
+            let lhsDestrOpt = is_in_lArrDestructable vlhs lArrDestructable in
+            let rhsDestrOpt = is_in_lArrDestructable vidSexpRhs lArrDestructable in
+            (match (lhsDestrOpt, rhsDestrOpt) with
+            | (None, None) -> (acc,eq::accrest)
+            | (Some lhsDestrInfo, _) ->
+              let (_, arrsize, tybase) = lhsDestrInfo in 
+              let isrhsDestr = not (rhsDestrOpt = None) in
+              let infoEq = (vlhs, true, sebase, tybase, arrsize, vidSexpRhs, isrhsDestr) in
+              (infoEq::acc, accrest)
+            | (_, Some rhsDestrInfo) ->
+              let (_, arrsize, tybase) = rhsDestrInfo in 
+              let islhsDestr = not (rhsDestrOpt = None) in
+              let infoEq = (vlhs, islhsDestr, sebase, tybase, arrsize, vidSexpRhs, true) in
+              (infoEq::acc, accrest)
+            )
+          | _ -> (acc,eq::accrest)
+          )
+        | _ -> (acc,eq::accrest)  (* Example: fby on scalar *)
+      )
+    )
+    | _ -> (acc,eq::accrest)
+  ) ([],[]) nd.n_block.b_equs in
+
+  (lInfoeqFby, lresteq)
+
+
+(* For debugging *)
+let print_lInfoArrToDestroy ff lInfoArrToDestroy =
+  List.iter (fun info ->
+    let (vlhs, islhsDestr, sebase, tybase, arrsize, vidSexpRhs, isrhsDestr) = info in
+    Format.fprintf ff "[%s (%b)print_static_exp = [%a (%a) ^ %i] fby %s (%b)]\n@?"
+      (Idents.name vlhs) islhsDestr
+      Global_printer.print_static_exp sebase
+      Global_printer.print_type tybase  arrsize
+      (Idents.name vidSexpRhs) isrhsDestr
+  ) lInfoArrToDestroy
+
+
+
+module InfoDestrSet = Set.Make (struct type t = (ident * int * ty) let compare = compare end)
+
+let create_list_from_idelem_list lkVar =
+  let arrTemp = Array.make (List.length lkVar) None in
+  let arrTemp = List.fold_left
+    (fun acc (k,vd) ->
+      let kAdapted = if (!Compiler_options.safran_handling) then k-1 else k in
+      Array.set acc kAdapted (Some vd);
+      acc
+    )
+    arrTemp lkVar in
+  let lvlhs = Array.to_list arrTemp in
+  let lvlhs = List.map (fun opt -> match opt with
+    | None -> failwith "internal error: no hole in that array should happens"
+    | Some vd -> vd
+  ) lvlhs in
+  lvlhs
+
+
+(* Substitution: info equation (vlhs, islhsDestr, sebase, sepow, vidSexpRhs, isrhsDestr)
+    => if (islhsDestr && isrhsDest)
+      => vlhs_k = sebase fby vidSexpRhs_k
+
+    TODO: other cases ? 
+  *)
+let destroy_arrays_fby nd lInfoArrToDestroy lresteq lArrDestructable =
+  (* Get the list of variable for which we need to create new corresponding variables *)
+  let sArrDestr = InfoDestrSet.empty in
+  let sArrDestr = List.fold_left (fun sacc info ->
+    let (vlhs, _, _, tybase, arrsize, vidSexpRhs, _) = info in
+
+    (* In any case of islhsDestr/isrhsDestr, we will need a set of scalar variables *)
+    (* Exception is when both arrays are not destructible, but this case was removed beforehand *)
+    let nsacc = InfoDestrSet.add (vlhs, arrsize, tybase) sacc in
+    let nsacc = InfoDestrSet.add (vidSexpRhs, arrsize, tybase) nsacc in
+    nsacc
+  ) sArrDestr lInfoArrToDestroy in
+
+  (* TODO DEBUG *)
+  Format.fprintf (Format.formatter_of_out_channel stdout) "HE-destroy_arrays_fby : sArrDestr.size = %i\n@?"
+    (InfoDestrSet.cardinal sArrDestr);
+
+  (* Build the new array variables for each array to be destroyed *)
+  let mArrDestr = ArrayDestruct.IdentMap.empty in
+  let mArrDestr = InfoDestrSet.fold (fun (arrId, arrsize, tybase) macc ->
+    let (lArrVarDecl : (int * var_dec) list) = ArrayDestruct.create_var_decl_aux arrId arrsize tybase in
+    ArrayDestruct.IdentMap.add arrId lArrVarDecl macc
+  ) sArrDestr mArrDestr in
+
+  (* Building the new equations
+    It should be enough to consider the fby equations because of the special situation*)
+  let nEqs = List.fold_left (fun acc info ->
+    let (vlhs, islhsDestr, sebase, tybase, arrsize, vidSexpRhs, isrhsDestr) = info in
+
+    (* In all case, we need equation linking each scalar vars to another *)
+    let (lidvdecLhs : (int * var_dec) list) = ArrayDestruct.IdentMap.find vlhs mArrDestr in
+    let (lvdecLhs: var_dec list) = create_list_from_idelem_list lidvdecLhs in
+    let lvdecRhs = create_list_from_idelem_list (ArrayDestruct.IdentMap.find vidSexpRhs mArrDestr) in
+    assert((List.length lvdecLhs) = (List.length lvdecRhs));
+    assert(arrsize = (List.length lvdecLhs));
+    let lneqs = List.map2 (fun lvdecLhs lvdecRhs ->
+        let plhs = Evarpat lvdecLhs.v_ident in
+        let evarRhs = Hept_utils.mk_exp (Evar lvdecRhs.v_ident) tybase ~linearity:Linearity.Ltop in
+        let edescFby = Epre ((Some sebase), evarRhs) in
+        let erhs = Hept_utils.mk_exp edescFby tybase ~linearity:Linearity.Ltop in
+        Hept_utils.mk_equation (Eeq (plhs, erhs))
+      ) lvdecLhs lvdecRhs in
+
+    (* If left array is not destructible, we need to rebuild it afterward *)
+    let lneqs = if true then begin (* (not islhsDestr) then begin *)
+      let plhs = Evarpat vlhs in
+      let lsexp = List.map (fun vdec ->
+        Hept_utils.mk_exp (Evar vdec.v_ident) tybase ~linearity:Linearity.Ltop
+      ) lvdecLhs in
+      let app = Hept_utils.mk_app Etuple in
+      let edescTuple = Eapp (app, lsexp, None) in
+      let eTupleRhs = Hept_utils.mk_exp edescTuple tybase ~linearity:Linearity.Ltop in
+      let neq = Hept_utils.mk_equation (Eeq (plhs, eTupleRhs)) in
+      neq::lneqs
+    end else lneqs in
+
+    (* If right array is not destructible, we need to destruct it first ? *)
+    let lneqs = if true then begin (* (not isrhsDestr) then begin *)
+      let plhs = Etuplepat (List.map (fun vdec -> Evarpat vdec.v_ident) lvdecRhs) in
+      let sesize = Types.mk_static_exp Initial.tint (Sint arrsize) in
+      let tyarr = Tarray (tybase, sesize) in
+      let erhs = Hept_utils.mk_exp (Evar vidSexpRhs) tyarr ~linearity:Linearity.Ltop in
+      let neq = Hept_utils.mk_equation (Eeq (plhs, erhs)) in
+      neq::lneqs
+    end else lneqs in
+    List.rev_append lneqs acc
+  ) [] lInfoArrToDestroy in
+
+  (* lresteq: do substitution on it to remove arrays to be destroyed, using the implem from ArrDestr :/ *)
+  let funs_subst_array = { Hept_mapfold.defaults with
+    Hept_mapfold.edesc = (ArrayDestruct.edesc_subst_array mArrDestr)
+  } in
+  let lresteq = List.map (fun equ ->
+    let nequ, _ = funs_subst_array.Hept_mapfold.eq funs_subst_array [] equ in
+    nequ
+  ) lresteq in
+
+  let new_eq_nd = List.rev_append nEqs lresteq in
+
+  (* Manage the new local variables and remove the destructible ones *)
+  let lrestlocvd = nd.n_block.b_local in (* List.filter (fun vdloc ->
+      let opt = is_in_lArrDestructable vdloc.v_ident lArrDestructable in
+      (opt = None)
+    ) nd.n_block.b_local in *)
+
+  (* Issue with too much var loc destroyed => cf x_L20_62_sh13 ??? *)
+  (* Example: x_L47_18_sh0 (cf "all_mls_before_eq_clustering.mls") *)
+
+  (* Arrays marked as destructible, even if there is copy equation using them
+      => Destructible is not exactly what we need ? :/   ===> If do that, nothing is destructible (copies)
+      ===> Extend array destruct to copies? Aoutch ... :/
+
+      Meilleure solution?
+        => Do not remove array by default, i.e. always decompose and reconstruct :/
+        => Copy equation will stay internal to a group (because 1 use and 1 read ===> linear ),
+        no need to make them scalar, it will be dealed with after the equation clustering
+        => This means no variable should be removed... only few should be added
+  
+      => Always keep intermediate array (and translate on fby)
+
+    Or remove useless variables beforehand? ===> Not enough... :/
+     *)
+
+  let nllocvd = ArrayDestruct.IdentMap.fold (fun _ lidvdec acc ->
+    let lvdec = create_list_from_idelem_list lidvdec in
+    List.rev_append lvdec acc
+  ) mArrDestr [] in
+  let new_loc_vd = List.rev_append nllocvd lrestlocvd in
+
+
+  (* Update nd *)
+  let n_bl = { nd.n_block with b_equs = new_eq_nd; b_local = new_loc_vd } in
+  let n_nd = { nd with n_block = n_bl } in
+  n_nd
+
+
+
+(* Destruct the arrays in the equations of the form "Var1 = const^N fby Var2" with Var1, Var2 arrays *)
+(* These expressions might be introduced by the "elementary_func_call_duplEq" procedure, thus need to be destructed *)
+let destruct_array_fby nd =
+  (* List of Array Destructible, by the sense of ArrayDestruct *)
+  let lArrDestructable = ArrayDestruct.findArrayToDestroy nd in
+  let (lInfoArrToDestroy, lresteq) = get_fby_array_not_node lArrDestructable nd in
+
+  (* DEBUG
+  Format.fprintf (Format.formatter_of_out_channel stdout) "PING - lInfoArrToDestroy =\n%a\n@?"
+    print_lInfoArrToDestroy lInfoArrToDestroy;
+  *)
+
+  let n_nd = destroy_arrays_fby nd lInfoArrToDestroy lresteq lArrDestructable in
+  n_nd
+
+
+
+(* ================================================================================ *)
+
 (* Main functions *)
 let node nd =
   (* Step 0: get the equation using Wfz02_00_seq.wfz02_00_seq and put it in relation to correspondance_clock_safran *)
@@ -953,6 +1180,10 @@ let node nd =
 
   (* Quick normalization of the "var1 = 0 fby (var2+1)" equation we had to add in the system *)
   let n_nd = if (nominal_slicing) then (normalization_counter n_nd) else n_nd in
+
+  (* Array destruct for the Var1 = 0^n fby Var2, where Var2 is potentially the output of a wfz? *)
+  let n_nd = destruct_array_fby n_nd in
+
 
   (* Visitor to set all level_ck to Clocks.Cbase *)
   (* let exp_clockbase funs acc exp =

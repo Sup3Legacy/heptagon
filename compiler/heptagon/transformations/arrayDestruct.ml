@@ -83,7 +83,7 @@ let edesc_subst_array mArrayVar funs acc ed = match ed with
   | _ -> Hept_mapfold.edesc funs acc ed
 
 (* Convert the (k,elem) lists to a normal list, in the right order *)
-let create_list_from_idelem_list lkVar =
+let create_list_from_idelem_list_ident lkVar =
   let arrTemp = Array.make (List.length lkVar) None in
   let arrTemp = List.fold_left
     (fun acc (k,vd) ->
@@ -111,7 +111,7 @@ let create_new_eq_from_tuple vidLhs lkVar lexp =
   in
   
   (* We use the "k" to build the list in the right order *)
-  let lvlhs = create_list_from_idelem_list lkVar in
+  let lvlhs = create_list_from_idelem_list_ident lkVar in
   create_new_eq_from_tuple_aux lvlhs lexp
 
 
@@ -134,71 +134,70 @@ let eq_subst_array mArrayVar funs acc eq =
     | Eeq (lhs, rhs) -> begin
       (* Detect if the equation is of the form "A = [ .... ]" where A is an array *)
       match lhs with
-       | Etuplepat _ -> eq, eq::acc
-       | Evarpat vidLhs ->
-         if (IdentMap.mem vidLhs mArrayVar) then begin
-           let lkVarLhs = IdentMap.find vidLhs mArrayVar in
-           let (_,vdRandom) = (List.hd lkVarLhs) in
-           let tyScal = vdRandom.v_type in
+      | Etuplepat _ -> eq, eq::acc
+      | Evarpat vidLhs ->
+        if (IdentMap.mem vidLhs mArrayVar) then begin
+          let lkVarLhs = IdentMap.find vidLhs mArrayVar in
+          let (_,vdRandom) = (List.hd lkVarLhs) in
+          let tyScal = vdRandom.v_type in
 
-           (* We have an array on the left (vidLhs)
-              => we must have a tuple / Sarray_power or Stuple or Sarray on the right *)
-           match rhs.e_desc with
-             | Eapp (ap, lexp, _) when (ap.a_op=Etuple || ap.a_op=Earray) ->
-                 eq, (List.rev_append (create_new_eq_from_tuple vidLhs lkVarLhs lexp) acc)
-             | Econst sexpRhs -> begin match sexpRhs.se_desc with
-               | Sarray lsexp | Stuple lsexp ->
-                 let nlexp = List.map
-                    (fun stexp -> Hept_utils.mk_exp (Econst stexp) (* ~level_ck:rhs.e_level_ck *)
-                                     tyScal ~linearity:rhs.e_linearity 
-                    ) lsexp in
-                 eq, (List.rev_append (create_new_eq_from_tuple vidLhs lkVarLhs nlexp) acc)
-               | Sarray_power (sexp_value, lsexp_power) ->
-                 let numDupl = List.length lkVarLhs in
-                 let exp_value = Hept_utils.mk_exp (Econst sexp_value) (* ~level_ck:rhs.e_level_ck *)
+          (* We have an array on the left (vidLhs)
+            => we must have a tuple / Sarray_power or Stuple or Sarray on the right *)
+          match rhs.e_desc with
+            | Eapp (ap, lexp, _) when (ap.a_op=Etuple || ap.a_op=Earray) ->
+                eq, (List.rev_append (create_new_eq_from_tuple vidLhs lkVarLhs lexp) acc)
+            | Econst sexpRhs -> begin match sexpRhs.se_desc with
+                | Sarray lsexp | Stuple lsexp ->
+                  let nlexp = List.map
+                     (fun stexp -> Hept_utils.mk_exp (Econst stexp) (* ~level_ck:rhs.e_level_ck *)
+                                      tyScal ~linearity:rhs.e_linearity 
+                     ) lsexp in
+                  eq, (List.rev_append (create_new_eq_from_tuple vidLhs lkVarLhs nlexp) acc)
+                | Sarray_power (sexp_value, lsexp_power) ->
+                  let numDupl = List.length lkVarLhs in
+                  let exp_value = Hept_utils.mk_exp (Econst sexp_value) (* ~level_ck:rhs.e_level_ck *)
                                      tyScal ~linearity:rhs.e_linearity in
-                 let nlexp = duplicate_k_times exp_value numDupl in
-                 eq, (List.rev_append (create_new_eq_from_tuple vidLhs lkVarLhs nlexp) acc)
-               | _ -> Format.fprintf (Format.formatter_of_out_channel stdout)
+                  let nlexp = duplicate_k_times exp_value numDupl in
+                  eq, (List.rev_append (create_new_eq_from_tuple vidLhs lkVarLhs nlexp) acc)
+                | _ -> Format.fprintf (Format.formatter_of_out_channel stdout)
                              "Rhs of an equation defining a selected array not expected (const).\n\tEquation is %a\n@?"
                                  Hept_printer.print_eq eq;
                       failwith "arrayDestruct: unexpected destroyed array equation."
-               end
-              | Eapp (ap, lexp, _) when (ap.a_op=Eifthenelse) -> begin
-                (* A = if b then A1 else A2 ===> A_0 = if b then A1_0 else A2_0 / A_1 = ... *)
-                let (econd, ethen, eelse) = Misc.assert_3 lexp in
-                let numDupl = List.length lkVarLhs in
+                end
+            | Eapp (ap, lexp, _) when (ap.a_op=Eifthenelse) -> begin
+              (* A = if b then A1 else A2 ===> A_0 = if b then A1_0 else A2_0 / A_1 = ... *)
+              let (econd, ethen, eelse) = Misc.assert_3 lexp in
+              let numDupl = List.length lkVarLhs in
 
-
-                (* Because of normalization, ethen and eelse must be Evar or Econst *)
-                (* Depending on if ethen/eelse are array to be destroyed or not,
-                    we get either the corresponding new scalar variable or build an array access *)
-                let nlethen = match ethen.e_desc with
-                  | Econst stexp ->
-                    List.map (fun _ ->
-                      let eThenConst = Hept_utils.mk_exp (Econst stexp)
+              (* Because of normalization, ethen and eelse must be Evar or Econst *)
+              (* Depending on if ethen/eelse are array to be destroyed or not,
+                  we get either the corresponding new scalar variable or build an array access *)
+              let nlethen = match ethen.e_desc with
+                | Econst stexp ->
+                  List.map (fun _ ->
+                    let eThenConst = Hept_utils.mk_exp (Econst stexp)
+                      tyScal ~linearity:rhs.e_linearity in
+                    eThenConst
+                  ) (duplicate_k_times [] numDupl)
+                | Evar vIdEthen -> begin
+                  if (IdentMap.mem vIdEthen mArrayVar) then
+                    let lkVarThen = IdentMap.find vIdEthen mArrayVar in
+                    let lvidThen = create_list_from_idelem_list_ident lkVarThen in
+                    List.map (fun vid ->
+                      Hept_utils.mk_exp (Evar vid) tyScal ~linearity:rhs.e_linearity
+                    ) lvidThen
+                  else
+                    List.mapi (fun i _ ->
+                      let ihandl = if (!Compiler_options.safran_handling) then (i+1) else i in
+                      let se_i = Types.mk_static_exp Initial.tint (Sint ihandl) in
+                      let apThen = Hept_utils.mk_app Eselect ~params:(se_i::[]) in
+                      let arrExp = Hept_utils.mk_exp (Evar vIdEthen) rhs.e_ty ~linearity:rhs.e_linearity in
+                      let eThen = Hept_utils.mk_exp (Eapp (apThen, arrExp::[], None))
                         tyScal ~linearity:rhs.e_linearity in
-                      eThenConst
+                      eThen
                     ) (duplicate_k_times [] numDupl)
-                  | Evar vIdEthen -> begin
-                    if (IdentMap.mem vIdEthen mArrayVar) then
-                      let lkVarThen = IdentMap.find vIdEthen mArrayVar in
-                      let lvidThen = create_list_from_idelem_list lkVarThen in
-                      List.map (fun vid ->
-                        Hept_utils.mk_exp (Evar vid) tyScal ~linearity:rhs.e_linearity
-                      ) lvidThen
-                    else
-                      List.mapi (fun i _ ->
-                        let ihandl = if (!Compiler_options.safran_handling) then (i+1) else i in
-                        let se_i = Types.mk_static_exp Initial.tint (Sint ihandl) in
-                        let apThen = Hept_utils.mk_app Eselect ~params:(se_i::[]) in
-                        let arrExp = Hept_utils.mk_exp (Evar vIdEthen) rhs.e_ty ~linearity:rhs.e_linearity in
-                        let eThen = Hept_utils.mk_exp (Eapp (apThen, arrExp::[], None))
-                          tyScal ~linearity:rhs.e_linearity in
-                        eThen
-                      ) (duplicate_k_times [] numDupl)
-                  end
-                  | _ -> failwith "arrayDestruct - ifte : Not a Evar or a Econst failed"
+                end
+                | _ -> failwith "arrayDestruct - ifte : Not a Evar or a Econst failed"
                 in
 
                 let nleelse = match eelse.e_desc with
@@ -211,7 +210,7 @@ let eq_subst_array mArrayVar funs acc eq =
                   | Evar vIdEelse -> begin
                     if (IdentMap.mem vIdEelse mArrayVar) then
                       let lkVarElse = IdentMap.find vIdEelse mArrayVar in
-                      let lvidElse = create_list_from_idelem_list lkVarElse in
+                      let lvidElse = create_list_from_idelem_list_ident lkVarElse in
                       List.map (fun vid ->
                         Hept_utils.mk_exp (Evar vid) tyScal ~linearity:rhs.e_linearity
                       ) lvidElse
@@ -237,10 +236,10 @@ let eq_subst_array mArrayVar funs acc eq =
 
                 eq, (List.rev_append neqs acc)
                 end
-              | _ -> Format.fprintf (Format.formatter_of_out_channel stdout)
-                             "Rhs of an equation defining a selected array not expected.\n\tEquation is: %a\n@?"
-                                 Hept_printer.print_eq eq;
-                      failwith "arrayDestruct: unexpected destroyed array equation."
+            | _ -> Format.fprintf (Format.formatter_of_out_channel stdout)
+                           "Rhs of an equation defining a selected array not expected.\n\tEquation is: %a\n@?"
+                               Hept_printer.print_eq eq;
+                    failwith "arrayDestruct: unexpected destroyed array equation."
            end
          else eq, eq::acc
       end
@@ -260,7 +259,7 @@ let subst_array_var mArrayVar lequs =
   let funs_subst_array = { Hept_mapfold.defaults with
       eq = (eq_subst_array mArrayVar);         (* A = [ .... ] => A_0 = ... / A_1 = ... / ... *)
       edesc = (edesc_subst_array mArrayVar);   (* A[k] -> A_k *)
-(*      global_funs = {Global_mapfold.defaults with var_ident = (var_ident_subst_array mArrayVar)} *)
+      (*global_funs = {Global_mapfold.defaults with var_ident = (var_ident_subst_array mArrayVar)} *)
     }
   in
   let subst_array_var_eq acc equ =
@@ -358,29 +357,31 @@ let rec replace_equation eq nEq leq = match leq with
   | h::t -> if (h=eq) then nEq::t else h::(replace_equation eq nEq t)
 
 
+
+let rec get_new_names i name = match i with
+  | 0 -> []
+  | _ -> assert(i>0);
+    ( i, (name ^ "_" ^ (string_of_int i)) )
+      :: (get_new_names (i-1) name)
+
+let get_all_var_names arrId sizeArr =
+  let name = Idents.name arrId in
+  let lname = get_new_names sizeArr name in
+  lname
+
+let create_var_decl_aux arrId sizeArr tyArr =
+  let lnames = get_all_var_names arrId sizeArr in
+  let lvardecl = List.map (fun (sizeArr, strNameVarDec) ->
+    let nameVarDec = Idents.gen_var "arrayDestruct" strNameVarDec in
+    let vardec = Hept_utils.mk_var_dec nameVarDec tyArr ~linearity:Linearity.Ltop in
+    (sizeArr, vardec)
+  ) lnames in
+  lvardecl
+
 let destroyArrays nd larrIdToDestroy =
 
   (* Creation of the new variable declaration *)
-  let rec get_new_names i name = match i with
-    | 0 -> []
-    | _ -> assert(i>0);
-      ( i, (name ^ "_" ^ (string_of_int i)) )
-        :: (get_new_names (i-1) name)
-  in
-  let get_all_var_names arrId sizeArr =
-    let name = Idents.name arrId in
-    let lname = get_new_names sizeArr name in
-    lname
-  in
-  let create_var_decl_aux arrId sizeArr tyArr =
-    let lnames = get_all_var_names arrId sizeArr in
-    let lvardecl = List.map (fun (sizeArr, strNameVarDec) ->
-      let nameVarDec = Idents.gen_var "arrayDestruct" strNameVarDec in
-      let vardec = Hept_utils.mk_var_dec nameVarDec tyArr ~linearity:Linearity.Ltop in
-      (sizeArr, vardec)
-    ) lnames in
-    lvardecl
-  in
+  
   
   let bl = nd.n_block in
   

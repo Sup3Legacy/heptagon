@@ -20,7 +20,7 @@ exception GroupEqNotFound
 
 
 let debug_info = true (* TODO DEBUG *)
-let merge_only_same_instance = true   (* Force group fusion to be performed between equations of the same instance *)
+let merge_only_same_instance = false   (* Force group fusion to be performed between equations of the same instance *)
 let merge_only_same_instance_wfz = false (* Previous policy only applies on wfz groups *)
 let merge_no_wfz = true                (* wfz groups should not be merged together *)
 
@@ -86,6 +86,12 @@ type group_eq = {
 let mk_group_eq n leq i wfzOpt isPre = { name = n; lequ = leq; instance = i;
     wfz = wfzOpt; is_pre = isPre;
     l_inp = []; l_out = []; l_loc = [] }
+
+let print_group_eq ff grEq =
+  Format.fprintf ff "%s (inst: %i | is_pre: %b) : [[%a]]\n@?"
+    grEq.name grEq.instance grEq.is_pre
+    (Pp_tools.print_list Hept_printer.print_eq "[[\n" "\n\t" "]]") grEq.lequ
+
 
 (* Hashtbl maintained through the transformation: *)
 (*  * dataTable : var_ident --> ( leq_Prod_data , leq_Cons_data ) *)
@@ -1006,8 +1012,6 @@ let get_tag vd =
   "release(" ^ (string_of_int inst) ^ ") deadline(" ^ (string_of_int (inst+1)) ^ ")"
 
 
-(* TODO: bug here !!! *)
-
 (* Transform the input/output of the main node into local var + add equations read/write_int/float *)
 let add_read_write_int_float mainnode =
   let linput = mainnode.n_input in
@@ -1076,6 +1080,15 @@ let node nd =
   (* TODO DEBUG *)
   Format.fprintf (Format.formatter_of_out_channel stdout) "ping - group equation obtained\n@?";
 
+  (* DEBUG 
+  Format.fprintf (Format.formatter_of_out_channel stdout) "group_equation =\n@?";
+  List.iter (fun grEq ->
+    Format.fprintf (Format.formatter_of_out_channel stdout) "\t* %a\n@?"
+      print_group_eq grEq;
+  ) lgroupEq;
+  *)
+
+
   let subnodesgr = build_subnodes lgroupEq nd in
 
   (* TODO DEBUG *)
@@ -1103,6 +1116,10 @@ let node nd =
   let subnodes = List.fold_left (fun acc (sn,gr) ->
    if (gr.is_pre) then acc else sn::acc
   ) [] subnodesgr in
+
+
+  (* TODO DEBUG *)
+  Format.fprintf (Format.formatter_of_out_channel stdout) "ping - all done\n@?";
 
   new_nd :: subnodes
 
