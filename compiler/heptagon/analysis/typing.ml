@@ -694,16 +694,17 @@ and typing_operator op cenv se_list =
   let expected_ty_output = types_of_arg_list ty_desc.node_outputs in
   let ty_paramnames = ty_desc.node_typeparams in
   
+
   if (!verbose_debug_typing) then
   begin
     fprintf (formatter_of_out_channel stdout) "ty_desc = %a\n@?"
       Global_printer.print_interface_value (op.name,ty_desc);
-    fprintf (formatter_of_out_channel stdout) "expected_ty_list =@?";
-    Pp_tools.print_list Global_printer.print_type "[" "; " "]"  (formatter_of_out_channel stdout) expected_ty_list;
-    fprintf (formatter_of_out_channel stdout) "\n@?";
-    fprintf (formatter_of_out_channel stdout) "expected_ty_output =@?";
-    Pp_tools.print_list Global_printer.print_type "[" "; " "]"  (formatter_of_out_channel stdout) expected_ty_output;
-    fprintf (formatter_of_out_channel stdout) "\n@?"
+    fprintf (formatter_of_out_channel stdout) "expected_ty_list (size=%i) = [%a]\n@?"
+      (List.length expected_ty_list)
+      (Pp_tools.print_list Global_printer.print_type "" "; " "") expected_ty_list;
+    fprintf (formatter_of_out_channel stdout) "expected_ty_output (size=%i) = [%a]\n@?"
+      (List.length expected_ty_output)
+      (Pp_tools.print_list Global_printer.print_type "" "; " "") expected_ty_output;
   end;
   
   (* Default case when the operator does not have any typeparam *)
@@ -718,18 +719,23 @@ and typing_operator op cenv se_list =
       (fun tp_dec ->
         (tp_dec.tp_nametype, fresh_typaram_name "op" tp_dec.tp_nametype)
       ) ty_paramnames in
-    List.iter2
-      (fun (_,ty_paramname) typaram ->
-        curr_typeconstrnt := (ty_paramname.name, typaram.tp_nameclass, None)::!curr_typeconstrnt)
-      frname_ty_paramnames ty_paramnames;
+    
+    List.iter2 (fun (_,ty_paramname) typaram ->
+        curr_typeconstrnt := (ty_paramname.name, typaram.tp_nameclass, None)::!curr_typeconstrnt
+      ) frname_ty_paramnames ty_paramnames;
+    
     let expected_ty_list = List.map
       (fun exp_ty -> subst_name_typaram frname_ty_paramnames exp_ty)
       expected_ty_list in
+    let expected_ty_output = List.map
+      (fun exp_ty -> subst_name_typaram frname_ty_paramnames exp_ty)
+      expected_ty_output in
     
     (* We unify the expected input types with the computed types *)
     List.iter2
       (fun se exp_ty -> unify cenv se.se_ty exp_ty)
       typed_se_list expected_ty_list;
+
     Sop (op, typed_se_list), prod expected_ty_output
 
 
@@ -961,7 +967,6 @@ and typing_funcall funname cenv h expected_ty_list e_list m_simpl result_ty_list
   Format.fprintf (formatter_of_out_channel stdout) "result_ty_list.size = %i\n@?" (List.length result_ty_list);
   Format.fprintf (formatter_of_out_channel stdout) "typarams.size = %i\n@?" (List.length typarams); *)
   
-  
   (* Unifying the type of the arguments *)
   List.iter2
     (fun expected_ty arg_ty ->
@@ -972,7 +977,7 @@ and typing_funcall funname cenv h expected_ty_list e_list m_simpl result_ty_list
   let result_ty_list = List.map
     (fun res_ty -> subst_name_typaram frname_ty_paramnames res_ty)
     result_ty_list in
-  
+
   let result_ty_list = List.map m_simpl result_ty_list in
   (typed_e_list, result_ty_list)
 
@@ -1250,18 +1255,32 @@ and typing_array_subscript cenv h idx_list ty  =
     | Tarray(ty, exp), idx::idx_list ->
         ignore (expect_static_exp cenv (Tid Initial.pint) exp);
         let typed_idx = expect_static_exp cenv (Tid Initial.pint) idx in
-        
-        (* Safran UC: the arrays are starting by "1" instead of "0" *)
-        if (!Compiler_options.safran_handling) then
-          add_constraint_leq cenv (mk_static_int 1) typed_idx
-        else add_constraint_leq cenv (mk_static_int 0) typed_idx;
+        add_constraint_leq cenv (mk_static_int 0) typed_idx;
         let bound =
-          if (!Compiler_options.safran_handling) then exp else
           mk_static_int_op (mk_pervasives "-") [exp; mk_static_int 1]
         in
         add_constraint_leq cenv typed_idx bound;
         let typed_idx_list, ty = typing_array_subscript cenv h idx_list ty in
         typed_idx::typed_idx_list, ty
+    | Tprod lty, idx::idx_list ->
+      (* Added to allow access to a given element of a tuple *)
+      let typed_idx = expect_static_exp cenv (Tid Initial.pint) idx in
+      let val_idx = match idx.se_desc with
+        | Sint v -> v
+        | _ -> failwith "argument to array subscript for tuple is not a constant integer"
+      in
+      let tuplesize = List.length lty in
+      let sizeexp = mk_static_int tuplesize in
+
+      add_constraint_leq cenv (mk_static_int 0) typed_idx;
+
+      let bound =
+        mk_static_int_op (mk_pervasives "-") [sizeexp; mk_static_int 1]
+      in
+      add_constraint_leq cenv typed_idx bound;
+      let ty = List.nth lty val_idx in
+      let typed_idx_list, ty = typing_array_subscript cenv h idx_list ty in
+      typed_idx::typed_idx_list, ty
     | _, _ -> raise (TypingError (Esubscripted_value_not_an_array ty))
 
 (* This function checks that the array dimensions matches

@@ -407,7 +407,88 @@ and node_dec funs context nd =
   , context
 
 
+(* -------- *)
+
+(* ""Output1 = (if v then 1 else v_44, if v then false else v_45);"" 
+  are not managed by the previous transformation
+    => We are dealing with this case now... *)
+let is_variable exp = match exp.e_desc with
+  | Evar _ -> true
+  | _ -> false
+
+
+let eqdesc_tuple funs (leqAcc, llocAcc) eqdesc = match eqdesc with
+  | Eblock bl ->
+    let nbl, _ = Hept_mapfold.block funs ([], []) bl in
+    (Eblock nbl), (leqAcc, llocAcc)
+  | Eeq (plhs, erhs) -> begin 
+    match erhs.e_desc with
+    | Eapp (app, lexp, expopt) ->
+      if (app.a_op != Etuple) then eqdesc, (leqAcc, llocAcc) else
+      (* If an element of this tuple is not a Evar, then create a new local variable *)
+
+      (* Creating one new local variable per element of the tuple which is not already a var*)
+      let nlvdecl = List.fold_left (fun acc exp ->
+        if (is_variable exp) then acc else
+        let n = Idents.gen_var "normalize" "v" in
+        let vdec = mk_var_dec n exp.e_ty ~linearity:exp.e_linearity in
+        vdec::acc
+      ) [] lexp in
+
+      (* nlvdecl is in reverse order *)
+      let nlvdecl = List.rev nlvdecl in
+
+      (* Getting the new equations *)
+      let (_, nleqAcc) = List.fold_left (fun (lvdecl, accEq) sexp ->
+        if (is_variable sexp) then (lvdecl, accEq) else begin
+          assert(not (lvdecl=[]));
+          let vdecLhs = List.hd lvdecl in
+          let nlvdecl = List.tl lvdecl in
+          let plhs = Evarpat vdecLhs.v_ident in
+          let neq = mk_equation (Eeq (plhs, sexp)) in
+          (nlvdecl, neq::accEq)
+        end
+      ) (nlvdecl, []) lexp in
+
+      assert((List.length nleqAcc) = (List.length nlvdecl));
+
+      (* Building the new current equation *)
+      let (_, nlsexpTuple) = List.fold_left (fun (lvdecl, nlsexpTuple) sexp ->
+        if (is_variable sexp) then (lvdecl, sexp::nlsexpTuple) else begin
+          assert(not (lvdecl=[]));
+          let vdecLhs = List.hd lvdecl in
+          let nlvdecl = List.tl lvdecl in
+          let nsexp = Hept_utils.mk_exp (Evar vdecLhs.v_ident) vdecLhs.v_type ~linearity:Linearity.Ltop in
+          (nlvdecl, nsexp::nlsexpTuple)
+        end
+      ) (nlvdecl, []) lexp in
+      let nlsexpTuple = List.rev nlsexpTuple in
+      let edescTuple = Eapp (Hept_utils.mk_app Etuple, nlsexpTuple, expopt) in
+      let neqTuple = { erhs with e_desc = edescTuple } in 
+
+      let neqdesc = Eeq (plhs, neqTuple) in
+
+      neqdesc, ( (List.rev_append nleqAcc leqAcc) , (List.rev_append nlvdecl llocAcc) )
+
+    | _ -> eqdesc, (leqAcc, llocAcc)
+    end
+  | _ -> failwith "Normalize: not supposed to have anything else than Eblock and Eeq"
+
+
+let block_tuple funs acc b =
+  let b_equs, (leqAcc, llocAcc) = mapfold (eq_it funs) acc b.b_equs in
+  let b_equs = List.rev_append leqAcc b_equs in
+  let b_local = List.rev_append llocAcc b.b_local in
+  { b with b_local = b_local; b_equs = b_equs }, ([], [])
+
+
+(* -------- *)
+
 let program p =
   let funs = { defaults with block = block; eq = eq; contract = contract } in
   let p, _ = Hept_mapfold.program funs ([], []) p in
-    p
+
+  let funs_tuple = { defaults with  block = block_tuple; eqdesc = eqdesc_tuple } in
+  let p, _ = Hept_mapfold.program funs_tuple ([], []) p in
+  
+  p

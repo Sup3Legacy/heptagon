@@ -8,6 +8,9 @@ open Hept_mapfold
 exception Data_produced_twice
 exception Equation_not_in_Eeq_form
 
+
+let debug_misc_transformation = true (* TODO DEBUG *)
+
 let rec remove_all_list lToRemove res l = match l with
  | [] -> res
  | h::t ->
@@ -114,9 +117,9 @@ let get_varNotUsed dataTable nd =
     if (belim) then (vid, eqProd)::accRes else accRes
   ) [] varNotUsed in
 
-  (* TODO DEBUG *)
-  Format.fprintf (Format.formatter_of_out_channel stdout) "varNotUsed.size = %i\n@?"
-    (List.length varNotUsed);
+  if (debug_misc_transformation) then
+    Format.fprintf (Format.formatter_of_out_channel stdout) "varNotUsed.size = %i\n@?"
+      (List.length varNotUsed);
 
   varNotUsed
 
@@ -316,9 +319,9 @@ let const_propagation_array constmap nd =
       } in
   let nd, _ = funs_const_array_power_repl.node_dec funs_const_array_power_repl mVarArr nd in
 
-  (* TODO DEBUG *)
-  Format.fprintf (Format.formatter_of_out_channel stdout) "const_array_power : mVarArr.size = %i\n@?"
-    (MapVarId.cardinal mVarArr);
+  if (debug_misc_transformation) then
+    Format.fprintf (Format.formatter_of_out_channel stdout) "const_array_power : mVarArr.size = %i\n@?"
+      (MapVarId.cardinal mVarArr);
 
   (* VarArr = [ ... ] / replace "VarElem = VarArr[ind]" by "VarElem=elemVarArr" *)
   (* mVarArr : var_ident -> lelem *)
@@ -328,9 +331,9 @@ let const_propagation_array constmap nd =
       } in
   let nd, _ = funs_const_array_tuple.node_dec funs_const_array_tuple mVarArr nd in
 
-  (* TODO DEBUG *)
-  Format.fprintf (Format.formatter_of_out_channel stdout) "const_array_tuple : mVarArr.size = %i\n@?"
-    (MapVarId.cardinal mVarArr);
+  if (debug_misc_transformation) then
+    Format.fprintf (Format.formatter_of_out_channel stdout) "const_array_tuple : mVarArr.size = %i\n@?"
+      (MapVarId.cardinal mVarArr);
 
   nd
 
@@ -374,9 +377,9 @@ let const_var_propagation nd =
   let bl = { nd.n_block with b_equs = lneq } in
   let bl, _ = funs_const_var.block funs_const_var mVarConst bl in
 
-  (* TODO DEBUG *)
-  Format.fprintf (Format.formatter_of_out_channel stdout) "const_var : mVarConst.size = %i\n@?"
-    (MapVarId.cardinal mVarConst);
+  if (debug_misc_transformation) then
+    Format.fprintf (Format.formatter_of_out_channel stdout) "const_var : mVarConst.size = %i\n@?"
+      (MapVarId.cardinal mVarConst);
 
   { nd with n_block = bl }
 

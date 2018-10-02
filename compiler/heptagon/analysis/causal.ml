@@ -72,28 +72,33 @@ and nc =
   | Aac of ac
   | Aempty
 
+
+(* ======================================================== *)
+
+let rec print priority ff ac = match ac with
+  | Aseq(ac1, ac2) -> (* priority 1 *)
+      (if priority = 1 then fprintf ff "%a@ < %a"
+       else if priority > 1
+       then fprintf ff "@[<v 1>(%a@ < %a)@]"
+       else fprintf ff "@[%a@ < %a@]")
+        (print 1) ac1 (print 1) ac2
+  | Aand(ac1, ac2) -> (* priority 0 *)
+      (if priority = 0 then fprintf ff "%a@ || %a"
+       else if priority > 0
+       then fprintf ff "@[<v 1>(%a@ || %a)@]"
+       else fprintf ff "@[%a@ || %a@]")
+        (print 0) ac1 (print 0) ac2
+  | Atuple(acs) ->
+      fprintf ff "@[%a@]" (print_list_r (print 1) "(" "," ")") acs
+  | Awrite(m) -> fprintf ff "%s" (name m)
+  | Aread(m) -> fprintf ff "^%s" (name m)
+  | Alinread(m) -> fprintf ff "*%s" (name m)
+  | Alastread(m) -> fprintf ff "last %s" (name m)
+
 let output_ac ff ac =
-  let rec print priority ff ac = match ac with
-    | Aseq(ac1, ac2) -> (* priority 1 *)
-        (if priority = 1 then fprintf ff "%a@ < %a"
-         else if priority > 1
-         then fprintf ff "@[<v 1>(%a@ < %a)@]"
-         else fprintf ff "@[%a@ < %a@]")
-          (print 1) ac1 (print 1) ac2
-    | Aand(ac1, ac2) -> (* priority 0 *)
-        (if priority = 0 then fprintf ff "%a@ || %a"
-         else if priority > 0
-         then fprintf ff "@[<v 1>(%a@ || %a)@]"
-         else fprintf ff "@[%a@ || %a@]")
-          (print 0) ac1 (print 0) ac2
-    | Atuple(acs) ->
-        fprintf ff "@[%a@]" (print_list_r (print 1) "(" "," ")") acs
-    | Awrite(m) -> fprintf ff "%s" (name m)
-    | Aread(m) -> fprintf ff "^%s" (name m)
-    | Alinread(m) -> fprintf ff "*%s" (name m)
-    | Alastread(m) -> fprintf ff "last %s" (name m)
-  in
   fprintf ff "@[<v 1>%a@]@?" (print 0) ac
+
+(* ======================================================== *)
 
 
 type error =  Ecausality_cycle of ac
@@ -111,6 +116,10 @@ let message loc kind =
           output_ac ac
   end;
   raise Errors.Error
+
+
+(* ======================================================== *)
+
 
 let cor nc1 nc2 =
   match nc1, nc2 with
@@ -277,9 +286,22 @@ let check loc c =
       (let { g_bot = g_list } = build ac in
       match cycle g_list with
         | None -> ()
-        | Some _ -> error (Ecausality_cycle ac))
+        | Some lcycle ->
+
+          (* TODO DEBUG *)
+          Format.fprintf (Format.formatter_of_out_channel stdout)
+            "Cycle of dependence detected:\n@?";
+          List.iter (fun elem ->
+            Format.fprintf (Format.formatter_of_out_channel stderr) "%a\n@?" (print 0) elem;
+          ) lcycle;
+          error (Ecausality_cycle ac))
     with
-      | Self_dependency -> error (Ecausality_cycle ac)
+      | Self_dependency ->
+        
+        (* TODO DEBUG *)
+        Format.fprintf (Format.formatter_of_out_channel stderr) "Self_dependency on causality analysis\n@?";
+        
+        error (Ecausality_cycle ac)
   in
 
 

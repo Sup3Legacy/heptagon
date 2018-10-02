@@ -62,9 +62,69 @@ and root =
   | RExp of exp
   | ROr of root * root
 
+
+(* ============================================== *)
+
+module Printer = struct
+  open Format
+  open Pp_tools
+
+  let rec print_init ff i = match !i with
+    | Izero -> fprintf ff "initialized"
+    | Ione _ -> fprintf ff "not initialized"
+    | Ivar(i) -> fprintf ff "ivar_%i" i
+    | Imax(i1, i2) -> fprintf ff "@[<4>max %a@ %a@]" print_init i1 print_init i2
+    | Ilink(i) -> print_init ff i
+
+  let rec print_type ff = function
+    | Ileaf(i) -> print_init ff i
+    | Iproduct(ty_list) ->
+        fprintf ff "@[%a@]" (print_list_r print_type "("" *"")") ty_list
+
+  let rec print_root ff = function
+    | RLast_none(i) ->
+        fprintf ff "that last %a should be initialized" print_ident i
+    | RExp(e) ->
+        fprintf ff "the expression :@\n  @[%a@]" print_location e.e_loc
+    | ROr(r1,r2) ->
+        fprintf ff "@\n- %a@\n- or %a" print_root r1 print_root r2
+end
+
+
+
+(* ============================================== *)
+
 (* typing errors *)
 exception Unify of root
 exception CurrentShouldNotHappenHere
+
+module Error = struct
+  type error = | Eclash of root * typ * typ
+
+  exception Error of location * error
+
+  let error loc kind = raise (Error(loc, kind))
+
+  let message loc kind =
+    begin match kind with
+      | Eclash(root, left_ty, right_ty) ->
+          Format.eprintf
+            "Initialization error :@\n%a\
+             this expression is %a,@ but is expected to be %a,\
+             @ the root of the conflict is %a.@."
+            print_location loc
+            Printer.print_type left_ty
+            Printer.print_type right_ty
+            Printer.print_root root
+    end;
+    raise Errors.Error
+end
+
+
+(* ============================================== *)
+
+
+
 
 (** unalias [init] type *)
 let rec irepr i =
@@ -183,60 +243,32 @@ let rec less left_ty right_ty =
   else match left_ty, right_ty with
     | Iproduct(l1), Iproduct(l2) -> List.iter2 less l1 l2
     | Ileaf(i1), Ileaf(i2) -> iless i1 i2
-    | _ -> assert false
-
-
-module Printer = struct
-  open Format
-  open Pp_tools
-
-  let rec print_init ff i = match !i with
-    | Izero -> fprintf ff "initialized"
-    | Ione _ -> fprintf ff "not initialized"
-    | Ivar(i) -> fprintf ff "ivar_%i" i
-    | Imax(i1, i2) -> fprintf ff "@[<4>max %a@ %a@]" print_init i1 print_init i2
-    | Ilink(i) -> print_init ff i
-
-  let rec print_type ff = function
-    | Ileaf(i) -> print_init ff i
-    | Iproduct(ty_list) ->
-        fprintf ff "@[%a@]" (print_list_r print_type "("" *"")") ty_list
-
-  let rec print_root ff = function
-    | RLast_none(i) ->
-        fprintf ff "that last %a should be initialized" print_ident i
-    | RExp(e) ->
-        fprintf ff "the expression :@\n  @[%a@]" print_location e.e_loc
-    | ROr(r1,r2) ->
-        fprintf ff "@\n- %a@\n- or %a" print_root r1 print_root r2
-end
-
-module Error = struct
-  type error = | Eclash of root * typ * typ
-
-  exception Error of location * error
-
-  let error loc kind = raise (Error(loc, kind))
-
-  let message loc kind =
-    begin match kind with
-      | Eclash(root, left_ty, right_ty) ->
-          Format.eprintf
-            "Initialization error :@\n%a\
-             this expression is %a,@ but is expected to be %a,\
-             @ the root of the conflict is %a.@."
-            print_location loc
-            Printer.print_type left_ty
-            Printer.print_type right_ty
-            Printer.print_root root
-    end;
-    raise Errors.Error
-end
+    | Iproduct(l1), Ileaf(i2) ->
+      (* Tuple on the right affected to a single variable on the left *)
+      (* TODO: right now, only trivial cases are dealt with... however the main case is still missing! *)
+      begin match !(irepr i2) with
+        | Ione _ -> ()
+        | Izero -> List.iter (fun elem1 ->
+          match elem1 with
+          | Ileaf(i1) -> force_initialized (irepr i1)
+          | _ -> assert false
+          ) l1
+        | _ -> assert false
+      end
+    | _ ->
+      assert false
 
 let less_exp e actual_ty expected_ty =
   try
     less actual_ty expected_ty
   with Unify r -> Error.message e.e_loc (Error.Eclash(r,actual_ty, expected_ty))
+
+
+
+
+(* ============================================== *)
+
+
 
 (** Main typing function *)
 let rec typing h e =
@@ -295,7 +327,6 @@ and apply h app e_list =
         List.iter (fun e -> initialized_exp h e) e_list; izero )
       else (
         List.fold_left (fun acc e -> max acc (itype (typing h e))) izero e_list)
-
 
 and expect h e expected_ty =
   let actual_ty = typing h e in

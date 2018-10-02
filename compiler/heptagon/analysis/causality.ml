@@ -256,9 +256,12 @@ let typing_contract loc contract =
         let t_contract = clear (build b.b_local) t_contract in
         t_contract
 
-let typing_node { n_contract = contract;
-                  n_block = b; n_loc = loc } =
+let typing_node ({ n_contract = contract;
+                  n_block = b; n_loc = loc } as n) =
   let _ = typing_contract loc contract in
+  (* DEBUG *)
+  (* Format.fprintf (Format.formatter_of_out_channel stdout) "ping - causality - current node = %a\n@?"
+    Hept_printer.print_node n; *)
   let teq = typing_block b in
     Causal.check loc teq
 

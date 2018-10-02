@@ -25,6 +25,9 @@ let merge_only_same_instance_wfz = false (* Previous policy only applies on wfz 
 let merge_no_wfz = true                (* wfz groups should not be merged together *)
 
 
+(* TODO: check that merge between groups of different instances is fine *)
+
+
 (* Remove all elements of lToRemove in l and concatene it to res *)
 let rec remove_all_list lToRemove res l = match l with
  | [] -> res
@@ -1080,13 +1083,13 @@ let node nd =
   (* TODO DEBUG *)
   Format.fprintf (Format.formatter_of_out_channel stdout) "ping - group equation obtained\n@?";
 
-  (* DEBUG 
+  (* DEBUG TODO *)
   Format.fprintf (Format.formatter_of_out_channel stdout) "group_equation =\n@?";
   List.iter (fun grEq ->
     Format.fprintf (Format.formatter_of_out_channel stdout) "\t* %a\n@?"
       print_group_eq grEq;
   ) lgroupEq;
-  *)
+  (* *)
 
 
   let subnodesgr = build_subnodes lgroupEq nd in

@@ -38,9 +38,27 @@ open Hept_mapfold
 
 exception Output_type_of_node_is_not_product
 
+let rec is_name_in_qualnamelist s l = match l with
+  | [] -> false
+  | h::t -> if (h.name = s.name) then true
+    else is_name_in_qualnamelist s t
+
+let is_prefix pref str =
+  if ((String.length str) < (String.length pref)) then false else
+  String.equal pref (String.sub str 0 (String.length pref))
+
+
+let rec is_name_prefix s l = match l with
+  | [] -> false
+  | h::t -> if (is_prefix h s.name) then true
+    else is_name_prefix s t
+
+
 let to_be_inlined s =
   (!Compiler_options.flatten && not (s.qual = Pervasives))
-    || (List.mem s !Compiler_options.inline)
+    (* || (List.mem s !Compiler_options.inline) *)
+    || (is_name_in_qualnamelist s !Compiler_options.inline)
+    || (is_name_prefix s !Compiler_options.inline_prefix)
 
 let fresh = Idents.gen_var "inline"
 

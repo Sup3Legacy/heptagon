@@ -138,9 +138,9 @@ let calculate_deps modname source_f =
     if b then uppercase_first str else str
   in
   
-  let source_f = opt_uppercase_first (not !safran_handling) source_f in
-  let syms = List.map (opt_uppercase_first (not !safran_handling)) syms in
-  let deps = List.map (opt_uppercase_first (not !safran_handling)) deps in
+  let source_f = opt_uppercase_first (not !scade_array) source_f in
+  let syms = List.map (opt_uppercase_first (not !scade_array)) syms in
+  let deps = List.map (opt_uppercase_first (not !scade_array)) deps in
   
   Printf.printf "%s=%s: %s\n" source_f (String.concat " " syms)
                                        (String.concat " " deps)
@@ -233,7 +233,7 @@ let main () =
         
         "-M", Arg.Set calc_deps, doc_calc_deps;
         "-stats", Arg.Set calc_stats, doc_calc_stats;
-        "-safran", Arg.Set safran_handling, doc_safran_handling;
+        "-safran", Arg.Set scade_array, doc_scade_array; (* TODO: modify option name *)
         
         "-open", Arg.String new_file_to_open, doc_files_to_open;
         "-c", Arg.Set create_object_file, doc_object_file;
@@ -246,6 +246,7 @@ let main () =
         "-tomacheck", read_qualname add_tomato_check, "";
         
         "-inline", read_qualname add_inlined_node, doc_inline;
+        "-inlinePrefix", Arg.String add_inlined_prefix_node, doc_inline_prefix;
         "-flatten", Arg.Set flatten, doc_flatten;
         "-mainnode", read_qualname add_main_node, doc_mainnode;
         "-prune", Arg.Set prune, doc_prune;

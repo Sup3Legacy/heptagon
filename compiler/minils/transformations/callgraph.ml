@@ -475,6 +475,7 @@ let rec call_node (ln, inst) =
   List.iter call_node call_list
 
 let program p =
+  info.called_nodes <- QualEnv.empty;
   let main_nodes = if (!Compiler_options.mainnode=[]) then
     (* Default option: find the nodes without static parameters *)
     List.filter (function Pnode n -> (is_empty n.n_params && is_empty n.n_typeparams)

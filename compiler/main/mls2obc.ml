@@ -98,6 +98,8 @@ let rec extvalue_of_idx_list w l = match Modules.unalias_type w.w_ty, l with
   | _, [] -> w
   | Tarray (ty',_), idx :: l ->
     extvalue_of_idx_list (mk_ext_value ty' (Warray (w, idx))) l
+  | Tprod lty, idx ::l ->
+    internal_error "mls2obc : array access to tuple should have been removed at that point"
   | _ -> internal_error "mls2obc extvalue_of_idx_list"
 
 let ext_value_of_trunc_idx_list p l =

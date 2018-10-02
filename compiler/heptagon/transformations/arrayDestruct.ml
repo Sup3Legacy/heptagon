@@ -87,7 +87,7 @@ let create_list_from_idelem_list_ident lkVar =
   let arrTemp = Array.make (List.length lkVar) None in
   let arrTemp = List.fold_left
     (fun acc (k,vd) ->
-      let kAdapted = if (!Compiler_options.safran_handling) then k-1 else k in
+      let kAdapted = k in
       Array.set acc kAdapted (Some vd);
       acc
     )
@@ -188,7 +188,7 @@ let eq_subst_array mArrayVar funs acc eq =
                     ) lvidThen
                   else
                     List.mapi (fun i _ ->
-                      let ihandl = if (!Compiler_options.safran_handling) then (i+1) else i in
+                      let ihandl = i in
                       let se_i = Types.mk_static_exp Initial.tint (Sint ihandl) in
                       let apThen = Hept_utils.mk_app Eselect ~params:(se_i::[]) in
                       let arrExp = Hept_utils.mk_exp (Evar vIdEthen) rhs.e_ty ~linearity:rhs.e_linearity in
@@ -216,7 +216,7 @@ let eq_subst_array mArrayVar funs acc eq =
                       ) lvidElse
                     else
                       List.mapi (fun i _ ->
-                        let ihandl = if (!Compiler_options.safran_handling) then (i+1) else i in
+                        let ihandl = i in
                         let se_i = Types.mk_static_exp Initial.tint (Sint ihandl) in
                         let apElse = Hept_utils.mk_app Eselect ~params:(se_i::[]) in
                         let arrExp = Hept_utils.mk_exp (Evar vIdEelse) rhs.e_ty ~linearity:rhs.e_linearity in
@@ -486,7 +486,7 @@ let get_local_arrays nd =
   let lloc = nd.n_block.b_local in
   
   (* Get the arrays and their size*)
-  let lloc = List.map
+  let lloc = List.rev_map
     (fun vdec ->
       let ty = vdec.v_type in
       let optSize = get_array_const_size ty in
@@ -677,7 +677,7 @@ let aliasSubstitution tyAliasInfo nd =
       | _ -> varLoc
   in
   let lVarLoc = nd.n_block.b_local in
-  let nlVarLoc = List.map (replaceAliasType tyAliasInfo) lVarLoc in
+  let nlVarLoc = List.rev_map (replaceAliasType tyAliasInfo) lVarLoc in
   let nbl = { nd.n_block with b_local = nlVarLoc } in
 
   let nlVarIn = List.map (replaceAliasType tyAliasInfo) nd.n_input in

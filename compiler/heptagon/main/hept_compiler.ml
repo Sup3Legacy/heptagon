@@ -30,7 +30,8 @@
 open Compiler_options
 open Compiler_utils
 
-let pp p = if !verbose then Hept_printer.print stdout p
+(* TODO DEBUG *)
+let pp p = () (* if !verbose then Hept_printer.print stdout p *) (* TODO *)
 
 let compile_program p =
   (* Remove the "current" construct (syntactic sugar) *)
@@ -44,6 +45,9 @@ let compile_program p =
   
   (* Inlining *)
   let p = pass "Inlining" true Inline.program p pp in
+
+  (* Needed after inlining before causality check to avoid dep between a and d in "(a,b) = (c,d)" *)
+  let p = silent_pass "Tuple breaking" true TupleBreaking.program p in
   
   (* Pruning of the uncalled node *)
   let p = pass "Pruning" !prune Pruning.program p pp in
@@ -83,6 +87,14 @@ let compile_program p =
 
   (* Normalization *)
   let p = pass "Normalization" true Normalize.program p pp in
+
+
+
+
+  (* TODO: tuple destruction before normalization !!!
+      (to distribute and avoid tuple with "if" inside ) *)
+
+
   
   (* Boolean pass *)
   let p = pass "Clocking(Heptagon)" !boolean Hept_clocking.program p pp in
@@ -92,6 +104,7 @@ let compile_program p =
   (* Block flatten *)
   let p = pass "Block" true Block.program p pp in
   
+
 
   (* Temp pass - make a real compiler option for that *)
   let p = pass "Inline all constant" true InlineConstant.program p pp in
@@ -138,16 +151,14 @@ let compile_program p =
   let p = silent_pass "Tuple breaking" !hyperperiod TupleBreaking.program p in
   let p = silent_pass "Remove unused locvar - post hyperperiod expansion" !removeUnusedLocVar RemoveUnusedLocVar.program p in
 
-
-  (* TODO: check program here ??? (to see if equations from group here) *)
-
+  (* TODO: check order of transformation, to see what is the best *)
 
   let p = silent_pass "Copy equation removal (3)" !copyEqRemoval CopyRemoval.program p in
   let p = silent_pass "Slicing nominal (2)" !slicing_nominal Slicing.program p in
   let p = pass "Copy equation removal - post slicing (2)" !slicing_nominal CopyRemoval.program p pp in
   
 
-  (* TODO: DEBUG (in order to check the program before the equation clustering *)
+  (* TODO: DEBUG (in order to check the program before the equation clustering) *)
   if (true) then
     let oc = open_out "all_mls_before_eq_clustering.mls" in
     Hept_printer.print oc p

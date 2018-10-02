@@ -227,6 +227,7 @@ let contain_star_type_var = ref false
 %token POWER
 %token LBRACKET LBRACKETGREATER
 %token RBRACKET LESSRBRACKET
+%token LBRACKETPAR RBRACKETPAR
 %token DOUBLE_DOT
 %token AROBASE
 %token DOUBLE_LESS DOUBLE_GREATER
@@ -812,7 +813,7 @@ _exp:
   | CASE varCase=simple_exp OF lcaseCond=l_case_cond
       {
         (* lcaseCond : (exp opt, exp) list / none = default  *)
-        let default_case = List.hd (List.fold_left (fun acc (expopt, exp) ->
+        let default_case = Misc.assert_1 (List.fold_left (fun acc (expopt, exp) ->
             if (expopt=None) then exp::acc else acc) [] lcaseCond) in
         
         let lcaseCond = List.fold_left (fun acc (expopt,exp) -> match expopt with
@@ -833,7 +834,6 @@ _exp:
           mk_exp edesc no_location
 
           ) default_case lcaseCond in
-
         exp_ife.e_desc
       }
   /* condact to translate to when */
@@ -974,12 +974,33 @@ iterator:
 ;
 
 indexes:
-   LBRACKET exp RBRACKET { [$2] }
+   LBRACKET exp RBRACKET
+    {
+      let eInd = $2 in
+      if (!Compiler_options.scade_array) then
+        let seOne = mk_static_exp (Sint 1) Location.no_location in
+        let eOne = mk_exp (Econst seOne) Location.no_location in
+        let neIndDesc = mk_op_call "-" [eInd; eOne] in
+        let neInd = mk_exp neIndDesc eInd.e_loc in
+        [neInd]
+      else
+        [eInd]
+    }
   | LBRACKET exp RBRACKET indexes { $2::$4 }
 ;
 
 trunc_indexes:
-   LBRACKETGREATER exp LESSRBRACKET { [$2] }
+   LBRACKETGREATER exp LESSRBRACKET {
+    let eInd = $2 in
+    if (!Compiler_options.scade_array) then
+      let seOne = mk_static_exp (Sint 1) Location.no_location in
+      let eOne = mk_exp (Econst seOne) Location.no_location in
+      let neIndDesc = mk_op_call "-" [eInd; eOne] in
+      let neInd = mk_exp neIndDesc eInd.e_loc in
+      [neInd]
+    else
+      [eInd]
+   }
   | LBRACKETGREATER exp LESSRBRACKET trunc_indexes { $2::$4 }
 ;
 

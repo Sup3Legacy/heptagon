@@ -402,6 +402,17 @@ let transpose_list_list lle =
   if (lle=[]) then [] else
   transpose_list_list_aux lle (List.length (List.hd lle))
 
+(* Tail recursive version of the List.concat - do not preserve order *)
+let concat_list_revtr ll =
+  let rec concat_list_revtr_aux res ll = match ll with
+    | [] -> res
+    | hl::tl ->
+      let nres = List.rev_append hl res in
+      concat_list_revtr_aux nres tl
+  in
+  concat_list_revtr_aux [] ll
+
+
 (* Find vid in the 3 HashTbls *)
 let search_var_ident varTables vid =
   let (varTblIn, varTblOut, varTblLoc) = varTables in
@@ -776,7 +787,8 @@ and pat_duplEq varTables htblClocks p = match p with
     nlp
 
 
-and eqdesc_duplEq varTables lvardec htblClocks eqdesc = match eqdesc with
+and eqdesc_duplEq varTables lvardec htblClocks eqdesc =
+  match eqdesc with
   | Eeq (plhs, rhs) -> 
     let (lplhs: Heptagon.pat list) = pat_duplEq varTables htblClocks plhs in
     let (lrhs: Heptagon.exp list) = exp_duplEq varTables lvardec htblClocks lplhs rhs in
@@ -805,6 +817,10 @@ and eqdesc_duplEq varTables lvardec htblClocks eqdesc = match eqdesc with
 
       (* Normalization needed: we split the tuple into several equations *)
       let l_lhsvarid = get_list_vid pl in
+
+      (* TODO: Bug for "xOutput1_2372 = (xv_4363, xv_4364)" *)
+      (* => Modification of the application to avoid it... :/ *)
+
       assert((List.length l_lhsvarid) = (List.length tuple_args));
       let leq = list_map3 (fun lhs erhs tyElem ->
         if (is_a_pre) then
@@ -817,14 +833,14 @@ and eqdesc_duplEq varTables lvardec htblClocks eqdesc = match eqdesc with
       ) l_lhsvarid tuple_args ltyTuple in
       leq
     ) lplhs lrhs in
-    let nlEqDecs = List.concat nllEqDecs in
+    let nlEqDecs = concat_list_revtr nllEqDecs in
     nlEqDecs
   | _ -> raise Equation_not_in_Eeq_form
 
 
 and eq_duplEq varTables lvardec htblClocks eq =
   let leqdesc = eqdesc_duplEq varTables lvardec htblClocks eq.eq_desc in
-  let leq = List.map
+  let leq = List.rev_map
     (fun eqdesc -> Hept_utils.mk_equation eqdesc)
     leqdesc
   in
@@ -955,7 +971,7 @@ let create_list_from_idelem_list lkVar =
   let arrTemp = Array.make (List.length lkVar) None in
   let arrTemp = List.fold_left
     (fun acc (k,vd) ->
-      let kAdapted = if (!Compiler_options.safran_handling) then k-1 else k in
+      let kAdapted = k in
       Array.set acc kAdapted (Some vd);
       acc
     )
@@ -998,6 +1014,7 @@ let destroy_arrays_fby nd lInfoArrToDestroy lresteq lArrDestructable =
     ArrayDestruct.IdentMap.add arrId lArrVarDecl macc
   ) sArrDestr mArrDestr in
 
+  
   (* Building the new equations
     It should be enough to consider the fby equations because of the special situation*)
   let nEqs = List.fold_left (fun acc info ->
@@ -1032,6 +1049,10 @@ let destroy_arrays_fby nd lInfoArrToDestroy lresteq lArrDestructable =
 
     (* If right array is not destructible, we need to destruct it first ? *)
     let lneqs = if true then begin (* (not isrhsDestr) then begin *)
+
+      (* TODO DEBUG : not truly a tuple needed here, but the access of an array *)
+
+
       let plhs = Etuplepat (List.map (fun vdec -> Evarpat vdec.v_ident) lvdecRhs) in
       let sesize = Types.mk_static_exp Initial.tint (Sint arrsize) in
       let tyarr = Tarray (tybase, sesize) in
@@ -1046,7 +1067,7 @@ let destroy_arrays_fby nd lInfoArrToDestroy lresteq lArrDestructable =
   let funs_subst_array = { Hept_mapfold.defaults with
     Hept_mapfold.edesc = (ArrayDestruct.edesc_subst_array mArrDestr)
   } in
-  let lresteq = List.map (fun equ ->
+  let lresteq = List.rev_map (fun equ ->
     let nequ, _ = funs_subst_array.Hept_mapfold.eq funs_subst_array [] equ in
     nequ
   ) lresteq in
@@ -1066,7 +1087,7 @@ let destroy_arrays_fby nd lInfoArrToDestroy lresteq lArrDestructable =
       => Destructible is not exactly what we need ? :/   ===> If do that, nothing is destructible (copies)
       ===> Extend array destruct to copies? Aoutch ... :/
 
-      Meilleure solution?
+      Best solution?
         => Do not remove array by default, i.e. always decompose and reconstruct :/
         => Copy equation will stay internal to a group (because 1 use and 1 read ===> linear ),
         no need to make them scalar, it will be dealed with after the equation clustering
@@ -1110,6 +1131,9 @@ let destruct_array_fby nd =
 
 (* ================================================================================ *)
 
+let debug_HE = false (* TODO DEBUG *)
+let ffout = Format.formatter_of_out_channel stdout
+
 (* Main functions *)
 let node nd =
   (* Step 0: get the equation using Wfz02_00_seq.wfz02_00_seq and put it in relation to correspondance_clock_safran *)
@@ -1121,6 +1145,9 @@ let node nd =
   (* Do the same with the clock from the ecas *)
   fill_correspondance_clock_array_ecas ();
   let htblClocks = find_seq_call_eq htblClocks name_seq_call_ecas correspondance_clock_ecas nd.n_block in
+
+  if (debug_HE) then
+    Format.fprintf ffout "[debug_HE] step 0 - htblClocks built\n@?";
 
   (* Step 1: creates all instances of variables *)
   let varTblIn = Hashtbl.create (List.length nd.n_input) in
@@ -1141,6 +1168,9 @@ let node nd =
     ) nd.n_block.b_local;
   let varTables = (varTblIn, varTblOut, varTblLoc) in
 
+  if (debug_HE) then
+    Format.fprintf ffout "[debug_HE] step 1 - varTables built\n@?";
+
   (* Step 2: duplicate equations *)
   let lvardec = nd.n_input @ nd.n_output @ nd.n_block.b_local in
   let lneqs = List.fold_left (fun acc eq ->
@@ -1151,6 +1181,9 @@ let node nd =
   (* TODO: iterate over contracts also? => nContract *)
   assert(nd.n_contract=None);
   let nContract = None in
+
+  if (debug_HE) then
+    Format.fprintf ffout "[debug_HE] step 2 - equation and var decl built\n@?";
 
   (* Step 3: build the new system and return it *)
   let lnInputs = get_all_var_decl varTblIn in
@@ -1178,12 +1211,22 @@ let node nd =
     n_param_constraints = nd.n_param_constraints;
   } in
 
+
+  if (debug_HE) then
+    Format.fprintf ffout "[debug_HE] step 3 - block built\n@?";
+
   (* Quick normalization of the "var1 = 0 fby (var2+1)" equation we had to add in the system *)
   let n_nd = if (nominal_slicing) then (normalization_counter n_nd) else n_nd in
+
+  if (debug_HE) then
+    Format.fprintf ffout "[debug_HE] step 4 - normalization counter done\n@?";
 
   (* Array destruct for the Var1 = 0^n fby Var2, where Var2 is potentially the output of a wfz? *)
   let n_nd = destruct_array_fby n_nd in
 
+
+  if (debug_HE) then
+    Format.fprintf ffout "[debug_HE] step 5 - destruct array fby done\n@?";
 
   (* Visitor to set all level_ck to Clocks.Cbase *)
   (* let exp_clockbase funs acc exp =

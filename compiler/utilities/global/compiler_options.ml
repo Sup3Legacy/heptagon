@@ -70,7 +70,7 @@ let show_version () =
 (* other options of the compiler *)
 let calc_deps = ref false
 let calc_stats = ref false
-let safran_handling = ref false
+let scade_array = ref false
 let files_to_open = ref ([] : string list)
 let new_file_to_open s = (files_to_open := s :: !files_to_open)
 
@@ -120,6 +120,9 @@ let init = ref true
 
 let inline : qualname list ref = ref []
 let add_inlined_node s = inline := s :: !inline
+
+let inline_prefix : string list ref = ref []
+let add_inlined_prefix_node s = inline_prefix := s :: !inline_prefix
 
 let flatten = ref false
 
@@ -211,7 +214,7 @@ and doc_include = "<dir>\t\tAdd <dir> to the list of include directories"
 and doc_stdlib = "<dir>\t\tDirectory for the standard library"
 and doc_calc_deps = "\t\t\tCalculate dependencies for the given files"
 and doc_calc_stats = "\t\t\tCalculate statistics for the given files"
-and doc_safran_handling = "\t\t\tTrigger special modification to fit the Safran usecase"
+and doc_scade_array = "\t\t\tManages Scade arrays indices which starts at 1"
 
 and doc_files_to_open = "\t\tFiles to open before compiling"
 and doc_object_file = "\t\t\tOnly generate a .epo object file"
@@ -250,6 +253,7 @@ and doc_nocaus = "\t\tDisable causality analysis"
 and doc_noinit = "\t\tDisable initialization analysis"
 and doc_assert = "<node>\tInsert run-time assertions for boolean node <node>"
 and doc_inline = "<node>\tInline node <node>"
+and doc_inline_prefix = "<node>\tInline nodes starting with this string."
 and doc_itfusion = "\t\tEnable iterator fusion."
 and doc_tomato = "\t\tEnable automata minimization."
 and doc_strict_ssa = "\t\tEnsure that the generated code is SSA, even for array elements."
