@@ -178,6 +178,16 @@ let get_dummy_expr t =
   mk_exp (Econst sexp) no_location 
 
 
+(* Check is e is an integer constant. Return (Some i) if it is, else return None *)
+let is_integer_const e = match e.e_desc with
+  | Econst se -> begin match se.se_desc with
+    | Sint i -> Some i
+    | _ -> None
+  end
+  | _ -> None
+
+
+
 (* TODO: hacky solution to manage the "*" types as a type variable (cf NamedNVM.saofd in Safran UC) *)
 let default_type_var_string = "t_default"
 let default_type_var_name = ToQ default_type_var_string
@@ -949,11 +959,17 @@ _exp:
                 Efield_update [$2; $7] }
   
 /* ADDED FOR SAFRAN UC */
-  | LBRACKET l=separated_nonempty_list(COMMA, exp) RBRACKET
+  | LBRACKET l=separated_nonempty_list(sepArray, exp) RBRACKET
       { mk_call Earray l }
-  | LBRACKET l=separated_nonempty_list(SEMICOL, exp) RBRACKET
-      { mk_call Earray l }
+/*  | LBRACKET l=separated_nonempty_list(SEMICOL, exp) RBRACKET
+      { mk_call Earray l } */
 ;
+
+sepArray:
+  | COMMA     {}
+  | SEMICOL   {}
+;
+
 
 l_case_cond:
   | DEFAULT COLON LPAREN exp RPAREN                  { (None, $4)::[] }
@@ -978,11 +994,18 @@ indexes:
     {
       let eInd = $2 in
       if (!Compiler_options.scade_array) then
-        let seOne = mk_static_exp (Sint 1) Location.no_location in
-        let eOne = mk_exp (Econst seOne) Location.no_location in
-        let neIndDesc = mk_op_call "-" [eInd; eOne] in
-        let neInd = mk_exp neIndDesc eInd.e_loc in
-        [neInd]
+        let oiValeInd = is_integer_const eInd in
+        match oiValeInd with
+        | None ->
+          let seOne = mk_static_exp (Sint 1) Location.no_location in
+          let eOne = mk_exp (Econst seOne) Location.no_location in
+          let neIndDesc = mk_op_call "-" [eInd; eOne] in
+          let neInd = mk_exp neIndDesc eInd.e_loc in
+          [neInd]
+        | Some i ->
+          let nseIntDesc = mk_static_exp (Sint (i-1)) Location.no_location in
+          let neInd = mk_exp (Econst nseIntDesc) eInd.e_loc in
+          [neInd]
       else
         [eInd]
     }
@@ -993,11 +1016,18 @@ trunc_indexes:
    LBRACKETGREATER exp LESSRBRACKET {
     let eInd = $2 in
     if (!Compiler_options.scade_array) then
-      let seOne = mk_static_exp (Sint 1) Location.no_location in
-      let eOne = mk_exp (Econst seOne) Location.no_location in
-      let neIndDesc = mk_op_call "-" [eInd; eOne] in
-      let neInd = mk_exp neIndDesc eInd.e_loc in
-      [neInd]
+      let oiValeInd = is_integer_const eInd in
+      match oiValeInd with
+      | None ->
+        let seOne = mk_static_exp (Sint 1) Location.no_location in
+        let eOne = mk_exp (Econst seOne) Location.no_location in
+        let neIndDesc = mk_op_call "-" [eInd; eOne] in
+        let neInd = mk_exp neIndDesc eInd.e_loc in
+        [neInd]
+      | Some i ->
+        let nseIntDesc = mk_static_exp (Sint (i-1)) Location.no_location in
+        let neInd = mk_exp (Econst nseIntDesc) eInd.e_loc in
+        [neInd]
     else
       [eInd]
    }

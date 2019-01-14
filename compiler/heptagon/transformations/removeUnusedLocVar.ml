@@ -291,7 +291,7 @@ let edesc_const_array_tuple funs acc edesc = match edesc with
           if (MapVarId.mem vid acc) then
             let lelem = MapVarId.find vid acc in
             let access_int = assert_int (Misc.assert_1 a.a_params) in
-            let elem = List.nth lelem (access_int-1) in (* NOTE! Safran numerotation !!! *)
+            let elem = List.nth lelem access_int in
             (Econst elem), acc
           else Hept_mapfold.edesc funs acc edesc
         | _ -> Hept_mapfold.edesc funs acc edesc
@@ -441,6 +441,7 @@ let const_fby_removal nd =
     
     (* Only one var on the left *)
     let lvidlhs = get_list_vid plhs in
+    if ((List.length lvidlhs)= 0) then eq::acc else (* Void equation *)
     if ((List.length lvidlhs)>1) then eq::acc else
     let vidlhs = List.hd lvidlhs in
 
@@ -483,6 +484,10 @@ let remove_outputs_to_local nd =
 (* ============================================================================= *)
 (* Main functions *)
 let node constmap nd =
+  (* DEBUG
+  Format.fprintf (Format.formatter_of_out_channel stdout) "DEBUG - entering node %a\n@?"
+    Global_printer.print_qualname nd.n_name; *)
+
   let nd = remove_void_equation nd in
   let nd = if (remove_outputs) then (remove_outputs_to_local nd) else nd in
   let nd = closure_useless_locvar_removal nd in

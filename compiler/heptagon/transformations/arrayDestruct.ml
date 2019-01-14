@@ -64,7 +64,7 @@ let edesc_subst_array mArrayVar funs acc ed = match ed with
           else
           
           let index = match stExpIndex.se_desc with
-            | Sint i -> i
+            | Sint i -> i-1
             | _ -> failwith "ArrayDestruct: parameter of a Eselect is not an integer."
           in
           (* Getting the associated local variable *)
@@ -381,8 +381,6 @@ let create_var_decl_aux arrId sizeArr tyArr =
 let destroyArrays nd larrIdToDestroy =
 
   (* Creation of the new variable declaration *)
-  
-  
   let bl = nd.n_block in
   
   (* Creation of the new local variables
@@ -704,6 +702,9 @@ let rec findAndDestroyArrays nd =
 
 (* Main function *)
 let node tyAliasInfo nd =
+  (* Skip the non-main nodes *)
+  if (not (List.mem nd.n_name (!Compiler_options.mainnode))) then nd else
+
   let nd = aliasSubstitution tyAliasInfo nd in
   let nd = findAndDestroyArrays nd in
   nd

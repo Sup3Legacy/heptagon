@@ -667,7 +667,12 @@ and elementary_func_call_duplEq varTables (lvardec:var_dec list) htblClocks lplh
 
 
     (* Checking if the first argument is a clock *)
-    let first_arg = List.hd le in
+    (* If "internal_state_exposal" transformation is enable, this argument becomes the second one *)
+    let first_arg = if (!Compiler_options.exposeintstate) then
+        List.hd (List.tl le)
+      else
+        List.hd le
+    in
     let optbaseclockvarid = match first_arg.e_desc with
       | Evar vid -> Some vid
       | Econst se -> None  (* TODO: assert that "se" is true ? *)
@@ -1136,6 +1141,10 @@ let ffout = Format.formatter_of_out_channel stdout
 
 (* Main functions *)
 let node nd =
+  (* If not the main node, ignore *)
+  if (not (List.mem nd.n_name (!Compiler_options.mainnode))) then nd else
+
+
   (* Step 0: get the equation using Wfz02_00_seq.wfz02_00_seq and put it in relation to correspondance_clock_safran *)
   let htblClocks = Hashtbl.create 43 in
   (* Fill the correspondance array now (because it's the initialization) *)

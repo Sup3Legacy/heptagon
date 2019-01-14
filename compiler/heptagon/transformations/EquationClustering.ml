@@ -1128,12 +1128,15 @@ let node nd =
 
 let program p =
   let npdesc = List.fold_left (fun acc pdesc ->
-  	 match pdesc with
-  	   | Pnode nd ->
+  	match pdesc with
+  	  | Pnode nd ->
+        (* Only main node *)
+        if (not (List.mem nd.n_name (!Compiler_options.mainnode))) then (Pnode nd)::acc else
+
         let new_nd = node nd in
         let new_pnode = List.rev_map (fun nd1 -> Pnode nd1) new_nd in
         List.rev_append new_pnode acc
-  	   | _ -> pdesc::acc
+  	  | _ -> pdesc::acc
   	) [] p.p_desc in
 
   { p with p_desc = npdesc }

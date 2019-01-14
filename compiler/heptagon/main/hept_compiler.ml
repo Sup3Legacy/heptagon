@@ -87,14 +87,6 @@ let compile_program p =
 
   (* Normalization *)
   let p = pass "Normalization" true Normalize.program p pp in
-
-
-
-
-  (* TODO: tuple destruction before normalization !!!
-      (to distribute and avoid tuple with "if" inside ) *)
-
-
   
   (* Boolean pass *)
   let p = pass "Clocking(Heptagon)" !boolean Hept_clocking.program p pp in
@@ -111,7 +103,7 @@ let compile_program p =
   
   
   (* For script adaptation with Lopht ===> Should be disabled afterward *)
-  let p = silent_pass "Variable renaming" true Varname_change.program p in (* TODO: disable that *)
+  let p = silent_pass "Variable renaming" false Varname_change.program p in (* TODO: disable that *)
 
 
   let p = silent_pass "Elimination of pre" !preElimination EliminationPre.program p in
@@ -127,6 +119,10 @@ let compile_program p =
     Hept_printer.print oc p
   else ();
   (* *)
+
+  (* TODO: scalarification in the main system... :/ *)
+  let p = pass "Scalarify main system" !scalarify Scalarify.program p pp in
+
 
   (* Array destruction + copy equation afterward to clean up *)
   let p = silent_pass "Remove unused locvar - pre arraydestruction" !removeUnusedLocVar RemoveUnusedLocVar.program p in
@@ -145,6 +141,7 @@ let compile_program p =
   (* let p = pass "Dependence graph generation" ((!depgraphGeneration)!=[]) DepGraphGeneration.program p pp in *)
 
   (* Dirty hyperperiod expansion output for the Safran usecase *)
+  let p = silent_pass "Internal state exposal" (!hyperperiod && !exposeintstate) InternalStateExposal.program p in
   let p = silent_pass "Dirty Hyperperiod expansion" !hyperperiod Dirty_hyperperiod_expansion_Safran.program p in
   (* let p = pass "Normalization" !hyperperiod Normalize.program p pp in For counter in hyperperiod expansion for sequenceur ??? *)
 

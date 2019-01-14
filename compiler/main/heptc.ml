@@ -249,6 +249,7 @@ let main () =
         "-inlinePrefix", Arg.String add_inlined_prefix_node, doc_inline_prefix;
         "-flatten", Arg.Set flatten, doc_flatten;
         "-mainnode", read_qualname add_main_node, doc_mainnode;
+        "-scalarify", Arg.Set scalarify, doc_scalarify;
         "-prune", Arg.Set prune, doc_prune;
         "-copyRemoval", Arg.Set copyRemoval, doc_copyRemoval;
         "-arrayDestruct", Arg.Set arrayDestruct, doc_arrayDestruct;
@@ -261,7 +262,7 @@ let main () =
         "-remUnusedLocVar", Arg.Set removeUnusedLocVar, doc_removeUnusedLocVar;
         "-copyEqRemoval", Arg.Set copyEqRemoval, doc_copyEqRemoval;
         "-safranClustering", Arg.Set safran_clustering, doc_safran_clustering;
-        
+        "-intstate", Arg.Set exposeintstate, doc_exposeintstate;
         
         "-assert", Arg.String add_assert, doc_assert;
         "-nopervasives", Arg.Unit set_no_pervasives, doc_no_pervasives;
