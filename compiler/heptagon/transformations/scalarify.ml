@@ -19,7 +19,7 @@ open Heptagon
 
 
 (* TODO DEBUG *)
-let debug_scalarify = false (* DEBUG *)
+let debug_scalarify = true (* DEBUG *)
 let ffout = Format.formatter_of_out_channel stdout
 
 
@@ -287,9 +287,18 @@ let eq_scalarify mvid_vdec macc eq =
   match optInfoCall with
   | None -> (eq::[], [], macc)
   | Some (fun_name, lplhs, lsexp) -> begin
-
     (* We get the signature of fun_name *)
     let sig_fun = Modules.find_value fun_name in
+
+
+    if (debug_scalarify) then
+      Format.fprintf ffout "... Testing node call \"%a\"\n@?"
+        Global_printer.print_qualname fun_name;
+    (* if (debug_scalarify) then
+      Format.fprintf ffout "... ... Signature = \"%a\"\n@?"
+        Global_printer.print_interface_value (fun_name.name, sig_fun); *)
+
+
     if (signature_only_scalar sig_fun) then (eq::[], [], macc) else
     begin
 

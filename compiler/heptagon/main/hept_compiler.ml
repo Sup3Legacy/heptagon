@@ -103,7 +103,7 @@ let compile_program p =
   
   
   (* For script adaptation with Lopht ===> Should be disabled afterward *)
-  let p = silent_pass "Variable renaming" false Varname_change.program p in (* TODO: disable that *)
+  let p = silent_pass "Variable renaming" true Varname_change.program p in (* TODO: disable that *)
 
 
   let p = silent_pass "Elimination of pre" !preElimination EliminationPre.program p in
@@ -111,7 +111,6 @@ let compile_program p =
   (* Copy equation ("VarLoc1 = VarLoc2") removal *)
   let p = pass "Copy equation removal" !copyRemoval CopyRemoval.program p pp in
   
-
 
   (* TODO: DEBUG (in order to merge the as and the ecas *)
   if (true) then

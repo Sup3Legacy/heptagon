@@ -700,6 +700,8 @@ let rec findAndDestroyArrays nd =
   
 
 
+
+
 (* Main function *)
 let node tyAliasInfo nd =
   (* Skip the non-main nodes *)

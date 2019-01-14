@@ -41,6 +41,16 @@ open C
 open Location
 open Format
 
+
+(* Option to put the internal state in first position of a step function *)
+let option_mem_arg_first = false (* TODO: make a real compiler option for that *)
+
+(* Option to not generate an output structure, but a list of elements *)
+let option_list_elem_output = false (* TODO: make a real compiler option for that *)
+  (* TODO: finish the implementation of this option later *)
+
+
+
 module Error =
 struct
   type error =
@@ -167,6 +177,15 @@ let inputlist_of_ovarlist vl =
     name vd.v_ident, ty
   in
   List.map cvar_of_ovar vl
+
+let outputlist_of_ovarlist vl =
+  let cvar_of_ovar vd =
+    let ty = ctype_of_otype vd.v_type in
+    let ty = pointer_type vd.v_type ty in (* Always pointer, because output *)
+    name vd.v_ident, ty
+  in
+  List.map cvar_of_ovar vl
+
 
 (** @return the unaliased version of a type. *)
 let rec unalias_ctype cty = match cty with
@@ -422,12 +441,11 @@ let rec assoc_obj instance obj_env =
 let assoc_cn instance obj_env =
   (assoc_obj (obj_ref_name instance) obj_env).o_class
 
-let is_op = function
+let is_op f = match f with
   | { qual = Pervasives; name = _ } -> true
   | _ -> false
 
-let out_var_name_of_objn o =
-   o ^"_out_st"
+let out_var_name_of_objn o = o ^ "_out_st"
 
 (** Creates the list of arguments to call a node. [targeting] is the targeting
     of the called node, [mem] represents the node context and [args] the
@@ -454,7 +472,10 @@ let step_fun_call out_env var_env sig_info objn out args =
              in
              mk_idx l
       ) in
-      args@[Caddrof out; Caddrof mem]
+      if (option_mem_arg_first) then
+        (Caddrof mem) :: (args@[Caddrof out])
+      else
+        args@[Caddrof out; Caddrof mem]
   ) else
     args@[Caddrof out]
 
@@ -629,10 +650,7 @@ and cstm_of_act_list out_env var_env obj_env b =
   let l = List.map cvar_of_vd b.b_locals in
   let var_env = l @ var_env in
   let cstm = List.flatten (List.map (cstm_of_act out_env var_env obj_env) b.b_body) in
-    match l with
-      | [] -> cstm
-      | _ ->
-            [Csblock { var_decls = l; block_body = cstm }]
+  if (l=[]) then cstm else [Csblock { var_decls = l; block_body = cstm }]
 
 (* TODO needed only because of renaming phase *)
 let global_name = ref "";;
@@ -647,13 +665,21 @@ let qn_append q suffix =
 (** Builds the argument list of step function*)
 let step_fun_args n md =
   let args = inputlist_of_ovarlist md.m_inputs in
-  let out_arg = [("_out", Cty_ptr (Cty_id (qn_append n "_out")))] in
+  let out_arg =
+    if (option_list_elem_output) then
+      outputlist_of_ovarlist md.m_outputs
+    else
+      [("_out", Cty_ptr (Cty_id (qn_append n "_out")))]
+  in
   let context_arg =
     if is_stateful n then
       [("self", Cty_ptr (Cty_id (qn_append n "_mem")))]
     else
       []
   in
+  if (option_mem_arg_first) then
+    context_arg @ args @ out_arg
+  else
     args @ out_arg @ context_arg
 
 
@@ -671,19 +697,25 @@ let fun_def_of_step_fun n obj_env mem objs md =
 
   (* Out vars for function calls *)
   let out_vars =
-    unique
-      (List.map (fun obj -> out_var_name_of_objn (cname_of_qn obj.o_class),
+    if (option_list_elem_output) then
+      [] (* No output structure => does not need to manage those of the called node *)
+    else
+      unique
+        (List.map (fun obj -> out_var_name_of_objn (cname_of_qn obj.o_class),
                    Cty_id (qn_append obj.o_class "_out"))
-         (List.filter (fun obj -> not (is_op obj.o_class)) objs)) in
+          (List.filter (fun obj -> not (is_op obj.o_class)) objs)) in
 
   (* The body *)
   let mems = List.map cvar_of_vd (mem@md.m_outputs) in
   let var_env = args @ mems @ out_vars in
   let out_env =
-    List.fold_left
-      (fun out_env vd -> IdentSet.add vd.v_ident out_env)
-      IdentSet.empty
-      md.m_outputs
+    if (option_list_elem_output) then
+      IdentSet.empty (* No need for specialized output var inside the step function *)
+    else
+      List.fold_left
+        (fun out_env vd -> IdentSet.add vd.v_ident out_env)
+        IdentSet.empty
+        md.m_outputs
   in
   let body = cstm_of_act_list out_env var_env obj_env md.m_body in
 
@@ -764,11 +796,16 @@ let cdefs_and_cdecls_of_class_def cd =
   Idents.enter_node cd.cd_name;
   let step_m = find_step_method cd in
   let memory_struct_decl = mem_decl_of_class_def cd in
-  let out_struct_decl = out_decl_of_class_def cd in
+  let out_struct_decl =
+    if (option_list_elem_output) then [] else
+    out_decl_of_class_def cd
+  in
+
   let step_fun_def = fun_def_of_step_fun cd.cd_name
     cd.cd_objs cd.cd_mems cd.cd_objs step_m in
   (* C function for resetting our memory structure. *)
   let reset_fun_def = reset_fun_def_of_class_def cd in
+
   let res_fun_decl = cdecl_of_cfundef reset_fun_def in
   let step_fun_decl = cdecl_of_cfundef step_fun_def in
   let (decls, defs) =
@@ -777,8 +814,7 @@ let cdefs_and_cdecls_of_class_def cd =
     else
       ([step_fun_decl], [step_fun_def]) in
 
-  memory_struct_decl @ out_struct_decl @ decls,
-  defs
+  (memory_struct_decl @ out_struct_decl @ decls, defs)
 
 (** {2 Type translation} *)
 

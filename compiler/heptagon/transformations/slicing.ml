@@ -4,7 +4,7 @@
 
 (* Author: Guillaume I *)
 
-
+open Names
 open Heptagon
 open Hept_mapfold
 
@@ -68,15 +68,17 @@ let node_ifte nd =
 
 (* ==================================================== *)
 
+let is_main_node nd =
+  List.mem nd.n_name.name (List.map (fun qname -> qname.name) !Compiler_options.mainnode)
+
 let program p =
   let nlpdesc = List.fold_left
   (fun acc pdesc -> match pdesc with
     | Pnode nd ->
       (* We just want to do that on the main node *)
-      if (not (List.mem nd.n_name (!Compiler_options.mainnode))) then
+      if (not (is_main_node nd)) then
         (Pnode nd)::acc
       else
-
       let nd = node_slice nd in
       let nd = RemoveUnusedLocVar.closure_const_var_propagation nd in
       let nd = node_ifte nd in

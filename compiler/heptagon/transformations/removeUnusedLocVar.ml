@@ -484,6 +484,8 @@ let remove_outputs_to_local nd =
 (* ============================================================================= *)
 (* Main functions *)
 let node constmap nd =
+  (* If not the main node, ignore *)
+  if (not (List.mem nd.n_name (!Compiler_options.mainnode))) then nd else
   (* DEBUG
   Format.fprintf (Format.formatter_of_out_channel stdout) "DEBUG - entering node %a\n@?"
     Global_printer.print_qualname nd.n_name; *)

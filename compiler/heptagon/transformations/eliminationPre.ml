@@ -2,11 +2,14 @@
 (* This transformation remove the Epre(None, ...) from the AST,
   and replace them by Efby(stexp, ...), with a dummy static expression *)
 
+(* Also perform alias substitution *)
+
 (* Author: Guillaume I *)
 
 open Names
 open Idents
 open Types
+open Signature
 open Heptagon
 open Hept_mapfold
 
@@ -116,17 +119,30 @@ let getTyAliasInfo p =
     ) [] p.p_desc in
   tyAliasInfo
 
+
+let rec find_aliasInfo tyAliasInfo tid = match tyAliasInfo with
+  | [] -> None
+  | (nty, ty)::r ->
+    if (tid.name = nty.name) then Some ty
+    else find_aliasInfo r tid
+
+let replaceType tyAliasInfo tyVarLoc = match tyVarLoc with
+  | Tid tid ->
+    begin
+    let optTy = find_aliasInfo tyAliasInfo tid in
+    match optTy with
+      | None -> tyVarLoc
+      | Some ty -> ty
+    end
+  | _ -> tyVarLoc
+
+
 (* Iterate over all local variables and replace their type with the aliased expression, if needed *)
 let aliasSubstitution tyAliasInfo nd =
-  let rec find_aliasInfo tyAliasInfo tid = match tyAliasInfo with
-    | [] -> None
-    | (nty, ty)::r ->
-      if (tid.name = nty.name) then Some ty
-      else find_aliasInfo r tid
-  in
   let replaceAliasType tyAliasInfo varLoc =
     let tyVarLoc = varLoc.v_type in
-    match tyVarLoc with
+    { varLoc with v_type = replaceType tyAliasInfo tyVarLoc }
+    (* match tyVarLoc with
       | Tid tid ->
         begin
         let optTy = find_aliasInfo tyAliasInfo tid in
@@ -134,7 +150,7 @@ let aliasSubstitution tyAliasInfo nd =
           | None -> varLoc
           | Some ty -> { varLoc with v_type = ty }
         end
-      | _ -> varLoc
+      | _ -> varLoc *)
   in
   let lVarLoc = nd.n_block.b_local in
   let nlVarLoc = List.map (replaceAliasType tyAliasInfo) lVarLoc in
@@ -152,9 +168,28 @@ let aliasSubstitution tyAliasInfo nd =
 (* TODO: get informations of types and make the init_stexp_fby initialisation more general *)
 
 
+(* Alias substitution in the arguments of the signature of the global environment *)
+let arg_subst_ty tyAliasInfo arg =
+  { arg with a_type = replaceType tyAliasInfo arg.a_type}
+
 
 let program p =
   let tyAliasInfo = getTyAliasInfo p in
+
+  (* Substitution on the signatures in Modules *)
+  let n_env_values = QualEnv.fold (fun k sign acc ->
+    let ninputs = List.map (fun argin ->
+      arg_subst_ty tyAliasInfo argin
+    ) sign.node_inputs in
+    let noutputs = List.map (fun argout ->
+      arg_subst_ty tyAliasInfo argout
+    ) sign.node_outputs in
+    let nsign = { sign with node_inputs = ninputs; node_outputs = noutputs } in
+    QualEnv.add k nsign acc
+  ) Modules.g_env.values QualEnv.empty in
+  Modules.g_env.values <- n_env_values;
+
+  (* Substitution on the nodes of the program *)
   let lnpdesc = List.map (fun pdesc -> match pdesc with
     | Pnode nd ->
       let nd = aliasSubstitution tyAliasInfo nd in
