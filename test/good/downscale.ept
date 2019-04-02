@@ -77,9 +77,9 @@ let
   i_img = (i_x = 0) & (i_y = 0);
   i_buff = current_node(mod_counter<<2>>() - 1, i_img);
   o_buff = (i_buff + 1) % 2;
-  o_y = mod_counter<<y>>() -1;
+  o_y = mod_counter<<y>>() - 1;
   o_line = o_y = 0;
-  o_x = current_node (mod_counter<<x>>()-1, o_line);
+  o_x = current_node (mod_counter<<x>>() - 1, o_line);
   store = (pix_zero^x^y^2) fby [store with [i_buff][i_y][i_x] = i];
   o = store[>o_buff<][>o_y<][>o_x<];
 tel

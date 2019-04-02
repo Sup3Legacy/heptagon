@@ -71,6 +71,6 @@ let
   () = jj();
   o1 = if (g(false fby true)) then 1 else 2;
   () = hhh();
-  o2 = hh(0 fby 1 fby 2, 3, o1-2);
+  o2 = hh(0 fby 1 fby 2, 3, o1 - 2);
 tel
 

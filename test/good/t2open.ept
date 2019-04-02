@@ -41,5 +41,5 @@ node h(x,z,m:int) returns (o:int)
 node main() returns (o1,o2:int)
 let
   o1 = if (g(false fby true)) then 1 else 2;
-  o2 = h(0 fby 1 fby 2, 3, o1-2);
+  o2 = h(0 fby 1 fby 2, 3, o1 - 2);
 tel

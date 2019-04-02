@@ -1,7 +1,7 @@
 fun g(a:int) returns (u,v:int)
 let
-  u = a+1;
-  v = a-1;
+  u = a + 1;
+  v = a - 1;
 tel
 
 node f(a:int; c:bool) returns (o:int)

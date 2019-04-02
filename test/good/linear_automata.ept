@@ -7,7 +7,7 @@ tel
 
 fun g(a:int^n at r) returns (o:int^n at r)
 let
-  o = [ a with [n-1] = 10 ]
+  o = [ a with [n - 1] = 10 ]
 tel
 
 node autom(a:int^n at r) returns (o:int^n at r; u:int)
@@ -41,7 +41,7 @@ let
     until false then S1
   end;
   u1 = o[0];
-  u2 = o[n-1];
+  u2 = o[n - 1];
 tel
 
 node main() returns (u1,u2:int)

@@ -26,8 +26,8 @@ let
       var i,x1,x2:int;
       do
         i = 0 fby i + 1;
-        x1 = (last t).[i-2] default 0;
-        x2 = (last t).[i-1] default 1;
+        x1 = (last t).[i - 2] default 0;
+        x2 = (last t).[i - 1] default 1;
         t = [ (last t) with [i] = x1 + x2 ];
         o = p(t);
       until i = 43 then Compute

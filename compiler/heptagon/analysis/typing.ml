@@ -500,7 +500,11 @@ let rec _unify cenv t1 t2 =
     | Tclasstype (tn1, _), _ ->
       begin
       match (find_typeconstrnt tn1.name !curr_typeconstrnt) with
-        | None -> error (EconstrOnClassType (tn1,t2))
+        | None -> begin
+            Format.fprintf (Format.formatter_of_out_channel stdout) "curr_typeconstrnt =\n%a\n@?"
+                    print_lntypeclass !curr_typeconstrnt;
+            error (EconstrOnClassType (tn1,t2))
+            end
         | Some (_,_,None) ->
           curr_typeconstrnt := replace_typeconstrnt tn1.name (Some t2) !curr_typeconstrnt;
         | Some (_,_,Some tyval) -> _unify cenv t2 tyval
@@ -694,12 +698,12 @@ and typing_operator op cenv se_list =
   begin
     fprintf (formatter_of_out_channel stdout) "ty_desc = %a\n@?"
       Global_printer.print_interface_value (op.name,ty_desc);
-    fprintf (formatter_of_out_channel stdout) "expected_ty_list =@?";
-    Pp_tools.print_list Global_printer.print_type "[" "; " "]"  (formatter_of_out_channel stdout) expected_ty_list;
-    fprintf (formatter_of_out_channel stdout) "\n@?";
-    fprintf (formatter_of_out_channel stdout) "expected_ty_output =@?";
-    Pp_tools.print_list Global_printer.print_type "[" "; " "]"  (formatter_of_out_channel stdout) expected_ty_output;
-    fprintf (formatter_of_out_channel stdout) "\n@?"
+    fprintf (formatter_of_out_channel stdout) "expected_ty_list (size=%i) = [%a]\n@?"
+      (List.length expected_ty_list)
+      (Pp_tools.print_list Global_printer.print_type "" "; " "") expected_ty_list;
+    fprintf (formatter_of_out_channel stdout) "expected_ty_output (size=%i) = [%a]\n@?"
+      (List.length expected_ty_output)
+      (Pp_tools.print_list Global_printer.print_type "" "; " "") expected_ty_output;
   end;
   
   (* Default case when the operator does not have any typeparam *)
@@ -716,8 +720,8 @@ and typing_operator op cenv se_list =
       ) ty_paramnames in
     List.iter2
       (fun (_,ty_paramname) typaram ->
-        curr_typeconstrnt := (ty_paramname.name, typaram.tp_nameclass, None)::!curr_typeconstrnt)
-      frname_ty_paramnames ty_paramnames;
+        curr_typeconstrnt := (ty_paramname.name, typaram.tp_nameclass, None)::!curr_typeconstrnt
+      ) frname_ty_paramnames ty_paramnames;
     let expected_ty_list = List.map
       (fun exp_ty -> subst_name_typaram frname_ty_paramnames exp_ty)
       expected_ty_list in
@@ -1332,37 +1336,38 @@ let rec typing_pat h acc = function
       acc, Tprod(ty_list)
 
 (* Second pass of typing a block/node (substitution at the type level) *)
-let rec is_in_typardecs tid typardecs = match typardecs with
+let typing_eq_propagating l_ntypeclass typardecs_node typed_desc =
+  let rec is_in_typardecs tid typardecs = match typardecs with
     | [] -> false
     | h::t ->
       if (h.t_nametype=tid) then true else is_in_typardecs tid t
-
-let rec ty_eq_propagating typardecs_node funs acc t = match t with
-  | Tid _ -> t, acc
-  | Tprod t_l ->
-     let t_l, acc = mapfold (ty_eq_propagating typardecs_node funs) acc t_l in
-     Tprod t_l, acc
-  | Tarray (t, se) ->
-      let t, acc = ty_eq_propagating typardecs_node funs acc t in
-      let se, acc = funs.Global_mapfold.static_exp funs acc se in
-      Tarray (t, se), acc
-  | Tclasstype (tid, _) ->
-    begin
-      (* If the Tclasstype is coming from the node itself, no substitution *)
-      if (is_in_typardecs tid typardecs_node) then t, acc else
-      match (find_typeconstrnt tid.name acc) with
-        | None -> error (Etypevar_not_found tid)
-        | Some (_, _, tyval) -> (* Substitution + recursive call *)
-           begin
-           match tyval with
-             | None -> failwith "l_ntypeclass should have been completed at that point"
-             | Some tyv -> ty_eq_propagating typardecs_node funs acc tyv
-           end
-    end
-  | Tinvalid -> Tinvalid, acc
-
-let typing_eq_propagating l_ntypeclass typardecs_node typed_desc =
-  let glfuns = { Global_mapfold.defaults with ty = (ty_eq_propagating typardecs_node) } in
+  in
+  let rec ty_eq_propagating funs acc t = match t with
+    | Tid _ -> t, acc
+    | Tprod t_l ->
+       let t_l, acc = mapfold (ty_eq_propagating funs) acc t_l in
+       Tprod t_l, acc
+    | Tarray (t, se) ->
+        let t, acc = ty_eq_propagating funs acc t in
+        let se, acc = funs.Global_mapfold.static_exp funs acc se in
+        Tarray (t, se), acc
+    | Tclasstype (tid, _) ->
+      begin
+        (* If the Tclasstype is coming from the node itself, no substitution *)
+        if (is_in_typardecs tid typardecs_node) then t, acc else
+        match (find_typeconstrnt tid.name acc) with
+          | None -> error (Etypevar_not_found tid)
+          | Some (_, _, tyval) -> (* Substitution + recursive call *)
+            begin
+            match tyval with
+              | None -> failwith "l_ntypeclass should have been completed at that point"
+              | Some tyv -> ty_eq_propagating funs acc tyv
+            end
+      end
+    | Tinvalid -> Tinvalid, acc
+  in
+  
+  let glfuns = { Global_mapfold.defaults with ty = ty_eq_propagating } in
   let funs_typing_eq_propagating = { Hept_mapfold.defaults with global_funs = glfuns } in
   let (typed_desc,_) = Hept_mapfold.eqdesc_it funs_typing_eq_propagating l_ntypeclass typed_desc in
   typed_desc
