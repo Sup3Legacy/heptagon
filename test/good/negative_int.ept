@@ -1,0 +1,9 @@
+
+(* Test for the lexer, to check if the parsing of the negative values works fine *)
+(* Ie, if we can write "a-2" without parsing "-2" as an integer, instead of a binary op *)
+node f(x:int) returns (y:int; z:int; t:int)
+let
+  y = -x;
+  z = 4-x;
+  t = -4;
+tel
