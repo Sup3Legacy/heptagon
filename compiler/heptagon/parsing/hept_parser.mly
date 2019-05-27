@@ -69,7 +69,7 @@ open Hept_parsetree
 %token REACHABLE
 %token ATTRACTIVE
 %token WITH
-%token WHEN WHENOT MERGE ON ONOT CURRENT BUFFER1
+%token WHEN WHENOT MERGE ON ONOT CURRENT
 %token INLINED
 %token POWER
 %token LBRACKET LBRACKETGREATER
@@ -577,10 +577,6 @@ _exp:
       { Ecurrent (c, ce, eInit, e) }
   | CURRENT LPAREN ce=IDENT COMMA eInit=exp COMMA e=exp RPAREN
       { Ecurrent (Q Initial.ptrue, ce, eInit, e) }
-  | BUFFER1 LPAREN c1=constructor_or_bool COMMA ce1=IDENT COMMA
-                   c2=constructor_or_bool COMMA ce2=IDENT COMMA
-                   eInit=exp COMMA e=exp RPAREN
-      { Ebuffer(c1, ce1, c2, ce2, eInit, e) }
   
   
   | exp INFIX1 exp

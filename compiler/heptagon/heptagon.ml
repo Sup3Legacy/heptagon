@@ -66,8 +66,6 @@ and desc =
     (** merge ident (Constructor -> exp)+ *)
   | Ecurrent of constructor_name * var_ident * exp * exp
     (** current( cons(clk), expInit, exp) *)
-  | Ebuffer of constructor_name * var_ident * constructor_name * var_ident * exp * exp
-    (** buffer(cons(clk), cons(clk), expInit, exp) *)
   | Esplit of exp * exp
   | Eapp of app * exp list * exp option
   | Eiterator of iterator_type * app * static_exp list

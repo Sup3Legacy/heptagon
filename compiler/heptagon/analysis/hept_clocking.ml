@@ -122,7 +122,6 @@ let rec typing h pat e =
         List.iter (fun (c,e) -> expect h pat (Ck(Clocks.Con (ck,c,x))) e) c_e_list;
         Ck ck, ck
     | Ecurrent _ -> raise StructureShouldHaveBeenRemoved
-    | Ebuffer _ -> raise StructureShouldHaveBeenRemoved
     | Estruct l ->
         let ck = fresh_clock () in
         List.iter (fun (_, e) -> expect h pat (Ck ck) e) l;

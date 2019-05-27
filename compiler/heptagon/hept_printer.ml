@@ -172,10 +172,6 @@ and print_exp_desc ff = function
   | Ecurrent (c, n, eInit, e) ->
       fprintf ff "@[<2>current %a(%a)@ %a@ %a@]"
         print_qualname c  print_ident n  print_exp eInit  print_exp e
-  | Ebuffer (c1, n1, c2, n2, eInit, e) ->
-      fprintf ff "@[<2>buffer %a(%a)@ %a(%a)@ %a@ %a@]"
-        print_qualname c1  print_ident n1  print_qualname c2  print_ident n2
-        print_exp eInit  print_exp e
   | Esplit (x, e1) ->
       fprintf ff "@[<2>split %a@ %a@]"
         print_exp x  print_exp e1

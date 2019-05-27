@@ -271,7 +271,6 @@ let rec typing h e =
         let i = imax (IEnv.find_var x h) (itype (typing h e)) in
         skeleton i e.e_ty
     | Ecurrent _ -> raise StructureShouldHaveBeenRemoved
-    | Ebuffer _ -> raise StructureShouldHaveBeenRemoved
     | Emerge (x, c_e_list) ->
         let i =
           List.fold_left

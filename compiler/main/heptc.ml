@@ -137,10 +137,12 @@ let main () =
         "-tomato", Arg.Set tomato, doc_tomato;
         "-tomanode", read_qualname add_tomato_node, doc_tomato;
         "-tomacheck", read_qualname add_tomato_check, "";
+
         "-inline", read_qualname add_inlined_node, doc_inline;
+        "-inlinePrefix", Arg.String add_inlined_prefix_node, doc_inline_prefix;
         "-flatten", Arg.Set flatten, doc_flatten;
-        
-        "-bufferremoval", Arg.Set buffer_removal, doc_buffer_removal;
+        "-mainnode", read_qualname add_main_node, doc_mainnode;
+        "-prune", Arg.Set prune, doc_prune;
         
         "-assert", Arg.String add_assert, doc_assert;
         "-nopervasives", Arg.Unit set_no_pervasives, doc_no_pervasives;

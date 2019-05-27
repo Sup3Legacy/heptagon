@@ -914,14 +914,6 @@ and typing cenv h e =
          unify cenv (typ_of_name h exp_clk) (find_constrs cons_clk);
          Ecurrent (cons_clk, exp_clk, typed_e_init, typed_e), t
       
-      | Ebuffer (cons1, eclk1, cons2, eclk2, e_init, e) ->
-         let typed_e_init, t = typing cenv h e_init in
-         let typed_e = expect cenv h t e in
-         (* Check that the type of the clock match their constructor *)
-         unify cenv (typ_of_name h eclk1) (find_constrs cons1);
-         unify cenv (typ_of_name h eclk2) (find_constrs cons2);
-         Ebuffer (cons1, eclk1, cons2, eclk2, typed_e_init, typed_e), t
-      
       | Esplit(c, e2) ->
           let typed_c, ty_c = typing cenv h c in
           let typed_e2, ty = typing cenv h e2 in

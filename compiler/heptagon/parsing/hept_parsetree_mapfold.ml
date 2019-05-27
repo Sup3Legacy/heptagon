@@ -134,10 +134,6 @@ and edesc funs acc ed = match ed with
     let ei, acc = exp_it funs acc ei in
     let e, acc = exp_it funs acc e in
       Ecurrent(c, x, ei, e), acc
-  | Ebuffer (c1, ce1, c2, ce2, eInit, e) ->
-    let eInit, acc = exp_it funs acc eInit in
-    let e, acc = exp_it funs acc e in
-      Ebuffer (c1, ce1, c2, ce2, eInit, e), acc
   | Ewhen (e, c, x) ->
     let e, acc = exp_it funs acc e in
       Ewhen (e, c, x), acc

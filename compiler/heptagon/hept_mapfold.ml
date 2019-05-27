@@ -163,12 +163,6 @@ and edesc funs acc ed = match ed with
      let e, acc = exp_it funs acc e in
      let n, acc = var_ident_it funs.global_funs acc n in
      Ecurrent (c, n, eInit, e), acc
-  | Ebuffer (c1, n1, c2, n2, eInit, e) ->
-     let eInit, acc = exp_it funs acc eInit in
-     let e, acc = exp_it funs acc e in
-     let n1, acc = var_ident_it funs.global_funs acc n1 in
-     let n2, acc = var_ident_it funs.global_funs acc n2 in
-     Ebuffer (c1, n1, c2, n2, eInit, e), acc
   | Esplit (e1, e2) ->
       let e1, acc = exp_it funs acc e1 in
       let e2, acc = exp_it funs acc e2 in

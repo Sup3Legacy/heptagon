@@ -139,7 +139,6 @@ let rec typing e =
         let tc = read x in
         cseq tc t
     | Ecurrent _ -> raise StructureShouldHaveBeenRemoved
-    | Ebuffer _ -> raise StructureShouldHaveBeenRemoved
     | Emerge (x, c_e_list) ->
         let t = read x in
         let tl = List.map (fun (_,e) -> typing e) c_e_list in

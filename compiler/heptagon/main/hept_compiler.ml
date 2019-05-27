@@ -39,7 +39,6 @@ let compile_program p =
   let p = pass "Typing" true Typing.program p pp in
   
   (* Remove the "current" construct (syntactic sugar) / we need the typing pass beforehand *)
-  let p = silent_pass "Buffer removal" !buffer_removal BufferRemoval.program p in
   let p = silent_pass "Current removal" true CurrentRemoval.program p in
   
   (* End of typing*)
@@ -47,6 +46,9 @@ let compile_program p =
   
   (* Inlining *)
   let p = pass "Inlining" true Inline.program p pp in
+
+  (* Pruning of the uncalled node *)
+  let p = pass "Pruning" !prune Pruning.program p pp in
 
   (* Contracts handling *)
   let p = pass "Contracts" true Contracts.program p pp in

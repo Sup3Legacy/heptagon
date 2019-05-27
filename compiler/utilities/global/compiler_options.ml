@@ -115,9 +115,15 @@ let init = ref true
 let inline : qualname list ref = ref []
 let add_inlined_node s = inline := s :: !inline
 
+let inline_prefix : string list ref = ref []
+let add_inlined_prefix_node s = inline_prefix := s :: !inline_prefix
+
 let flatten = ref false
 
-let buffer_removal = ref false
+let mainnode : qualname list ref = ref []
+let add_main_node s = mainnode := s :: !mainnode
+
+let prune = ref false
 
 let deadcode = ref false
 
@@ -191,24 +197,26 @@ and doc_hepts = "\t\tSimulation for hepts (graphical simulator)"
 and doc_locate_stdlib = "\t\tLocate standard libray"
 and doc_no_pervasives = "\tDo not load the pervasives module"
 and doc_flatten = "\t\tInline everything."
-and doc_buffer_removal = "\t\tReplace buffer by when/current combination."
+and doc_mainnode = "\t\tSpecify a main node. The nodes not used by a main node is removed."
+  ^ "\n\t\t\tBy default, the parameterless nodes are the main nodes."
 and doc_target =
   "<lang>\tGenerate code in language <lang>\n\t\t\t(with <lang>=c,"
   ^ " java, z3z or ctrln)"
 and doc_full_type_info = "\t\t\tPrint full type information"
 and doc_stateful_info = "\t\tPrint stateful information"
-and doc_full_name = "\t\tPrint full variable name information"
-and doc_nbvars = "\t\tPrint information about number of variables"
+and doc_full_name = "\t\tPrint full variable name information."
+and doc_nbvars = "\t\tPrint information about number of variables."
 and doc_target_path =
   "<path>\tGenerated files will be placed in <path>\n\t\t\t(the directory is"
-  ^ " cleaned)"
-and doc_boolean = "\t\tTranslate enumerated values towards boolean vectors"
-and doc_nosink = "\t\tSuppress the sink state in sigali equations"
-and doc_deadcode = "\t\tDeadcode removal"
-and doc_nocaus = "\t\tDisable causality analysis"
-and doc_noinit = "\t\tDisable initialization analysis"
-and doc_assert = "<node>\tInsert run-time assertions for boolean node <node>"
-and doc_inline = "<node>\tInline node <node>"
+  ^ " cleaned)."
+and doc_boolean = "\t\tTranslate enumerated values towards boolean vectors."
+and doc_nosink = "\t\tSuppress the sink state in sigali equations."
+and doc_deadcode = "\t\tDeadcode removal."
+and doc_nocaus = "\t\tDisable causality analysis."
+and doc_noinit = "\t\tDisable initialization analysis."
+and doc_assert = "<node>\tInsert run-time assertions for boolean node <node>."
+and doc_inline = "<node>\tInline node <node>."
+and doc_inline_prefix = "<node>\tInline nodes starting with this string."
 and doc_itfusion = "\t\tEnable iterator fusion."
 and doc_tomato = "\t\tEnable automata minimization."
 and doc_strict_ssa = "\t\tEnsure that the generated code is SSA, even for array elements."
