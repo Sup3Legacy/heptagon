@@ -129,7 +129,7 @@ let exposeintstate = ref false
 
 (* C code generation option *)
 let cg_memfirst = ref false
-let cg_outlist = ref false
+let cg_outlist = ref false (* TODO: inplace management missing? *)
 
 let deadcode = ref false
 

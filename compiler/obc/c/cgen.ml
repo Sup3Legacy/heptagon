@@ -50,6 +50,7 @@ struct
     | Ederef_not_pointer
     | Estatic_exp_compute_failed
     | Eunknown_method of string
+    | Eunsupportedkindofoutput of clhs
 
   let message loc kind = (match kind with
     | Evar name ->
@@ -72,7 +73,13 @@ struct
         eprintf "%aCode generation : Methods other than step and \
                     reset are not supported (found '%s').@."
           print_location loc
-          s);
+          s
+    | Eunsupportedkindofoutput outv ->
+        eprintf "%aCgen::step_fun_call : unsupported kind of outputs\
+                    when no output structure is generated (outv = %a).@."
+          print_location loc
+          C.pp_clhs outv
+    );
     raise Errors.Error
 end
 
@@ -164,6 +171,14 @@ let inputlist_of_ovarlist vl =
   let cvar_of_ovar vd =
     let ty = ctype_of_otype vd.v_type in
     let ty = if vd.v_mutable then pointer_type vd.v_type ty else ty in
+    name vd.v_ident, ty
+  in
+  List.map cvar_of_ovar vl
+
+let outputlist_of_ovarlist vl =
+  let cvar_of_ovar vd =
+    let ty = ctype_of_otype vd.v_type in
+    let ty = pointer_type vd.v_type ty in (* Always pointer, because output *)
     name vd.v_ident, ty
   in
   List.map cvar_of_ovar vl
@@ -437,7 +452,7 @@ let out_var_name_of_objn o =
 (** Creates the list of arguments to call a node. [targeting] is the targeting
     of the called node, [mem] represents the node context and [args] the
     argument list.*)
-let step_fun_call out_env var_env sig_info objn out args =
+let step_fun_call out_env var_env sig_info outvl objn out args =
   let rec add_targeting l ads = match l, ads with
     | [], [] -> []
     | e::l, ad::ads ->
@@ -446,8 +461,55 @@ let step_fun_call out_env var_env sig_info objn out args =
           e::(add_targeting l ads)
     | _, _ -> assert false
   in
+  let rec add_targeting_out l ads = match l, ads with
+    | [], [] -> []
+    | e::l, ad::ads ->
+        (* Always use a pointer for outputs *)
+        let e = address_of ad.a_type e in
+          e::(add_targeting_out l ads)
+    | _, _ -> assert false
+  in
+  let rec clhs_to_var_conversion outv = match outv with
+    | CLvar s -> Cvar s
+    | CLderef d -> Cderef (clhs_to_var_conversion d)
+    | CLfield (cl, name) -> Cfield ((clhs_to_var_conversion cl), name)
+    | _ -> Error.message no_location (Error.Eunsupportedkindofoutput outv)
+  in
+
+  (* DEBUG
+  List.iter (fun outv ->
+    Format.fprintf (Format.formatter_of_out_channel stdout) "outv = %a\n@?"
+      C.pp_clhs outv
+  ) outvl; *)
+  
   let args = (add_targeting args sig_info.node_inputs) in
-  let caddrout = [Caddrof out] in
+  let args = if (!Compiler_options.cg_outlist) then (
+
+      let args_out = List.map clhs_to_var_conversion outvl in
+
+      let l_lin_in = List.fold_left (fun acc arg_in -> match arg_in.a_linearity with
+        | Linearity.Lat vlin -> vlin::acc
+        | _ -> acc
+      ) [] sig_info.node_inputs in
+      let sig_info_out_filtered = List.filter (fun arg_out -> match arg_out.a_linearity with
+          | Linearity.Lat vlin_out -> not (List.exists (fun vlin_in -> vlin_in=vlin_out) l_lin_in)
+          | _ -> true
+      ) sig_info.node_outputs in
+
+
+      (* DEBUG
+      Format.fprintf (Format.formatter_of_out_channel stdout) "args_out.size = %i | node_outputs.size = %i\n@?"
+        (List.length args_out) (List.length sig_info.node_outputs);
+      Format.fprintf (Format.formatter_of_out_channel stdout) "l_lin_in.size = %i\n@?"
+        (List.length l_lin_in);
+      Format.fprintf (Format.formatter_of_out_channel stdout) "sig_info_out_filtered.size = %i\n@?"
+        (List.length sig_info_out_filtered); *)
+
+      let args_out = add_targeting_out args_out sig_info_out_filtered in
+      args @ args_out
+    ) else args
+  in
+  let caddrout = if (!Compiler_options.cg_outlist) then [] else [Caddrof out] in
   if sig_info.node_stateful then (
     let mem =
       (match objn with
@@ -484,7 +546,7 @@ let generate_function_call out_env var_env obj_env outvl objn args =
     else
       (* The step function takes scalar arguments and its own internal memory
           holding structure. *)
-      let args = step_fun_call out_env var_env sig_info objn out args in
+      let args = step_fun_call out_env var_env sig_info outvl objn out args in
       (* Our C expression for the function call. *)
       Cfun_call (classn ^ "_step", args)
   in
@@ -492,6 +554,7 @@ let generate_function_call out_env var_env obj_env outvl objn args =
   (* Act according to the length of our list. Step functions with
      multiple return values will return a structure, and we care of
      assigning each field to the corresponding local variable. *)
+  if (!Compiler_options.cg_outlist) then [Csexpr fun_call] else
   match outvl with
     | [] -> [Csexpr fun_call]
     | [outv] when is_op classln ->
@@ -661,7 +724,11 @@ let qn_append q suffix =
 (** Builds the argument list of step function*)
 let step_fun_args n md =
   let args = inputlist_of_ovarlist md.m_inputs in
-  let out_arg = [("_out", Cty_ptr (Cty_id (qn_append n "_out")))] in
+  let out_arg =
+    if (!Compiler_options.cg_outlist) then
+      outputlist_of_ovarlist md.m_outputs
+    else
+      [("_out", Cty_ptr (Cty_id (qn_append n "_out")))] in
   let context_arg =
     if is_stateful n then
       [("self", Cty_ptr (Cty_id (qn_append n "_mem")))]
@@ -688,19 +755,25 @@ let fun_def_of_step_fun n obj_env mem objs md =
 
   (* Out vars for function calls *)
   let out_vars =
-    unique
-      (List.map (fun obj -> out_var_name_of_objn (cname_of_qn obj.o_class),
-                   Cty_id (qn_append obj.o_class "_out"))
-         (List.filter (fun obj -> not (is_op obj.o_class)) objs)) in
+    if (!Compiler_options.cg_outlist) then
+      [] (* No output structure => does not need to manage those of the called node *)
+    else
+      unique
+        (List.map (fun obj -> out_var_name_of_objn (cname_of_qn obj.o_class),
+                     Cty_id (qn_append obj.o_class "_out"))
+           (List.filter (fun obj -> not (is_op obj.o_class)) objs)) in
 
   (* The body *)
   let mems = List.map cvar_of_vd (mem@md.m_outputs) in
   let var_env = args @ mems @ out_vars in
   let out_env =
-    List.fold_left
-      (fun out_env vd -> IdentSet.add vd.v_ident out_env)
-      IdentSet.empty
-      md.m_outputs
+    if (!Compiler_options.cg_outlist) then
+      IdentSet.empty (* No need for specialized output var inside the step function *)
+    else
+      List.fold_left
+        (fun out_env vd -> IdentSet.add vd.v_ident out_env)
+        IdentSet.empty
+        md.m_outputs
   in
   let body = cstm_of_act_list out_env var_env obj_env md.m_body in
 
@@ -781,7 +854,10 @@ let cdefs_and_cdecls_of_class_def cd =
   Idents.enter_node cd.cd_name;
   let step_m = find_step_method cd in
   let memory_struct_decl = mem_decl_of_class_def cd in
-  let out_struct_decl = out_decl_of_class_def cd in
+  let out_struct_decl =
+    if (!Compiler_options.cg_memfirst) then [] else
+      out_decl_of_class_def cd
+  in
   let step_fun_def = fun_def_of_step_fun cd.cd_name
     cd.cd_objs cd.cd_mems cd.cd_objs step_m in
   (* C function for resetting our memory structure. *)
