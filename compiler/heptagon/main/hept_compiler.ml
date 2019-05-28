@@ -95,6 +95,9 @@ let compile_program p =
   (* Block flatten *)
   let p = pass "Block" true Block.program p pp in
   
+  (* Internal state exposal*)
+  let p = silent_pass "Internal state exposal" !exposeintstate InternalStateExposal.program p in
+
   (* Return the transformed AST *)
   p
 

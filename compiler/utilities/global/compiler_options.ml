@@ -125,6 +125,8 @@ let add_main_node s = mainnode := s :: !mainnode
 
 let prune = ref false
 
+let exposeintstate = ref false
+
 let deadcode = ref false
 
 let tomato = ref false
@@ -201,6 +203,7 @@ and doc_flatten = "\t\tInline everything."
 and doc_mainnode = "\t\tSpecify a main node. The nodes not used by a main node is removed."
   ^ "\n\t\t\tBy default, the parameterless nodes are the main nodes."
 and doc_prune = "\t\tRemove the nodes unused by the main nodes."
+and doc_exposeintstate = "\t\tExpose the internal states of nodes as a new first input/output."
 and doc_target =
   "<lang>\tGenerate code in language <lang>\n\t\t\t(with <lang>=c,"
   ^ " java, z3z or ctrln)"
