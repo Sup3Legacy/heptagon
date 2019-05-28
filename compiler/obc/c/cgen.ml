@@ -447,6 +447,7 @@ let step_fun_call out_env var_env sig_info objn out args =
     | _, _ -> assert false
   in
   let args = (add_targeting args sig_info.node_inputs) in
+  let caddrout = [Caddrof out] in
   if sig_info.node_stateful then (
     let mem =
       (match objn with
@@ -459,7 +460,10 @@ let step_fun_call out_env var_env sig_info objn out args =
              in
              mk_idx l
       ) in
-      args@[Caddrof out; Caddrof mem]
+      if (!Compiler_options.cg_memfirst) then
+        (Caddrof mem) :: (args@caddrout)
+      else
+        args @ caddrout @ [Caddrof mem]
   ) else
     args@[Caddrof out]
 
@@ -664,7 +668,10 @@ let step_fun_args n md =
     else
       []
   in
-    args @ out_arg @ context_arg
+    if (!Compiler_options.cg_memfirst) then
+      context_arg @ args @ out_arg
+    else
+      args @ out_arg @ context_arg
 
 
 (** [fun_def_of_step_fun name obj_env mods sf] returns a C function definition

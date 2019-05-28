@@ -127,6 +127,10 @@ let prune = ref false
 
 let exposeintstate = ref false
 
+(* C code generation option *)
+let cg_memfirst = ref false
+let cg_outlist = ref false
+
 let deadcode = ref false
 
 let tomato = ref false
@@ -207,8 +211,11 @@ and doc_exposeintstate = "\t\tExpose the internal states of nodes as a new first
 and doc_target =
   "<lang>\tGenerate code in language <lang>\n\t\t\t(with <lang>=c,"
   ^ " java, z3z or ctrln)"
-and doc_full_type_info = "\t\t\tPrint full type information"
-and doc_stateful_info = "\t\tPrint stateful information"
+and doc_cg_memfirst = "\t\t\tPut the internal state in the first position of a step function."
+and doc_cg_outlist = "\t\t\tDo not generate a structure for the outputs of a step function"
+  ^ "but a list of arguments."
+and doc_full_type_info = "\t\t\tPrint full type information."
+and doc_stateful_info = "\t\tPrint stateful information."
 and doc_full_name = "\t\tPrint full variable name information."
 and doc_nbvars = "\t\tPrint information about number of variables."
 and doc_target_path =
