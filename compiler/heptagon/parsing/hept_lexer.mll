@@ -108,7 +108,15 @@ List.iter (fun (str,tok) -> Hashtbl.add keyword_table str tok) [
  "xor", INFIX2("xor");
  "lsl", INFIX4("lsl");
  "lsr", INFIX4("lsr");
- "asr", INFIX4("asr")
+ "asr", INFIX4("asr");
+
+  "__clkernel", CLKERNEL;
+  "__clsource", CLSOURCE;
+  "__clbinary", CLBINARY;
+  "__cldim", CLDIM;
+  "__cllocal", CLLOCAL;
+  "__clglobal_worksize", CLGLWORKSIZE;
+  "__cllocal_worksize", CLLOCWORKSIZE;
 ]
 
 

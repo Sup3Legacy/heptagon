@@ -277,6 +277,12 @@ let program_classes p =
   in
     List.fold_right add_class p.p_desc []
 
+let program_kernels p =
+  List.fold_right (fun pd acc -> match pd with
+    | Pkernel kd -> kd :: acc
+    | _ -> acc
+  ) p.p_desc []
+
 let interface_types i =
   let add_type id acc = match id with
     | Itypedef ty -> ty :: acc

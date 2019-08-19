@@ -75,6 +75,7 @@ open Heptagon
 
 type 'a hept_it_funs = {
   app            : 'a hept_it_funs -> 'a -> app -> app * 'a;
+  cl_option      : 'a hept_it_funs -> 'a -> cl_option -> cl_option * 'a;
   block          : 'a hept_it_funs -> 'a -> block -> block * 'a;
   edesc          : 'a hept_it_funs -> 'a -> desc -> desc * 'a;
   eq             : 'a hept_it_funs -> 'a -> eq -> eq * 'a;
@@ -94,6 +95,7 @@ type 'a hept_it_funs = {
   node_dec       : 'a hept_it_funs -> 'a -> node_dec -> node_dec * 'a;
   const_dec      : 'a hept_it_funs -> 'a -> const_dec -> const_dec * 'a;
   class_dec      : 'a hept_it_funs -> 'a -> class_dec -> class_dec * 'a;
+  kernel_dec     : 'a hept_it_funs -> 'a -> kernel_dec -> kernel_dec * 'a;
   program        : 'a hept_it_funs -> 'a -> program -> program * 'a;
   program_desc   : 'a hept_it_funs -> 'a -> program_desc -> program_desc * 'a;
   global_funs    : 'a Global_mapfold.global_it_funs }
@@ -171,8 +173,13 @@ and edesc funs acc ed = match ed with
 and app_it funs acc a = funs.app funs acc a
 and app funs acc a =
   let p, acc = mapfold (static_exp_it funs.global_funs) acc a.a_params in
-  { a with a_params = p }, acc
+  let clopt, acc = optional_wacc (cl_option_it funs) acc a.a_cloption in
+  { a with a_params = p; a_cloption = clopt }, acc
 
+and cl_option_it funs acc clo =
+  try funs.cl_option funs acc clo
+with Fallback -> cl_option funs acc clo
+and cl_option funs acc clo = clo, acc (* Nothing to do here *)
 
 and pat_it funs acc p =
   try funs.pat funs acc p
@@ -349,6 +356,16 @@ and const_dec funs acc c =
 and class_dec_it funs acc c = funs.class_dec funs acc c
 and class_dec funs acc c = c, acc (* Nothing below to explore *)
 
+and kernel_dec_it funs acc k = funs.kernel_dec funs acc k
+and kernel_dec funs acc k = 
+  let k_input, acc = mapfold (var_dec_it funs) acc k.k_input in
+  let k_output, acc = mapfold (var_dec_it funs) acc k.k_output in
+  let k_local, acc = mapfold (var_dec_it funs) acc k.k_local in
+  { k with
+    k_input = k_input;
+    k_output = k_output;
+    k_local = k_local} , acc
+
 
 and program_it funs acc p = funs.program funs acc p
 and program funs acc p =
@@ -363,9 +380,11 @@ and program_desc funs acc pd = match pd with
   | Ptype _td -> pd, acc (* TODO types *)
   | Pnode n -> let n, acc = node_dec_it funs acc n in Pnode n, acc
   | Pclass c -> let c, acc = class_dec_it funs acc c in Pclass c, acc
+  | Pkernel k -> let k, acc = kernel_dec_it funs acc k in Pkernel k, acc
 
 let defaults = {
   app = app;
+  cl_option = cl_option;
   block = block;
   edesc = edesc;
   eq = eq;
@@ -385,6 +404,7 @@ let defaults = {
   node_dec = node_dec;
   const_dec = const_dec;
   class_dec = class_dec;
+  kernel_dec = kernel_dec;
   program = program;
   program_desc = program_desc;
   global_funs = Global_mapfold.defaults }
@@ -393,6 +413,7 @@ let defaults = {
 
 let defaults_stop = {
   app = stop;
+  cl_option = stop;
   block = stop;
   edesc = stop;
   eq = stop;
@@ -412,6 +433,7 @@ let defaults_stop = {
   node_dec = stop;
   const_dec = stop;
   class_dec = stop;
+  kernel_dec = stop;
   program = stop;
   program_desc = stop;
   global_funs = Global_mapfold.defaults_stop }

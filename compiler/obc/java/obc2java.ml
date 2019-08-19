@@ -361,6 +361,7 @@ let rec act_list param_env act_l acts =
     | Obc.Acall (_, obj, Mreset, _) ->
         let acall = Emethod_call (obj_ref param_env obj, "reset", []) in
         Aexp acall::acts
+    | Obc.Acall (_, _, Mkernel _, _) -> failwith "OpenCL kernel not supported by Java CG"
     | Obc.Acase (e, c_b_l) when e.e_ty = Types.Tid Initial.pbool ->
         (match c_b_l with
           | [] -> acts
@@ -609,6 +610,7 @@ let program p =
     | Obc.Pclass n :: pds -> program_descs pds (n::ns,cs,ts)
     | Obc.Pconst c :: pds -> program_descs pds (ns,c::cs,ts)
     | Obc.Ptype t :: pds -> program_descs pds (ns,cs,t::ts)
+    | Obc.Pkernel k :: pds -> failwith "Java CG does not support OpenCL kernel declaration"
   in
   let ns,cs,ts = program_descs p.p_desc ([],[],[]) in
   let classes = const_dec_list cs in

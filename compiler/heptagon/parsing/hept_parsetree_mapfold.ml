@@ -37,6 +37,7 @@ type 'a hept_it_funs = {
   ty              : 'a hept_it_funs -> 'a -> ty -> ty * 'a;
   static_exp      : 'a hept_it_funs -> 'a -> static_exp -> static_exp * 'a;
   static_exp_desc : 'a hept_it_funs -> 'a -> static_exp_desc -> static_exp_desc * 'a;
+  cl_option       : 'a hept_it_funs -> 'a -> cl_option -> cl_option * 'a;
   app             : 'a hept_it_funs -> 'a -> app -> app * 'a;
   block           : 'a hept_it_funs -> 'a -> block -> block * 'a;
   edesc           : 'a hept_it_funs -> 'a -> edesc -> edesc * 'a;
@@ -58,6 +59,7 @@ type 'a hept_it_funs = {
   node_dec        : 'a hept_it_funs -> 'a -> node_dec -> node_dec * 'a;
   const_dec       : 'a hept_it_funs -> 'a -> const_dec -> const_dec * 'a;
   class_dec       : 'a hept_it_funs -> 'a -> class_dec -> class_dec * 'a;
+  kernel_dec      : 'a hept_it_funs -> 'a -> kernel_dec -> kernel_dec * 'a;
   type_dec        : 'a hept_it_funs -> 'a -> type_dec -> type_dec * 'a;
   type_desc       : 'a hept_it_funs -> 'a -> type_desc -> type_desc * 'a;
   program         : 'a hept_it_funs -> 'a -> program -> program * 'a;
@@ -151,11 +153,15 @@ and edesc funs acc ed = match ed with
       let args, acc = mapfold (exp_it funs) acc args in
       Eiterator (i, app, params, pargs, args), acc
 
+and cl_option_it funs acc o = funs.cl_option funs acc o
+and cl_option funs acc o = o, acc (* Nothing to do *)
+
 
 and app_it funs acc a = funs.app funs acc a
 and app funs acc a =
+  let clopt, acc = optional_wacc (cl_option_it funs) acc a.a_cloption in
   let p, acc = mapfold (exp_it funs) acc a.a_params in
-  { a with a_params = p }, acc
+  { a with a_params = p; a_cloption = clopt }, acc
 
 
 and pat_it funs acc p =
@@ -327,6 +333,13 @@ and class_dec_it funs acc c = funs.class_dec funs acc c
 and class_dec funs acc c = c, acc (* nothing to parse below that *)
 
 
+and kernel_dec_it funs acc k = funs.kernel_dec funs acc k
+and kernel_dec funs acc k =
+  let k_input, acc = mapfold (var_dec_it funs) acc k.k_input in
+  let k_output, acc = mapfold (var_dec_it funs) acc k.k_output in
+  let k_local, acc = mapfold (var_dec_it funs) acc k.k_local in
+  { k with k_input = k_input; k_output = k_output; k_local = k_local}, acc
+
 and type_dec_it funs acc td = funs.type_dec funs acc td
 and type_dec funs acc td =
   let t_desc, acc = type_desc_it funs acc td.t_desc in
@@ -359,6 +372,7 @@ and program_desc funs acc pd = match pd with
   | Ptype t -> let t, acc = type_dec_it funs acc t in Ptype t, acc
   | Pclass c -> let c, acc = class_dec_it funs acc c in Pclass c, acc
   | Pnode n -> let n, acc = node_dec_it funs acc n in Pnode n, acc
+  | Pkernel k -> let k, acc = kernel_dec_it funs acc k in Pkernel k, acc
   | Ppragma _ -> pd, acc
 
 and interface_desc_it funs acc id =
@@ -394,6 +408,7 @@ let defaults = {
   ty = ty;
   static_exp = static_exp;
   static_exp_desc = static_exp_desc;
+  cl_option = cl_option;
   app = app;
   block = block;
   edesc = edesc;
@@ -414,6 +429,7 @@ let defaults = {
   node_dec = node_dec;
   const_dec = const_dec;
   class_dec = class_dec;
+  kernel_dec = kernel_dec;
   type_dec = type_dec;
   type_desc = type_desc;
   program = program;
@@ -429,6 +445,7 @@ let defaults_stop = {
   ty = Global_mapfold.stop;
   static_exp = Global_mapfold.stop;
   static_exp_desc = Global_mapfold.stop;
+  cl_option = Global_mapfold.stop;
   app = Global_mapfold.stop;
   block = Global_mapfold.stop;
   edesc = Global_mapfold.stop;
@@ -449,6 +466,7 @@ let defaults_stop = {
   node_dec = Global_mapfold.stop;
   const_dec = Global_mapfold.stop;
   class_dec = Global_mapfold.stop;
+  kernel_dec = Global_mapfold.stop;
   type_dec = Global_mapfold.stop;
   type_desc = Global_mapfold.stop;
   program = Global_mapfold.stop;

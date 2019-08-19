@@ -39,6 +39,7 @@ open Signature
 open Location
 
 type class_name = qualname
+type kernel_name = qualname
 type classtype_name = qualname
 type op_name = qualname
 type obj_ident = var_ident
@@ -90,9 +91,15 @@ type obj_ref =
   | Oobj of obj_ident
   | Oarray of obj_ident * pattern list
 
+type cl_option = {
+    copt_gl_worksize  : int;
+    copt_loc_worksize : int;
+    copt_id : int }  (* Unique id to identify different instances of Mkernel calls *)
+
 type method_name =
   | Mreset
   | Mstep
+  | Mkernel of cl_option
 
 type act =
   | Aassgn of pattern * exp
@@ -141,10 +148,22 @@ type class_def =
       cd_mem_alloc : (ty * Interference_graph.ivar list) list; }
 
 
+(* Note: Currently not used in Obc, and useless is no type parameters *)
 type classtype_dec =
     { c_nameclass   : classtype_name;
       c_insttypes   : type_name list;
-      c_loc         : location }
+      c_loc         : location; }
+
+type kernel_dec =
+    { k_namekernel  : kernel_name;
+      k_input       : var_dec list;
+      k_output      : var_dec list;
+      k_loc         : location;
+      k_issource    : bool; (* true: source / false: binary *)
+      k_srcbin      : string;
+      k_dim         : int;
+      k_local       : var_dec list; }
+
 
 type program =
     { p_modname : modul;
@@ -155,6 +174,7 @@ and program_desc =
   | Pclass of class_def
   | Pconst of const_dec
   | Ptype of type_dec
+  | Pkernel of kernel_dec
 
 
 type signature = {

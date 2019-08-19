@@ -87,6 +87,7 @@ let ctrln_targets =
 
 let targets =
   [ mk_target ~interface:(IObc Cmain.interface) "c" (Obc_no_params Cmain.program);
+    mk_target ~interface:(IObc Cmain.interface) "opencl" (Obc_no_params Cmain.program);
     mk_target ~load_conf:java_conf "java" (Obc Java_main.program);
     mk_target ~load_conf:java_conf "java14" (Obc Java14_main.program);
     mk_target "z3z" (Minils_no_params ignore);
@@ -136,11 +137,13 @@ let generate_target p s =
     | Minils_no_params convert_fun ->
         let p_list = callgraph p in
         do_silent_pass "Code generation from Minils (w/o params)" (List.iter convert_fun) p_list
-    | Obc_no_params convert_fun ->
+    | Obc_no_params convert_fun -> (
+        if (s="opencl") then Compiler_options.opencl_cg := true;
         let p_list = callgraph p in
         let o_list = mls2obc_list p_list in
         let o_list = List.map Obc_compiler.compile_program o_list in
         do_silent_pass "Code generation from Obc (w/o params)"         List.iter convert_fun o_list
+      )
     | Disabled_target ->
         warn "ignoring unavailable target `%s'." name
 

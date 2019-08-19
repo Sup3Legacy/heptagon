@@ -148,8 +148,12 @@ and print_exp_desc ff = function
         print_w_tuple args
         print_every reset
 
+and print_cl_option ff clopt =
+  fprintf ff " __clglobal_worksize %i __cllocal_worksize %i"
+    clopt.copt_gl_worksize  clopt.copt_loc_worksize
+
 and print_app ff (app, args) =
-  match app.a_op with
+  (match app.a_op with
     | Eequal ->
       let e1, e2 = assert_2 args in
         fprintf ff "@[<2>%a@ = %a@]" print_extvalue e1  print_extvalue e2
@@ -203,6 +207,11 @@ and print_app ff (app, args) =
     | Econcat ->
       let e1, e2 = assert_2 args in
         fprintf ff "@[<2>%a@ @@ %a@]" print_extvalue e1  print_extvalue e2
+  );
+  match app.a_cloption with
+  | None -> ()
+  | Some clopt -> print_cl_option ff clopt
+
 
 and print_handler ff c =
   fprintf ff "@[<2>%a@]" (print_couple print_qualname print_extvalue "("" -> "")") c
@@ -261,6 +270,26 @@ let print_typeparams ff tp =
   fprintf ff "%a of %a" print_qualname tp.t_nametype  print_qualname tp.t_nameclass
 
 
+let print_vd_loc_kernel ff vd =
+  fprintf ff "__cllocal %a" (print_vd ~show_ck:false) vd
+
+let print_kernel_dec ff
+    { k_namekernel = n; k_input = ki; k_output = ko;
+    k_issource = issrc; k_srcbin = filename; k_dim = dim;
+    k_local = kl} =
+  fprintf ff "@[__clkernel fun %a%a returns %a@]\n@."
+    print_qualname n
+    print_vd_tuple ki
+    print_vd_tuple ko;
+  (if issrc then
+    fprintf ff "\t__clsource \"%s\" __cldim %i\n@." filename dim
+  else
+    fprintf ff "\t__clbinary \"%s\" __cldim %i\n@." filename dim);
+  if (kl != []) then
+    fprintf ff "\t%a\n@."
+    (print_list print_vd_loc_kernel "" " " "") kl
+
+
 let print_node ff { n_name = n; n_input = ni; n_output = no; n_typeparams = ntp;
                     n_contract = contract; n_local = nl;
                     n_equs = ne; n_params = params } =
@@ -281,6 +310,7 @@ let print oc { p_opened = pm; p_desc = pd } =
     | Ptype t -> print_type_dec ff t
     | Pconst c -> print_const_dec ff c
     | Pclasstype c -> print_classtype_dec ff c
+    | Pkernel k -> print_kernel_dec ff k
   in
   let ff = formatter_of_out_channel oc in
   List.iter (print_open_module ff) pm;

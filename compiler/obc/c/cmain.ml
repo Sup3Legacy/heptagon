@@ -44,12 +44,18 @@ let _ = Idents.enter_node (Modules.fresh_value "cmain" "main")
 
 let fresh n = Idents.name (Idents.gen_var "cmain" n)
 
+(* Order*)
+let order_list lposelem =
+  let lsorted = List.sort (fun (a, _) (b,_) -> a - b) lposelem in
+  List.map (fun (_,e) -> e) lsorted
+
+
 let mk_int i = Cconst (Ccint i)
 let mk_float f = Cconst (Ccfloat f)
 
 (* Unique names for C variables handling step counts. *)
 let step_counter = fresh "step_c"
-and max_step = fresh"step_max"
+and max_step = fresh "step_max"
 
 let assert_node_res cd =
   let stepm = find_step_method cd in
@@ -108,7 +114,7 @@ let assert_node_res cd =
       } in
   (out :: mem, reset_i, step_i);;
 
-(** [main_def_of_class_def cd] returns a [(var_list, rst_i, step_i)] where
+(** [main_def_of_class_def_simul cd] returns a [(var_list, rst_i, step_i)] where
     [var_list] (resp. [rst_i] and [step_i]) is a list of variables (resp. of
     statements) needed for a main() function calling [cd]. *)
 let main_def_of_class_def cd =
@@ -309,9 +315,9 @@ let main_def_of_class_def cd =
 
   (mem_decl, varlist, rst_i, step_l)
 
-(** [main_skel var_list prologue body] generates a C main() function using the
+(** [main_skel_simul var_list prologue body] generates a C main() function using the
     variable list [var_list], prologue [prologue] and loop body [body]. *)
-let main_skel var_list prologue body =
+let main_skel_simul var_list prologue body =
   Cfundef {
     C.f_name = "main";
     f_retty = Cty_int;
@@ -352,43 +358,345 @@ let main_skel var_list prologue body =
           Creturn (mk_int 0);
         ];
     }
+  } 
+
+
+(* ----- *)
+(* OpenCL code generation *)
+
+let program_var_name kernel_name instnum = "program_" ^ kernel_name ^ "_" ^ (string_of_int instnum)
+let kernel_var_name kernel_name instnum = "kernel_" ^ kernel_name ^ "_" ^ (string_of_int instnum)
+let buffer_var_name kernel_name buffid = "buffer_" ^ kernel_name ^ "_" ^ (string_of_int buffid)
+
+
+(* Remark: global declaration and OpenCL header file include are
+ in a common file "hept_opencl.h" which does not change from a CG to another
+    Also, all the info needed are already built in Openclprep*)
+let get_opencl_prologue () =
+
+  (* Step 1 - architecture configuration *)
+  let lvarloc_step1 =
+    ("platform_id", Cty_id (Modules.current_qual "cl_platform_id"))::
+    ("num_platforms", Cty_id (Modules.current_qual "cl_uint"))::
+    ("device_id", Cty_id (Modules.current_qual "cl_device_id"))::
+    ("num_devices", Cty_id (Modules.current_qual "cl_uint"))::
+    ("context", Cty_id (Modules.current_qual "cl_context"))::
+    ("queue", Cty_id (Modules.current_qual "cl_command_queue"))::[] in
+
+  let lstm_step1 =
+    (* platform_id = NULL; *)
+    (Caffect ((CLvar "platform_id"), (Cconst (Ctag "NULL")))) ::
+    (* clGetPlatformIDs(1, &platform_id, &num_platforms); *)
+    (Csexpr (Cfun_call ("clGetPlatformIDs",
+      [ Cconst (Ccint 1);
+        Caddrof (Cvar "platform_id");
+        Caddrof (Cvar "num_platforms")
+      ]
+    )))::
+    (* device_id = NULL; *)
+    (Caffect ((CLvar "device_id"), (Cconst (Ctag "NULL"))))::
+    (* clGetDeviceIDs(platform_id, CL_DEVICE_TYPE_CUSTOM, 1, &device_id, &num_devices); *)
+    (Csexpr (Cfun_call ("clGetDeviceIDs",
+      [ Cvar "platform_id";
+        Cconst (Ctag "CL_DEVICE_TYPE_CUSTOM");
+        Cconst (Ccint 1);
+        Caddrof (Cvar "device_id");
+        Caddrof (Cvar "num_devices")
+      ]
+    )))::
+    (* context = clCreateContext(NULL, num_devices, &device_id, NULL, NULL, NULL); *)
+    (Caffect ((CLvar "context"), (Cfun_call ("clCreateContext",
+      [ Cconst (Ctag "NULL");
+        Cvar "num_devices";
+        Caddrof (Cvar "device_id");
+        Cconst (Ctag "NULL");
+        Cconst (Ctag "NULL");
+        Cconst (Ctag "NULL")
+      ]
+    ))))::
+    (* queue = clCreateCommandQueue(context, device_id, 0, NULL); *)
+    (Caffect ((CLvar "queue"), (Cfun_call ("clCreateCommandQueue",
+      [ Cvar "context";
+        Cvar "device_id";
+        Cconst (Ccint 0);
+        Cconst (Ctag "NULL")
+      ]
+    ))))::[]
+  in
+
+  (* Step 2 & 3 - Kernel management *)
+  (* Preparation *)
+  let lKernelVar = Openclprep.IntMap.fold (fun cloid (qname, sign, _) acc ->
+    let nprogname = program_var_name qname.name cloid in
+    let nkername = kernel_var_name qname.name cloid in
+    (qname, sign, nprogname, cloid, nkername)::acc
+  ) !Openclprep.mKernelCL [] in
+
+  let lvarloc_step2 =
+    ("fp", Cty_ptr (Cty_id (Modules.current_qual "FILE")))::
+    ("code", Cty_ptr (Cty_id (Modules.current_qual "char")))::
+    ("code_size", Cty_id (Modules.current_qual "size_t"))::[] in
+  let lvarloc_step2 = List.fold_left (fun acc (_, _, nprogname, _, nkername) ->
+    (nprogname, Cty_id (Modules.current_qual "cl_program"))::
+    (nkername, Cty_id (Modules.current_qual "cl_kernel"))::acc
+  ) lvarloc_step2 lKernelVar in
+
+  (* For all kernels... *)
+  let lstm_step2 = List.fold_left (fun acc (qname, kernsig, nprogname, _, nkername) ->
+    (* fp = fopen("[program source location]", "r"); *)
+    let acc = (Caffect ((CLvar "fp"), (Cfun_call ("fopen",
+      [ Cconst (Cstrlit kernsig.Signature.k_srcbin);
+        Cconst (Cstrlit "r")
+      ]
+    ))))::
+    (* code = (char* ) malloc(MAX_SOURCE_SIZE); *)
+    (Caffect ((CLvar "code"), (Cfun_call ("malloc", 
+      [ Cconst (Ctag "MAX_SOURCE_SIZE") ]
+    ))))::
+    (* code_size = fread(code, 1, MAX_SOURCE_SIZE, fp); *)
+    (Caffect ((CLvar "code_size"), (Cfun_call ("fread",
+      [ Cvar "code";
+        Cconst (Ccint 1);
+        Cconst (Ctag "MAX_SOURCE_SIZE");
+        Cvar "fp"
+      ]
+    ))))::
+    (* fclose(fp); *)
+    (Csexpr (Cfun_call ("fclose", [Cvar "fp"])))::acc in
+
+    (* Switch if source or binary file *)
+    let acc = if (kernsig.k_issource) then
+      (* Program from source file *)
+      (* [nprogname] = clCreateProgramWithSource(context, 1, (const char ** ) &code, &code_size, NULL); *)
+      (Caffect ((CLvar nprogname), (Cfun_call ("clCreateProgramWithSource",
+        [ Cvar "context";
+          Cconst (Ccint 1);
+          Caddrof (Cvar "code");
+          Caddrof (Cvar "code_size");
+          Cconst (Ctag "NULL")
+        ]
+      ))))::
+      (* clBuildProgram([nprogname], 1, &device_id, NULL, NULL, NULL);*)
+      (Csexpr (Cfun_call ("clBuildProgram",
+        [ Cvar nprogname;
+          Cconst (Ccint 1);
+          Caddrof (Cvar "device_id");
+          Cconst (Ctag "NULL"); Cconst (Ctag "NULL"); Cconst (Ctag "NULL")
+        ]
+      )))::acc
+    else
+      (* Program from binary file *)
+      (* [nprogname] = clCreateProgramWithBinary(context, 1, &device_id, &code_size, &code, NULL, NULL) *)
+      (Caffect ((CLvar nprogname), (Cfun_call ("clCreateProgramWithBinary",
+        [ Cvar "context";
+          Cconst (Ccint 1);
+          Caddrof (Cvar "device_id");
+          Caddrof (Cvar "code_size");
+          Caddrof (Cvar "code");
+          Cconst (Ctag "NULL"); Cconst (Ctag "NULL")
+        ]
+      ))))::acc
+    in
+
+    (* [nkername] = clCreateKernel([nprogname], "[sig_kernel_name]", NULL);*)
+    (Caffect ((CLvar nkername), (Cfun_call ("clCreateKernel",
+      [ Cvar nprogname;
+        Cvar qname.name;
+        Cconst (Ctag "NULL")
+      ]
+    )))) :: acc
+  ) [] lKernelVar in
+
+  (* Step 4 & 5 - buffer construction + association *)
+  
+  (* lBufferVar: list of (qnameKernel, kernelsign, buffid, isInput, pos, buffname) *)
+  let lBufferVar = Openclprep.IntMap.fold (fun cloid (qnameKernel, kernelsign, mBuffer) acc ->
+    Openclprep.BoolIntMap.fold (fun (isInput, pos) (buffid,_) acc ->
+      let buffname = buffer_var_name qnameKernel.name buffid in
+      (qnameKernel, kernelsign, cloid, buffid, isInput, pos, buffname)::acc
+    ) mBuffer acc
+  ) !Openclprep.mBufferCL [] in
+
+  let rec find_kernelvar lKernelVar cloid = match lKernelVar with
+    | [] -> failwith ("find_kernelvar : kernel occurrence " ^ (string_of_int cloid) ^ " was not found.")
+    | (_, _, _, cid, kervar)::t ->
+      if (cid=cloid) then kervar else find_kernelvar t cloid
+  in
+  
+  let lvarloc_step4 = List.fold_left
+    (fun acc (_, _, _, _, _, _, buffname) ->
+      (buffname, Cty_id (Modules.current_qual "cl_mem"))::acc
+    ) [] lBufferVar
+  in
+  let lstm_step4 = List.fold_left
+    (fun acc (_, kernelsign, cloid, _, isInput, pos, buffname) ->
+      
+
+      let flagRW = if isInput then "CL_MEM_READ_ONLY" else "CL_MEM_WRITE_ONLY" in
+      let tyBuffer = if isInput then
+          (List.nth kernelsign.k_input pos).a_type
+        else
+          (List.nth kernelsign.k_output pos).a_type
+      in
+      let strsizebuffer = Cgen.type_to_sizeof tyBuffer in
+      
+
+
+      (* [buffname] = clCreateBuffer(context, CL_MEM_[READ/WRITE]_ONLY, [sizebuffer], NULL, NULL) *)
+      let acc = (Caffect ((CLvar buffname), (Cfun_call ("clCreateBuffer",
+        [ Cvar "context";
+          Cconst (Ctag flagRW);
+          Cconst (Ctag strsizebuffer);
+          Cconst (Ctag "NULL"); Cconst (Ctag "NULL")
+        ]
+      ))))::acc in
+
+      let kernelvar = find_kernelvar lKernelVar cloid in
+
+      (* clSetKernelArg([kernelvar], [pos], size_of(cl_mem), &[buffname])  - for input/output *)
+      let acc = (Csexpr (Cfun_call ("clSetKernelArg",
+        [ Cvar kernelvar;
+          Cconst (Ccint pos);
+          Cconst (Ctag "sizeof(cl_mem)");
+          Caddrof (Cvar buffname)
+        ]
+      ))) :: acc in
+      acc
+    ) [] lBufferVar in
+
+  (* Local memory - buffer namangement *)
+  (* clSetKernelArg([kernelvar], [pos], [sizebuffer], NULL)  - for local var *)
+  let lstm_step4 = Openclprep.IntMap.fold (fun cloid (_, mcloid) acc ->
+    Openclprep.IntMap.fold (fun pos argloc acc ->
+      let kernelvar = find_kernelvar lKernelVar cloid in
+      let strsizebuffer = Cgen.type_to_sizeof argloc.a_type in
+
+      let nacc = (Csexpr (Cfun_call ("clSetKernelArg",
+        [Cvar kernelvar;
+          Cconst (Ccint pos);
+          Cconst (Ctag strsizebuffer);
+          Cconst (Ctag "NULL")
+        ]
+      ))) :: acc
+      in
+      nacc
+    ) mcloid acc
+  ) !Openclprep.mLocalBuffCL lstm_step4 in
+    
+
+  (* Step 6 - Build global data structure *)
+  let numKernel = Openclprep.IntMap.cardinal !Openclprep.mKernelCL in
+  let numBuffer = !Openclprep.idbuffer in
+  let lvarloc_step6 = 
+    ("kernels", Cty_arr (numKernel, Cty_id (Modules.current_qual "cl_kernel")))::
+    ("buffers", Cty_arr (numBuffer, Cty_id (Modules.current_qual "cl_buffer")))::[]
+  in
+  
+  (* TODO: get the list using the cloid (key) to get the position *)
+  let lkernelvarstr = order_list
+    (List.map (fun (_, _, _, cloid, nkername) -> (cloid, nkername)) lKernelVar)
+  in
+  let lbuffervarstr = order_list 
+    (List.map (fun (_, _, _, buffid, _, _, buffname) -> (buffid, buffname)) lBufferVar) in
+
+  let lstm_step6 =
+  (* kernels = { ..[kernelvarstr].. } *)
+  (Caffect (CLvar "kernels", Carraylit (
+    List.map (fun kervar -> Cvar kervar) lkernelvarstr
+  ))) ::
+  (* buffers = { ..[buffervarstr].. } *)
+  (Caffect (CLvar "buffers", Carraylit (
+    List.map (fun bufvar -> Cvar bufvar) lbuffervarstr
+  ))) ::
+  (* [icl_data_struct_string].queue = queue; *)
+  (Caffect ((CLfield (CLvar (Openclprep.icl_data_struct_string), Modules.current_qual "queue"))
+    , Cvar "queue"
+  )) ::  
+  (* [icl_data_struct_string].buffers = buffers; *)
+  (Caffect ((CLfield (CLvar (Openclprep.icl_data_struct_string), Modules.current_qual "buffers"))
+    , Cvar "buffers"
+  )) ::
+  (* [icl_data_struct_string].kernels = kernels; *)
+  (Caffect ((CLfield (CLvar (Openclprep.icl_data_struct_string), Modules.current_qual "kernels"))
+    , Cvar "kernels"
+  )) :: [] in
+
+
+  (* Wrapping things up *)
+  let stm = lstm_step1 @ lstm_step2 @ lstm_step4 @ lstm_step6 in
+  let lvarloc = lvarloc_step1 @ lvarloc_step2 @ lvarloc_step4 @ lvarloc_step6 in
+  (stm, lvarloc)
+
+
+
+(* Main function for OpenCL is a while loop *)
+let main_skel_opencl var_list prologue body =
+  Cfundef {
+    C.f_name = "main";
+    f_retty = Cty_int;
+    f_args = [("argc", Cty_int); ("argv", Cty_ptr (Cty_ptr Cty_char))];
+    f_body = {
+      var_decls = var_list;
+      block_body =
+        prologue (* Includes classical "reset" prologue + OpenCL init *)
+        @ [
+          (* Infinite while loop *)
+          Cwhile (Cconst (Ccint 1), body);
+          Creturn (mk_int 0);
+        ];
+    }
   }
 
+(* ----- *)
+
 let mk_main name p =
-  if !Compiler_options.simulation then (
+  if (!Compiler_options.simulation || !Compiler_options.opencl_cg) then (
       let classes = program_classes p in
       let n_names = !Compiler_options.assert_nodes in
       let find_class n =
         List.find (fun cd -> cd.cd_name.name = n) classes
       in
 
-      let a_classes =
-        List.fold_left
-          (fun acc n ->
-             try
-               find_class n :: acc
-             with Not_found -> acc)
-          []
-          n_names in
-
-      let (var_l, res_l, step_l) =
-        let add cd (var_l, res_l, step_l) =
+      let a_classes = List.fold_left
+        (fun acc n -> try find_class n :: acc with Not_found -> acc)
+        [] n_names
+      in
+      let (var_l, res_l, step_l) = List.fold_right (fun cd (var_l, res_l, step_l) ->
           let (var, res, step) = assert_node_res cd in
-          (var @ var_l, res @ res_l, step :: step_l) in
-        List.fold_right add a_classes ([], [], []) in
+          (var @ var_l, res @ res_l, step :: step_l)
+        ) a_classes ([], [], [])
+      in
 
-      let n = !Compiler_options.simulation_node in
+      let n =
+        if (!Compiler_options.simulation) then
+          !Compiler_options.simulation_node
+        else
+          (Misc.assert_1 !Compiler_options.mainnode).name
+      in
+
+      
       let (defs, var_l, res_l, step_l) =
         try
           let (mem, nvar_l, res, nstep_l) = main_def_of_class_def (find_class n) in
           let defs = match mem with None -> [] | Some m -> [m] in
           (defs, nvar_l @ var_l, res @ res_l, nstep_l @ step_l)
-        with Not_found -> ([],var_l,res_l,step_l) in
-
-      [("_main.c", Csource (defs @ [main_skel var_l res_l step_l]));
-       ("_main.h", Cheader ([name], []))];
+        with Not_found -> ([],var_l,res_l,step_l)
+      in
+      
+      let (prologue, var_l) = if (!Compiler_options.opencl_cg) then
+          let (prol_l, extra_var_l) = get_opencl_prologue () in
+          (prol_l @ res_l, extra_var_l @ var_l)
+        else
+          (res_l, var_l)
+      in
+      let main_skel = if (!Compiler_options.simulation) then
+        main_skel_simul else main_skel_opencl
+      in
+      [("_main.c", Csource (defs @ [main_skel var_l prologue step_l]));
+       ("_main.h", Cheader ([name], []))]
   ) else
     []
+
 
 
 

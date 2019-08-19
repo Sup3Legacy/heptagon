@@ -357,6 +357,8 @@ let pp_cfile_desc fmt filen cfile =
         fprintf fmt "#include <stdio.h>@\n";
         fprintf fmt "#include <string.h>@\n";
         fprintf fmt "#include <stdlib.h>@\n";
+        if (!Compiler_options.opencl_cg) then
+          fprintf fmt "#include \"hept_opencl.h\"@\n";
         fprintf fmt "#include \"%s\"@\n@\n" headern;
         iter (pp_cdef fmt) cdefs
 

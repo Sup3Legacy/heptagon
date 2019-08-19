@@ -712,7 +712,7 @@ and typing_operator op cenv se_list =
     Sop (op, typed_se_list), prod expected_ty_output
   else
     let typed_se_list = List.map (typing_static_exp cenv) se_list in
-    let typed_se_list = List.map (fun (se,ty) -> se) typed_se_list in
+    let typed_se_list = List.map (fun (se,_) -> se) typed_se_list in
     
     let frname_ty_paramnames = List.map
       (fun tp_dec ->
@@ -1676,12 +1676,23 @@ let typing_signature s =
     sig_inputs = List.map (typing_arg cenv) s.sig_inputs;
     sig_outputs = List.map (typing_arg cenv) s.sig_outputs; }
 
+let typing_kerneldec k =
+  let typed_input, (_, h) = build QualEnv.empty Env.empty k.k_input in
+  let typed_output, (_, h) = build QualEnv.empty h k.k_output in
+  let typed_local, _ = build QualEnv.empty h k.k_local in
+  { k with
+    k_input = typed_input;
+    k_output = typed_output;
+    k_local = typed_local; }
+
+
 let program p =
   let program_desc pd = match pd with
     | Pnode n -> Pnode (node n)
     | Pconst c -> Pconst (typing_const_dec c)
     | Ptype t -> Ptype (typing_typedec t)
     | Pclass c -> Pclass (typing_classdec c)
+    | Pkernel k -> Pkernel (typing_kerneldec k)
   in
   { p with p_desc = List.map program_desc p.p_desc }
 

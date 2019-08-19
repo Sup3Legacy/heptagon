@@ -87,6 +87,8 @@ open Hept_parsetree
 %token <string> SUBTRACTIVE
 %token <string> INFIX3
 %token <string> INFIX4
+
+%token CLKERNEL CLSOURCE CLBINARY CLDIM CLLOCAL CLGLWORKSIZE CLLOCWORKSIZE
 %token EOF
 
 
@@ -157,6 +159,7 @@ program_desc:
   | t=type_dec     { Ptype t }
   | c=class_dec    { Pclass c}
   | n=node_dec     { Pnode n }
+  | k=kernel_dec   { Pkernel k }
 ;
 
 opens: OPEN m=modul { m }
@@ -206,6 +209,35 @@ label_ty:
 
 returns: RETURNS | EQUAL {}
 ;
+
+
+clsrcbin:
+  | CLSOURCE  { true  }
+  | CLBINARY  { false }
+
+kernel_dec:
+  | CLKERNEL FUN n=ident LPAREN i=in_params RPAREN
+    returns LPAREN o=out_params RPAREN
+    issrc=clsrcbin fname=STRING
+    CLDIM dim=INT l=loc_params_kernel
+      {{k_namekernel = n;
+        k_input = i;
+        k_output = o;
+        k_loc = (Loc($startpos,$endpos));
+        k_issource = issrc;
+        k_srcbin = fname;
+        k_dim = dim;
+        k_local = l }}
+;
+
+loc_params_kernel:
+  | /* empty */      { [] }
+  | CLLOCAL id=ident COLON ty_lin=located_ty_ident rest=loc_params_kernel {
+    let vdloc = mk_var_dec ~linearity:(snd ty_lin) id (fst ty_lin)
+        None Var (Loc($startpos,$endpos)) in
+    vdloc :: rest }
+;
+
 
 node_dec:
   | u=unsafe n=node_or_fun f=ident pc=node_params tp=type_params
@@ -531,8 +563,15 @@ _simple_exp:
 ;
 
 node_name:
-  | q=qualname c=call_params { mk_app (Enode q) c false }
-  | INLINED q=qualname c=call_params { mk_app (Enode q) c true }
+  | q=qualname c=call_params { mk_app (Enode q) c false None }
+  | INLINED q=qualname c=call_params { mk_app (Enode q) c true None }
+  | clopt=clmacrocall q=qualname c=call_params { mk_app (Enode q) c false clopt }
+  | INLINED clopt=clmacrocall q=qualname c=call_params { mk_app (Enode q) c true clopt }
+;
+
+clmacrocall:
+  | CLGLWORKSIZE glw=INT CLLOCWORKSIZE locw=INT  { Some (mk_cloption glw locw) }
+;
 
 merge_handlers:
   | hs=nonempty_list(merge_handler) { hs }

@@ -38,6 +38,7 @@ open Minils
 
 type 'a mls_it_funs = {
   app:           'a mls_it_funs -> 'a -> Minils.app -> Minils.app * 'a;
+  cl_option:     'a mls_it_funs -> 'a -> Minils.cl_option -> Minils.cl_option * 'a;
   edesc:         'a mls_it_funs -> 'a -> Minils.edesc -> Minils.edesc * 'a;
   eq:            'a mls_it_funs -> 'a -> Minils.eq -> Minils.eq * 'a;
   eqs:           'a mls_it_funs -> 'a -> Minils.eq list -> Minils.eq list * 'a;
@@ -54,6 +55,7 @@ type 'a mls_it_funs = {
   const_dec:     'a mls_it_funs -> 'a -> Minils.const_dec -> Minils.const_dec * 'a;
   classtype_dec: 'a mls_it_funs -> 'a -> Minils.classtype_dec -> Minils.classtype_dec * 'a;
   type_dec:      'a mls_it_funs -> 'a -> Minils.type_dec -> Minils.type_dec * 'a;
+  kernel_dec:    'a mls_it_funs -> 'a -> Minils.kernel_dec -> Minils.kernel_dec * 'a;
   tdesc:         'a mls_it_funs -> 'a -> Minils.tdesc -> Minils.tdesc * 'a;
   program:       'a mls_it_funs -> 'a -> Minils.program -> Minils.program * 'a;
   program_desc:  'a mls_it_funs -> 'a -> Minils.program_desc -> Minils.program_desc * 'a;
@@ -142,10 +144,14 @@ and edesc funs acc ed = match ed with
       Eiterator (i, app, params, pargs, args, reset), acc
 
 
+and cl_option_it funs acc copt = funs.cl_option funs acc copt
+and cl_option _ acc copt = copt, acc
+
 and app_it funs acc a = funs.app funs acc a
 and app funs acc a =
   let p, acc = mapfold (static_exp_it funs.global_funs) acc a.a_params in
-  { a with a_params = p }, acc
+  let copt, acc = optional_wacc (cl_option_it funs) acc a.a_cloption in
+  { a with a_params = p; a_cloption = copt }, acc
 
 
 and pat_it funs acc p =
@@ -204,7 +210,7 @@ and contract funs acc c =
   , acc
 
 and typeparam_dec_it funs acc td = funs.typeparam_dec funs acc td
-and typeparam_dec funs acc td = td, acc (* Nothing to explore below *)
+and typeparam_dec _ acc td = td, acc (* Nothing to explore below *)
 
 and node_dec_it funs acc nd =
   Idents.enter_node nd.n_name;
@@ -237,7 +243,7 @@ and const_dec funs acc c =
 
 
 and classtype_dec_it funs acc c = funs.classtype_dec funs acc c
-and classtype_dec funs acc c = c, acc (* Nothing to explore below *)
+and classtype_dec _ acc c = c, acc (* Nothing to explore below *)
 
 and type_dec_it funs acc t =
   try funs.type_dec funs acc t
@@ -245,6 +251,15 @@ and type_dec_it funs acc t =
 and type_dec funs acc t =
   let tdesc, acc = tdesc_it funs acc t.t_desc in
     { t with t_desc = tdesc }, acc
+
+and kernel_dec_it funs acc k =
+  try funs.kernel_dec funs acc k
+  with Fallback -> kernel_dec funs acc k
+and kernel_dec funs acc k =
+  let k_input, acc = var_decs_it funs acc k.k_input in
+  let k_output, acc = var_decs_it funs acc k.k_output in
+  let k_local, acc = var_decs_it funs acc k.k_local in
+  { k with k_input = k_input; k_output = k_output; k_local = k_local}, acc
 
 
 and tdesc_it funs acc td =
@@ -273,10 +288,12 @@ and program_desc funs acc pd = match pd with
   | Ptype td -> let td, acc = type_dec_it funs acc td in Ptype td, acc
   | Pnode n -> let n, acc = node_dec_it funs acc n in Pnode n, acc
   | Pclasstype cd -> let cd, acc = classtype_dec_it funs acc cd in Pclasstype cd, acc
+  | Pkernel kd -> let kd, acc = kernel_dec_it funs acc kd in Pkernel kd, acc
 
 
 let defaults = {
   app = app;
+  cl_option = cl_option;
   edesc = edesc;
   eq = eq;
   eqs = eqs;
@@ -293,6 +310,7 @@ let defaults = {
   const_dec = const_dec;
   classtype_dec = classtype_dec;
   type_dec = type_dec;
+  kernel_dec = kernel_dec;
   tdesc = tdesc;
   program = program;
   program_desc = program_desc;

@@ -117,10 +117,14 @@ let print_op ff op = match op with
   | Econcat -> fprintf ff "Econcat"
   | Ereinit -> fprintf ff "Ereinit"
 
-let rec print_app ff { a_op = op; a_params = lexp; a_inlined = binl} =
-  fprintf ff "%a%a [inlined:%b]" print_op op
+let rec print_app ff { a_op = op; a_params = lexp; a_inlined = binl; a_cloption = clopt} =
+  fprintf ff "%a%a [inlined:%b | clopt: [%a] ]" print_op op
      (print_list print_exp "(" "," ")") lexp
      binl
+     (print_opt print_cl_option) clopt
+
+and print_cl_option ff { copt_gl_worksize = glws; copt_loc_worksize = locws} =
+  fprintf ff "gl_ws: %i | loc_ws: %i" glws locws
 
 and print_edesc ff edesc = match edesc with
   | Econst st_exp -> fprintf ff "Econst %a" print_static_exp st_exp
@@ -144,7 +148,7 @@ and print_edesc ff edesc = match edesc with
   | Emerge (var_name, lconstname_exp) -> fprintf ff "Emerge %a%a" print_var_name var_name
      (print_list (print_couple print_const_name print_exp "" "|" "") "" "," "") lconstname_exp
   | Ecurrent (cons_name, var_name, expInit, exp) -> fprintf ff "Ecurrent(%a(%a), %a, %a)"
-      print_const_name cons_name  print_var_name var_name  print_exp expInit  print_exp expr
+      print_const_name cons_name  print_var_name var_name  print_exp expInit  print_exp exp
   | Esplit (var_name, exp) -> fprintf ff "Esplit %a%a" print_var_name var_name print_exp exp
 
 and print_exp ff { e_desc= edesc; e_ct_annot= optct } =
@@ -293,6 +297,17 @@ let print_class_dec ff cdec =
     print_class_name cdec.c_nameclass
     (print_list print_type_name "" ", " "") cdec.c_insttypes
 
+let print_kernel_dec ff kdec =
+  fprintf ff "kernel %a (%a) returns (%a)\n\
+      is_source = %b | source_bin_file = %s | dim = %i\n\
+      locals = (%a)\n@."
+    print_dec_name kdec.k_namekernel
+    (print_list print_var_dec "" ", " "") kdec.k_input
+    (print_list print_var_dec "" ", " "") kdec.k_output
+    kdec.k_issource  kdec.k_srcbin
+    kdec.k_dim
+    (print_list print_var_dec "" ", " "") kdec.k_local
+
 
 
 (************************************)
@@ -308,6 +323,7 @@ let print_pdesc ff pdesc = match pdesc with
   | Pconst c_dec -> print_const_dec ff c_dec
   | Pclass c_dec -> print_class_dec ff c_dec
   | Pnode n_dec -> print_node_dec ff n_dec
+  | Pkernel k_dec -> print_kernel_dec ff k_dec
 
 (* Pretty-print a Hept_parsetree AST - Entry point*)
 let print_AST oc { p_modname = pname; p_opened = po; p_desc = pd } =

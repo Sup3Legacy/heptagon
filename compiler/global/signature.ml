@@ -34,7 +34,7 @@ open Linearity
 
 (** Warning: Whenever these types are modified,
     interface_format_version should be incremented. *)
-let interface_format_version = "4.1"  (* last change: add type parameters & type class (Guillaume I) *)
+let interface_format_version = "4.2"  (* last change: add OpenCL kernel support (Guillaume I) *)
 
 type ck =
   | Cbase
@@ -68,6 +68,18 @@ type node = {
   node_param_constraints  : constrnt list;
   node_external           : bool;
   node_loc                : location}
+
+(** OpenCL Kernel signature *)
+type kernel = {
+  k_input       : arg list;
+  k_output      : arg list;
+  k_loc         : location;
+  k_issource    : bool; (* true: source / false: binary *)
+  k_srcbin      : string;
+  k_dim         : int;
+  k_local       : arg list 
+}
+
 
 type field = { f_name : field_name; f_type : ty }
 type structure = field list
@@ -130,6 +142,15 @@ let mk_node ?(constraints = []) loc ~extern ?(typeparams = []) ins outs stateful
     node_param_constraints = constraints;
     node_external = extern;
     node_loc = loc}
+
+let mk_kernel loc ins outs issource srcbin ?(dim=1) ?(locs=[]) =
+  { k_input = ins;
+    k_output = outs;
+    k_loc = loc;
+    k_issource = issource; (* true: source / false: binary *)
+    k_srcbin = srcbin;
+    k_dim = dim;
+    k_local = locs}
 
 let rec field_assoc f = function
   | [] -> raise Not_found

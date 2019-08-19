@@ -71,12 +71,17 @@ and desc =
   | Eiterator of iterator_type * app * static_exp list
                   * exp list * exp list * exp option
 
+and cl_option = {
+  copt_gl_worksize  : int;
+  copt_loc_worksize : int }
+
 and app = {
   a_op     : op;
   a_params : static_exp list;
   a_ty_subst : (type_name * ty) list; (* non-empty only when a_op = (Efun _) | (Enode _) with type params *)
   a_unsafe : bool;
-  a_inlined : bool }
+  a_inlined : bool;
+  a_cloption : cl_option option }
 
 and op =
   | Etuple
@@ -206,6 +211,16 @@ type class_dec =
     c_insttypes   : type_name list;
     c_loc         : location }
 
+type kernel_dec =
+  { k_namekernel  : qualname;
+    k_input       : var_dec list;
+    k_output      : var_dec list;
+    k_loc         : location;
+    k_issource    : bool; (* true: source / false: binary *)
+    k_srcbin      : string;
+    k_dim         : int;
+    k_local       : var_dec list }
+
 type program = {
   p_modname : modul;
   p_opened  : modul list;
@@ -216,6 +231,7 @@ and program_desc =
   | Pnode of node_dec
   | Pconst of const_dec
   | Pclass of class_dec
+  | Pkernel of kernel_dec
 
 type signature = {
   sig_name              : qualname;

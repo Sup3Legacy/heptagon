@@ -44,6 +44,7 @@ exception Already_defined
 type module_object =
   { m_name    : Names.modul;
     m_values  : node NamesEnv.t;
+    m_kernels : kernel NamesEnv.t;
     m_types   : type_def NamesEnv.t;
     m_classes : type_class NamesEnv.t;
     m_consts  : const_def NamesEnv.t;
@@ -56,6 +57,7 @@ type env = {
   mutable opened_mod  : modul list;      (** Modules opened and loaded into the env *)
   mutable loaded_mod  : modul list;      (** Modules loaded into the env *)
   mutable values  : node QualEnv.t;      (** Node definitions *)
+  mutable kernels : kernel QualEnv.t;    (** Kernel definitions *)
   mutable types   : type_def QualEnv.t;  (** Type definitions *)
   mutable classes : type_class QualEnv.t; (** Class definitions *)
   mutable consts  : const_def QualEnv.t; (** Constants definitions *)
@@ -70,6 +72,7 @@ let g_env =
     opened_mod  = [];
     loaded_mod = [];
     values    = QualEnv.empty;
+    kernels   = QualEnv.empty;
     types     = QualEnv.empty;
     classes   = QualEnv.empty;
     constrs   = QualEnv.empty;
@@ -98,6 +101,7 @@ let _append_module mo =
         QualEnv.add {qual= mo.m_name; name= x} {qual= mo.m_name; name= v} env)
       mo_env QualEnv.empty in
   g_env.values <- QualEnv.append (qualify mo.m_values) g_env.values;
+  g_env.kernels <- QualEnv.append (qualify mo.m_kernels) g_env.kernels;
   g_env.types <- QualEnv.append (qualify mo.m_types) g_env.types;
   g_env.classes <- QualEnv.append (qualify mo.m_classes) g_env.classes;
   g_env.constrs <- QualEnv.append (qualify_all mo.m_constrs) g_env.constrs;
@@ -171,6 +175,9 @@ let _check_not_defined env f =
 let add_value f v =
   _check_not_defined g_env.values f;
   g_env.values <- QualEnv.add f v g_env.values
+let add_kernel f v =
+  _check_not_defined g_env.kernels f;
+  g_env.kernels <- QualEnv.add f v g_env.kernels
 let add_type f v =
   _check_not_defined g_env.types f;
   g_env.types <- QualEnv.add f v g_env.types
@@ -192,6 +199,8 @@ let add_const f v =
 (** Same as add_value but without checking for redefinition *)
 let replace_value f v =
   g_env.values <- QualEnv.add f v g_env.values
+let replace_kernel f v =
+  g_env.kernels <- QualEnv.add f v g_env.kernels
 let replace_type f v =
   g_env.types <- QualEnv.add f v g_env.types
 let replace_class f v =
@@ -204,6 +213,7 @@ let replace_const f v =
 (** {3 Find functions look in the global environement, nothing more} *)
 
 let find_value x = QualEnv.find x g_env.values
+let find_kernel x = QualEnv.find x g_env.kernels
 let find_type x = QualEnv.find x g_env.types
 let find_class x = QualEnv.find x g_env.classes
 let find_constrs x = QualEnv.find x g_env.constrs
@@ -226,6 +236,9 @@ let find_struct n =
 let check_value q =
   _load_module q.qual;
   try let _ = QualEnv.find q g_env.values in true with Not_found -> false
+let check_kernel q =
+  _load_module q.qual;
+  try let _ = QualEnv.find q g_env.kernels in true with Not_found -> false
 let check_type q =
   _load_module q.qual;
   try let _ = QualEnv.find q g_env.types in true with Not_found -> false
@@ -261,6 +274,7 @@ let _qualify env name =
   { qual = m; name = name }
 
 let qualify_value name = _qualify g_env.values name
+let qualify_kernel name = _qualify g_env.kernels name
 let qualify_type name = _qualify g_env.types name
 let qualify_class name = _qualify g_env.classes name
 let qualify_constrs name = _qualify g_env.constrs name
@@ -389,6 +403,7 @@ let current_module () =
   in
     { m_name = g_env.current_mod;
       m_values = unqualify g_env.values;
+      m_kernels = unqualify g_env.kernels;
       m_types = unqualify g_env.types;
       m_classes = unqualify g_env.classes;
       m_consts = unqualify g_env.consts;

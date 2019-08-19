@@ -144,8 +144,14 @@ and print_exp_desc ff edesc = match edesc with
         print_w_tuple pargs
         print_w_tuple args
         print_every reset
+
+
+and print_cl_option ff clopt =
+  fprintf ff "[gl_worksize = %i | loc_worksize = %i ]"
+    clopt.copt_gl_worksize  clopt.copt_loc_worksize
+
 and print_app ff (app, args) =
-  match app.a_op with
+  (match app.a_op with
     | Eequal ->
       let e1, e2 = assert_2 args in
         fprintf ff "@[<2>%a@ = %a@]" print_extvalue e1  print_extvalue e2
@@ -199,6 +205,10 @@ and print_app ff (app, args) =
     | Econcat ->
       let e1, e2 = assert_2 args in
         fprintf ff "@[<2>%a@ @@ %a@]" print_extvalue e1  print_extvalue e2
+  );
+  match app.a_cloption with
+  | None -> ()
+  | Some clopt -> print_cl_option ff clopt
 
 
 (* lhs of equations *)
@@ -366,6 +376,26 @@ let print_classtype_dec ff cdecl =
     (print_list print_full_qualname "" ", " "") cdecl.c_insttypes
 
 
+let print_vardecl_loc_kernel ff vd = fprintf ff "__cllocal %a" print_vardecl vd
+
+let print_kernel_dec ff
+    { k_namekernel = n; k_input = ki; k_output = ko;
+    k_issource = issrc; k_srcbin = filename; k_dim = dim;
+    k_local = kl} =
+  fprintf ff "@[__clkernel fun %a%a returns %a@]\n@."
+    print_qualname n
+    print_vardecl_tuple ki
+    print_vardecl_tuple ko;
+  (if issrc then
+    fprintf ff "\t__clsource \"%s\" __cldim %i\n@." filename dim
+  else
+    fprintf ff "\t__clbinary \"%s\" __cldim %i\n@." filename dim);
+  if (kl != []) then
+    fprintf ff "\t%a\n@."
+    (print_list print_vardecl_loc_kernel "" " " "") kl
+
+
+
 (************************************)
 (* *** Program level of the AST *** *)
 (************************************)
@@ -378,6 +408,7 @@ let printAST_program oc prog =
     | Pconst cdecl -> print_const_dec ff cdecl
     | Ptype tdecl -> print_type_dec ff tdecl
     | Pclasstype cdecl -> print_classtype_dec ff cdecl
+    | Pkernel kdecl -> print_kernel_dec ff kdecl
   in
   let {p_modname=modname; p_format_version=format_version;
        p_opened=lopened; p_desc = ldesc} = prog in

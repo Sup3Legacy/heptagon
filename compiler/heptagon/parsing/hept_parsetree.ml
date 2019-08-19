@@ -111,7 +111,9 @@ and edesc =
   | Ecurrent of constructor_name * var_name * exp * exp (* current(cons(clk), eInit, eCurr) *)
   | Esplit of var_name * exp
 
-and app = { a_op: op; a_params: exp list; a_inlined: bool }
+and cl_option = { copt_gl_worksize  : int; copt_loc_worksize : int }
+
+and app = { a_op: op; a_params: exp list; a_inlined: bool; a_cloption : cl_option option }
 
 and op =
   | Etuple
@@ -237,6 +239,16 @@ type class_dec =
     c_insttypes   : type_name list;
     c_loc         : location }
 
+type kernel_dec =
+  { k_namekernel  : dec_name;
+    k_input       : var_dec list;
+    k_output      : var_dec list;
+    k_loc         : location;
+    k_issource    : bool; (* true: source / false: binary *)
+    k_srcbin      : string;
+    k_dim         : int;
+    k_local       : var_dec list }
+
 type program =
   { p_modname : dec_name;
     p_opened  : module_name list;
@@ -248,6 +260,7 @@ and program_desc =
   | Pconst of const_dec
   | Pclass of class_dec
   | Pnode of node_dec
+  | Pkernel of kernel_dec
 
 
 type arg =
@@ -284,17 +297,20 @@ and interface_desc =
 let mk_exp desc ?(ct_annot = None) loc =
   { e_desc = desc; e_ct_annot = ct_annot; e_loc = loc }
 
-let mk_app op params inlined =
-  { a_op = op; a_params = params; a_inlined = inlined }
+let mk_cloption glworksize locworksize =
+  { copt_gl_worksize = glworksize; copt_loc_worksize = locworksize }
+
+let mk_app op params inlined clopt =
+  { a_op = op; a_params = params; a_inlined = inlined; a_cloption = clopt }
 
 let mk_call ?(params=[]) ?(inlined=false) op exps =
-  Eapp (mk_app op params inlined, exps)
+  Eapp (mk_app op params inlined None, exps)
 
 let mk_op_call ?(params=[]) s exps =
   mk_call ~params:params (Enode (ToQ s)) exps
 
 let mk_iterator_call it ln params n_list pexps exps =
-  Eiterator (it, mk_app (Enode ln) params false, n_list, pexps, exps)
+  Eiterator (it, mk_app (Enode ln) params false None, n_list, pexps, exps)
 
 let mk_static_exp desc loc =
   { se_desc = desc; se_loc = loc }
@@ -327,6 +343,12 @@ let mk_objective kind exp =
 
 let mk_const_dec id ty e loc =
   { c_name = id; c_type = ty; c_value = e; c_loc = loc }
+
+let mk_kernel_dec name linput loutput loc issource srcbin dim lloc =
+  { k_namekernel = name; k_input = linput; k_output = loutput;
+    k_loc = loc; k_issource = issource; k_srcbin = srcbin;
+    k_dim = dim; k_local = lloc }
+
 
 let mk_arg name (ty,lin) ck =
   { a_type = ty; a_linearity = lin; a_name = name; a_clock = ck }

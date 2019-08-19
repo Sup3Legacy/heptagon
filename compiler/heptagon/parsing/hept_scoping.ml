@@ -138,6 +138,18 @@ let _qualify_with_error s qfun cqfun q = match q with
   | Q q ->
       if cqfun q then q else error (Equal_notfound (s,q))
 
+let qualify_value_or_kernel q = match q with
+  | ToQ name ->
+      (try qualify_value name with Not_found -> (
+        try qualify_kernel name with Not_found ->
+       error (Equal_unbound ("value_kernel",name)) )
+     )
+  | Q q ->
+      if check_value q then q else
+      if check_kernel q then q else
+      error (Equal_notfound ("value_kernel",q))
+
+
 let qualify_value = _qualify_with_error "value" qualify_value check_value
 let qualify_type = _qualify_with_error "type" qualify_type check_type
 let qualify_class = _qualify_with_error "class" qualify_class check_class
@@ -232,12 +244,13 @@ struct
 end
 
 
-let mk_app ?(params=[]) ?(ty_subst=[]) ?(unsafe=false) ?(inlined = false) op =
+let mk_app ?(params=[]) ?(ty_subst=[]) ?(unsafe=false) ?(inlined = false) ?(clopt = None) op =
   { Heptagon.a_op = op;
     Heptagon.a_params = params;
     Heptagon.a_ty_subst = ty_subst;
     Heptagon.a_unsafe = unsafe;
-    Heptagon.a_inlined = inlined }
+    Heptagon.a_inlined = inlined;
+    Heptagon.a_cloption = clopt }
 
 let mk_signature name ~extern ?(typeparamdecs=[]) ins outs stateful params constraints loc =
   { Heptagon.sig_name = name;
@@ -347,6 +360,11 @@ let rec translate_exp env e =
       Heptagon.e_loc = e.e_loc }
   with ScopingError(error) -> Error.message e.e_loc error
 
+and translate_cloption clopt = match clopt with
+  | None -> None
+  | Some cl -> Some { Heptagon.copt_gl_worksize = cl.copt_gl_worksize;
+                      Heptagon.copt_loc_worksize = cl.copt_loc_worksize }
+
 and translate_desc loc env = function
   | Econst c -> Heptagon.Econst (translate_static_exp c)
   | Evar x -> Heptagon.Evar (Rename.var loc env x)
@@ -362,10 +380,11 @@ and translate_desc loc env = function
         List.map (fun (f,e) -> qualify_field f, translate_exp env e)
           f_e_list in
       Heptagon.Estruct f_e_list
-  | Eapp ({ a_op = op; a_params = params; a_inlined = inl }, e_list) ->
+  | Eapp ({ a_op = op; a_params = params; a_inlined = inl; a_cloption = clopt }, e_list) ->
       let e_list = List.map (translate_exp env) e_list in
       let params = List.map (expect_static_exp) params in
-      let app = mk_app ~params:params ~inlined:inl (translate_op op) in
+      let app = mk_app ~params:params ~inlined:inl
+            ~clopt:(translate_cloption clopt) (translate_op op) in
       Heptagon.Eapp (app, e_list, None)
 
   | Eiterator (it, { a_op = op; a_params = params }, n_list, pe_list, e_list) ->
@@ -415,8 +434,8 @@ and translate_op = function
   | Econcat -> Heptagon.Econcat
   | Eselect_dyn -> Heptagon.Eselect_dyn
   | Eselect_trunc -> Heptagon.Eselect_trunc
-  | Efun ln -> Heptagon.Efun (qualify_value ln)
-  | Enode ln -> Heptagon.Enode (qualify_value ln)
+  | Efun ln -> Heptagon.Efun (qualify_value_or_kernel ln)
+  | Enode ln -> Heptagon.Enode (qualify_value_or_kernel ln)
   | Ereinit -> Heptagon.Ereinit
 
 and translate_pat loc env = function
@@ -645,6 +664,33 @@ let translate_classdec cd =
   with
     | ScopingError err -> Error.message cd.c_loc err
 
+let translate_kernel kd =
+  try
+    let name = current_qual kd.k_namekernel in
+
+    (* No parameters to kernel (yet) => no need for renaming here *)
+    let tenv = RenameType.empty in
+    let env = Rename.empty in
+
+    let env = Rename.append env kd.k_input in
+    let inputs = translate_vd_list env tenv kd.k_input in
+    let env = Rename.append env kd.k_output in
+    let outputs = translate_vd_list env tenv kd.k_output in
+    let env = Rename.append env kd.k_local in
+    let locals = translate_vd_list env tenv kd.k_local in
+
+   {  Heptagon.k_namekernel = name;
+      Heptagon.k_input = inputs;
+      Heptagon.k_output = outputs;
+      Heptagon.k_loc = kd.k_loc;
+      Heptagon.k_issource = kd.k_issource;
+      Heptagon.k_srcbin = kd.k_srcbin;
+      Heptagon.k_dim = kd.k_dim;
+      Heptagon.k_local = locals }
+  with
+    | ScopingError err -> Error.message kd.k_loc err
+
+
 let translate_program p =
   let translate_program_desc pd = match pd with
     | Ppragma _ -> Misc.unsupported "pragma in scoping"
@@ -652,6 +698,7 @@ let translate_program p =
     | Ptype t -> Heptagon.Ptype (translate_typedec t)
     | Pclass c -> Heptagon.Pclass (translate_classdec c)
     | Pnode n -> Heptagon.Pnode (translate_node n)
+    | Pkernel k -> Heptagon.Pkernel (translate_kernel k)
   in
   let desc = List.map translate_program_desc p.p_desc in
   { Heptagon.p_modname = Names.modul_of_string p.p_modname;

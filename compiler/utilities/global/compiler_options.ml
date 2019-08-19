@@ -95,6 +95,8 @@ let add_target_language s =
   if s = "z3z" then boolean := true; (* TODO use load_conf instead *)
   target_languages := s :: !target_languages
 
+let opencl_cg = ref false
+
 (* Optional path for generated files (C or Java) *)
 let target_path : string option ref = ref None
 

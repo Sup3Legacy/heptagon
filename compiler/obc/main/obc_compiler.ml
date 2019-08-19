@@ -54,4 +54,7 @@ let compile_program p =
   (*Loop unrolling*)
   let p = pass "Loop unrolling" !Compiler_options.unroll_loops Unroll.program p pp in
 
+  (* OpenCL CG preparation - counting kernels and buffers *)
+  let p = pass "OpenCL-C kernel and buffer indexing" !Compiler_options.opencl_cg Openclprep.program p pp in
+
   p

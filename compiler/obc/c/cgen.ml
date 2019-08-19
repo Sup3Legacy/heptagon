@@ -92,6 +92,35 @@ let int_of_static_exp se =
   Static.int_of_static_exp QualEnv.empty se
 
 
+(* Datatype to string conversion *)
+let rec tostring_static_exp_desc sedesc = match sedesc with
+  | Sint i -> (string_of_int i)
+  | Svar id -> id.name
+  | Sop (op, se_list) ->
+      if is_infix (shortname op)
+      then
+        let e1,e2 = Misc.assert_2 se_list in
+        let s1 = tostring_static_exp_desc e1.se_desc in
+        let s2 = tostring_static_exp_desc e2.se_desc in
+        (s1 ^ " " ^ (shortname op) ^ " " ^ s2)
+      else
+        let lstr = List.fold_left
+          (fun acc se -> acc ^ (tostring_static_exp_desc se.se_desc))
+          "" se_list
+        in
+        (shortname op) ^ " " ^ lstr
+  | _ -> failwith "tostring_static_exp_desc : static expression should not appear as an array size"
+
+let rec type_to_sizeof ty = match ty with
+  | Tprod tl ->
+    List.fold_left (fun acc t -> (type_to_sizeof t) ^ " + " ^ acc) "" tl 
+  | Tid name -> "sizeof(" ^ (shortname name) ^ ")"
+  | Tarray (ty, se) ->
+    (type_to_sizeof ty) ^ " * (" ^ (tostring_static_exp_desc se.se_desc) ^ ")"
+  | Tclasstype _ | Tinvalid -> failwith "Invalid types - should not be present on CG level"
+
+
+
 let output_names_list sig_info =
   let remove_option ad = match ad.a_name with
     | Some n -> n
@@ -152,6 +181,12 @@ let cformat_of_format s =
 (** Translates an Obc var_dec to a tuple (name, cty). *)
 let cvar_of_vd vd =
   name vd.v_ident, ctype_of_otype vd.v_type
+
+let rec clhs_to_var_conversion outv = match outv with
+  | CLvar s -> Cvar s
+  | CLderef d -> Cderef (clhs_to_var_conversion d)
+  | CLfield (cl, name) -> Cfield ((clhs_to_var_conversion cl), name)
+  | _ -> Error.message no_location (Error.Eunsupportedkindofoutput outv)
 
 (** Returns the type of a pointer to a type, except for
     types which are already pointers. *)
@@ -469,13 +504,7 @@ let step_fun_call out_env var_env sig_info outvl objn out args =
           e::(add_targeting_out l ads)
     | _, _ -> assert false
   in
-  let rec clhs_to_var_conversion outv = match outv with
-    | CLvar s -> Cvar s
-    | CLderef d -> Cderef (clhs_to_var_conversion d)
-    | CLfield (cl, name) -> Cfield ((clhs_to_var_conversion cl), name)
-    | _ -> Error.message no_location (Error.Eunsupportedkindofoutput outv)
-  in
-
+  
   (* DEBUG
   List.iter (fun outv ->
     Format.fprintf (Format.formatter_of_out_channel stdout) "outv = %a\n@?"
@@ -568,6 +597,128 @@ let generate_function_call out_env var_env obj_env outvl objn args =
             create_affect_stm outv (Cfield (out, local_qn out_name)) ty
         in
           (Csexpr fun_call)::(List.flatten (map2 create_affect outvl out_sig))
+
+
+(** generate the statements to call the kernel [objn]
+    [outvl] is a list of lhs where to put the results.
+    [args] is the list of expressions to use as arguments.
+    [mem] is the lhs where is stored the node's context.*)
+let generate_kernel_call out_env var_env obj_env ocl outvl objn args =
+  (* Default behavior if the option to generate OpenCL code is disabled *)
+  if (not (!Compiler_options.opencl_cg)) then
+    generate_function_call out_env var_env obj_env outvl objn args
+  else
+
+  (* Info on the kernel *)
+  let idkernel = ocl.copt_id in
+  let (_, sig_info_kernel, _) = try
+      Openclprep.IntMap.find idkernel !Openclprep.mKernelCL
+    with Not_found -> failwith ("OpenCL kernel number " ^ (string_of_int idkernel) ^ " was not found")
+  in
+  
+  (* Retrieving infos on the buffers *)
+  let (_, _, bufferinfos) = Openclprep.IntMap.find idkernel !Openclprep.mBufferCL in
+
+  let bufferInput = Openclprep.BoolIntMap.fold (fun (isIn, pos) (v,_) acc ->
+    if (isIn) then (pos,v)::acc else acc
+  ) bufferinfos [] in
+  let bufferOutput = Openclprep.BoolIntMap.fold (fun (isIn, pos) (v,_) acc ->
+    if (not isIn) then (pos,v)::acc else acc
+  ) bufferinfos [] in
+
+  (* Preparing the inputs *)
+  let rec add_targeting l ads = match l, ads with
+    | [], [] -> []
+    | e::l, ad::ads ->
+        (*this arg is targeted, use a pointer*)
+        let e = if Linearity.is_linear ad.a_linearity then address_of ad.a_type e else e in
+          e::(add_targeting l ads)
+    | _, _ -> assert false
+  in
+  let args = add_targeting args sig_info_kernel.k_input in
+  let args_out = List.map clhs_to_var_conversion outvl in
+
+
+  (* Step A - Enqueue write buffer *)
+  let lcstm_stepA = List.fold_left (fun acc (posIn, bufferId) ->
+    let argIn = List.nth sig_info_kernel.k_input posIn in
+    let sexprIn = List.nth args posIn in
+    let lcexp_buffIn =
+      (* Queue *)
+      (Cconst (Ctag (Openclprep.icl_data_struct_string ^ ".queue")))::
+      (* Buffer *)
+      (Cconst (Ctag  (Openclprep.icl_data_struct_string ^ ".buffers[" ^ (string_of_int bufferId) ^ "]")))::
+      (* Blocking write *)
+      (Cconst (Ctag "CL_TRUE"))::
+      (* Position as input *)
+      (Cconst (Ccint posIn))::
+      (* Size of the data transfered *)
+      (Cconst (Ctag (type_to_sizeof argIn.a_type)))::
+      (* Input : always need pointers (even if integer) *)
+      (address_of argIn.a_type sexprIn)::
+      (* Disabled options *)
+      (Cconst (Ccint 0))::(Cconst (Ctag "NULL"))::(Cconst (Ctag "NULL"))::[]
+    in
+    let fun_call_buffIn = Cfun_call ("clEnqueueWriteBuffer", lcexp_buffIn) in
+    let cstm_bufIn = Csexpr fun_call_buffIn in
+    cstm_bufIn::acc
+  ) [] bufferInput in
+
+
+  (* Step B - Enqueue computation *)
+  let lcexp_comput =
+    (* Queue *)
+    (Cconst (Ctag (Openclprep.icl_data_struct_string ^ ".queue")))::
+    (* Buffer *)
+    (Cconst (Ctag  (Openclprep.icl_data_struct_string ^ ".kernels[" ^ (string_of_int idkernel) ^ "]")))::
+    (* Dimension of the kernel *)
+    (Cconst (Ccint sig_info_kernel.k_dim))::
+    (* Disabled alignment option *)
+    (Cconst (Ctag "NULL"))::
+    (* Info on local_worksize *)
+    (Cstructlit ("size_t", [Cconst (Ccint ocl.copt_gl_worksize)]))::
+    (* Info on global_worksize *)
+    (Cstructlit ("size_t", [Cconst (Ccint ocl.copt_loc_worksize)]))::
+    (Cconst (Ccint 0))::(Cconst (Ctag "NULL"))::(Cconst (Ctag "NULL"))::[]    (* Disabled options *)
+  in
+  (* Note for eventual debug: if Cstructlit does not work, do with Ctag "{" ^ ... ^ "}" *)
+  let fun_call_comput = Cfun_call ("clEnqueueNDRangeKernel", lcexp_comput) in
+  let cstm_stepB = Csexpr fun_call_comput in
+
+
+  (* Step C - Waiting for completion *)
+  let lcexp_completion =
+    (* Queue *)
+    (Cconst (Ctag (Openclprep.icl_data_struct_string ^ ".queue")))::[]
+  in
+  let fun_call_completion = Cfun_call ("clFinish", lcexp_completion) in
+  let cstm_stepC = Csexpr fun_call_completion in
+
+  (* Step D - Retrieve data *)
+  let lcstm_stepD = List.fold_left (fun acc (posOut, bufferId) ->
+    let argOut = List.nth sig_info_kernel.k_input posOut in
+    let sexprOut = List.nth args_out posOut in
+    let lcexp_buffOut =
+      (* Queue *)
+      (Cconst (Ctag (Openclprep.icl_data_struct_string ^ ".queue")))::
+      (* Buffer *)
+      (Cconst (Ctag  (Openclprep.icl_data_struct_string ^ ".buffers[" ^ (string_of_int bufferId))))::
+      (* Blocking read *)
+      (Cconst (Ctag "CL_TRUE"))::
+      (Cconst (Ccint posOut))::
+      (Cconst (Ctag (type_to_sizeof argOut.a_type)))::
+      (* Output : always need pointers (even if integer) *)
+      (address_of argOut.a_type sexprOut)::
+      (Cconst (Ccint 0))::(Cconst (Ctag "NULL"))::(Cconst (Ctag "NULL"))::[]    (* Disabled options *)
+    in
+    let fun_call_buffOut = Cfun_call ("clEnqueueReadBuffer", lcexp_buffOut) in
+    let cstm_bufOut = Csexpr fun_call_buffOut in
+    cstm_bufOut::acc
+  ) [] bufferOutput in
+
+  (* Output: list of statements, the order matters *)
+  lcstm_stepA @ [cstm_stepB] @ [cstm_stepC] @ lcstm_stepD
+
 
 (** Create the statement dest = c where c = v^n^m... *)
 let rec create_affect_const var_env (dest : clhs) c =
@@ -697,9 +848,16 @@ let rec cstm_of_act out_env var_env obj_env act =
        local structure to hold the results, before allocating to our
        variables. *)
     | Acall (outvl, objn, Mstep, el) ->
-        let args = cexprs_of_exps out_env var_env el in
-        let outvl = clhs_list_of_pattern_list out_env var_env outvl in
-        generate_function_call out_env var_env obj_env outvl objn args
+      let args = cexprs_of_exps out_env var_env el in
+      let outvl = clhs_list_of_pattern_list out_env var_env outvl in
+      generate_function_call out_env var_env obj_env outvl objn args
+
+    | Acall (outvl, objn, Mkernel ocl, el) ->
+      let args = cexprs_of_exps out_env var_env el in
+      let outvl = clhs_list_of_pattern_list out_env var_env outvl in
+      generate_kernel_call out_env var_env obj_env ocl outvl objn args
+
+
 
 
 and cstm_of_act_list out_env var_env obj_env b =

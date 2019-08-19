@@ -74,6 +74,13 @@ let fresh_it () =
   let id = Idents.gen_var "mls2obc" "i" in
   id, mk_var_dec id Initial.tint
 
+let clo_id = ref 0
+let get_unique_clo_id () =
+  let id = !clo_id in
+  clo_id := !clo_id +1;
+  id
+
+
 let gen_obj_ident n = Idents.gen_var "mls2obc" ((shortname n) ^ "_inst")
 let fresh_for = fresh_for "mls2obc"
 (*let copy_array = copy_array "mls2obc"*)
@@ -452,8 +459,8 @@ let empty_call_context = None
     [s] the actions used in the step method.
     [v] var decs *)
 let rec translate_eq map call_context
-    ({ Minils.eq_lhs = pat; Minils.eq_base_ck = ck; Minils.eq_rhs = e } as eq)
-    (v, si, j, s) =
+  ({ Minils.eq_lhs = pat; Minils.eq_base_ck = ck; Minils.eq_rhs = e } as eq)
+  (v, si, j, s) =
   let { Minils.e_desc = desc; Minils.e_loc = loc } = e in
   match (pat, desc) with
     | _pat, Minils.Ewhen (e,_,_) ->
@@ -466,7 +473,7 @@ let rec translate_eq map call_context
                     | Some c -> (Aassgn (x, mk_ext_value_exp_static x.pat_ty c)) :: si) in
         let action = Aassgn (var_from_name map n, translate_extvalue_to_exp map e) in
         v, si, j, (control map ck action) :: s
-(* should be unnecessary
+    (* should be unnecessary
     | Minils.Etuplepat p_list,
         Minils.Eapp({ Minils.a_op = Minils.Etuple }, act_list, _) ->
         List.fold_right2
@@ -474,7 +481,7 @@ let rec translate_eq map call_context
              translate_eq map call_context
                (Minils.mk_equation pat e))
           p_list act_list (v, si, j, s)
-*)
+    *)
     | pat, Minils.Eapp({ Minils.a_op = Minils.Eifthenelse }, [e1;e2;e3], _) ->
         let cond = translate_extvalue_to_exp map e1 in
         let true_act = translate_act_extvalue map pat e2 in
@@ -585,7 +592,22 @@ and mk_node_call map call_context app loc (name_list : Obc.pattern list) args ty
           | Minils.Enode _ -> [reinit o]
           | _ -> assert false
         in
-        let s = [Acall (name_list, o, Mstep, args)] in
+
+        let s = if (Modules.check_kernel f) then
+          (match app.a_cloption with
+            | None ->
+              Misc.unsupported "mls2obc: OpenCL kernel call with no cl option associated"
+            | Some clo ->
+              let nclo = {
+                copt_gl_worksize = clo.copt_gl_worksize;
+                copt_loc_worksize = clo.copt_loc_worksize;
+                copt_id = get_unique_clo_id ()}
+              in
+              [Acall (name_list, o, Mkernel nclo, args)])
+          else
+            [Acall (name_list, o, Mstep, args)]
+        in
+
         [], si, [obj], s
     | _ -> assert false
 
@@ -777,6 +799,18 @@ let translate_const_def { Minils.c_name = name; Minils.c_value = se;
 let translate_classtype_dec { Minils.c_nameclass = nclass; Minils.c_insttypes = instty; Minils.c_loc = loc } =
   { Obc.c_nameclass = nclass; Obc.c_insttypes = instty; Obc.c_loc = loc }
 
+let translate_kernel_def (k:Minils.kernel_dec) =
+  { Obc.k_namekernel = k.k_namekernel;
+    Obc.k_input = translate_var_dec k.k_input;
+    Obc.k_output = translate_var_dec k.k_output;
+    Obc.k_loc = k.k_loc;
+    Obc.k_issource = k.k_issource;
+    Obc.k_srcbin = k.k_srcbin;
+    Obc.k_dim = k.k_dim;
+    Obc.k_local = translate_var_dec k.k_local 
+  }
+
+
 let program { Minils.p_modname = p_modname; Minils.p_opened = p_o; Minils.p_desc = pd; } =
   build_anon pd;
 
@@ -788,6 +822,7 @@ let program { Minils.p_modname = p_modname; Minils.p_opened = p_o; Minils.p_desc
     | Minils.Ptype t -> Ptype (translate_ty_def t) :: acc
     | Minils.Pconst c -> Pconst (translate_const_def c) :: acc
     | Minils.Pclasstype c -> acc (* Not needed anymore *)
+    | Minils.Pkernel k -> Pkernel (translate_kernel_def k) :: acc
   in
   let p_desc = List.fold_right program_desc pd [] in
   { p_modname = p_modname;

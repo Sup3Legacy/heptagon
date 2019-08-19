@@ -96,13 +96,18 @@ and edesc =
                  * extvalue list * extvalue list * var_ident option
                        (** [map f <<n>> <(extvalue)> (extvalue) reset ident] *)
 
+and cl_option = {
+  copt_gl_worksize  : int;
+  copt_loc_worksize : int }
+
 and app = { a_op: op;
             a_params: static_exp list;
             a_ty_subst : (type_name * ty) list;
                 (* non-empty only when a_op = (Efun _) | (Enode _) with type params *)
             a_unsafe: bool;
             a_id: ident option;
-            a_inlined: bool }
+            a_inlined: bool;
+            a_cloption: cl_option option }
     (** Unsafe applications could have side effects
         and be delicate about optimizations, !be careful! *)
 
@@ -176,6 +181,17 @@ type node_dec = {
   n_param_constraints : constrnt list;
   n_mem_alloc         : (ty * Interference_graph.ivar list) list; }
 
+type kernel_dec = {
+  k_namekernel  : qualname;
+  k_input       : var_dec list;
+  k_output      : var_dec list;
+  k_loc         : location;
+  k_issource    : bool; (* true: source / false: binary *)
+  k_srcbin      : string;
+  k_dim         : int;
+  k_local       : var_dec list 
+}
+
 
 type const_dec = {
   c_name : qualname;
@@ -199,10 +215,11 @@ and program_desc =
   | Pconst of const_dec
   | Ptype of type_dec
   | Pclasstype of classtype_dec
+  | Pkernel of kernel_dec
 
 type signature = {
   sig_name              : qualname;
-  sig_typeparams 		: typeparam_dec list;
+  sig_typeparams        : typeparam_dec list;
   sig_inputs            : arg list;
   sig_stateful          : bool;
   sig_outputs           : arg list;
@@ -284,6 +301,9 @@ let mk_const_dec id ty e loc =
 
 let mk_classtype_dec id ltyid loc = { c_nameclass = id; c_insttypes=ltyid; c_loc = loc }
 
-let mk_app ?(params=[]) ?(ty_subst=[]) ?(unsafe=false) ?(id=None) ?(inlined=false) op =
+let mk_cl_option glws locws =
+  { copt_gl_worksize = glws; copt_loc_worksize = locws }
+
+let mk_app ?(params=[]) ?(ty_subst=[]) ?(unsafe=false) ?(id=None) ?(inlined=false) ?(clopt=None) op =
   { a_op = op; a_params = params; a_ty_subst=ty_subst; a_unsafe = unsafe;
-    a_id = id; a_inlined = inlined }
+    a_id = id; a_inlined = inlined; a_cloption = clopt }

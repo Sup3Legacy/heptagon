@@ -163,7 +163,11 @@ let flatten_lin_list l =
     (fun arg args -> match arg with Ltuple l -> l@args | a -> a::args ) l []
 
 let lin_of_ident x (env, _, _) =
-  Env.find x env
+  try
+    Env.find x env
+  with
+    Not_found ->
+      failwith ("linear_typing::lin_of_ident : variable " ^ (Idents.name x) ^" not found in the environment")
 
 (** [check_linearity loc id] checks that id has not been used linearly before.
     This function is called every time a variable is used as
@@ -828,6 +832,7 @@ and typing_present_handler env ph =
 and expect env lin e =
   let l, env = match e.e_desc with
     | Evar x ->
+      (* TODO: contrenum.ept => issue if the variable is comming from a contract *)
       let actual_lin = lin_of_ident x env in
       let found_lin = unify_lin lin actual_lin in
       let env = check_linearity_exp env e found_lin in

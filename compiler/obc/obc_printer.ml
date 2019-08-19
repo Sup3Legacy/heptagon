@@ -110,9 +110,16 @@ let print_obj_call ff = function
         print_ident o
         (print_list_r print_lhs "[" "][" "]") i
 
+let print_cloption ff clo =
+  fprintf ff "[gl:%i, loc: %i]"
+    clo.copt_gl_worksize  clo.copt_loc_worksize
+
 let print_method_name ff = function
   | Mstep -> fprintf ff "step"
   | Mreset -> fprintf ff "reset"
+  | Mkernel clo ->
+    fprintf ff "kernel(%a)"
+      print_cloption clo
 
 
 let rec print_act ff a =
@@ -161,10 +168,6 @@ and print_tag_act_list ff tag_act_list =
          print_qualname tag
          print_block a)
     "" "" "" ff tag_act_list
-
-let print_method_name ff = function
-  | Mreset -> fprintf ff "reset"
-  | Mstep -> fprintf ff "step"
 
 let print_arg_list ff var_list =
   fprintf ff "(@[%a@])" (print_list_r print_vd "" "," "") var_list
@@ -234,10 +237,29 @@ let print_const_dec ff c =
     | None -> fprintf ff "@."
     | Some cval -> fprintf ff " = %a@." print_static_exp cval
 
+let print_vd_loc_kernel ff vd =
+  fprintf ff "__cllocal %a" print_vd vd
+
+let print_kernel_dec ff { k_namekernel = n; k_input = ki; k_output = ko;
+                          k_issource = issrc; k_srcbin = filename; k_dim = dim;
+                          k_local = kl} =
+  fprintf ff "@[__clkernel fun %a%a returns %a@]\n@."
+    print_qualname n
+    print_var_dec_list ki
+    print_var_dec_list ko;
+  (if issrc then
+    fprintf ff "\t__clsource \"%s\" __cldim %i\n@." filename dim
+  else
+    fprintf ff "\t__clbinary \"%s\" __cldim %i\n@." filename dim);
+  if (kl != []) then
+    fprintf ff "\t%a\n@."
+    (print_list print_vd_loc_kernel "" " " "") kl
+
 let print_prog_desc ff pd = match pd with
   | Pclass cd -> print_class_def ff cd; fprintf ff "@\n@\n"
   | Pconst cd -> print_const_dec ff cd
   | Ptype td -> print_type_def ff td
+  | Pkernel kd -> print_kernel_dec ff kd
 
 let print_prog ff { p_opened = modules; p_desc = descs } =
   List.iter (print_open_module ff) modules;

@@ -42,8 +42,11 @@ let mk_exp desc ?(level_ck = Clocks.Cbase) ?(ct_annot = None) ?(loc = no_locatio
   { e_desc = desc; e_ty = ty; e_ct_annot = ct_annot; e_linearity = linearity;
     e_level_ck = level_ck; e_loc = loc; }
 
-let mk_app ?(params=[]) ?(ty_subst=[]) ?(unsafe=false) ?(inlined=false) op =
-  { a_op = op; a_params = params; a_ty_subst=ty_subst; a_unsafe = unsafe; a_inlined = inlined }
+let mk_cl_option glws locws =
+  { copt_gl_worksize = glws; copt_loc_worksize = locws }
+
+let mk_app ?(params=[]) ?(ty_subst=[]) ?(unsafe=false) ?(inlined=false) ?(clopt=None) op =
+  { a_op = op; a_params = params; a_ty_subst=ty_subst; a_unsafe = unsafe; a_inlined = inlined; a_cloption = clopt }
 
 let mk_op_app ?(params=[]) ?(ty_subst=[]) ?(unsafe=false) ?(reset=None) op args =
   Eapp(mk_app ~params:params ~ty_subst:ty_subst ~unsafe:unsafe op, args, reset)
@@ -86,6 +89,9 @@ let mk_typeparam_dec nametype nameclass =
 let mk_class_dec classname linsts loc =
   { c_nameclass = classname; c_insttypes = linsts; c_loc = loc }
 
+let mk_kernel_dec name inputs outputs loc issrc srcbin dim ?(locals = []) =
+  { k_namekernel = name; k_input = inputs; k_output = outputs; k_loc = loc;
+    k_issource = issrc; k_srcbin = srcbin; k_dim = dim; k_local = locals }
 
 let mk_signature name ~extern ?(typeparamdecs=[]) ins outs stateful params constraints loc =
   { sig_name = name;

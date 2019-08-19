@@ -101,10 +101,19 @@ let translate_op = function
   | Heptagon.Earrow -> assert false
   | Heptagon.Ereinit -> assert false
 
+let translate_cl_option (clopt:Heptagon.cl_option) =
+  mk_cl_option clopt.copt_gl_worksize clopt.copt_loc_worksize
+
 let translate_app app =
+  let clopt = match app.Heptagon.a_cloption with
+    | None -> None
+    | Some cl -> Some (translate_cl_option cl)
+  in
   mk_app ~params:app.Heptagon.a_params ~ty_subst:app.Heptagon.a_ty_subst
     ~unsafe:app.Heptagon.a_unsafe
     ~id:(Some (fresh app.Heptagon.a_op))
+    ~inlined:app.Heptagon.a_inlined
+    ~clopt:clopt
     (translate_op app.Heptagon.a_op)
 
 let mk_extvalue e w =
@@ -262,11 +271,25 @@ let class_dec cd =
     Minils.c_insttypes = cd.Heptagon.c_insttypes;
     Minils.c_loc = cd.Heptagon.c_loc }
 
+let kernel_dec (kd:Heptagon.kernel_dec) =
+  let k = {
+    k_namekernel = kd.k_namekernel;
+    k_input = List.map translate_var kd.k_input;
+    k_output = List.map translate_var kd.k_output;
+    k_loc = kd.k_loc;
+    k_issource = kd.k_issource;
+    k_srcbin = kd.k_srcbin;
+    k_dim = kd.k_dim;
+    k_local = List.map translate_var kd.k_local;
+  } in
+  k
+
 let program_desc pd = match pd with
   | Heptagon.Ptype td -> Ptype (typedec td)
   | Heptagon.Pnode nd -> Pnode (node nd)
   | Heptagon.Pconst cd -> Pconst (const_dec cd)
   | Heptagon.Pclass cd -> Pclasstype (class_dec cd)
+  | Heptagon.Pkernel kd -> Pkernel (kernel_dec kd)
 
 let program
     { Heptagon.p_modname = modname;

@@ -39,6 +39,8 @@ type 'a obc_it_funs = {
   lhsdesc:      'a obc_it_funs -> 'a -> Obc.pat_desc -> Obc.pat_desc * 'a;
   extvalue:     'a obc_it_funs -> 'a -> Obc.ext_value -> Obc.ext_value * 'a;
   evdesc:       'a obc_it_funs -> 'a -> Obc.ext_value_desc -> Obc.ext_value_desc * 'a;
+  cl_option:    'a obc_it_funs -> 'a -> Obc.cl_option -> Obc.cl_option * 'a;
+  method_name:  'a obc_it_funs -> 'a -> Obc.method_name -> Obc.method_name * 'a;
   act:          'a obc_it_funs -> 'a -> Obc.act -> Obc.act * 'a;
   block:        'a obc_it_funs -> 'a -> Obc.block -> Obc.block * 'a;
   var_dec:      'a obc_it_funs -> 'a -> Obc.var_dec -> Obc.var_dec * 'a;
@@ -51,6 +53,7 @@ type 'a obc_it_funs = {
   classtype_dec:'a obc_it_funs -> 'a -> Obc.classtype_dec -> Obc.classtype_dec * 'a;
   type_dec:     'a obc_it_funs -> 'a -> Obc.type_dec -> Obc.type_dec * 'a;
   tdesc:        'a obc_it_funs -> 'a -> Obc.tdesc -> Obc.tdesc * 'a;
+  kernel_dec:   'a obc_it_funs -> 'a -> Obc.kernel_dec -> Obc.kernel_dec * 'a;
   program:      'a obc_it_funs -> 'a -> Obc.program -> Obc.program * 'a;
   program_desc: 'a obc_it_funs -> 'a -> Obc.program_desc -> Obc.program_desc * 'a;
   interface:    'a obc_it_funs -> 'a -> Obc.interface -> Obc.interface * 'a;
@@ -136,6 +139,21 @@ and evdesc funs acc wd = match wd with
       let e, acc = exp_it funs acc e in
       Warray(w, e), acc
 
+and cl_option_it funs acc clo =
+  try funs.cl_option funs acc clo
+  with Fallback -> cl_option funs acc clo
+and cl_option _ acc clo = clo, acc (* Nothing to do here *)
+
+and method_name_it funs acc mn =
+  method_name funs acc mn
+and method_name funs acc mn = match mn with
+  | Mreset | Mstep -> mn, acc
+  | Mkernel clo ->
+    let clo, acc = cl_option_it funs acc clo in
+    (Mkernel clo), acc
+  
+
+
 and act_it funs acc a =
   try funs.act funs acc a
   with Fallback -> act funs acc a
@@ -149,6 +167,7 @@ and act funs acc a = match a with
         Aop(op_name, args), acc
   | Acall(lhs_list, obj, n, args) ->
       let lhs_list, acc = mapfold (lhs_it funs) acc lhs_list in
+      let n, acc = method_name_it funs acc n in
       let args, acc = mapfold (exp_it funs) acc args in
         Acall(lhs_list, obj, n, args), acc
   | Acase(e, c_b_list) ->
@@ -248,6 +267,13 @@ and tdesc funs acc td = match td with
     Type_alias ty, acc
   | _ -> td, acc
 
+and kernel_dec_it funs acc k = funs.kernel_dec funs acc k
+and kernel_dec funs acc k =
+  let k_input, acc = var_decs_it funs acc k.k_input in
+  let k_output, acc = var_decs_it funs acc k.k_output in
+  let k_local, acc = var_decs_it funs acc k.k_local in
+  { k with k_input = k_input; k_output = k_output; k_local = k_local }, acc
+
 
 and program_it funs acc p = funs.program funs acc p
 and program funs acc p =
@@ -261,6 +287,7 @@ and program_desc funs acc pd = match pd with
   | Pconst cd -> let cd, acc = const_dec_it funs acc cd in Pconst cd, acc
   | Ptype td -> let td, acc = type_dec_it funs acc td in Ptype td, acc
   | Pclass n -> let n, acc = class_def_it funs acc n in Pclass n, acc
+  | Pkernel k -> let k, acc = kernel_dec_it funs acc k in Pkernel k, acc
 
 
 and interface_it funs acc p = funs.interface funs acc p
@@ -270,7 +297,7 @@ and interface funs acc p =
 
 
 and classtype_dec_it funs acc c = funs.classtype_dec funs acc c
-and classtype_dec funs acc c = c, acc (* Nothing to do below *)
+and classtype_dec _ acc c = c, acc (* Nothing to do below *)
 
 and interface_desc_it funs acc pd =
   try funs.interface_desc funs acc pd
@@ -297,6 +324,8 @@ let defaults = {
   evdesc = evdesc;
   exp = exp;
   edesc = edesc;
+  cl_option = cl_option;
+  method_name = method_name;
   act = act;
   block = block;
   var_dec = var_dec;
@@ -309,6 +338,7 @@ let defaults = {
   classtype_dec = classtype_dec;
   type_dec = type_dec;
   tdesc = tdesc;
+  kernel_dec = kernel_dec;
   program = program;
   program_desc = program_desc;
   interface = interface;

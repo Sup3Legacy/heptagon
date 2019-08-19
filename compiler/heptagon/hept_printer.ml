@@ -185,8 +185,12 @@ and print_tag_e_list ff tag_e_list =
 and print_every ff reset =
   print_opt (fun ff id -> fprintf ff " every %a" print_exp id) ff reset
 
+and print_cl_option ff clopt =
+  fprintf ff "__clglobal_worksize %i __cllocal_worksize %i"
+  clopt.copt_gl_worksize  clopt.copt_loc_worksize
+
 and print_app ff (app, args) =
-  match app.a_op with
+  (match app.a_op with
     | Etuple -> print_exp_tuple ff args
     (* we need a special case for '*' and '*.' as printing (_*_) is incorrect *)
     | Efun { name = n } when (n = "*" || n = "*.") ->
@@ -251,6 +255,11 @@ and print_app ff (app, args) =
         fprintf ff "@[<2>%a ->@ %a@]" print_exp e1  print_exp e2
     | Ereinit ->
         fprintf ff "@[split@,%a@]" print_exp_tuple args
+    );
+    match app.a_cloption with
+    | None -> ()
+    | Some clopt -> print_cl_option ff clopt
+
 
 let rec print_eq ff eq =
   print_stateful ff eq.eq_stateful;
@@ -348,7 +357,7 @@ let print_objective_kind ff = function
   | Obj_attractive -> fprintf ff "attractive"
 
 let print_objective ff o =
-  fprintf ff "@[<2>%a@ %a]"
+  fprintf ff "@[<2>%a@ %a@]"
 	  print_objective_kind o.o_kind
 	  print_exp o.o_exp
 
@@ -384,11 +393,30 @@ let print_node ff
 let print_class_dec ff cdec = 
   fprintf ff "class %a@\n" print_qualname cdec.c_nameclass
 
+let print_vd_loc_kernel ff vd = fprintf ff "__cllocal %a" print_vd vd
+
+let print_kernel_dec ff
+    { k_namekernel = n; k_input = ki; k_output = ko;
+    k_issource = issrc; k_srcbin = filename; k_dim = dim;
+    k_local = kl} =
+  fprintf ff "@[__clkernel fun %a%a returns %a@]\n@."
+    print_qualname n
+    print_vd_tuple ki
+    print_vd_tuple ko;
+  (if issrc then
+    fprintf ff "\t__clsource \"%s\" __cldim %i\n@." filename dim
+  else
+    fprintf ff "\t__clbinary \"%s\" __cldim %i\n@." filename dim);
+  if (kl != []) then
+    fprintf ff "\t%a\n@."
+    (print_list print_vd_loc_kernel "" " " "") kl
+
 let print_pdesc ff pd = match pd with
   | Pnode n -> print_node ff n
   | Pconst c -> print_const_dec ff c
   | Ptype t -> print_type_def ff t
   | Pclass c -> print_class_dec ff c
+  | Pkernel k -> print_kernel_dec ff k
 
 let print_open_module ff name = fprintf ff "open %s@." (modul_to_string name)
 
