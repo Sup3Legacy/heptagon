@@ -376,12 +376,12 @@ let get_opencl_prologue () =
 
   (* Step 1 - architecture configuration *)
   let lvarloc_step1 =
-    ("platform_id", Cty_id (Modules.current_qual "cl_platform_id"))::
-    ("num_platforms", Cty_id (Modules.current_qual "cl_uint"))::
-    ("device_id", Cty_id (Modules.current_qual "cl_device_id"))::
-    ("num_devices", Cty_id (Modules.current_qual "cl_uint"))::
-    ("context", Cty_id (Modules.current_qual "cl_context"))::
-    ("queue", Cty_id (Modules.current_qual "cl_command_queue"))::[] in
+    ("platform_id", Cty_id { qual = Pervasives; name = "cl_platform_id"})::
+    ("num_platforms", Cty_id { qual = Pervasives; name = "cl_uint"})::
+    ("device_id", Cty_id { qual = Pervasives; name = "cl_device_id"})::
+    ("num_devices", Cty_id { qual = Pervasives; name = "cl_uint"})::
+    ("context", Cty_id { qual = Pervasives; name = "cl_context"})::
+    ("queue", Cty_id { qual = Pervasives; name = "cl_command_queue"})::[] in
 
   let lstm_step1 =
     (* platform_id = NULL; *)
@@ -433,18 +433,18 @@ let get_opencl_prologue () =
   ) !Openclprep.mKernelCL [] in
 
   let lvarloc_step2 =
-    ("fp", Cty_ptr (Cty_id (Modules.current_qual "FILE")))::
-    ("code", Cty_ptr (Cty_id (Modules.current_qual "char")))::
-    ("code_size", Cty_id (Modules.current_qual "size_t"))::[] in
+    ("fp", Cty_ptr (Cty_id { qual = Pervasives; name = "FILE"}))::
+    ("code", Cty_ptr (Cty_id { qual = Pervasives; name = "char"}))::
+    ("code_size", Cty_id { qual = Pervasives; name = "size_t"})::[] in
   let lvarloc_step2 = List.fold_left (fun acc (_, _, nprogname, _, nkername) ->
-    (nprogname, Cty_id (Modules.current_qual "cl_program"))::
-    (nkername, Cty_id (Modules.current_qual "cl_kernel"))::acc
+    (nprogname, Cty_id { qual = Pervasives; name = "cl_program"})::
+    (nkername, Cty_id { qual = Pervasives; name = "cl_kernel"})::acc
   ) lvarloc_step2 lKernelVar in
 
   (* For all kernels... *)
   let lstm_step2 = List.fold_left (fun acc (qname, kernsig, nprogname, _, nkername) ->
     (* fp = fopen("[program source location]", "r"); *)
-    let acc = (Caffect ((CLvar "fp"), (Cfun_call ("fopen",
+    let nstmts_load = (Caffect ((CLvar "fp"), (Cfun_call ("fopen",
       [ Cconst (Cstrlit kernsig.Signature.k_srcbin);
         Cconst (Cstrlit "r")
       ]
@@ -462,10 +462,10 @@ let get_opencl_prologue () =
       ]
     ))))::
     (* fclose(fp); *)
-    (Csexpr (Cfun_call ("fclose", [Cvar "fp"])))::acc in
+    (Csexpr (Cfun_call ("fclose", [Cvar "fp"])))::[] in
 
     (* Switch if source or binary file *)
-    let acc = if (kernsig.k_issource) then
+    let nstmts_prog = if (kernsig.k_issource) then
       (* Program from source file *)
       (* [nprogname] = clCreateProgramWithSource(context, 1, (const char ** ) &code, &code_size, NULL); *)
       (Caffect ((CLvar nprogname), (Cfun_call ("clCreateProgramWithSource",
@@ -483,7 +483,7 @@ let get_opencl_prologue () =
           Caddrof (Cvar "device_id");
           Cconst (Ctag "NULL"); Cconst (Ctag "NULL"); Cconst (Ctag "NULL")
         ]
-      )))::acc
+      )))::[]
     else
       (* Program from binary file *)
       (* [nprogname] = clCreateProgramWithBinary(context, 1, &device_id, &code_size, &code, NULL, NULL) *)
@@ -495,16 +495,18 @@ let get_opencl_prologue () =
           Caddrof (Cvar "code");
           Cconst (Ctag "NULL"); Cconst (Ctag "NULL")
         ]
-      ))))::acc
+      ))))::[]
     in
 
     (* [nkername] = clCreateKernel([nprogname], "[sig_kernel_name]", NULL);*)
-    (Caffect ((CLvar nkername), (Cfun_call ("clCreateKernel",
+    let nstmts_kernel = (Caffect ((CLvar nkername), (Cfun_call ("clCreateKernel",
       [ Cvar nprogname;
-        Cvar qname.name;
+        Cconst (Cstrlit qname.name);
         Cconst (Ctag "NULL")
       ]
-    )))) :: acc
+    ))))::[] in
+
+    nstmts_load @ nstmts_prog @ nstmts_kernel @ acc
   ) [] lKernelVar in
 
   (* Step 4 & 5 - buffer construction + association *)
@@ -525,7 +527,7 @@ let get_opencl_prologue () =
   
   let lvarloc_step4 = List.fold_left
     (fun acc (_, _, _, _, _, _, buffname) ->
-      (buffname, Cty_id (Modules.current_qual "cl_mem"))::acc
+      (buffname, Cty_id { qual = Pervasives; name = "cl_mem"})::acc
     ) [] lBufferVar
   in
   let lstm_step4 = List.fold_left
@@ -538,30 +540,27 @@ let get_opencl_prologue () =
         else
           (List.nth kernelsign.k_output pos).a_type
       in
-      let strsizebuffer = Cgen.type_to_sizeof tyBuffer in
-      
-
 
       (* [buffname] = clCreateBuffer(context, CL_MEM_[READ/WRITE]_ONLY, [sizebuffer], NULL, NULL) *)
-      let acc = (Caffect ((CLvar buffname), (Cfun_call ("clCreateBuffer",
+      let cstm_createbuff = (Caffect ((CLvar buffname), (Cfun_call ("clCreateBuffer",
         [ Cvar "context";
           Cconst (Ctag flagRW);
-          Cconst (Ctag strsizebuffer);
+         (Cgen.type_to_sizeof tyBuffer);
           Cconst (Ctag "NULL"); Cconst (Ctag "NULL")
         ]
-      ))))::acc in
+      )))) in
 
       let kernelvar = find_kernelvar lKernelVar cloid in
 
       (* clSetKernelArg([kernelvar], [pos], size_of(cl_mem), &[buffname])  - for input/output *)
-      let acc = (Csexpr (Cfun_call ("clSetKernelArg",
+      let cstm_setkernelarg = (Csexpr (Cfun_call ("clSetKernelArg",
         [ Cvar kernelvar;
           Cconst (Ccint pos);
-          Cconst (Ctag "sizeof(cl_mem)");
+          Cfun_call ("sizeof", (Cconst (Ctag "cl_mem")::[]));
           Caddrof (Cvar buffname)
         ]
-      ))) :: acc in
-      acc
+      ))) in
+      cstm_createbuff :: cstm_setkernelarg :: acc
     ) [] lBufferVar in
 
   (* Local memory - buffer namangement *)
@@ -569,12 +568,11 @@ let get_opencl_prologue () =
   let lstm_step4 = Openclprep.IntMap.fold (fun cloid (_, mcloid) acc ->
     Openclprep.IntMap.fold (fun pos argloc acc ->
       let kernelvar = find_kernelvar lKernelVar cloid in
-      let strsizebuffer = Cgen.type_to_sizeof argloc.a_type in
 
       let nacc = (Csexpr (Cfun_call ("clSetKernelArg",
         [Cvar kernelvar;
           Cconst (Ccint pos);
-          Cconst (Ctag strsizebuffer);
+          (Cgen.type_to_sizeof argloc.a_type);
           Cconst (Ctag "NULL")
         ]
       ))) :: acc
@@ -588,8 +586,8 @@ let get_opencl_prologue () =
   let numKernel = Openclprep.IntMap.cardinal !Openclprep.mKernelCL in
   let numBuffer = !Openclprep.idbuffer in
   let lvarloc_step6 = 
-    ("kernels", Cty_arr (numKernel, Cty_id (Modules.current_qual "cl_kernel")))::
-    ("buffers", Cty_arr (numBuffer, Cty_id (Modules.current_qual "cl_buffer")))::[]
+    ("kernels", Cty_arr (numKernel, Cty_id { qual = Pervasives; name = "cl_kernel"}))::
+    ("buffers", Cty_arr (numBuffer, Cty_id { qual = Pervasives; name = "cl_buffer"}))::[]
   in
   
   (* TODO: get the list using the cloid (key) to get the position *)

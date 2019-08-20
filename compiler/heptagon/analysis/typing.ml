@@ -268,6 +268,7 @@ let find_with_error find_fun f =
   with Not_found -> error (Eundefined(fullname f))
 
 let find_value v = find_with_error find_value v
+let find_kernel k = find_with_error find_kernel k
 let find_constrs c = Tid (find_with_error find_constrs c)
 let find_field f = find_with_error find_field f
 
@@ -1043,11 +1044,32 @@ and typing_app cenv h app e_list =
         Tprod [], app, typed_e1::typed_e2::typed_format_args
 
     | (Efun f | Enode f) ->
-        let ty_desc = find_value f in
-        let op, expected_ty_list, result_ty_list, typarams = kind f ty_desc in
+        (* Depending on the fact that f is a kernel or a function, informations are stored differently *)
+        let (op, expected_ty_list, result_ty_list, typarams,
+            node_params, node_param_constraints) =
+          if (check_kernel f) then
+            let kern_desc = find_kernel f in
+            let op = Efun f in (* Kernels does not have internal state *)
+            let ty_of_arg v =
+              if Linearity.is_linear v.a_linearity && not !Compiler_options.do_linear_typing then
+                error Eenable_memalloc;
+              v.a_type
+            in
+            let expected_ty_list = List.map ty_of_arg kern_desc.k_input in
+            let result_ty_list = List.map ty_of_arg kern_desc.k_output in
+
+            (op, expected_ty_list, result_ty_list, [], [], [])
+          else
+            let ty_desc = find_value f in
+            let op, expected_ty_list, result_ty_list, typarams = kind f ty_desc in
+            let node_params = ty_desc.node_params in
+            let node_param_constraints = ty_desc.node_param_constraints in
+
+            (op, expected_ty_list, result_ty_list, typarams, node_params, node_param_constraints)
+        in
         
-        let node_params = List.map (fun { p_name = n } -> local_qn n) ty_desc.node_params in
-        let m = build_subst node_params app.a_params in
+        let n_node_params = List.map (fun { p_name = n } -> local_qn n) node_params in
+        let m = build_subst n_node_params app.a_params in
         let expected_ty_list = List.map (simplify_type m) expected_ty_list in
         
         let (typed_e_list, result_ty_list) =
@@ -1062,15 +1084,16 @@ and typing_app cenv h app e_list =
         in
         
         (* Type static parameters and generate constraints *)
-        let typed_params = typing_node_params cenv ty_desc.node_params app.a_params in
-        let constrs = List.map (simplify m) ty_desc.node_param_constraints in
+        let typed_params = typing_node_params cenv node_params app.a_params in
+        let constrs = List.map (simplify m) node_param_constraints in
         List.iter (add_constraint cenv) constrs;
         
+        (* Not useful?
         let op = match op with
           | Efun _ -> Efun f
           | Enode _-> Enode f
           | _ -> raise Errors.Error
-       in
+        in *)
         prod result_ty_list,
           { app with a_op = op; a_params = typed_params },
           typed_e_list

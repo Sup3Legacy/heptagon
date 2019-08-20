@@ -61,6 +61,10 @@ let edesc funs stateful ed =
       | Efby _ | Epre _ -> ed, true
       | Eapp({ a_op = Earrow }, _, _) -> ed, true
       | Eapp({ a_op = (Enode f | Efun f) } as app, e_list, r) ->
+          (* OpenCL kernel are always stateless *)
+          if (check_kernel f) then
+            Eapp({ app with a_op = Efun f}, e_list, r), stateful
+          else
           let ty_desc = find_value f in
           let op = if ty_desc.node_stateful then Enode f else Efun f in
           Eapp({ app with a_op = op }, e_list, r), ty_desc.node_stateful || stateful

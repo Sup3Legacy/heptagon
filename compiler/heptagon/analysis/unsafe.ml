@@ -47,6 +47,8 @@ let message loc kind =
 (* Returns whether an op is unsafe *)
 let unsafe_op op = match op with
   | Enode f | Efun f ->
+    (* OpenCL kernels are safe *)
+    if (check_kernel f) then false else
       (find_value f).node_unsafe
   | _ -> (*TODO il y a des op unsafe ??*)
       false

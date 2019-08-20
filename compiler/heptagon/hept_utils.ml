@@ -158,3 +158,12 @@ let signature_of_node n =
       node_param_constraints = n.n_param_constraints;
       node_external = false;
       node_loc = n.n_loc }
+
+let signature_of_kernel k =
+   { k_input = args_of_var_decs k.k_input;
+     k_output = args_of_var_decs k.k_output;
+     k_loc = k.k_loc;
+     k_issource = k.k_issource;
+     k_srcbin = k.k_srcbin;
+     k_dim = k.k_dim;
+     k_local = args_of_var_decs k.k_local }

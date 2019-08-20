@@ -212,7 +212,7 @@ and doc_prune = "\t\tRemove the nodes unused by the main nodes."
 and doc_exposeintstate = "\t\tExpose the internal states of nodes as a new first input/output."
 and doc_target =
   "<lang>\tGenerate code in language <lang>\n\t\t\t(with <lang>=c,"
-  ^ " java, z3z or ctrln)"
+  ^ " java, z3z, ctrln or opencl)"
 and doc_cg_memfirst = "\t\t\tPut the internal state in the first position of a step function."
 and doc_cg_outlist = "\t\t\tDo not generate a structure for the outputs of a step function"
   ^ "but a list of arguments."

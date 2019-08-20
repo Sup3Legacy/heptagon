@@ -92,7 +92,7 @@ let int_of_static_exp se =
   Static.int_of_static_exp QualEnv.empty se
 
 
-(* Datatype to string conversion *)
+(* Datatype to string conversion
 let rec tostring_static_exp_desc sedesc = match sedesc with
   | Sint i -> (string_of_int i)
   | Svar id -> id.name
@@ -110,15 +110,7 @@ let rec tostring_static_exp_desc sedesc = match sedesc with
         in
         (shortname op) ^ " " ^ lstr
   | _ -> failwith "tostring_static_exp_desc : static expression should not appear as an array size"
-
-let rec type_to_sizeof ty = match ty with
-  | Tprod tl ->
-    List.fold_left (fun acc t -> (type_to_sizeof t) ^ " + " ^ acc) "" tl 
-  | Tid name -> "sizeof(" ^ (shortname name) ^ ")"
-  | Tarray (ty, se) ->
-    (type_to_sizeof ty) ^ " * (" ^ (tostring_static_exp_desc se.se_desc) ^ ")"
-  | Tclasstype _ | Tinvalid -> failwith "Invalid types - should not be present on CG level"
-
+*)
 
 
 let output_names_list sig_info =
@@ -599,6 +591,20 @@ let generate_function_call out_env var_env obj_env outvl objn args =
           (Csexpr fun_call)::(List.flatten (map2 create_affect outvl out_sig))
 
 
+
+(* Get the "sizeof cexpr" from a type *)
+let rec type_to_sizeof ty = match ty with
+  | Tprod tl ->
+    List.fold_left (fun acc t ->
+      Cbop ("+", (type_to_sizeof t), acc)
+    ) (Cconst (Ccint 0)) tl 
+  | Tid name ->
+    Cfun_call ("sizeof", (Cconst (Ctag (shortname name)))::[])
+  | Tarray (ty, se) ->
+    Cbop ("*", (type_to_sizeof ty), cexpr_of_static_exp se)
+  | Tclasstype _ | Tinvalid -> failwith "Invalid types - should not be present on CG level"
+
+
 (** generate the statements to call the kernel [objn]
     [outvl] is a list of lhs where to put the results.
     [args] is the list of expressions to use as arguments.
@@ -645,15 +651,19 @@ let generate_kernel_call out_env var_env obj_env ocl outvl objn args =
     let sexprIn = List.nth args posIn in
     let lcexp_buffIn =
       (* Queue *)
-      (Cconst (Ctag (Openclprep.icl_data_struct_string ^ ".queue")))::
+      (Cfield (Cconst (Ctag Openclprep.icl_data_struct_string), (Modules.current_qual "queue")))::
       (* Buffer *)
-      (Cconst (Ctag  (Openclprep.icl_data_struct_string ^ ".buffers[" ^ (string_of_int bufferId) ^ "]")))::
+      (Carray (
+        (Cfield (Cconst (Ctag Openclprep.icl_data_struct_string), (Modules.current_qual "buffers")))
+        ,
+        (Cconst (Ccint bufferId))
+      ))::
       (* Blocking write *)
       (Cconst (Ctag "CL_TRUE"))::
       (* Position as input *)
       (Cconst (Ccint posIn))::
       (* Size of the data transfered *)
-      (Cconst (Ctag (type_to_sizeof argIn.a_type)))::
+      (type_to_sizeof argIn.a_type)::
       (* Input : always need pointers (even if integer) *)
       (address_of argIn.a_type sexprIn)::
       (* Disabled options *)
@@ -668,7 +678,7 @@ let generate_kernel_call out_env var_env obj_env ocl outvl objn args =
   (* Step B - Enqueue computation *)
   let lcexp_comput =
     (* Queue *)
-    (Cconst (Ctag (Openclprep.icl_data_struct_string ^ ".queue")))::
+    (Cfield (Cconst (Ctag Openclprep.icl_data_struct_string), (Modules.current_qual "queue")))::
     (* Buffer *)
     (Cconst (Ctag  (Openclprep.icl_data_struct_string ^ ".kernels[" ^ (string_of_int idkernel) ^ "]")))::
     (* Dimension of the kernel *)
@@ -689,7 +699,7 @@ let generate_kernel_call out_env var_env obj_env ocl outvl objn args =
   (* Step C - Waiting for completion *)
   let lcexp_completion =
     (* Queue *)
-    (Cconst (Ctag (Openclprep.icl_data_struct_string ^ ".queue")))::[]
+    (Cfield (Cconst (Ctag Openclprep.icl_data_struct_string), (Modules.current_qual "queue")))::[]
   in
   let fun_call_completion = Cfun_call ("clFinish", lcexp_completion) in
   let cstm_stepC = Csexpr fun_call_completion in
@@ -700,13 +710,17 @@ let generate_kernel_call out_env var_env obj_env ocl outvl objn args =
     let sexprOut = List.nth args_out posOut in
     let lcexp_buffOut =
       (* Queue *)
-      (Cconst (Ctag (Openclprep.icl_data_struct_string ^ ".queue")))::
+      (Cfield (Cconst (Ctag Openclprep.icl_data_struct_string), (Modules.current_qual "queue")))::
       (* Buffer *)
-      (Cconst (Ctag  (Openclprep.icl_data_struct_string ^ ".buffers[" ^ (string_of_int bufferId))))::
+      (Carray (
+        (Cfield (Cconst (Ctag Openclprep.icl_data_struct_string), (Modules.current_qual "buffers")))
+        ,
+        (Cconst (Ccint bufferId))
+      ))::
       (* Blocking read *)
       (Cconst (Ctag "CL_TRUE"))::
       (Cconst (Ccint posOut))::
-      (Cconst (Ctag (type_to_sizeof argOut.a_type)))::
+      (type_to_sizeof argOut.a_type)::
       (* Output : always need pointers (even if integer) *)
       (address_of argOut.a_type sexprOut)::
       (Cconst (Ccint 0))::(Cconst (Ctag "NULL"))::(Cconst (Ctag "NULL"))::[]    (* Disabled options *)

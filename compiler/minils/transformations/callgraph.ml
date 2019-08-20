@@ -58,6 +58,13 @@ struct
     raise Errors.Error
 end
 
+
+let is_external ln =
+  (* Kernel content is defined externaly by a .cl file *)
+  if (Modules.check_kernel ln) then true else
+  (Modules.find_value ln).node_external
+
+
 module Param_instances :
 sig
   type key1 = private static_exp (** Fully instantiated param *)
@@ -175,8 +182,7 @@ struct
       Format.fprintf (Format.formatter_of_out_channel stdout) "node_for_params_call => %a %a\n@?"
         Global_printer.print_qualname ln
         print_instance insts; *)
-      if (Modules.find_value ln).node_external
-      then ln
+      if (is_external ln) then ln
       else (let ln = M.find (ln,insts) !nodes_names in ln)
 
   (** Generates a fresh name for the the instance of
@@ -273,21 +279,21 @@ struct
           let typ, (env,tysubst) = ty_it funs (env,tysubst) typ in
           typ, (env,tysubst)
     
-    
+
     (** Replaces nodes call with the call to the correct instance. *)
     let edesc funs (env,tysubst) ed =
       let ed, _ = Mls_mapfold.edesc funs (env,tysubst) ed in
       let ed = match ed with
         | Eapp ({ a_op = Efun ln; a_params = params } as app, e_list, r) ->
           begin
-            if ((Modules.find_value ln).node_external) then ed else
+            if (is_external ln) then ed else
             let ty_vals = List.map (fun (_,v) -> v) tysubst in (* tysubst was sorted *)
             let op = Efun (node_for_params_call ln (instantiate env params ty_vals)) in
             Eapp ({ app with a_op = op; a_params = []; }, e_list, r)
           end
         | Eapp ({ a_op = Enode ln; a_params = params } as app, e_list, r) ->
           begin
-            if ((Modules.find_value ln).node_external) then ed else
+            if (is_external ln) then ed else
             let ty_vals = List.map (fun (_,v) -> v) tysubst in (* tysubst was sorted *)
             let op = Enode (node_for_params_call ln (instantiate env params ty_vals)) in
             Eapp ({ app with a_op = op; a_params = [] }, e_list, r)
@@ -295,7 +301,7 @@ struct
         | Eiterator(it, ({ a_op = Efun ln; a_params = params } as app),
                       n, pe_list, e_list, r) ->
           begin
-            if ((Modules.find_value ln).node_external) then ed else
+            if (is_external ln) then ed else
             let ty_vals = List.map (fun (_,v) -> v) tysubst in (* tysubst was sorted *)
             let op = Efun (node_for_params_call ln (instantiate env params ty_vals)) in
             Eiterator(it, {app with a_op = op; a_params = [] },
@@ -304,7 +310,7 @@ struct
         | Eiterator(it, ({ a_op = Enode ln; a_params = params } as app),
                      n, pe_list, e_list, r) ->
           begin
-            if ((Modules.find_value ln).node_external) then ed else
+            if (is_external ln) then ed else
             let ty_vals = List.map (fun (_,v) -> v) tysubst in (* tysubst was sorted *)
             let op = Enode (node_for_params_call ln (instantiate env params ty_vals)) in
             Eiterator(it,{app with a_op = op; a_params = [] },
@@ -335,6 +341,7 @@ struct
       let n, _ = Mls_mapfold.node_dec_it funs (env,[]) n in
       
       (* Add to the global environment the signature of the new instance *)
+      (* Note that at that point the node cannot be external, or a kernel *)
       let node_sig = find_value n.n_name in
       let node_sig, _ = Global_mapfold.node_it global_funs (env,[]) node_sig in
       let node_sig = { node_sig with node_params = [];
@@ -430,9 +437,8 @@ let collect_node_calls ln =
     match (params,typarams) with
       | [],[] -> acc
       | _ ->
-        if (Modules.find_value ln).node_external
-        then acc
-        else (ln, params,typarams)::acc
+        if (is_external ln) then acc else
+          (ln, params,typarams)::acc
   in
   let edesc _ (acc,tysubst) ed = match ed with
     | Eapp ({ a_op = (Enode ln | Efun ln); a_params = params }, _, _) ->

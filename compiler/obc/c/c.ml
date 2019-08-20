@@ -273,7 +273,8 @@ and pp_cexpr fmt ce = match ce with
   | Cstructlit (s, el) ->
       fprintf fmt "(%a){@[%a@]}" pp_string s (pp_list1 pp_cexpr ",") el
   | Carraylit el -> (* TODO master : WRONG *)
-      fprintf fmt "((int []){@[%a@]})" (pp_list1 pp_cexpr ",") el
+      fprintf fmt "{@[%a@]}" (pp_list1 pp_cexpr ",") el
+      (* fprintf fmt "((int []){@[%a@]})" (pp_list1 pp_cexpr ",") el *)
   | Cconst c -> pp_cconst fmt c
   | Cvar s -> pp_string fmt s
   | Cderef e -> fprintf fmt "*%a" pp_cexpr e

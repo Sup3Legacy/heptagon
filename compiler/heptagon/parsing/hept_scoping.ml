@@ -679,7 +679,8 @@ let translate_kernel kd =
     let env = Rename.append env kd.k_local in
     let locals = translate_vd_list env tenv kd.k_local in
 
-   {  Heptagon.k_namekernel = name;
+    let nkernel = {
+      Heptagon.k_namekernel = name;
       Heptagon.k_input = inputs;
       Heptagon.k_output = outputs;
       Heptagon.k_loc = kd.k_loc;
@@ -687,6 +688,10 @@ let translate_kernel kd =
       Heptagon.k_srcbin = kd.k_srcbin;
       Heptagon.k_dim = kd.k_dim;
       Heptagon.k_local = locals }
+    in
+    (* Adding def to the Module *)
+    safe_add kd.k_loc add_kernel name (Hept_utils.signature_of_kernel nkernel);
+    nkernel
   with
     | ScopingError err -> Error.message kd.k_loc err
 

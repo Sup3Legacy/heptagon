@@ -243,7 +243,7 @@ let print_vd_loc_kernel ff vd =
 let print_kernel_dec ff { k_namekernel = n; k_input = ki; k_output = ko;
                           k_issource = issrc; k_srcbin = filename; k_dim = dim;
                           k_local = kl} =
-  fprintf ff "@[__clkernel fun %a%a returns %a@]\n@."
+  fprintf ff "@[__clkernel fun %a%a returns %a@]@."
     print_qualname n
     print_var_dec_list ki
     print_var_dec_list ko;

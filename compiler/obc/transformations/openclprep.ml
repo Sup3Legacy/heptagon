@@ -48,10 +48,10 @@ let mBufferCL = ref IntMap.empty
 let mLocalBuffCL = ref IntMap.empty
 
 (* mKernelCL : copt_id (identify the instance) ===>  (kernelname, kernelsign, clo) *)
-(* mBufferCL : copt_id ====> (kernelname, (isInput, position) ===> (id, arg)) *)
+(* mBufferCL : copt_id ====> (kernelname, kernelsign, (isInput, position) ===> (id, arg)) *)
 (* mLocalBuffCL : copt_id ====> (kernelname, (posLocal ====> arg)) *)
 
-(* Name of the global data structure used in the generated code*)
+(* Name of the global data structure used in the generated code - cf file "hept_opencl.h" *)
 let icl_data_struct_string = "icl"
 
 
@@ -62,16 +62,59 @@ let get_fresh_idbuffer () =
   idbuffer := !idbuffer + 1;
   temp
 
+(* ------------------------------------------ *)
+(* Pretty-printer for the global data struct (for debugging) *)
+
+let print_mKernelCL ff =
+  IntMap.iter (fun k (kernelname, _, clo) ->
+    Format.fprintf ff "[copt_id = %i | kernelname = %a | clo = %a]\n@?"
+      k
+      Global_printer.print_qualname kernelname
+      (* Note: right now, we do not print the full signature *)
+      Obc_printer.print_cloption clo
+  ) !mKernelCL
+
+let print_mBufferCL ff =
+  IntMap.iter (fun k (kernelname, _, mArgs) ->
+    Format.fprintf ff "[[ copt_id = %i | kernelname = %a |\n@?"
+      k  Global_printer.print_qualname kernelname;
+    BoolIntMap.iter (fun (isInput, pos) (idBuffer, arg) ->
+      let strInOut = if isInput then "Input" else "Output" in
+      Format.fprintf ff "\t%s #%i => IdBuffer = %i | ArgSig = %a\n@?"
+        strInOut pos
+        idBuffer  Global_printer.print_sarg arg
+    ) mArgs;
+    Format.fprintf ff "]]\n@?"
+  ) ! mBufferCL
+
+let print_mLocalBuffCL ff =
+  IntMap.iter (fun k (kernelname, mArgs) ->
+    Format.fprintf ff "[[ copt_id = %i | kernelname = %a |\n@?"
+      k  Global_printer.print_qualname kernelname;
+    IntMap.iter (fun pos arg ->
+      Format.fprintf ff "\tLocal #%i => ArgSig = %a\n@?"
+        pos  Global_printer.print_sarg arg
+    ) mArgs;
+    Format.fprintf ff "]]\n@?"
+  ) !mLocalBuffCL
+
+
 
 (* ------------------------------------------ *)
 
-let get_kernel_sign objref = match objref with
+let rec find_object obj_id lobjdec = match lobjdec with
+  | [] -> raise Not_found
+  | h::t ->
+    if (h.o_ident = obj_id) then h else (find_object obj_id t)
+
+
+let get_kernel_sign classdef_objs objref = match objref with
   | Oarray _ ->
     failwith "openclprep internal error : kernel object is not supposed to be a Oarray"
   | Oobj obj_id ->
     try
-      let qnamekernel = Modules.qualify_kernel (Idents.name obj_id) in
-      (qnamekernel, Modules.find_kernel qnamekernel)
+      let odec = find_object obj_id classdef_objs in
+      (odec.o_class, Modules.find_kernel odec.o_class)
     with Not_found ->
       failwith ("openclprep internal error : " ^ (Idents.name obj_id) ^ " not found in environment.")
 
@@ -82,7 +125,7 @@ let act_opencl _ acc act = match act with
     match mname with
     | Mkernel clo -> (
       let idkernelcall = clo.copt_id in
-      let (qnameKernel, kernelsign) = get_kernel_sign objref in
+      let (qnameKernel, kernelsign) = get_kernel_sign acc objref in
       mKernelCL := IntMap.add idkernelcall (qnameKernel, kernelsign, clo) !mKernelCL;
 
       let mBufferCLPart = BoolIntMap.empty in
@@ -111,10 +154,27 @@ let act_opencl _ acc act = match act with
   | _ -> act, acc
 
 
+let class_def_opencl funs acc cd =
+  Obc_mapfold.class_def funs cd.cd_objs cd
+
+
 let program p =
   let funs_opencl = { Obc_mapfold.defaults with
+    class_def = class_def_opencl;
     act = act_opencl
   } in
   let p, _ = Obc_mapfold.program funs_opencl [] p in
 
+
+  (* TODO DEBUG *)
+  let ffout = Format.formatter_of_out_channel stdout in
+  Format.fprintf ffout "mKernelCl =\n@?";
+  print_mKernelCL ffout;
+  Format.fprintf ffout "\nmBufferCL =\n@?";
+  print_mBufferCL ffout;
+  Format.fprintf ffout "\nmLocalBuffCL =\n@?";
+  print_mLocalBuffCL ffout;
+  (* END DEBUG *)
+
   p
+

@@ -189,7 +189,7 @@ rule token = parse
   | "..."           {THREE_DOTS}
   | (['A'-'Z']('_' ? ['A'-'Z' 'a'-'z' ''' '0'-'9']) * as id)
       {Constructor id}
-  | (['A'-'Z' 'a'-'z']('_' ? ['A'-'Z' 'a'-'z' ''' '0'-'9']) * as id)
+  | (['A'-'Z' 'a'-'z' '_']('_' ? ['A'-'Z' 'a'-'z' ''' '0'-'9']) * as id)
       { let s = Lexing.lexeme lexbuf in
           begin try
       Hashtbl.find keyword_table s

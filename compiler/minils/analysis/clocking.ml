@@ -130,7 +130,15 @@ let typing_app h base pat op w_list = match op with
     List.iter (expect_extvalue h base) w_list;
     Cprod []
   | ( Efun f | Enode f) ->
-      let node = Modules.find_value f in
+      (* Check for OpenCL kernel *)
+      let (inputs, outputs) = if (Modules.check_kernel f) then
+          let kern = Modules.find_kernel f in
+          (kern.k_input, kern.k_output)
+        else
+          let node = Modules.find_value f in
+          (node.node_inputs, node.node_outputs)
+      in
+
       let pat_id_list = Mls_utils.ident_list_of_pat pat in
       let rec build_env a_l v_l env = match a_l, v_l with
         | [],[] -> env
@@ -140,8 +148,8 @@ let typing_app h base pat op w_list = match op with
         | _ -> Misc.internal_error ("Clocking, non matching signature in call of " ^
                                       Names.fullname f)
       in
-      let env_pat = build_env node.node_outputs pat_id_list [] in
-      let env_args = build_env node.node_inputs w_list [] in
+      let env_pat = build_env outputs pat_id_list [] in
+      let env_args = build_env inputs w_list [] in
       (* implement with Cbase as base, replace name dep by ident dep *)
       let rec sigck_to_ck sck = match sck with
         | Signature.Cbase -> base
@@ -159,8 +167,8 @@ let typing_app h base pat op w_list = match op with
             in
             Clocks.Con (sigck_to_ck sck, c, id)
       in
-      List.iter2 (fun a w -> expect_extvalue h (sigck_to_ck a.a_clock) w) node.node_inputs w_list;
-      Clocks.prod (List.map (fun a -> sigck_to_ck a.a_clock) node.node_outputs)
+      List.iter2 (fun a w -> expect_extvalue h (sigck_to_ck a.a_clock) w) inputs w_list;
+      Clocks.prod (List.map (fun a -> sigck_to_ck a.a_clock) outputs)
 
 
 let rec stateful e = match e.e_desc with

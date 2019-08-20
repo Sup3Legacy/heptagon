@@ -1,0 +1,14 @@
+(* Offloaded computation *)
+__kernel node vector_add<<size:int>>(a : int^size; b : int^size) returns (c : int^size)
+	__source "sum_vector.cl"
+	__dim 1;
+
+
+(* Main node *)
+node main(i1 : int^1024, i2 : int^1024) returns (o : int^1024)
+let
+	o = vector_add<<1024>>(i1, i2) __global_worksize 1024 __local_worksize 32;
+tel
+
+
+
