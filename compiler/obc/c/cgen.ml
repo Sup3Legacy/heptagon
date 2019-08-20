@@ -679,8 +679,12 @@ let generate_kernel_call out_env var_env obj_env ocl outvl objn args =
   let lcexp_comput =
     (* Queue *)
     (Cfield (Cconst (Ctag Openclprep.icl_data_struct_string), (Modules.current_qual "queue")))::
-    (* Buffer *)
-    (Cconst (Ctag  (Openclprep.icl_data_struct_string ^ ".kernels[" ^ (string_of_int idkernel) ^ "]")))::
+    (* Kernel *)
+    (Carray (
+        (Cfield (Cconst (Ctag Openclprep.icl_data_struct_string), (Modules.current_qual "kernels")))
+        ,
+        (Cconst (Ccint idkernel))
+      ))::
     (* Dimension of the kernel *)
     (Cconst (Ccint sig_info_kernel.k_dim))::
     (* Disabled alignment option *)
@@ -933,7 +937,13 @@ let fun_def_of_step_fun n obj_env mem objs md =
       unique
         (List.map (fun obj -> out_var_name_of_objn (cname_of_qn obj.o_class),
                      Cty_id (qn_append obj.o_class "_out"))
-           (List.filter (fun obj -> not (is_op obj.o_class)) objs)) in
+          (List.filter (fun obj -> not (is_op obj.o_class)) 
+          (List.filter (fun obj -> not (Modules.check_kernel obj.o_class))
+          objs))) in
+
+  (* TODO: another filter for OpenCL kernels !!! *)
+
+
 
   (* The body *)
   let mems = List.map cvar_of_vd (mem@md.m_outputs) in
@@ -1140,8 +1150,14 @@ let global_file_header name prog =
   let cdefs_and_cdecls = List.map cdefs_and_cdecls_of_program_decl prog.p_desc in
 
   let (cty_defs, cty_decls) = List.split cdefs_and_cdecls in
+  let ldefaultheader = "stdbool"::"assert"::"pervasives"::[] in
+  let ldefaultheader = if (!Compiler_options.opencl_cg) then
+      ldefaultheader @ ["hept_opencl"]
+    else
+      ldefaultheader
+  in
   let types_h = (filename_types ^ ".h",
-                 Cheader ("stdbool"::"assert"::"pervasives"::dependencies_types,
+                 Cheader (ldefaultheader @ dependencies_types,
                           List.concat cty_decls)) in
   let types_c = (filename_types ^ ".c", Csource (concat cty_defs)) in
 
@@ -1159,8 +1175,14 @@ let interface_header name i =
   let cdefs_and_cdecls = List.map cdefs_and_cdecls_of_interface_decl i.i_desc in
 
   let (cty_defs, cty_decls) = List.split cdefs_and_cdecls in
+  let ldefaultheader = "stdbool"::"assert"::"pervasives"::[] in
+  let ldefaultheader = if (!Compiler_options.opencl_cg) then
+      ldefaultheader @ ["hept_opencl"]
+    else
+      ldefaultheader
+  in
   let types_h = (name ^ ".h",
-                 Cheader ("stdbool"::"assert"::"pervasives"::dependencies,
+                 Cheader (ldefaultheader @ dependencies,
                           List.concat cty_decls)) in
   let types_c = (name ^ ".c", Csource (concat cty_defs)) in
 

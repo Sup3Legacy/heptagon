@@ -586,11 +586,13 @@ let get_opencl_prologue () =
   let numKernel = Openclprep.IntMap.cardinal !Openclprep.mKernelCL in
   let numBuffer = !Openclprep.idbuffer in
   let lvarloc_step6 = 
-    ("kernels", Cty_arr (numKernel, Cty_id { qual = Pervasives; name = "cl_kernel"}))::
-    ("buffers", Cty_arr (numBuffer, Cty_id { qual = Pervasives; name = "cl_buffer"}))::[]
+    ("kernels", Cty_ptr (Cty_id { qual = Pervasives; name = "cl_kernel"}))::
+    ("buffers", Cty_ptr (Cty_id { qual = Pervasives; name = "cl_mem"}))::[]
+    (* ("kernels", Cty_arr (numKernel, Cty_id { qual = Pervasives; name = "cl_kernel"}))::
+    ("buffers", Cty_arr (numBuffer, Cty_id { qual = Pervasives; name = "cl_mem"}))::[] *)
   in
   
-  (* TODO: get the list using the cloid (key) to get the position *)
+  (* OLD (with arrays directly filled)
   let lkernelvarstr = order_list
     (List.map (fun (_, _, _, cloid, nkername) -> (cloid, nkername)) lKernelVar)
   in
@@ -605,8 +607,34 @@ let get_opencl_prologue () =
   (* buffers = { ..[buffervarstr].. } *)
   (Caffect (CLvar "buffers", Carraylit (
     List.map (fun bufvar -> Cvar bufvar) lbuffervarstr
-  ))) ::
+  ))) *)
+  let lstm_step6_fill =
+  (* kernels = malloc([numKernel] * sizeof(cl_kernel)) *)
+  (Caffect ((CLvar "kernels"), Cfun_call ("malloc",
+    [ Cbop ("*", (Cconst (Ccint numKernel)),
+        Cfun_call ("sizeof", [Cconst (Ctag "cl_kernel")])
+      )
+    ]
+  )))::
+ (* buffers = malloc([numBuffer] * sizeof(cl_mem)) *)
+  (Caffect ((CLvar "buffers"), Cfun_call ("malloc",
+    [ Cbop ("*", (Cconst (Ccint numBuffer)),
+        Cfun_call ("sizeof", [Cconst (Ctag "cl_mem")])
+      )
+    ]
+  )))::[] in
+  let lstm_step6_fill = lstm_step6_fill @
+  (* kernels[...[cloid]... = ...[nkername]... *)
+  (List.map (fun (_, _, _, cloid, nkername) ->
+    Caffect (CLarray ( (CLvar "kernels"), Cconst (Ccint cloid)) , Cvar nkername)
+  ) lKernelVar) @
+  (* buffers[...[buffid]... = ...[buffname]... *)
+  (List.map (fun (_, _, _, buffid, _, _, buffname) ->
+    Caffect (CLarray ( (CLvar "buffers"), Cconst (Ccint buffid)) , Cvar buffname)
+  ) lBufferVar) in
+
   (* [icl_data_struct_string].queue = queue; *)
+  let lstm_step6_icl =
   (Caffect ((CLfield (CLvar (Openclprep.icl_data_struct_string), Modules.current_qual "queue"))
     , Cvar "queue"
   )) ::  
@@ -618,6 +646,7 @@ let get_opencl_prologue () =
   (Caffect ((CLfield (CLvar (Openclprep.icl_data_struct_string), Modules.current_qual "kernels"))
     , Cvar "kernels"
   )) :: [] in
+  let lstm_step6 = lstm_step6_fill @ lstm_step6_icl in
 
 
   (* Wrapping things up *)

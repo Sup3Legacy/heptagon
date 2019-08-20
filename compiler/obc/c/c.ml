@@ -348,6 +348,8 @@ let pp_cfile_desc fmt filen cfile =
         Compiler_utils.print_header_info fmt "/*" "*/";
         fprintf fmt "#ifndef %s_H@\n" headern_macro;
         fprintf fmt "#define %s_H@\n@\n" headern_macro;
+        if (!Compiler_options.opencl_cg) then
+          fprintf fmt "#include \"hept_opencl.h\"\n";
         iter (fun d -> fprintf fmt "#include \"%s.h\"@\n" d)
           deps;
         iter (pp_cdecl fmt) cdecls;
@@ -358,8 +360,6 @@ let pp_cfile_desc fmt filen cfile =
         fprintf fmt "#include <stdio.h>@\n";
         fprintf fmt "#include <string.h>@\n";
         fprintf fmt "#include <stdlib.h>@\n";
-        if (!Compiler_options.opencl_cg) then
-          fprintf fmt "#include \"hept_opencl.h\"@\n";
         fprintf fmt "#include \"%s\"@\n@\n" headern;
         iter (pp_cdef fmt) cdefs
 

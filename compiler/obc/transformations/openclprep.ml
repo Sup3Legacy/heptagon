@@ -165,8 +165,7 @@ let program p =
   } in
   let p, _ = Obc_mapfold.program funs_opencl [] p in
 
-
-  (* TODO DEBUG *)
+  (* DEBUG
   let ffout = Format.formatter_of_out_channel stdout in
   Format.fprintf ffout "mKernelCl =\n@?";
   print_mKernelCL ffout;
@@ -174,7 +173,7 @@ let program p =
   print_mBufferCL ffout;
   Format.fprintf ffout "\nmLocalBuffCL =\n@?";
   print_mLocalBuffCL ffout;
-  (* END DEBUG *)
+  *)
 
   p
 
