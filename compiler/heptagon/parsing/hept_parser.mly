@@ -232,12 +232,8 @@ kernel_dec:
 
 loc_params_kernel:
   | /* empty */      { [] }
-  | CLLOCAL id=ident COLON ty_lin=located_ty_ident rest=loc_params_kernel {
-    let vdloc = mk_var_dec ~linearity:(snd ty_lin) id (fst ty_lin)
-        None Var (Loc($startpos,$endpos)) in
-    vdloc :: rest }
+  | CLLOCAL LPAREN nonmt_params RPAREN { $3 }
 ;
-
 
 node_dec:
   | u=unsafe n=node_or_fun f=ident pc=node_params tp=type_params

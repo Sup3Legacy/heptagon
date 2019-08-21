@@ -1,0 +1,11 @@
+
+__clkernel fun fft1D_1024(i1 : float^1024) returns (o1 : float^1024)
+	__clsource "fft1D_1024_kernel_src.cl"
+	__cldim 1
+	__cllocal (sMemx : float^64 ; sMemy : float^64)
+
+node main(i : float^1024) returns (o : float^1024)
+let
+	o =  __clglobal_worksize 32 __cllocal_worksize 32
+		fft1D_1024(i);
+tel

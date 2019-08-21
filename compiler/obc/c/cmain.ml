@@ -518,6 +518,10 @@ let get_opencl_prologue () =
       (qnameKernel, kernelsign, cloid, buffid, isInput, pos, buffname)::acc
     ) mBuffer acc
   ) !Openclprep.mBufferCL [] in
+  let numInput = List.fold_left (fun acc (_, _, _, _, isInput, _, _) ->
+    if isInput then acc+1 else acc
+  ) 0 lBufferVar in
+  let numInOutput = List.length lBufferVar in
 
   let rec find_kernelvar lKernelVar cloid = match lKernelVar with
     | [] -> failwith ("find_kernelvar : kernel occurrence " ^ (string_of_int cloid) ^ " was not found.")
@@ -551,27 +555,31 @@ let get_opencl_prologue () =
       )))) in
 
       let kernelvar = find_kernelvar lKernelVar cloid in
+      (* We assume that all the inputs come before all the outputs *)
+      let pos_buff = if isInput then pos else (numInput + pos) in
 
       (* clSetKernelArg([kernelvar], [pos], size_of(cl_mem), &[buffname])  - for input/output *)
       let cstm_setkernelarg = (Csexpr (Cfun_call ("clSetKernelArg",
         [ Cvar kernelvar;
-          Cconst (Ccint pos);
+          Cconst (Ccint pos_buff);
           Cfun_call ("sizeof", (Cconst (Ctag "cl_mem")::[]));
           Caddrof (Cvar buffname)
         ]
       ))) in
-      cstm_createbuff :: cstm_setkernelarg :: acc
+      acc @ [cstm_createbuff; cstm_setkernelarg]
     ) [] lBufferVar in
 
   (* Local memory - buffer namangement *)
   (* clSetKernelArg([kernelvar], [pos], [sizebuffer], NULL)  - for local var *)
-  let lstm_step4 = Openclprep.IntMap.fold (fun cloid (_, mcloid) acc ->
+  let lstm_step4_local = Openclprep.IntMap.fold (fun cloid (_, mcloid) acc ->
     Openclprep.IntMap.fold (fun pos argloc acc ->
       let kernelvar = find_kernelvar lKernelVar cloid in
+      (* Local buffers comes after all input and output buffers *)
+      let npos = numInOutput + pos in
 
       let nacc = (Csexpr (Cfun_call ("clSetKernelArg",
         [Cvar kernelvar;
-          Cconst (Ccint pos);
+          Cconst (Ccint npos);
           (Cgen.type_to_sizeof argloc.a_type);
           Cconst (Ctag "NULL")
         ]
@@ -579,8 +587,8 @@ let get_opencl_prologue () =
       in
       nacc
     ) mcloid acc
-  ) !Openclprep.mLocalBuffCL lstm_step4 in
-    
+  ) !Openclprep.mLocalBuffCL [] in
+  let lstm_step4 = lstm_step4 @ lstm_step4_local in
 
   (* Step 6 - Build global data structure *)
   let numKernel = Openclprep.IntMap.cardinal !Openclprep.mKernelCL in
