@@ -201,6 +201,12 @@ struct
 
   (** Append a list of var dec *)
   let append env vd_list = List.fold_left add env vd_list
+
+  (** Append a var model dec *)
+  let add_vdm env vm =
+    add_var vm.vm_loc env vm.vm_ident
+
+  let append_vdm env vdm_list = List.fold_left add_vdm env vdm_list
 end
 
 
@@ -332,9 +338,20 @@ and translate_clock loc env ck = match ck with
   | Cbase -> Clocks.Cbase
   | Con(ck,c,x) -> Clocks.Con(translate_clock loc env ck, qualify_constrs c, Rename.var loc env x)
 
+let rec translate_some_one_clock loc env ock = match ock with
+  | None -> Clocks.fresh_osynch_clock ()
+  | Some ock -> translate_one_clock loc env ock
+
+and translate_one_clock loc env ock = match ock with
+  | Cone (ph, per) -> Clocks.Cone (ph, per)
+
 let rec translate_ct loc env ct = match ct with
   | Ck ck -> Clocks.Ck (translate_clock loc env ck)
   | Cprod c_l -> Clocks.Cprod (List.map (translate_ct loc env) c_l)
+
+let rec translate_one_ct loc env oct = match oct with
+  | Hept_parsetree.Ock ck -> Clocks.Ock (translate_one_clock loc env ck)
+  | Hept_parsetree.Ocprod c_l -> Clocks.Ocprod (List.map (translate_one_ct loc env) c_l)
 
 
 let rec translate_exp env e =
@@ -397,9 +414,24 @@ and translate_desc loc env = function
       let e = translate_exp env e in
       Heptagon.Ecurrent (c, x, eInit, e)
   | Esplit (x, e1) ->
-     let x = translate_exp env (mk_exp (Evar x) loc) in
-     let e1 = translate_exp env e1 in
-       Heptagon.Esplit(x, e1)
+    let x = translate_exp env (mk_exp (Evar x) loc) in
+    let e1 = translate_exp env e1 in
+      Heptagon.Esplit(x, e1)
+  | Ewhenmodel (e1, (ph,per)) ->
+    let e1 = translate_exp env e1 in
+    Heptagon.Ewhenmodel (e1, (ph,per))
+  | Ecurrentmodel ((ph,per), eInit, e1) ->
+    let eInit = translate_exp env eInit in
+    let e1 = translate_exp env e1 in
+    Heptagon.Ecurrentmodel ((ph,per), eInit, e1)
+  | Edelay (d, e1) ->
+    let e1 = translate_exp env e1 in
+    Heptagon.Edelay (d, e1)
+  | Edelayfby (d, eInit, e1) ->
+    let eInit = translate_exp env eInit in
+    let e1 = translate_exp env e1 in
+    Heptagon.Edelayfby (d, eInit, e1)
+
 
 and translate_op = function
   | Earrow -> Heptagon.Earrow
@@ -452,6 +484,13 @@ and translate_eq_desc loc env tenv = function
       let b, _ = translate_block env tenv b in
       Heptagon.Eblock b
 
+and translate_eq_model env eqm =
+  { Heptagon.eqm_lhs = translate_pat eqm.eqm_loc env eqm.eqm_lhs;
+    Heptagon.eqm_rhs = translate_exp env eqm.eqm_rhs;
+    Heptagon.eqm_clk = translate_some_one_clock eqm.eqm_loc env None;
+    Heptagon.eqm_stateful = false;
+    Heptagon.eqm_loc = eqm.eqm_loc; }
+
 and translate_block env tenv b =
   let env = Rename.append env b.b_local in
   { Heptagon.b_local = translate_vd_list env tenv b.b_local;
@@ -459,6 +498,14 @@ and translate_block env tenv b =
     Heptagon.b_defnames = Env.empty;
     Heptagon.b_stateful = false;
     Heptagon.b_loc = b.b_loc; }, env
+
+and translate_block_model env bm =
+  let env = Rename.append_vdm env bm.bm_local in
+  { Heptagon.bm_local = translate_vd_model_list env bm.bm_local;
+    Heptagon.bm_eqs = List.map (translate_eq_model env) bm.bm_eqs;
+    Heptagon.bm_loc = bm.bm_loc }, env
+
+
 
 and translate_state_handler env tenv sh =
   let b, env = translate_block env tenv sh.s_block in
@@ -496,6 +543,16 @@ and translate_var_dec env tenv vd =
 (** [env] should contain the declared variables prior to this translation *)
 and translate_vd_list env tenv =
   List.map (translate_var_dec env tenv)
+
+and translate_var_dec_model env vdm =
+  { Heptagon.vm_ident = Rename.var vdm.vm_loc env vdm.vm_ident;
+    Heptagon.vm_type = translate_type vdm.vm_loc RenameType.empty vdm.vm_type;
+    Heptagon.vm_clock = translate_some_one_clock vdm.vm_loc env vdm.vm_clock;
+    Heptagon.vm_loc = vdm.vm_loc }
+
+
+and translate_vd_model_list env =
+  List.map (translate_var_dec_model env)
 
 and translate_last = function
   | Var -> Heptagon.Var
@@ -596,6 +653,23 @@ let translate_node node =
   safe_add node.n_loc add_value n (Hept_utils.signature_of_node nnode);
   nnode
 
+let translate_model md =
+  let n = current_qual md.Hept_parsetree.m_name in
+  let env = Rename.append_vdm Rename.empty md.m_input in
+  let linputs = translate_vd_model_list env md.m_input in
+  let env = Rename.append_vdm env md.m_output in
+  let loutputs = translate_vd_model_list env md.m_output in
+  let bm, _ = translate_block_model env md.m_block in
+
+  let mmodel = {
+    Heptagon.m_name = n;
+    Heptagon.m_input = linputs;
+    Heptagon.m_output = loutputs;
+    Heptagon.m_block = bm;
+    Heptagon.m_loc = md.m_loc;
+  } in
+  mmodel
+
 let translate_typedec ty =
     let n = current_qual ty.t_name in
     let tydesc = match ty.t_desc with
@@ -652,6 +726,7 @@ let translate_program p =
     | Ptype t -> Heptagon.Ptype (translate_typedec t)
     | Pclass c -> Heptagon.Pclass (translate_classdec c)
     | Pnode n -> Heptagon.Pnode (translate_node n)
+    | Pmodel m -> Heptagon.Pmodel (translate_model m)
   in
   let desc = List.map translate_program_desc p.p_desc in
   { Heptagon.p_modname = Names.modul_of_string p.p_modname;

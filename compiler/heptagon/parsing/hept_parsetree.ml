@@ -92,6 +92,13 @@ and ct =
   | Ck of ck
   | Cprod of ct list
 
+and oneck =
+  | Cone of int * int
+
+and onect =
+  | Ock of oneck
+  | Ocprod of onect list
+
 and exp =
   { e_desc     : edesc;
     e_ct_annot : ct option ;
@@ -110,6 +117,11 @@ and edesc =
   | Emerge of var_name * (constructor_name * exp) list
   | Ecurrent of constructor_name * var_name * exp * exp (* current(cons(clk), eInit, eCurr) *)
   | Esplit of var_name * exp
+  | Ewhenmodel of exp * (int * int)
+  | Ecurrentmodel of (int * int) * exp * exp
+  | Edelay of int * exp
+  | Edelayfby of int * exp * exp
+
 
 and app = { a_op: op; a_params: exp list; a_inlined: bool }
 
@@ -152,6 +164,17 @@ and block =
     b_equs  : eq list;
     b_loc   : location; }
 
+and eq_model = {
+  eqm_lhs : pat;
+  eqm_rhs : exp;
+  eqm_loc : location;
+}
+
+and block_model = {
+  bm_local    : var_dec_model list;
+  bm_eqs      : eq_model list;
+  bm_loc      : location }
+
 and state_handler =
   { s_state  : state_name;
     s_block  : block;
@@ -178,6 +201,12 @@ and var_dec =
     v_clock : ck option;
     v_last  : last;
     v_loc   : location; }
+
+and var_dec_model = {
+  vm_ident : var_name;
+  vm_type  : ty;
+  vm_clock : oneck option;
+  vm_loc   : location }
 
 and last = Var | Last of exp option
 
@@ -226,6 +255,14 @@ type node_dec =
     n_params      : var_dec list;
     n_constraints : exp list; }
 
+type model_dec = {
+  m_name                : dec_name;
+  m_input               : var_dec_model list;
+  m_output              : var_dec_model list;
+  m_block               : block_model;
+  m_loc                 : location }
+
+
 type const_dec =
   { c_name  : dec_name;
     c_type  : ty;
@@ -248,6 +285,7 @@ and program_desc =
   | Pconst of const_dec
   | Pclass of class_dec
   | Pnode of node_dec
+  | Pmodel of model_dec
 
 
 type arg =
@@ -314,13 +352,22 @@ let mk_class_dec nameclass lnametypes loc =
 let mk_equation desc loc =
   { eq_desc = desc; eq_loc = loc }
 
+let mk_equation_model plhs erhs loc =
+  { eqm_lhs = plhs; eqm_rhs = erhs; eqm_loc = loc }
+
 let mk_var_dec ?(linearity=Linearity.Ltop) name ty ck last loc =
   { v_name = name; v_type = ty; v_linearity = linearity;
     v_clock =ck; v_last = last; v_loc = loc }
 
+let mk_var_dec_model name ty oock loc =
+  { vm_ident = name; vm_type = ty; vm_clock = oock; vm_loc = loc }
+
 let mk_block locals eqs loc =
   { b_local = locals; b_equs = eqs;
     b_loc = loc; }
+
+let mk_block_model locals eqs loc =
+  { bm_local = locals; bm_eqs = eqs; bm_loc = loc }
 
 let mk_objective kind exp =
   { o_kind = kind; o_exp = exp }

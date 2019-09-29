@@ -62,9 +62,15 @@ let mk_var_dec ?(last = Var) ?(clock = fresh_clock()) name ty ~linearity =
   { v_ident = name; v_type = ty; v_linearity = linearity; v_clock = clock;
     v_last = last; v_loc = no_location }
 
+let mk_var_dec_model ?(clock = fresh_osynch_clock ()) name ty =
+  { vm_ident = name; vm_type = ty; vm_clock = clock; vm_loc = no_location }
+
 let mk_block ?(stateful = true) ?(defnames = Env.empty) ?(locals = []) eqs =
   { b_local = locals; b_equs = eqs; b_defnames = defnames;
     b_stateful = stateful; b_loc = no_location; }
+
+let mk_block_model ?(locals = []) eqs =
+  { bm_local = locals; bm_eqs = eqs; bm_loc = no_location }
 
 let dfalse =
   mk_exp (Econst (mk_static_bool false)) (Tid Initial.pbool) ~linearity:Ltop
@@ -113,6 +119,15 @@ let mk_node
     n_loc = loc;
     n_params = param;
     n_param_constraints = constraints }
+
+let mk_model ?(input = []) ?(output = []) ?(loc = no_location) name block =
+  { m_name = name;
+    m_input = input;
+    m_output = output;
+    m_block = block;
+    m_loc = loc }
+
+
 
 (** @return the set of variables defined in [pat]. *)
 let vars_pat pat =

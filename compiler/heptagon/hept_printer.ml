@@ -66,6 +66,9 @@ let rec print_vd ff { v_ident = n; v_type = ty; v_linearity = lin; v_last = last
     print_last last  print_ident n
     print_type ty  print_linearity lin  print_last_value last
 
+and print_vdm ff { vm_ident = n; vm_type = ty } =
+   fprintf ff "%a : %a"  print_ident n print_type ty
+
 and print_last ff = function
   | Last _ -> fprintf ff "last "
   | _ -> ()
@@ -78,6 +81,11 @@ let print_local_vars s ff l = match l with
   | [] -> ()
   | l ->
       fprintf ff "@[<4>%a@]%s@\n" (print_list_r print_vd "var "";"";") l s
+
+let print_local_vars_model s ff l = match l with
+  | [] -> ()
+  | l -> fprintf ff "@[<4>%a@]%s@\n" (print_list_r print_vdm "var "";"";") l s
+
 
 let print_const_dec ff c =
   if !Compiler_options.full_type_info then
@@ -106,6 +114,12 @@ and print_vd_tuple ff l =
     | [] -> fprintf ff "()"
     | _ ->
       fprintf ff "@[<2>%a@]" (print_list_r print_vd "("";"")") l
+
+and print_vdm_tuple ff l =
+  match l with
+    | [] -> fprintf ff "()"
+    | _ -> fprintf ff "@[<2>%a@]" (print_list_r print_vdm "("";"")") l
+
 
 and print_index ff idx =
   fprintf ff "@[<2>%a@]" (print_list print_static_exp "[""][""]") idx
@@ -175,6 +189,18 @@ and print_exp_desc ff = function
   | Esplit (x, e1) ->
       fprintf ff "@[<2>split %a@ %a@]"
         print_exp x  print_exp e1
+  | Ewhenmodel (e, (ph, per)) ->
+      fprintf ff "@[<2>(%a@ when [%i,%i])@]"
+        print_exp e  ph  per
+  | Ecurrentmodel ((ph,per), eInit, e) ->
+      fprintf ff "@[<2>current([%i,%i],@ %a,@ %a)@]"
+        ph  per  print_exp eInit  print_exp e
+  | Edelay (d, e) ->
+      fprintf ff "@[delay(%i) %a@]" d  print_exp e
+  | Edelayfby (d, eInit, e) ->
+      fprintf ff "@[%a delayfby(%i) %a@]"
+        print_exp eInit   d  print_exp e
+
 
 and print_handler ff c =
   fprintf ff "@[<2>%a@]" (print_couple print_qualname print_exp "("" -> "")") c
@@ -274,6 +300,9 @@ let rec print_eq ff eq =
     | Eblock b ->
       fprintf ff "@[<v>do@[<v>@ @[%a@]@]@ done@]" (print_sblock " in ") b
 
+and print_eq_model ff eqm =
+  fprintf ff "@[<2>%a =@ %a@]" print_pat_init (eqm.eqm_lhs, Lno_init)  print_exp eqm.eqm_rhs
+
 and print_state_handler_list ff tag_act_list =
   print_list
     (fun ff sh ->
@@ -319,6 +348,10 @@ and print_default ff b =
 and print_eq_list ff = function
   | [] -> ()
   | l -> print_list_r print_eq """;""" ff l
+
+and print_eq_model_list ff = function
+  | [] -> ()
+  | l -> print_list_r print_eq_model """;""" ff l
 
 
 and print_block sep ff { b_local = v_list; b_equs = eqs; b_stateful = s } =
@@ -381,6 +414,15 @@ let print_node ff
     (print_local_vars "") nb.b_local
     print_eq_list nb.b_equs
 
+let print_model ff
+    { m_name = n; m_input = mi; m_output = mo; m_block = mb } =
+  fprintf ff "@[model %a%a@ returns %a@]\n%a@[<v2>let@ %a@]@\ntel@]\n@."
+    print_qualname n
+    print_vdm_tuple mi
+    print_vdm_tuple mo
+    (print_local_vars_model "") mb.bm_local
+    print_eq_model_list mb.bm_eqs
+
 let print_class_dec ff cdec = 
   fprintf ff "class %a@\n" print_qualname cdec.c_nameclass
 
@@ -389,6 +431,7 @@ let print_pdesc ff pd = match pd with
   | Pconst c -> print_const_dec ff c
   | Ptype t -> print_type_def ff t
   | Pclass c -> print_class_dec ff c
+  | Pmodel m -> print_model ff m
 
 let print_open_module ff name = fprintf ff "open %s@." (modul_to_string name)
 

@@ -69,25 +69,40 @@ let print_shortname ff {name = n} = print_name ff n
 
 let print_ident = Idents.print_ident
 
- let rec print_ck ff = function
+let rec print_ck ff = function
   | Clocks.Cbase -> fprintf ff "."
   | Clocks.Con (ck, c, n) -> fprintf ff "%a on %a(%a)" print_ck ck print_qualname c print_ident n
   | Cvar { contents = Cindex i } -> fprintf ff "'a%i" i
   | Cvar { contents = Clink ck } ->
-      if !Compiler_options.full_type_info then
-        fprintf ff "~> %a" print_ck ck
-      else
-        fprintf ff "%a" print_ck ck
+    if !Compiler_options.full_type_info then
+      fprintf ff "~> %a" print_ck ck
+    else
+      fprintf ff "%a" print_ck ck
+
+let rec print_oneck ff = function
+  | Clocks.Cone (ph, per) -> fprintf ff "[%i,%i]" ph per
+  | Clocks.Covar { contents = Coindex i } -> fprintf ff "'a%i" i
+  | Clocks.Covar { contents = Colink ck} ->
+    if !Compiler_options.full_type_info then
+      fprintf ff "~> %a" print_oneck ck
+    else
+      fprintf ff "%a" print_oneck ck
+
 
 let rec print_ct ff = function
   | Ck ck -> print_ck ff ck
   | Cprod ct_list ->
       fprintf ff "@[<2>(%a)@]" (print_list_r print_ct """ *""") ct_list
 
- let rec print_sck ff = function
+let rec print_onect ff = function
+  | Clocks.Ock ock -> print_oneck ff ock
+  | Clocks.Ocprod loct ->
+      fprintf ff "@[<2>(%a)@]" (print_list_r print_onect """ *""") loct
+
+
+let rec print_sck ff = function
   | Signature.Cbase -> fprintf ff "."
   | Signature.Con (ck, c, n) -> fprintf ff "%a on %a(%a)" print_sck ck print_qualname c print_name n
-
 
 let rec print_static_exp_desc ff sed = match sed with
   | Sint i -> fprintf ff "%d" i

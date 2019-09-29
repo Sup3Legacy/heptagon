@@ -452,6 +452,8 @@ let rec typing_exp env e =
     | Ecurrent _ -> raise StructureShouldHaveBeenRemoved
     | Estruct _ -> Ltop, env
     | Emerge _ | Esplit _ | Eapp _ | Eiterator _ -> assert false
+    (* Linear typing should not happen on model nodes *)
+    | Ewhenmodel _ | Ecurrentmodel _ | Edelay _ | Edelayfby _ -> assert false
   in
     e.e_linearity <- l;
     l, env

@@ -64,12 +64,20 @@ and desc =
     (** exp when Constructor(ident) *)
   | Emerge of var_ident * (constructor_name * exp) list
     (** merge ident (Constructor -> exp)+ *)
-  | Ecurrent of constructor_name * var_ident * exp * exp
+  | Ecurrent of constructor_name * var_ident * exp * exp    (* Only allowed in model *)
     (** current( cons(clk), expInit, exp) *)
   | Esplit of exp * exp
   | Eapp of app * exp list * exp option
   | Eiterator of iterator_type * app * static_exp list
                   * exp list * exp list * exp option
+
+  (* Expressions only allowed inside a "model" (clasiscal when/current cannot be) *)
+  | Ewhenmodel of exp * (int * int)
+(*  | Emergemodel of int * (exp list)   (*period / matchs*) *)
+  | Ecurrentmodel of (int * int) * exp * exp
+  | Edelay of int * exp
+  | Edelayfby of int * exp * exp
+
 
 and app = {
   a_op     : op;
@@ -118,8 +126,21 @@ and block = {
   b_local     : var_dec list;
   b_equs      : eq list;
   b_defnames  : var_dec Env.t;
-  b_stateful : bool;
+  b_stateful  : bool;
   b_loc       : location; }
+
+and eq_model = {
+  eqm_lhs : pat;
+  eqm_rhs : exp;
+  eqm_clk : Clocks.oneck;
+  eqm_stateful : bool;
+  eqm_loc : location;
+}
+
+and block_model = {
+  bm_local    : var_dec_model list;
+  bm_eqs      : eq_model list;
+  bm_loc      : location }
 
 and state_handler = {
   s_state  : state_name;
@@ -147,6 +168,12 @@ and var_dec = {
   v_clock : Clocks.ck;
   v_last  : last;
   v_loc   : location }
+
+and var_dec_model = {
+  vm_ident : var_ident;
+  vm_type  : ty;
+  vm_clock : Clocks.oneck;
+  vm_loc   : location }
 
 and last = Var | Last of static_exp option
 
@@ -195,6 +222,13 @@ type node_dec = {
   n_params             : param list;
   n_param_constraints  : constrnt list }
 
+type model_dec = {
+  m_name                : qualname;
+  m_input               : var_dec_model list;
+  m_output              : var_dec_model list;
+  m_block               : block_model;
+  m_loc                 : location }
+
 type const_dec = {
   c_name  : qualname;
   c_type  : ty;
@@ -214,6 +248,7 @@ type program = {
 and program_desc =
   | Ptype of type_dec
   | Pnode of node_dec
+  | Pmodel of model_dec
   | Pconst of const_dec
   | Pclass of class_dec
 

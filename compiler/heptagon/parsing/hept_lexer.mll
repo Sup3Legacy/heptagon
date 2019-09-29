@@ -43,6 +43,7 @@ let keyword_table = ((Hashtbl.create 149) : (string, token) Hashtbl.t);;
 List.iter (fun (str,tok) -> Hashtbl.add keyword_table str tok) [
  "node", NODE;
  "fun", FUN;
+ "model", MODEL;
  "returns", RETURNS;
  "var", VAR;
  "val", VAL;
@@ -88,6 +89,8 @@ List.iter (fun (str,tok) -> Hashtbl.add keyword_table str tok) [
  "whenot", WHENOT;
  "merge", MERGE;
  "current", CURRENT;
+ "delay", DELAY;
+ "delayfby", DELAYFBY;
  "on", ON;
  "onot", ONOT;
  "map", MAP;

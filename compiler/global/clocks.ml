@@ -45,6 +45,19 @@ and link =
   | Cindex of int
   | Clink of ck
 
+(* 1-synchronous clocks - only in model nodes - separated from general clocks *)
+type onect =
+  | Ock of oneck
+  | Ocprod of onect list
+
+and oneck =
+  | Covar of onelink ref  (* Needed for unification and clock variable *)
+  | Cone of int * int     (* (phase, period) *)
+
+and onelink =
+  | Coindex of int
+  | Colink of oneck  (* reference to another clock *)
+
 
 exception Unify
 
@@ -193,3 +206,103 @@ let is_subclock ck1 ck2 =
         c1 = c2 && sub_samplers s_ck1 s_ck2
   in
   sub_samplers (list_of_samplers [] ck1) (list_of_samplers [] ck2)
+
+
+
+(* --- One-synchronous methods --- *)
+exception Variable_ock
+
+let fresh_osynch_clock () = Covar { contents = Coindex (gen_index ()); }
+
+let base_osynch_clock = Cone (0,1)
+
+let prod_osynch ck_l = match ck_l with
+  | [ck] -> Ock ck
+  | _ -> Ocprod (List.map (fun ck -> Ock ck) ck_l)
+
+
+(* Contraction of links inside a clock *)
+let rec ock_repr ock = match ock with
+  | Cone _ | Covar { contents = Coindex _ } -> ock
+  | Covar (({ contents = Colink ock } as link)) ->
+    let ock = ock_repr ock in
+    link.contents <- Colink ock;
+    ock
+
+(* Clock tuple management *)
+let rec skeleton_osynch ock = function
+  | Tprod ty_list ->
+      (match ty_list with
+        | [_] -> Ock ock
+        | l -> Ocprod (List.map (skeleton_osynch ock) l))
+  | Tarray _ | Tid _ | Tclasstype _ | Tinvalid -> Ock ock
+
+
+(* Check that a one-synchronous clock is well-formed *)
+let is_coherent_osync ock = match ock with
+  | Cone (ph, per) ->
+    if (per<=0) then false else
+    if ((ph<0) || (ph>=per)) then false else
+    true
+  | Covar _ -> true
+
+(* Check the inclusion of a clock under another *)
+(*  Is ock1 a subclock of ock2, ie whenever there is ock1, there is ock2? *)
+let is_subclock_osync ock1 ock2 =
+  let ock1 = ock_repr ock1 in
+  let ock2 = ock_repr ock2 in
+  match (ock1, ock2) with
+  | Cone (ph1, per1), Cone (ph2, per2) ->
+    if (per1=per2) then (ph1=ph2) else
+    if (per1<per2) then false else
+    (* per1 > per2 *)
+    if (per1 mod per2 !=0) then false else (* Not harmonic *)
+    let ratio = per1 / per2 in
+    
+    (* Check that the phases coincide *)
+    let temp = ph1 - ph2 in
+    if (temp mod ratio != 0) then false
+    else true
+  | _ -> false
+
+
+(* Unification of one-synchronous clocks *)
+let unify_oneck ock1 ock2 =
+  let ock1 = ock_repr ock1 in
+  let ock2 = ock_repr ock2 in
+  if ock1 == ock2 then () else
+  match (ock1, ock2) with
+    | Cone (ph1, per1), Cone (ph2,per2) ->
+      if ((ph1 == ph2) && (per1 == per2)) then ()   (* Remark: no implicit buffer here *)
+      else raise Unify
+    | Covar { contents = Coindex n1 }, Covar { contents = Coindex n2 } when n1 = n2 -> ()
+    | Covar ({ contents = Coindex n } as v), ock
+    | ock, Covar ({ contents = Coindex n } as v) ->
+      (* Unification - note: no check for freshness here (is it useful?) *)
+      v.contents <- Colink ock
+    | _ -> raise Unify
+
+let rec unify_onect t1 t2 =
+  if t1 == t2 then () else
+  match (t1, t2) with
+    | (Ock ck1, Ock ck2) -> unify_oneck ck1 ck2
+    | (Ocprod t1_list, Ocprod t2_list) -> unify_list_onect t1_list t2_list
+    | _ -> raise Unify
+
+and unify_list_onect t1_list t2_list =
+  try List.iter2 unify_onect t1_list t2_list
+  with _ -> raise Unify
+
+
+let is_base_ock ock = match (ock_repr ock) with
+  | Cone (ph, per) -> ((ph==0) && (per==1))
+  | _ -> false
+
+let get_ph_per_from_ock ock =
+  let ock = ock_repr ock in
+  let (ph,per) = match ock with
+    | Cone (ph, per) -> (ph, per)
+    | Covar _ -> raise Variable_ock
+  in
+  (ph, per)
+

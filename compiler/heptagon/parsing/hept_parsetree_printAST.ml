@@ -66,6 +66,13 @@ let rec print_ct ff ct = match ct with
   | Ck ck -> fprintf ff "Ck %a" print_ck ck
   | Cprod lct -> fprintf ff "Cprod %a" (print_list print_ct "(" ", " ")") lct
 
+let print_ock ff ock = match ock with
+  | Cone (ph, per) -> fprintf ff "Cone(%i,%i)" ph per
+
+let rec print_oct ff oct = match oct with
+  | Ock ock -> fprintf ff "Ock %a" print_ock ock
+  | Ocprod loct -> fprintf ff "Ocprod %a" (print_list print_oct "(" ", " ")") loct
+
 
 (* Static expressions *)
 let rec print_static_exp_desc ff sedesc = match sedesc with
@@ -141,10 +148,17 @@ and print_edesc ff edesc = match edesc with
        (print_list print_exp "("","")") lexp3
   | Ewhen (exp, cons_name, var_name) -> fprintf ff "Ewhen %a%a%a" print_exp exp
       print_const_name cons_name  print_var_name var_name
+  | Ewhenmodel (e, (ph, per)) -> fprintf ff "Ewhenmodel %a (%i,%i)" print_exp e ph per
+  | Ecurrentmodel ((ph,per), eInit, e) ->
+    fprintf ff "Ecurrentmodel (%i, %i) %a %a" ph per
+      print_exp eInit   print_exp e
+  | Edelay (d, e) -> fprintf ff "Edelay(%i) %a" d  print_exp e
+  | Edelayfby (d, eInit, e) ->
+    fprintf ff "(%a Edelayfby(%i) %a)" print_exp eInit  d  print_exp e
   | Emerge (var_name, lconstname_exp) -> fprintf ff "Emerge %a%a" print_var_name var_name
      (print_list (print_couple print_const_name print_exp "" "|" "") "" "," "") lconstname_exp
   | Ecurrent (cons_name, var_name, expInit, exp) -> fprintf ff "Ecurrent(%a(%a), %a, %a)"
-      print_const_name cons_name  print_var_name var_name  print_exp expInit  print_exp expr
+      print_const_name cons_name  print_var_name var_name  print_exp expInit  print_exp exp
   | Esplit (var_name, exp) -> fprintf ff "Esplit %a%a" print_var_name var_name print_exp exp
 
 and print_exp ff { e_desc= edesc; e_ct_annot= optct } =
@@ -172,6 +186,12 @@ let rec print_var_dec ff {v_name=vname; v_type=typ; v_linearity=lin; v_clock=clk
     print_linearity lin
     (print_opt print_ck) clk
     print_last lst
+
+and print_var_dec_model ff vdm =
+  fprintf ff "%a::(%a) (cl:%a)"
+    print_var_name vdm.vm_ident
+    print_type vdm.vm_type
+    (print_opt print_ock) vdm.vm_clock
 
 and print_present_handler ff {p_cond= cond; p_block=bl} = 
   fprintf ff "%a%a" print_exp cond  print_block bl
@@ -207,6 +227,12 @@ and print_eqdesc ff eqd = match eqd with
 
 and print_eq ff {eq_desc=eqd} = fprintf ff "%a" print_eqdesc eqd
 
+and print_eq_model ff eqm =
+  fprintf ff "%a = %a"  print_pat eqm.eqm_lhs  print_exp eqm.eqm_rhs
+
+and print_block_model ff bm =
+  fprintf ff "%a@\n%a" (print_list print_var_dec_model "(" "," ")") bm.bm_local
+     (print_list print_eq_model "(" "," ")") bm.bm_eqs
 
 (* Node declaration *)
 let print_objective_kind ff objkind = match objkind with
@@ -267,6 +293,13 @@ let print_node_dec ff {n_name = dname;
            print_block bl
            (print_list print_exp "(" "," ")") lexp_constr
 
+and print_model_dec ff md =
+  fprintf ff "@[<v2>model %a@\ninputs = @[<2>%a@]@\n\
+      outputs = @[<2>%a@]@\nblock =@[<2>%a@]@\n@]@\n@."
+        print_dec_name md.m_name
+        (print_list print_var_dec_model "(" "; " ")") md.m_input
+        (print_list print_var_dec_model "(" "; " ")") md.m_output
+        print_block_model md.m_block
 
 (* Constant declaration *)
 let print_const_dec ff { c_name=dname; c_type=typ; c_value=vopt } =
@@ -308,6 +341,7 @@ let print_pdesc ff pdesc = match pdesc with
   | Pconst c_dec -> print_const_dec ff c_dec
   | Pclass c_dec -> print_class_dec ff c_dec
   | Pnode n_dec -> print_node_dec ff n_dec
+  | Pmodel m_dec -> print_model_dec ff m_dec
 
 (* Pretty-print a Hept_parsetree AST - Entry point*)
 let print_AST oc { p_modname = pname; p_opened = po; p_desc = pd } =

@@ -76,9 +76,11 @@ open Heptagon
 type 'a hept_it_funs = {
   app            : 'a hept_it_funs -> 'a -> app -> app * 'a;
   block          : 'a hept_it_funs -> 'a -> block -> block * 'a;
+  block_model    : 'a hept_it_funs -> 'a -> block_model -> block_model * 'a;
   edesc          : 'a hept_it_funs -> 'a -> desc -> desc * 'a;
   eq             : 'a hept_it_funs -> 'a -> eq -> eq * 'a;
   eqdesc         : 'a hept_it_funs -> 'a -> eqdesc -> eqdesc * 'a;
+  eq_model       : 'a hept_it_funs -> 'a -> eq_model -> eq_model * 'a;
   escape_unless  : 'a hept_it_funs -> 'a -> escape -> escape * 'a;
   escape_until   : 'a hept_it_funs -> 'a -> escape -> escape * 'a;
   exp            : 'a hept_it_funs -> 'a -> exp -> exp * 'a;
@@ -87,11 +89,13 @@ type 'a hept_it_funs = {
   state_handler  : 'a hept_it_funs -> 'a -> state_handler -> state_handler * 'a;
   switch_handler : 'a hept_it_funs -> 'a -> switch_handler -> switch_handler * 'a;
   var_dec        : 'a hept_it_funs -> 'a -> var_dec -> var_dec * 'a;
+  var_dec_model  : 'a hept_it_funs -> 'a -> var_dec_model -> var_dec_model * 'a;
   last           : 'a hept_it_funs -> 'a -> last -> last * 'a;
   objective      : 'a hept_it_funs -> 'a -> objective -> objective * 'a;
   contract       : 'a hept_it_funs -> 'a -> contract -> contract * 'a;
   typeparam_dec  : 'a hept_it_funs -> 'a -> typeparam_dec -> typeparam_dec * 'a;
   node_dec       : 'a hept_it_funs -> 'a -> node_dec -> node_dec * 'a;
+  model_dec      : 'a hept_it_funs -> 'a -> model_dec -> model_dec * 'a;
   const_dec      : 'a hept_it_funs -> 'a -> const_dec -> const_dec * 'a;
   class_dec      : 'a hept_it_funs -> 'a -> class_dec -> class_dec * 'a;
   program        : 'a hept_it_funs -> 'a -> program -> program * 'a;
@@ -167,6 +171,23 @@ and edesc funs acc ed = match ed with
       let e1, acc = exp_it funs acc e1 in
       let e2, acc = exp_it funs acc e2 in
         Esplit(e1, e2), acc
+  | Ewhenmodel (e, (ph,per)) ->
+      let e, acc = exp_it funs acc e in
+      Ewhenmodel (e, (ph,per)), acc
+(*  | Emergemodel (per, le) ->
+      let le, acc = mapfold (exp_it funs) acc le in
+      Emergemodel (per, le), acc *)
+  | Ecurrentmodel ((ph,per), eInit, e) ->
+      let eInit, acc = exp_it funs acc eInit in
+      let e, acc = exp_it funs acc e in
+      Ecurrentmodel ((ph,per), eInit, e), acc
+  | Edelay (d, e) ->
+      let e, acc = exp_it funs acc e in
+      Edelay (d, e), acc
+  | Edelayfby (d, eInit, e) ->
+      let eInit, acc = exp_it funs acc eInit in
+      let e, acc = exp_it funs acc e in
+      Edelayfby (d, eInit, e), acc
 
 and app_it funs acc a = funs.app funs acc a
 and app funs acc a =
@@ -219,6 +240,13 @@ and eqdesc funs acc eqd = match eqd with
       let e, acc = exp_it funs acc e in
       Eeq (p, e), acc
 
+and eq_model_it funs acc eqm = funs.eq_model funs acc eqm
+and eq_model funs acc eqm =
+  let lhs, acc = pat_it funs acc eqm.eqm_lhs in
+  let rhs, acc = exp_it funs acc eqm.eqm_rhs in
+  let clk, acc = Global_mapfold.oneck_it funs.global_funs acc eqm.eqm_clk in
+  { eqm with eqm_lhs = lhs; eqm_rhs = rhs; eqm_clk = clk }, acc
+
 
 and block_it funs acc b = funs.block funs acc b
 and block funs acc b =
@@ -234,6 +262,12 @@ and block funs acc b =
       b.b_defnames
       (Idents.Env.empty, acc) in
   { b with b_local = b_local; b_equs = b_equs; b_defnames = b_defnames }, acc
+
+and block_model_it funs acc bm = funs.block_model funs acc bm
+and block_model funs acc bm =
+  let bm_local, acc = mapfold (var_dec_model_it funs) acc bm.bm_local in
+  let bm_eqs, acc = mapfold (eq_model_it funs) acc bm.bm_eqs in
+  { bm with bm_local = bm_local; bm_eqs = bm_eqs }, acc
 
 
 and state_handler_it funs acc s = funs.state_handler funs acc s
@@ -273,6 +307,13 @@ and var_dec funs acc vd =
   let v_clock, acc = ck_it funs.global_funs acc vd.v_clock in
   let v_last, acc = last_it funs acc vd.v_last in
   { vd with v_last = v_last; v_type = v_type; v_clock = v_clock; v_ident = v }, acc
+
+and var_dec_model_it funs acc vdm = funs.var_dec_model funs acc vdm
+and var_dec_model funs acc vdm =
+  let vm_ident, acc = var_ident_it funs.global_funs acc vdm.vm_ident in
+  let vm_type, acc = ty_it funs.global_funs acc vdm.vm_type in
+  let vm_clock, acc = oneck_it funs.global_funs acc vdm.vm_clock in
+  { vdm with vm_ident = vm_ident; vm_type = vm_type; vm_clock = vm_clock }, acc
 
 
 and last_it funs acc l =
@@ -333,6 +374,18 @@ and node_dec funs acc nd =
       n_contract = n_contract }
   , acc
 
+and model_dec_it funs acc md =
+  Idents.enter_node md.m_name;
+  funs.model_dec funs acc md
+and model_dec funs acc md =
+  let m_input, acc = mapfold (var_dec_model_it funs) acc md.m_input in
+  let m_output, acc = mapfold (var_dec_model_it funs) acc md.m_output in
+  let m_block, acc = block_model_it funs acc md.m_block in
+  { md with
+      m_input = m_input;
+      m_output = m_output;
+      m_block = m_block }, acc
+
 
 and const_dec_it funs acc c = funs.const_dec funs acc c
 and const_dec funs acc c =
@@ -363,13 +416,16 @@ and program_desc funs acc pd = match pd with
   | Ptype _td -> pd, acc (* TODO types *)
   | Pnode n -> let n, acc = node_dec_it funs acc n in Pnode n, acc
   | Pclass c -> let c, acc = class_dec_it funs acc c in Pclass c, acc
+  | Pmodel m -> let m, acc = model_dec_it funs acc m in Pmodel m, acc
 
 let defaults = {
   app = app;
   block = block;
+  block_model = block_model;
   edesc = edesc;
   eq = eq;
   eqdesc = eqdesc;
+  eq_model = eq_model;
   escape_unless = escape;
   escape_until = escape;
   exp = exp;
@@ -378,11 +434,13 @@ let defaults = {
   state_handler = state_handler;
   switch_handler = switch_handler;
   var_dec = var_dec;
+  var_dec_model = var_dec_model;
   last = last;
   objective = objective;
   contract = contract;
   typeparam_dec = typeparam_dec;
   node_dec = node_dec;
+  model_dec = model_dec;
   const_dec = const_dec;
   class_dec = class_dec;
   program = program;
@@ -394,9 +452,11 @@ let defaults = {
 let defaults_stop = {
   app = stop;
   block = stop;
+  block_model = stop;
   edesc = stop;
   eq = stop;
   eqdesc = stop;
+  eq_model = stop;
   escape_unless = stop;
   escape_until = stop;
   exp = stop;
@@ -405,11 +465,13 @@ let defaults_stop = {
   state_handler = stop;
   switch_handler = stop;
   var_dec = stop;
+  var_dec_model = stop;
   last = stop;
   objective = stop;
   contract = stop;
   typeparam_dec = stop;
   node_dec = stop;
+  model_dec = stop;
   const_dec = stop;
   class_dec = stop;
   program = stop;

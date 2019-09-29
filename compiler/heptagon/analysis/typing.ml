@@ -308,15 +308,24 @@ let kind f ty_desc =
     op, List.map ty_of_arg ty_desc.node_inputs,
   List.map ty_of_arg ty_desc.node_outputs, ty_desc.node_typeparams
 
+(* [h] : var_ident --> sum_h , in order to managed both type of variable declaration *)
+type sum_h =
+  | Vd of (var_dec * bool)
+  | Vdm of var_dec_model
+
 let typ_of_name h x =
   try
-    let { vd = vd } = Env.find x h in vd.v_type
+    let res = Env.find x h in
+    match res with
+    | Vd (vd,_) -> vd.v_type
+    | Vdm vdm -> vdm.vm_type
   with
       Not_found -> error (Eundefined(name x))
 
 let vd_of_name h x =
   try
-    let { vd = vd } = Env.find x h in vd
+    let vd = Env.find x h in
+    vd
   with
       Not_found -> error (Eundefined(name x))
 
@@ -400,11 +409,13 @@ let rec merge local_names_list =
 
 (** Checks that every partial name has a last value *)
 let all_last h env =
-  Env.iter
-    (fun elt _ ->
-       if not (Env.find elt h).last
-       then error (Elast_undefined(name elt)))
-    env
+  Env.iter (fun elt _ ->
+      let sh = Env.find elt h in
+      match sh with
+      | Vd (_, blst) ->
+        if not blst then error (Elast_undefined(name elt))
+      | Vdm _ -> ()
+  ) env
 
 let last = function | Var -> false | Last _ -> true
 
@@ -929,6 +940,22 @@ and typing cenv h e =
               | Tprod _ -> message e.e_loc (Esplit_tuple ty)
               | _ -> ());
             Esplit(typed_c, typed_e2), Tprod (repeat_list ty n)
+
+      (* Model expressions *)
+      | Ewhenmodel (e, (ph,per)) ->
+        let typed_e, t = typing cenv h e in
+        Ewhenmodel (typed_e, (ph,per)), t
+      | Ecurrentmodel ((ph,per), eInit, e) ->
+        let typed_e_init, t = typing cenv h eInit in
+        let typed_e = expect cenv h t e in
+        Ecurrentmodel ((ph,per), typed_e_init, typed_e), t
+      | Edelay (d, e) ->
+        let typed_e, t = typing cenv h e in
+        Edelay (d, typed_e), t
+      | Edelayfby (d, eInit, e) ->
+        let typed_e_init, t = typing cenv h eInit in
+        let typed_e = expect cenv h t e in
+        Edelayfby (d, typed_e_init, typed_e), t
     in
       { e with e_desc = typed_desc; e_ty = ty; }, ty
   with
@@ -1317,8 +1344,12 @@ and typing_format_args cenv h e args =
 let rec typing_pat h acc = function
   | Evarpat(x) ->
       let vd = vd_of_name h x in
+      let ty = match vd with
+        | Vd (vd, _) -> vd.v_type
+        | Vdm vdm -> vdm.vm_type
+      in
       let acc = add_distinct_env x vd acc in
-      acc, vd.v_type
+      acc, ty
   | Etuplepat(pat_list) ->
       let acc, ty_list =
         List.fold_right
@@ -1431,8 +1462,17 @@ let rec typing_eq cenv h typardecs acc eq =
   let typed_desc = typing_eq_propagating l_ty_constr typardecs typed_desc in
   { eq with eq_desc = typed_desc }, acc
 
+and typing_eq_model cenv h acc eqm =
+  let acc, ty_pat = typing_pat h acc eqm.eqm_lhs in
+  let typed_e = expect cenv h ty_pat eqm.eqm_rhs in
+  { eqm with eqm_rhs = typed_e }, acc
+
+
 and typing_eq_list cenv h typardecs acc eq_list =
   mapfold (typing_eq cenv h typardecs) acc eq_list
+
+and typing_eq_model_list cenv h acc eqm_list =
+  mapfold (typing_eq_model cenv h) acc eqm_list
 
 and typing_automaton_handlers cenv h acc state_handlers =
   (* checks unicity of states *)
@@ -1503,14 +1543,32 @@ and typing_block cenv h typardecs
     let typed_l, (local_names, h0) = build cenv h l in
     let typed_eq_list, defined_names =
       typing_eq_list cenv h0 typardecs Env.empty eq_list in
-    let defnames = diff_env defined_names local_names in
+    let defsumhnames = diff_env defined_names local_names in
+    let defnames = Env.fold (fun k v acc ->
+      let nv = match v with
+        | Vd (vd, _) -> vd
+        | Vdm _ -> failwith "Model variable declaration in a block node"
+      in
+      Env.add k nv acc
+    ) defsumhnames Env.empty in
     { b with
         b_defnames = defnames;
         b_local = typed_l;
-        b_equs = typed_eq_list },
-    defnames, h0
+        b_equs = typed_eq_list }, defsumhnames, h0
   with
     | TypingError(kind) -> message loc kind
+
+and typing_block_model cenv h bm =
+  try
+    let typed_l, (local_names, h0) = build_vardec_model cenv h bm.bm_local in
+    let typed_eq_model_list, defined_names =
+      typing_eq_model_list cenv h0 Env.empty bm.bm_eqs in
+    let defnames = diff_env defined_names local_names in
+    { bm with
+      bm_local = typed_l;
+      bm_eqs = typed_eq_model_list }, defnames, h0
+  with
+  | TypingError(kind) -> message bm.bm_loc kind
 
 
 (* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~ *)
@@ -1537,12 +1595,28 @@ and build cenv h dec =
 
       let vd = { vd with v_last = last_dec; v_type = ty } in
       let acc_defined = Env.add vd.v_ident vd acc_defined in
-      let h = Env.add vd.v_ident { vd = vd; last = last vd.v_last } h in
+      let h = Env.add vd.v_ident (Vd (vd, last vd.v_last)) h in
       vd, (acc_defined, h)
     with
         TypingError(kind) -> message vd.v_loc kind
   in
     mapfold var_dec (Env.empty, h) dec
+
+and build_vardec_model cenv h ldecm =
+  mapfold (fun (acc_defined,h) vdm ->
+    try
+      let ty = check_type cenv vdm.vm_type in
+      
+      if Env.mem vdm.vm_ident h then
+        error (Ealready_defined(name vdm.vm_ident));
+
+      let vdm = { vdm with vm_type = ty } in
+      let acc_defined = Env.add vdm.vm_ident vdm acc_defined in
+      let h = Env.add vdm.vm_ident (Vdm vdm) h in
+      vdm, (acc_defined, h)
+    with
+     | TypingError(kind) -> message vdm.vm_loc kind
+  ) (Env.empty, h) ldecm
 
 let typing_objective cenv h obj =
   let typed_e = expect cenv h (Tid Initial.pbool) obj.o_exp in
@@ -1667,6 +1741,26 @@ let typing_classdec c = c  (* Nothing to check *)
 
 let typing_instancedec i = i (* The class and type are already defined - checked in hept_scoping.ml *)
 
+let typing_modeldec m =
+  try
+    (* Input and output management *)
+    let typed_i_list, (_input_names, h) = build_vardec_model QualEnv.empty Env.empty m.m_input in
+    let typed_o_list, (output_names, h) = build_vardec_model QualEnv.empty h m.m_output in
+
+    let typed_bm, defined_names, _ = typing_block_model QualEnv.empty h m.m_block in
+    
+    (* check that the defined names match exactly the outputs and locals *)
+    included_env defined_names output_names;
+    included_env output_names defined_names;
+    
+    (* Returns typed model *)
+    { m with
+        m_input = typed_i_list;
+        m_output = typed_o_list;
+        m_block = typed_bm }
+  with
+    | TypingError(error) -> message m.m_loc error
+
 let typing_signature s =
   let typed_params, cenv = build_node_params QualEnv.empty s.sig_params in
   if Modules.current () = Pervasives
@@ -1682,6 +1776,7 @@ let program p =
     | Pconst c -> Pconst (typing_const_dec c)
     | Ptype t -> Ptype (typing_typedec t)
     | Pclass c -> Pclass (typing_classdec c)
+    | Pmodel m -> Pmodel (typing_modeldec m)
   in
   { p with p_desc = List.map program_desc p.p_desc }
 

@@ -147,6 +147,16 @@ let rec typing e =
         let t = typing c in
         let te = typing e in
           cseq t te
+    | Ewhenmodel(e, _) -> typing e
+    | Ecurrentmodel(_, eInit, e) ->
+        let tInit = typing eInit in
+        let t = pre (typing e) in
+        candlist [tInit; t]
+    | Edelay (_, e) -> typing e
+    | Edelayfby (_, eInit, e) ->
+        let tInit = typing eInit in
+        let t = pre (typing e) in
+        candlist [tInit; t]
 
 
 (** Typing an application *)

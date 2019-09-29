@@ -40,6 +40,9 @@ type 'a global_it_funs = {
   type_class         : 'a global_it_funs -> 'a -> type_class -> type_class * 'a;
   ct                 : 'a global_it_funs -> 'a -> ct -> ct * 'a;
   ck                 : 'a global_it_funs -> 'a -> Clocks.ck -> Clocks.ck * 'a;
+  oneck              : 'a global_it_funs -> 'a -> Clocks.oneck -> Clocks.oneck * 'a;
+  onect              : 'a global_it_funs -> 'a -> Clocks.onect -> Clocks.onect * 'a;
+  onelink            : 'a global_it_funs -> 'a -> Clocks.onelink -> Clocks.onelink * 'a;
   link               : 'a global_it_funs -> 'a -> link -> link * 'a;
   var_ident          : 'a global_it_funs -> 'a -> var_ident -> var_ident * 'a;
   param              : 'a global_it_funs -> 'a -> param -> param * 'a;
@@ -80,7 +83,7 @@ and static_exp_desc funs acc sd = match sd with
       Srecord f_se_l, acc
 
 and type_class_it funs acc cl = funs.type_class funs acc cl
-and type_class funs acc cl = cl, acc
+and type_class _ acc cl = cl, acc
 
 and ty_it funs acc t = try funs.ty funs acc t with Fallback -> ty funs acc t
 and ty funs acc t = match t with
@@ -117,6 +120,21 @@ and link_it funs acc c =
 and link funs acc l = match l with
   | Cindex _ -> l, acc
   | Clink(ck) -> let ck, acc = ck_it funs acc ck in Clink ck, acc
+
+
+and oneck_it funs acc oc = try funs.oneck funs acc oc with Fallback -> oneck funs acc oc
+and oneck _ acc oc = oc, acc (* Leaf *)
+
+and onect_it funs acc oc = try funs.onect funs acc oc with Fallback -> onect funs acc oc
+and onect funs acc oc = match oc with
+  | Ock ock -> let ock, acc = oneck_it funs acc ock in Ock ock, acc
+  | Ocprod loct -> let loct, acc = mapfold (onect_it funs) acc loct in Ocprod loct, acc
+
+and onelink_it funs acc c = try funs.onelink funs acc c with Fallback -> onelink funs acc c
+and onelink funs acc l = match l with
+  | Coindex _ -> l, acc
+  | Colink ock -> let ock, acc = oneck_it funs acc ock in Colink ock, acc
+
 
 
 and var_ident_it funs acc i = funs.var_ident funs acc i
@@ -162,6 +180,9 @@ let defaults = {
   ct = ct;
   ck = ck;
   link = link;
+  oneck = oneck;
+  onect = onect;
+  onelink = onelink;
   var_ident = var_ident;
   structure = structure;
   field = field;
@@ -182,6 +203,9 @@ let defaults_stop = {
   ct = stop;
   ck = stop;
   link = stop;
+  oneck = stop;
+  onect = stop;
+  onelink = stop;
   var_ident = stop;
   structure = stop;
   field = stop;

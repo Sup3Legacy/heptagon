@@ -172,6 +172,9 @@ let rec typing h pat e =
         in
         ct, base_ck
     | Esplit _ | Elast _ -> assert false
+    (* In model *)
+    | Ewhenmodel _ | Ecurrentmodel _ | Edelay _ | Edelayfby _ ->
+      failwith "Model operators inside a node is forbidden."
   in
   begin match e.e_ct_annot with
     None -> ()
@@ -314,6 +317,8 @@ let typing_node node =
   (* check signature causality and update it in the global env *)
   update_signature h node;
   node
+
+(* ========================= *)
 
 let program p =
   let program_desc pd = match pd with

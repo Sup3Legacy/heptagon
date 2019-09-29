@@ -91,12 +91,16 @@ let compile_program p =
   let p = pass "Boolean" !boolean Boolean.program p pp in
   let p = pass "Normalization" !boolean Normalize.program p pp in
 
+  let p = pass "Model clocking" true Model_clocking.program p pp in
 
   (* Block flatten *)
   let p = pass "Block" true Block.program p pp in
   
   (* Internal state exposal*)
   let p = silent_pass "Internal state exposal" !exposeintstate InternalStateExposal.program p in
+
+  (* TODO: rajout de la phase model to node *)
+  let p = silent_pass "Model to node conversion" true Model2node.program p in
 
   (* Return the transformed AST *)
   p

@@ -44,7 +44,7 @@ open Hept_parsetree
 %token <bool> BOOL
 %token <string> STRING
 %token <string * string> PRAGMA
-%token TYPE FUN NODE RETURNS VAR VAL OPEN END CONST UNSAFE EXTERNAL
+%token TYPE FUN NODE MODEL RETURNS VAR VAL OPEN END CONST UNSAFE EXTERNAL
 %token CLASS
 %token FBY PRE SWITCH EVERY
 %token OR STAR NOT
@@ -69,7 +69,7 @@ open Hept_parsetree
 %token REACHABLE
 %token ATTRACTIVE
 %token WITH
-%token WHEN WHENOT MERGE ON ONOT CURRENT
+%token WHEN WHENOT MERGE ON ONOT CURRENT DELAY DELAYFBY
 %token INLINED
 %token POWER
 %token LBRACKET LBRACKETGREATER
@@ -157,6 +157,7 @@ program_desc:
   | t=type_dec     { Ptype t }
   | c=class_dec    { Pclass c}
   | n=node_dec     { Pnode n }
+  | m=model_dec    { Pmodel m }
 ;
 
 opens: OPEN m=modul { m }
@@ -207,6 +208,18 @@ label_ty:
 returns: RETURNS | EQUAL {}
 ;
 
+model_dec:
+  | MODEL f=ident LPAREN i=in_params_model RPAREN
+    returns LPAREN o=out_params_model RPAREN
+    b=block_model(LET) TEL
+    {{ m_name = f;
+       m_input = i;
+       m_output = o;
+       m_block = b;
+       m_loc = (Loc($startpos,$endpos)) }}
+;
+
+
 node_dec:
   | u=unsafe n=node_or_fun f=ident pc=node_params tp=type_params
     LPAREN i=in_params RPAREN returns LPAREN o=out_params RPAREN
@@ -244,6 +257,9 @@ in_params:
   | params {$1}
 ;
 
+in_params_model:
+  | params_model {$1}
+
 params:
   | /* empty */  { [] }
   | nonmt_params { $1 }
@@ -261,6 +277,28 @@ param:
         id (fst ty_lin) ck Var (Loc($startpos,$endpos))) idl }
 ;
 
+params_model:
+  | /* empty */        { [] }
+  | nonmt_params_model { $1 }
+;
+
+nonmt_params_model:
+  | param_model                            { $1 }
+  | param_model SEMICOL                    { $1 }
+  | param_model SEMICOL nonmt_params_model { $1 @ $3 }
+;
+
+param_model:
+  | idl=ident_list COLON ty=ty_ident oock=ock_annot
+    { List.map (fun id ->
+        mk_var_dec_model id ty oock (Loc($startpos,$endpos))
+      ) idl
+    }
+;
+
+
+
+
 out_params:
   | /* empty */ { [] }
   | nonmt_out_params { $1 }
@@ -270,6 +308,17 @@ nonmt_out_params:
   | var_last { $1 }
   | var_last SEMICOL { $1 }
   | var_last SEMICOL nonmt_out_params { $1 @ $3 }
+;
+
+out_params_model:
+  | /* empty */ { [] }
+  | nonmt_out_params_model { $1 }
+;
+
+nonmt_out_params_model:
+  | param_model { $1 }
+  | param_model SEMICOL { $1 }
+  | param_model SEMICOL nonmt_out_params_model { $1 @ $3 }
 ;
 
 constraints:
@@ -327,6 +376,11 @@ loc_params:
   | var_last SEMICOL loc_params { $1 @ $3 }
 ;
 
+loc_params_model:
+  | param_model SEMICOL                  { $1 }
+  | param_model SEMICOL loc_params_model { $1 @ $3 }
+;
+
 
 var_last:
   | idl=ident_list COLON ty_lin=located_ty_ident ck=ck_annot
@@ -373,7 +427,7 @@ ck_annot:
 ck:
   | DOT                  { Cbase }
   | ck=on_ck             { ck }
-
+;
 
 on_ck:
   | x=IDENT                                                { Con(Cbase,Q Initial.ptrue,x) }
@@ -381,12 +435,28 @@ on_ck:
   | b=ck ON x=IDENT                                        { Con(b,Q Initial.ptrue,x) }
   | b=ck ONOT x=IDENT                                      { Con(b,Q Initial.pfalse,x) }
   | b=ck ON c=constructor_or_bool LPAREN x=IDENT RPAREN    { Con(b,c,x) }
+;
+
+ock_annot:
+  | /*empty */         { None    }
+  | COLONCOLON ock=ock { Some ock}
+;
+
+ock : LBRACKET ph=INT COMMA per=INT RBRACKET  { Cone (ph, per) }
+;
 
 
 equs:
   | /* empty */                      { [] }
-  | eqs=optsnlist(SEMICOL,equ)       { eqs }
+  | eqs=optsnlist(SEMICOL,equ) { eqs }
 ;
+
+equs_model:
+  | /* empty */                      { [] }
+  | eqs=optsnlist(SEMICOL,equ_model) { eqs }
+;
+
+
 
 
 opt_bar:
@@ -397,12 +467,18 @@ opt_bar:
 /* delimited block */
 block(S) :
   | VAR l=loc_params S eq=equs { mk_block l eq (Loc($startpos,$endpos)) }
-  | S eq=equs                    { mk_block [] eq (Loc($startpos,$endpos)) }
+  | S eq=equs                  { mk_block [] eq (Loc($startpos,$endpos)) }
 
 /* separated block */
 sblock(S) :
   | VAR l=loc_params S eq=equs { mk_block l eq (Loc($startpos,$endpos)) }
-  | eq=equs                  { mk_block [] eq (Loc($startpos,$endpos)) }
+  | eq=equs                    { mk_block [] eq (Loc($startpos,$endpos)) }
+
+block_model(S) :
+  | VAR l=loc_params_model S eq=equs_model { mk_block_model l eq (Loc($startpos,$endpos)) }
+  | S eq=equs_model                        { mk_block_model [] eq (Loc($startpos,$endpos)) }
+
+
 
 equ:
   | eq=_equ { mk_equation eq (Loc($startpos,$endpos)) }
@@ -425,6 +501,13 @@ _equ:
   | DO b=sblock(IN) DONE
       { Eblock b }
 ;
+
+equ_model:
+  | pat=pat EQUAL e=exp
+    { mk_equation_model (fst pat) e (Loc($startpos,$endpos)) }
+;
+
+
 
 automaton_handler:
   | STATE Constructor b=block(DO) ut=opt_until_escapes ul=opt_unless_escapes
@@ -578,6 +661,16 @@ _exp:
   | CURRENT LPAREN ce=IDENT COMMA eInit=exp COMMA e=exp RPAREN
       { Ecurrent (Q Initial.ptrue, ce, eInit, e) }
   
+
+  | CURRENT LPAREN LBRACKET ph=INT COMMA ratio=INT RBRACKET COMMA eInit=exp COMMA e=exp RPAREN
+      { Ecurrentmodel ((ph,ratio), eInit, e) }
+  | e=exp WHEN LBRACKET ph=INT COMMA ratio=INT RBRACKET
+      { Ewhenmodel (e, (ph,ratio)) }
+  | DELAY LPAREN d=INT RPAREN e=exp
+      { Edelay (d, e) }
+  | eInit=exp DELAYFBY LPAREN d=INT RPAREN e=exp
+      { Edelayfby (d, eInit, e) }
+
   
   | exp INFIX1 exp
       { mk_op_call $2 [$1; $3] }

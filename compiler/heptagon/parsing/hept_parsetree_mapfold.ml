@@ -41,6 +41,8 @@ type 'a hept_it_funs = {
   block           : 'a hept_it_funs -> 'a -> block -> block * 'a;
   edesc           : 'a hept_it_funs -> 'a -> edesc -> edesc * 'a;
   eq              : 'a hept_it_funs -> 'a -> eq -> eq * 'a;
+  eq_model        : 'a hept_it_funs -> 'a -> eq_model -> eq_model * 'a;
+  block_model     : 'a hept_it_funs -> 'a -> block_model -> block_model * 'a;
   eqdesc          : 'a hept_it_funs -> 'a -> eqdesc -> eqdesc * 'a;
   escape_unless   : 'a hept_it_funs -> 'a -> escape -> escape * 'a;
   escape_until    : 'a hept_it_funs -> 'a -> escape -> escape * 'a;
@@ -50,12 +52,14 @@ type 'a hept_it_funs = {
   state_handler   : 'a hept_it_funs -> 'a -> state_handler -> state_handler * 'a;
   switch_handler  : 'a hept_it_funs -> 'a -> switch_handler -> switch_handler * 'a;
   var_dec         : 'a hept_it_funs -> 'a -> var_dec -> var_dec * 'a;
+  var_dec_model   : 'a hept_it_funs -> 'a -> var_dec_model -> var_dec_model * 'a;
   arg             : 'a hept_it_funs -> 'a -> arg -> arg * 'a;
   last            : 'a hept_it_funs -> 'a -> last -> last * 'a;
   objective       : 'a hept_it_funs -> 'a -> objective -> objective * 'a;
   contract        : 'a hept_it_funs -> 'a -> contract -> contract * 'a;
   typeparam_dec   : 'a hept_it_funs -> 'a -> typeparam_dec -> typeparam_dec * 'a;
   node_dec        : 'a hept_it_funs -> 'a -> node_dec -> node_dec * 'a;
+  model_dec       : 'a hept_it_funs -> 'a -> model_dec -> model_dec * 'a;
   const_dec       : 'a hept_it_funs -> 'a -> const_dec -> const_dec * 'a;
   class_dec       : 'a hept_it_funs -> 'a -> class_dec -> class_dec * 'a;
   type_dec        : 'a hept_it_funs -> 'a -> type_dec -> type_dec * 'a;
@@ -137,6 +141,20 @@ and edesc funs acc ed = match ed with
   | Ewhen (e, c, x) ->
     let e, acc = exp_it funs acc e in
       Ewhen (e, c, x), acc
+  | Ewhenmodel (e, (ph, per)) ->
+    let e, acc = exp_it funs acc e in
+    Ewhenmodel (e, (ph, per)), acc
+  | Ecurrentmodel ((ph, per), eInit, e) ->
+    let eInit, acc = exp_it funs acc eInit in
+    let e, acc = exp_it funs acc e in
+    Ecurrentmodel ((ph,per), eInit, e), acc
+  | Edelay (d,e) ->
+    let e, acc = exp_it funs acc e in
+    Edelay (d, e), acc
+  | Edelayfby (d, eInit, e) ->
+    let eInit, acc = exp_it funs acc eInit in
+    let e, acc = exp_it funs acc e in
+    Edelayfby (d, eInit, e), acc
   | Esplit (x, e2) ->
       let e2, acc = exp_it funs acc e2 in
         Esplit(x, e2), acc
@@ -209,6 +227,18 @@ and block funs acc b =
   let b_equs, acc = mapfold (eq_it funs) acc b.b_equs in
   { b with b_local = b_local; b_equs = b_equs }, acc
 
+and eq_model_it funs acc eqm = funs.eq_model funs acc eqm
+and eq_model funs acc eqm =
+  let eqm_lhs, acc = pat_it funs acc eqm.eqm_lhs in
+  let eqm_rhs, acc = exp_it funs acc eqm.eqm_rhs in
+  { eqm with eqm_lhs = eqm_lhs; eqm_rhs = eqm_rhs }, acc
+
+and block_model_it funs acc bm = funs.block_model funs acc bm
+and block_model funs acc bm =
+  let bm_local, acc = mapfold (var_dec_model_it funs) acc bm.bm_local in
+  let bm_eqs, acc = mapfold (eq_model_it funs) acc bm.bm_eqs in
+  { bm with bm_local = bm_local; bm_eqs = bm_eqs }, acc
+
 
 and state_handler_it funs acc s = funs.state_handler funs acc s
 and state_handler funs acc s =
@@ -245,6 +275,11 @@ and var_dec funs acc vd =
   let v_type, acc = ty_it funs acc vd.v_type in
   let v_last, acc = last_it funs acc vd.v_last in
   { vd with v_last = v_last; v_type = v_type }, acc
+
+and var_dec_model_it funs acc vdm = funs.var_dec_model funs acc vdm
+and var_dec_model funs acc vdm =
+  let vm_type, acc = ty_it funs acc vdm.vm_type in
+  { vdm with vm_type = vm_type }, acc
 
 and arg_it funs acc a = funs.arg funs acc a
 and arg funs acc a =
@@ -302,6 +337,13 @@ and node_dec funs acc nd =
       n_contract = n_contract }
   , acc
 
+and model_dec_it funs acc md = funs.model_dec funs acc md
+and model_dec funs acc md =
+  let m_input, acc = mapfold (var_dec_model_it funs) acc md.m_input in
+  let m_output, acc = mapfold (var_dec_model_it funs) acc md.m_output in
+  let m_block, acc = block_model_it funs acc md.m_block in
+  { md with m_input = m_input; m_output = m_output; m_block = m_block }, acc
+
 
 and ty_it funs acc t = try funs.ty funs acc t with Fallback -> ty funs acc t
 and ty funs acc t = match t with
@@ -324,7 +366,7 @@ and const_dec funs acc c =
 
 
 and class_dec_it funs acc c = funs.class_dec funs acc c
-and class_dec funs acc c = c, acc (* nothing to parse below that *)
+and class_dec _ acc c = c, acc (* nothing to parse below that *)
 
 
 and type_dec_it funs acc td = funs.type_dec funs acc td
@@ -359,6 +401,7 @@ and program_desc funs acc pd = match pd with
   | Ptype t -> let t, acc = type_dec_it funs acc t in Ptype t, acc
   | Pclass c -> let c, acc = class_dec_it funs acc c in Pclass c, acc
   | Pnode n -> let n, acc = node_dec_it funs acc n in Pnode n, acc
+  | Pmodel m -> let m, acc = model_dec_it funs acc m in Pmodel m, acc
   | Ppragma _ -> pd, acc
 
 and interface_desc_it funs acc id =
@@ -398,6 +441,8 @@ let defaults = {
   block = block;
   edesc = edesc;
   eq = eq;
+  eq_model = eq_model;
+  block_model = block_model;
   eqdesc = eqdesc;
   escape_unless = escape;
   escape_until = escape;
@@ -407,11 +452,13 @@ let defaults = {
   state_handler = state_handler;
   switch_handler = switch_handler;
   var_dec = var_dec;
+  var_dec_model = var_dec_model;
   last = last;
   objective = objective;
   contract = contract;
   typeparam_dec = typeparam_dec;
   node_dec = node_dec;
+  model_dec = model_dec;
   const_dec = const_dec;
   class_dec = class_dec;
   type_dec = type_dec;
@@ -433,6 +480,8 @@ let defaults_stop = {
   block = Global_mapfold.stop;
   edesc = Global_mapfold.stop;
   eq = Global_mapfold.stop;
+  eq_model = Global_mapfold.stop;
+  block_model = Global_mapfold.stop;
   eqdesc = Global_mapfold.stop;
   escape_unless = Global_mapfold.stop;
   escape_until = Global_mapfold.stop;
@@ -442,11 +491,13 @@ let defaults_stop = {
   state_handler = Global_mapfold.stop;
   switch_handler = Global_mapfold.stop;
   var_dec = Global_mapfold.stop;
+  var_dec_model = Global_mapfold.stop;
   last = Global_mapfold.stop;
   objective = Global_mapfold.stop;
   contract = Global_mapfold.stop;
   typeparam_dec = Global_mapfold.stop;
   node_dec = Global_mapfold.stop;
+  model_dec = Global_mapfold.stop;
   const_dec = Global_mapfold.stop;
   class_dec = Global_mapfold.stop;
   type_dec = Global_mapfold.stop;

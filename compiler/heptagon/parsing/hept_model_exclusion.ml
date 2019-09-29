@@ -27,49 +27,52 @@
 (*                                                                     *)
 (***********************************************************************)
 
-open Compiler_options
-open Compiler_utils
+(* Author: Guillaume I *)
+
+(* This transformation checks that:
+   - No "when", "merge" and "current" expression using general clocks are inside a model node
+   - No "whenmodel", "currentmodel", "delay" and "delayfby" are inside a node/fun node
+ *)
+open Format
 open Location
+open Hept_parsetree
+open Hept_parsetree_mapfold
+open Hept_parsetree_printAST
 
-let pp p = if !verbose then Hept_printer.print stdout p
 
-let parse parsing_fun lexbuf =
-  try
-    parsing_fun Hept_lexer.token lexbuf
-  with
-    | Hept_lexer.Lexical_error(err, l) ->
-        lexical_error err l
-    | Hept_parser.Error ->
-        let pos1 = Lexing.lexeme_start_p lexbuf
-        and pos2 = Lexing.lexeme_end_p lexbuf in
-        let l = Loc(pos1,pos2) in
-        syntax_error l
+(* acc: (expression_specific_to_a_node, expression_specific_to_a_model) *)
 
-(** Parse an implementation [lexbuf] *)
-let parse_program modname lexbuf =
-  (* Parsing of the file *)
-  let p = do_silent_pass "Parsing" (parse Hept_parser.program) lexbuf in
-  let p = { p with Hept_parsetree.p_modname = modname } in
-  
-  (* Fuse static exps together *)
-  let p = do_silent_pass "Static Scoping" Hept_static_scoping.program p in
-  
-  (* Check for non-model expression in model equation and vice-versa *)
-  let p = do_silent_pass "Model expression exclusion" Hept_model_exclusion.program p in
+let exp funs acc e =
+  let e, (accnode, accmodel) = Hept_parsetree_mapfold.exp funs acc e in
+  match e.e_desc with
+  | Ewhen _ | Emerge _ | Ecurrent _ ->
+    if (accmodel) then
+      (eprintf "%aThe expression %a is forbidden in a model.@."
+            print_location e.e_loc
+            print_exp e;
+      raise Errors.Error)
+    else
+      e, (accnode, accmodel)
+  | Ewhenmodel _ | Ecurrentmodel _ | Edelay _ | Edelayfby _ ->
+    if (accnode) then
+      (eprintf "%aThe expression %a is forbidden in a node.@."
+            print_location e.e_loc
+            print_exp e;
+      raise Errors.Error)
+    else
+      e, (accnode, accmodel)
+  | _ -> e, (accnode, accmodel)
 
-  (* Convert the parse tree to Heptagon AST *)
-  let p = do_pass "Scoping" Hept_scoping.translate_program p pp in
-  p
 
-(** Parse an interface [lexbuf] *)
-let parse_interface modname lexbuf =
-  (* Parsing of the file *)
-  let i = do_silent_pass "Parsing" (parse Hept_parser.interface) lexbuf in
-  let i = { i with Hept_parsetree.i_modname = modname } in
 
-  (* Fuse static exps together *)
-  let i = do_silent_pass "Static Scoping" Hept_static_scoping.interface i in
+let node_dec funs _ nd =
+  Hept_parsetree_mapfold.node_dec funs (true, false) nd
 
-  (* Convert the parse tree to Heptagon AST *)
-  let i = do_silent_pass "Scoping" Hept_scoping.translate_interface i in
-  i
+let model_dec funs _ md =
+  Hept_parsetree_mapfold.model_dec funs (false, true) md
+
+
+let program p =
+  let funs = { Hept_parsetree_mapfold.defaults with node_dec = node_dec; model_dec = model_dec; exp = exp } in
+  let p, _ = funs.program funs (false, false) p in
+	p

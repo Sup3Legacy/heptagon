@@ -176,6 +176,11 @@ let rec translate kind context e =
     | Ecurrent _ -> raise StructureShouldHaveBeenRemoved
     | Emerge(n, tag_e_list) ->
         merge context e n tag_e_list
+
+    (* Model expressions *)
+    | Ewhenmodel _ | Ecurrentmodel _ | Edelay _ | Edelayfby _ ->
+      failwith "Normalization : node contains constructs only allowed in a model node"
+
     | Eapp({ a_op = Eifthenelse }, [e1; e2; e3], _) ->
         ifthenelse context e e1 e2 e3
     (* XXX Huge hack to avoid comparing tuples... (temporary, until this is
