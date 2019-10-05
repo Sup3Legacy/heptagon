@@ -100,7 +100,7 @@ let compile_program p =
   let p = silent_pass "Internal state exposal" !exposeintstate InternalStateExposal.program p in
 
   (* TODO: rajout de la phase model to node *)
-  let p = silent_pass "Model to node conversion" true Model2node.program p in
+  let p = pass "Model to node conversion" true Model2node.program p pp in
 
   (* Return the transformed AST *)
   p

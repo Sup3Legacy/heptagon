@@ -438,8 +438,8 @@ on_ck:
 ;
 
 ock_annot:
-  | /*empty */         { None    }
-  | COLONCOLON ock=ock { Some ock}
+  | /*empty */         { None     }
+  | COLONCOLON ock=ock { Some ock }
 ;
 
 ock : LBRACKET ph=INT COMMA per=INT RBRACKET  { Cone (ph, per) }
@@ -662,14 +662,14 @@ _exp:
       { Ecurrent (Q Initial.ptrue, ce, eInit, e) }
   
 
-  | CURRENT LPAREN LBRACKET ph=INT COMMA ratio=INT RBRACKET COMMA eInit=exp COMMA e=exp RPAREN
-      { Ecurrentmodel ((ph,ratio), eInit, e) }
+  | CURRENT LPAREN LBRACKET ph=INT COMMA ratio=INT RBRACKET COMMA seInit=const COMMA e=exp RPAREN
+      { Ecurrentmodel ((ph,ratio), seInit, e) }
   | e=exp WHEN LBRACKET ph=INT COMMA ratio=INT RBRACKET
       { Ewhenmodel (e, (ph,ratio)) }
   | DELAY LPAREN d=INT RPAREN e=exp
       { Edelay (d, e) }
-  | eInit=exp DELAYFBY LPAREN d=INT RPAREN e=exp
-      { Edelayfby (d, eInit, e) }
+  | seInit=const DELAYFBY LPAREN d=INT RPAREN e=exp
+      { Edelayfby (d, seInit, e) }
 
   
   | exp INFIX1 exp

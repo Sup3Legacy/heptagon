@@ -283,14 +283,16 @@ let rec typing h e =
     | Ewhenmodel (e, _) ->
         let i = itype (typing h e) in
         skeleton i e.e_ty
-    | Ecurrentmodel (_, e1, e2) -> 
-      initialized_exp h e2;
-      skeleton (itype (typing h e1)) e.e_ty
+    | Ecurrentmodel (_, _, e2) -> 
+      (* initialized_exp h e2;
+      skeleton (itype (typing h e1)) e.e_ty *)
+      skeleton (itype (typing h e2)) e2.e_ty
     | Edelay (_, e) ->
       skeleton (itype (typing h e)) e.e_ty
-    | Edelayfby (_, e1, e2) ->
-      initialized_exp h e2;
-      skeleton (itype (typing h e1)) e.e_ty
+    | Edelayfby (_, _, e2) ->
+      (*initialized_exp h e2;
+      skeleton (itype (typing h e1)) e.e_ty *)
+      skeleton (itype (typing h e2)) e2.e_ty
 
 
 

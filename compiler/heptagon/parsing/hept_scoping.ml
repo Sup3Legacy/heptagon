@@ -338,8 +338,12 @@ and translate_clock loc env ck = match ck with
   | Cbase -> Clocks.Cbase
   | Con(ck,c,x) -> Clocks.Con(translate_clock loc env ck, qualify_constrs c, Rename.var loc env x)
 
-let rec translate_some_one_clock loc env ock = match ock with
-  | None -> Clocks.fresh_osynch_clock ()
+let rec translate_some_one_clock isInOutput loc env ock = match ock with
+  | None ->
+    if isInOutput then
+      Clocks.base_osynch_clock
+    else
+      Clocks.fresh_osynch_period 1  (* Local var is period 1 by default *)
   | Some ock -> translate_one_clock loc env ock
 
 and translate_one_clock loc env ock = match ock with
@@ -420,17 +424,17 @@ and translate_desc loc env = function
   | Ewhenmodel (e1, (ph,per)) ->
     let e1 = translate_exp env e1 in
     Heptagon.Ewhenmodel (e1, (ph,per))
-  | Ecurrentmodel ((ph,per), eInit, e1) ->
-    let eInit = translate_exp env eInit in
+  | Ecurrentmodel ((ph,per), seInit, e1) ->
+    let seInit = translate_static_exp seInit in
     let e1 = translate_exp env e1 in
-    Heptagon.Ecurrentmodel ((ph,per), eInit, e1)
+    Heptagon.Ecurrentmodel ((ph,per), seInit, e1)
   | Edelay (d, e1) ->
     let e1 = translate_exp env e1 in
     Heptagon.Edelay (d, e1)
-  | Edelayfby (d, eInit, e1) ->
-    let eInit = translate_exp env eInit in
+  | Edelayfby (d, seInit, e1) ->
+    let seInit = translate_static_exp seInit in
     let e1 = translate_exp env e1 in
-    Heptagon.Edelayfby (d, eInit, e1)
+    Heptagon.Edelayfby (d, seInit, e1)
 
 
 and translate_op = function
@@ -487,7 +491,7 @@ and translate_eq_desc loc env tenv = function
 and translate_eq_model env eqm =
   { Heptagon.eqm_lhs = translate_pat eqm.eqm_loc env eqm.eqm_lhs;
     Heptagon.eqm_rhs = translate_exp env eqm.eqm_rhs;
-    Heptagon.eqm_clk = translate_some_one_clock eqm.eqm_loc env None;
+    Heptagon.eqm_clk = translate_some_one_clock false eqm.eqm_loc env None;
     Heptagon.eqm_stateful = false;
     Heptagon.eqm_loc = eqm.eqm_loc; }
 
@@ -501,7 +505,7 @@ and translate_block env tenv b =
 
 and translate_block_model env bm =
   let env = Rename.append_vdm env bm.bm_local in
-  { Heptagon.bm_local = translate_vd_model_list env bm.bm_local;
+  { Heptagon.bm_local = translate_vd_model_list false env bm.bm_local;
     Heptagon.bm_eqs = List.map (translate_eq_model env) bm.bm_eqs;
     Heptagon.bm_loc = bm.bm_loc }, env
 
@@ -544,15 +548,15 @@ and translate_var_dec env tenv vd =
 and translate_vd_list env tenv =
   List.map (translate_var_dec env tenv)
 
-and translate_var_dec_model env vdm =
+and translate_var_dec_model isInOutput env vdm =
   { Heptagon.vm_ident = Rename.var vdm.vm_loc env vdm.vm_ident;
     Heptagon.vm_type = translate_type vdm.vm_loc RenameType.empty vdm.vm_type;
-    Heptagon.vm_clock = translate_some_one_clock vdm.vm_loc env vdm.vm_clock;
+    Heptagon.vm_clock = translate_some_one_clock isInOutput vdm.vm_loc env vdm.vm_clock;
     Heptagon.vm_loc = vdm.vm_loc }
 
 
-and translate_vd_model_list env =
-  List.map (translate_var_dec_model env)
+and translate_vd_model_list isInOutput env =
+  List.map (translate_var_dec_model isInOutput env)
 
 and translate_last = function
   | Var -> Heptagon.Var
@@ -656,9 +660,9 @@ let translate_node node =
 let translate_model md =
   let n = current_qual md.Hept_parsetree.m_name in
   let env = Rename.append_vdm Rename.empty md.m_input in
-  let linputs = translate_vd_model_list env md.m_input in
+  let linputs = translate_vd_model_list true env md.m_input in
   let env = Rename.append_vdm env md.m_output in
-  let loutputs = translate_vd_model_list env md.m_output in
+  let loutputs = translate_vd_model_list true env md.m_output in
   let bm, _ = translate_block_model env md.m_block in
 
   let mmodel = {

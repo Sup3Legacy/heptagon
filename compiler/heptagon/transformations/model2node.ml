@@ -44,6 +44,7 @@
 
 
 (* Author: Guillaume I *)
+open Format
 open Clocks
 open Types
 
@@ -52,32 +53,34 @@ open Hept_utils
 open Hept_mapfold
 
 
+(* DEBUG *)
+let debug_model2node = false
+let ffout = formatter_of_out_channel stdout
+
+
 (* Build an expression from a type *)
-let build_dummy_expression ty =
-  let rec build_dummy_stexp t = match t with
-    | Tid qname ->
-      let name = qname.name in
-      let se_desc = match name with
-        | "int" -> Sint 0
-        | "real" -> Sfloat 0.0
-        | "float" -> Sfloat 0.0
-        | "string" -> Sstring ""
-        | "bool" -> Sbool false
-        | _ -> failwith ("model2node - unrecognized type " ^ name)
-      in
-      mk_static_exp t se_desc
-    | Tarray (ty, sexpr) ->
-      let st_exp_ty = build_dummy_stexp ty in
-      let se_desc = Sarray_power (st_exp_ty, [sexpr]) in
-      mk_static_exp t se_desc
-    | Tprod lty ->
-      let lst_exp = List.map build_dummy_stexp lty in
-      let se_desc = Stuple lst_exp in
-      mk_static_exp t se_desc
-    | Tclasstype _ -> failwith "model2node : Classtype not managed."
-    | Tinvalid -> failwith "model2node : Tinvalid type encountered."
-  in
-  mk_exp (Econst (build_dummy_stexp ty)) ty ~linearity:Linearity.Ltop
+let rec build_dummy_stexp t = match t with
+  | Tid qname ->
+    let name = qname.name in
+    let se_desc = match name with
+      | "int" -> Sint 0
+      | "real" -> Sfloat 0.0
+      | "float" -> Sfloat 0.0
+      | "string" -> Sstring ""
+      | "bool" -> Sbool false
+      | _ -> failwith ("model2node - unrecognized type " ^ name)
+    in
+    mk_static_exp t se_desc
+  | Tarray (ty, sexpr) ->
+    let st_exp_ty = build_dummy_stexp ty in
+    let se_desc = Sarray_power (st_exp_ty, [sexpr]) in
+    mk_static_exp t se_desc
+  | Tprod lty ->
+    let lst_exp = List.map build_dummy_stexp lty in
+    let se_desc = Stuple lst_exp in
+    mk_static_exp t se_desc
+  | Tclasstype _ -> failwith "model2node : Classtype not managed."
+  | Tinvalid -> failwith "model2node : Tinvalid type encountered."
 
 
 
@@ -85,7 +88,7 @@ let build_dummy_expression ty =
 
 let rec gcd a b =
   assert(a>0);
-  assert(b>0);
+  assert(b>=0);
   if (a<b) then gcd b a else
   if (b=0) then a else
   gcd b (a mod b)
@@ -141,16 +144,14 @@ let rec create_rhs_osync_eq res ph per = match (ph, per) with
   | (0, _) ->
     assert(per>0);
     let seTrue = mk_static_exp Initial.tbool (Sbool true) in
-    let eTrue = mk_exp (Econst seTrue) Initial.tbool ~linearity:Linearity.Ltop in
-    let nedesc = Efby (eTrue,res) in
+    let nedesc = Epre (Some seTrue, res) in
     let nres = mk_exp nedesc Initial.tbool ~linearity:Linearity.Ltop in
     create_rhs_osync_eq nres per (per-1)
   | _ ->
     assert(ph>0);
     assert(per>0);
     let seFalse = mk_static_exp Initial.tbool (Sbool false) in
-    let eFalse = mk_exp (Econst seFalse) Initial.tbool ~linearity:Linearity.Ltop in
-    let nedesc = Efby (eFalse, res) in
+    let nedesc = Epre (Some seFalse, res) in
     let nres = mk_exp nedesc Initial.tbool ~linearity:Linearity.Ltop in
     create_rhs_osync_eq nres per (per-1)
 
@@ -184,7 +185,7 @@ let get_name_var_current _ =
   counter_var_exp := !counter_var_exp + 1;
   "var_current_" ^ (string_of_int !counter_var_exp)
 
-let make_current_exp ph ratio eInit e1 =
+let make_current_exp ph ratio seInit e1 =
   if (ratio==1) then (e1,[],[]) else
 
   (* We create a variable for the (ph, ratio). Cannot be the same than ock
@@ -197,13 +198,13 @@ let make_current_exp ph ratio eInit e1 =
   let neq = mk_simple_equation (Evarpat var_id) rhs_eq in 
 
 
-  (* Current variable : varcurrent = merge var_id (True => e1) (False => eInit fby varcurrent) *)
+  (* Current variable : varcurrent = merge var_id (True => e1) (False => seInit fby varcurrent) *)
   let var_current_id = Idents.gen_var "model2node" (get_name_var_current ()) in
   let nloc_current = mk_var_dec var_current_id e1.e_ty ~linearity:Ltop in
 
   let ebr_true = e1 in
   let evarbr_false = mk_exp (Evar var_current_id) e1.e_ty ~linearity:Linearity.Ltop in
-  let ebr_false = mk_exp (Efby (eInit, evarbr_false)) e1.e_ty ~linearity:Linearity.Ltop in
+  let ebr_false = mk_exp (Epre (Some seInit, evarbr_false)) e1.e_ty ~linearity:Linearity.Ltop in
   let lbranch = (Initial.ptrue, ebr_true)::(Initial.pfalse, ebr_false)::[] in
 
   let rhs_eq_current = mk_exp (Emerge (var_id, lbranch)) e1.e_ty ~linearity:Linearity.Ltop in
@@ -216,7 +217,11 @@ let make_current_exp ph ratio eInit e1 =
 (* We need to transform the clocks into boolean variables
  + manage the when/current associated to 1-synchronous clocks *)
 let translate_equations leqs = 
-  let (lneqs, nloceq) = List.fold_left (fun (acceq, accloc) eqm -> 
+  let (lneqs, nloceq) = List.fold_left (fun (acceq, accloc) eqm ->
+
+    if debug_model2node then
+      fprintf ffout "Entering equation eqm = %a\n@?" Hept_printer.print_eq_model eqm;
+
     (* Assume normalization *)
     let erhs = eqm.eqm_rhs in
     let eq_ock = eqm.eqm_clk in
@@ -236,19 +241,25 @@ let translate_equations leqs =
         let neq = mk_simple_equation (Evarpat var_id) rhs_eq in
 
         (nerhs, neq::[], nloc::[])
-      | Ecurrentmodel ((ph, ratio), eInit, e1) ->
-        make_current_exp ph ratio eInit e1
+      | Ecurrentmodel ((ph, ratio), seInit, e1) ->
+        make_current_exp ph ratio seInit e1
       | Edelay _ | Edelayfby _  ->
-        let (d, e1, eInit) = match erhs.e_desc with
-          | Edelay (d, e1) -> (d, e1, build_dummy_expression e1.e_ty)
-          | Edelayfby (d, eInit, e1) -> (d, e1, eInit)
+        let (p2, n) = Clocks.get_ph_per_from_ock eq_ock in
+
+        let (d, e1, seInit) = match erhs.e_desc with
+          | Edelay (d, e1) -> (d, e1, build_dummy_stexp e1.e_ty)
+          | Edelayfby (d, seInit, e1) -> (d, e1, seInit)
           | _ -> failwith "Impossible matching"
         in
 
         (* We translate this delay into a combination of when and current *)
         (* Common clock: (q,m) s.t. m = gcd(d,n) and q = p_2 mod m, where clock(eq) = (p2, n) *)
-        let (p2, n) = Clocks.get_ph_per_from_ock eq_ock in
         let p1 = p2 - d in
+
+        (* TODO DEBUG *)
+        if debug_model2node then
+          fprintf ffout "p1 = %i | p2 = %i | n = %i | d = %i\n@?" p1 p2 n d;
+
         assert(p1>=0);
         let m = gcd d n in
         let q = p2 mod m in
@@ -260,7 +271,7 @@ let translate_equations leqs =
         let b = (p2-q) / m in
 
         (* Building the equations *)
-        let (ecurrent, leqcurrent, lloccurrent) = make_current_exp a r eInit e1 in
+        let (ecurrent, leqcurrent, lloccurrent) = make_current_exp a r seInit e1 in
 
         let var_id_when = Idents.gen_var "model2node" (get_name_var_exp b r) in
         let nloc_when = mk_var_dec var_id_when Initial.tbool ~linearity:Ltop in
@@ -305,7 +316,6 @@ let vdm_2_vd_local mock_loc_eq vdm =
   in
   mk_var_dec ~clock:ck vdm.vm_ident vdm.vm_type ~linearity:Linearity.Ltop
 
-
 let model2node md =
   (* Step 1 - Management of 1-synchronous clocks *)
   let sock = gather_osyncclocks md in
@@ -334,6 +344,9 @@ let model2node md =
 
   let n_nd = mk_node ~input:ninputs ~output:noutputs ~loc:md.m_loc
     md.m_name n_block in
+  
+  (* Normalization of the node *)
+  let n_nd = Normalize.node_dec n_nd in
   n_nd
 
 

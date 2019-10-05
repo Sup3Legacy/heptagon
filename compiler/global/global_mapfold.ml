@@ -43,6 +43,7 @@ type 'a global_it_funs = {
   oneck              : 'a global_it_funs -> 'a -> Clocks.oneck -> Clocks.oneck * 'a;
   onect              : 'a global_it_funs -> 'a -> Clocks.onect -> Clocks.onect * 'a;
   onelink            : 'a global_it_funs -> 'a -> Clocks.onelink -> Clocks.onelink * 'a;
+  onephase           : 'a global_it_funs -> 'a -> Clocks.onephase -> Clocks.onephase * 'a;
   link               : 'a global_it_funs -> 'a -> link -> link * 'a;
   var_ident          : 'a global_it_funs -> 'a -> var_ident -> var_ident * 'a;
   param              : 'a global_it_funs -> 'a -> param -> param * 'a;
@@ -123,7 +124,15 @@ and link funs acc l = match l with
 
 
 and oneck_it funs acc oc = try funs.oneck funs acc oc with Fallback -> oneck funs acc oc
-and oneck _ acc oc = oc, acc (* Leaf *)
+and oneck funs acc oc = match oc with
+  | Covar rol ->
+    let ol, acc = onelink_it funs acc rol.contents in
+    Clocks.Covar {contents = ol}, acc
+  | Cone _ -> oc, acc (* Leaf *)
+  | Cshift (d, ock) ->
+    let ock, acc = oneck_it funs acc ock in
+    Cshift (d, ock), acc
+
 
 and onect_it funs acc oc = try funs.onect funs acc oc with Fallback -> onect funs acc oc
 and onect funs acc oc = match oc with
@@ -133,8 +142,13 @@ and onect funs acc oc = match oc with
 and onelink_it funs acc c = try funs.onelink funs acc c with Fallback -> onelink funs acc c
 and onelink funs acc l = match l with
   | Coindex _ -> l, acc
+  | Coper (rph, per) ->
+    let ph, acc = onephase_it funs acc rph.contents in
+    Coper ({ contents = ph}, per), acc
   | Colink ock -> let ock, acc = oneck_it funs acc ock in Colink ock, acc
 
+and onephase_it funs acc ph = try funs.onephase funs acc ph with Fallback -> onephase funs acc ph
+and onephase _ acc ph = ph, acc
 
 
 and var_ident_it funs acc i = funs.var_ident funs acc i
@@ -183,6 +197,7 @@ let defaults = {
   oneck = oneck;
   onect = onect;
   onelink = onelink;
+  onephase = onephase;
   var_ident = var_ident;
   structure = structure;
   field = field;
@@ -206,6 +221,7 @@ let defaults_stop = {
   oneck = stop;
   onect = stop;
   onelink = stop;
+  onephase = stop;
   var_ident = stop;
   structure = stop;
   field = stop;

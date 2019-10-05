@@ -149,12 +149,12 @@ and print_edesc ff edesc = match edesc with
   | Ewhen (exp, cons_name, var_name) -> fprintf ff "Ewhen %a%a%a" print_exp exp
       print_const_name cons_name  print_var_name var_name
   | Ewhenmodel (e, (ph, per)) -> fprintf ff "Ewhenmodel %a (%i,%i)" print_exp e ph per
-  | Ecurrentmodel ((ph,per), eInit, e) ->
+  | Ecurrentmodel ((ph,per), seInit, e) ->
     fprintf ff "Ecurrentmodel (%i, %i) %a %a" ph per
-      print_exp eInit   print_exp e
+      print_static_exp seInit   print_exp e
   | Edelay (d, e) -> fprintf ff "Edelay(%i) %a" d  print_exp e
-  | Edelayfby (d, eInit, e) ->
-    fprintf ff "(%a Edelayfby(%i) %a)" print_exp eInit  d  print_exp e
+  | Edelayfby (d, seInit, e) ->
+    fprintf ff "(%a Edelayfby(%i) %a)" print_static_exp seInit  d  print_exp e
   | Emerge (var_name, lconstname_exp) -> fprintf ff "Emerge %a%a" print_var_name var_name
      (print_list (print_couple print_const_name print_exp "" "|" "") "" "," "") lconstname_exp
   | Ecurrent (cons_name, var_name, expInit, exp) -> fprintf ff "Ecurrent(%a(%a), %a, %a)"

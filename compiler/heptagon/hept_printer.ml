@@ -66,8 +66,11 @@ let rec print_vd ff { v_ident = n; v_type = ty; v_linearity = lin; v_last = last
     print_last last  print_ident n
     print_type ty  print_linearity lin  print_last_value last
 
-and print_vdm ff { vm_ident = n; vm_type = ty } =
-   fprintf ff "%a : %a"  print_ident n print_type ty
+and print_vdm ff { vm_ident = n; vm_type = ty; vm_clock = ock} =
+  if (!Compiler_options.full_type_info) then
+    fprintf ff "%a : %a :: %a"  print_ident n print_type ty print_oneck ock
+  else
+    fprintf ff "%a : %a"  print_ident n print_type ty
 
 and print_last ff = function
   | Last _ -> fprintf ff "last "
@@ -192,14 +195,14 @@ and print_exp_desc ff = function
   | Ewhenmodel (e, (ph, per)) ->
       fprintf ff "@[<2>(%a@ when [%i,%i])@]"
         print_exp e  ph  per
-  | Ecurrentmodel ((ph,per), eInit, e) ->
+  | Ecurrentmodel ((ph,per), seInit, e) ->
       fprintf ff "@[<2>current([%i,%i],@ %a,@ %a)@]"
-        ph  per  print_exp eInit  print_exp e
+        ph  per  Global_printer.print_static_exp seInit  print_exp e
   | Edelay (d, e) ->
       fprintf ff "@[delay(%i) %a@]" d  print_exp e
-  | Edelayfby (d, eInit, e) ->
+  | Edelayfby (d, seInit, e) ->
       fprintf ff "@[%a delayfby(%i) %a@]"
-        print_exp eInit   d  print_exp e
+        Global_printer.print_static_exp seInit   d  print_exp e
 
 
 and print_handler ff c =
@@ -301,6 +304,12 @@ let rec print_eq ff eq =
       fprintf ff "@[<v>do@[<v>@ @[%a@]@]@ done@]" (print_sblock " in ") b
 
 and print_eq_model ff eqm =
+  if (!Compiler_options.full_type_info) then
+    fprintf ff "@[<2>%a ::%a =@ %a@]"
+      print_pat_init (eqm.eqm_lhs, Lno_init)
+      Global_printer.print_oneck eqm.eqm_clk
+      print_exp eqm.eqm_rhs
+  else
   fprintf ff "@[<2>%a =@ %a@]" print_pat_init (eqm.eqm_lhs, Lno_init)  print_exp eqm.eqm_rhs
 
 and print_state_handler_list ff tag_act_list =

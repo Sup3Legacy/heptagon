@@ -44,21 +44,42 @@ open Clocks
 open Location
 open Format
 
+let debug_clocking = false (* TODO DEBUG *)
+let ffout = formatter_of_out_channel stdout
+
+let print_henv ff h =
+  Env.iter (fun k v ->
+    fprintf ff "\t%a => %a\n@?"  print_ident k  print_oneck v
+  ) h
+
+
 
 type error_kind =
   | Etypeclash of onect * onect
 
 let error_message loc = function
   | Etypeclash (actual_ct, expected_ct) ->
-      Format.eprintf "%aClock Clash: this expression has clock %a,@\n\
-                        but is expected to have clock %a.@."
+      Format.eprintf "%aClock Clash: this expression has clock %a, but is expected to have clock %a.@."
         print_location loc
         print_onect actual_ct
         print_onect expected_ct;
       raise Errors.Error
 
 
-
+let apply_shift_period sh per ock =
+  let rec apply_period nper ock = match ock with
+    | Cone (s, _) -> Cone (s, nper)
+    | Cshift (a, ock) -> Cshift(a, apply_period nper ock)
+    | Covar { contents = ol } -> begin match ol with
+      | Colink ock -> apply_period nper ock
+      | Coindex _ -> failwith "Ock with no period associated is forbidden at that point"
+      | Coper (op, _) -> Covar { contents = Coper(op, nper)}
+      end
+  in
+  let n_ock = apply_period per ock in
+  let n_ock = Cshift (sh, n_ock) in
+  let n_ock = ock_repr n_ock in
+  n_ock
 
 
 (* Phase manipulation, corresponding to the time operators *)
@@ -71,11 +92,12 @@ let rec typing_when_osynch oct phWhen ratio = match oct with
     | Covar { contents = Coindex _ } ->
       failwith "Typing 1-synch when - variable clock manipulation should not happen?"
       (* Does this only happen when we have a when of a constant, or something like that? *)
-    | Cone (ph, per) ->
+    | _ ->
+      let per = Clocks.get_period_ock ock in
       let nper = per * ratio in
-      let nph = ph + (phWhen * per) in
-      Ock (Cone (nph, nper))
-    | _ -> failwith "Typing 1-synch when - Ck clock unrecognized"
+      let shift = (phWhen * per) in
+      let n_ock = apply_shift_period shift nper ock in
+      Ock n_ock
   end 
 
 let rec typing_current_osynch oct phCurr ratio = match oct with
@@ -87,12 +109,23 @@ let rec typing_current_osynch oct phCurr ratio = match oct with
     | Covar { contents = Coindex _ } ->
       failwith "Typing 1-synch current - variable clock manipulation should not happen?"
       (* Does this only happen when we have a current of a constant, or something like that? *)
-    | Cone (ph, per) ->
+    | _ ->
+      let per = Clocks.get_period_ock ock in
       assert(per mod ratio = 0); (* Harmonicity hypothesis *)
       let nper = per / ratio in
-      let nph = ph - (phCurr * nper) in
-      Ock (Cone (nph, nper))
-    | _ -> failwith "Typing 1-synch current - Ck clock unrecognized"
+      let shift =  - (phCurr * nper) in
+      let n_ock = apply_shift_period shift nper ock in
+
+      (* Case where the current access the previous instance of the period
+      let n_ock = match n_ock with
+        | Cone (ph, _) -> if (ph<0) then Cone(0,nper) else n_ock
+        | _ -> n_ock
+      in *)
+      
+      (* DEBUG
+      fprintf ffout "ph = %i | per = %i | ratio = %i\n@?" ph per ratio;
+      fprintf ffout "nper = %i | nph = %i\n@?" nper nph; *)
+      Ock n_ock
   end 
 
 let rec typing_delay_osynch oct d = match oct with
@@ -104,13 +137,12 @@ let rec typing_delay_osynch oct d = match oct with
     | Covar { contents = Coindex _ } ->
       failwith "Typing 1-synch delay - variable clock manipulation should not happen?"
       (* Does this only happen when we have a delay of a constant, or something like that? *)
-    | Cone (ph, per) ->
-      let nph = ph + d in
+    | _ ->
+      let per = Clocks.get_period_ock ock in
+      let shift = d in
       assert(0<=d);
-      assert(0<=nph);
-      assert(nph<per);
-      Ock (Cone (nph, per))
-    | _ -> failwith "Typing 1-synch delay - Ck clock unrecognized"
+      let n_ock = apply_shift_period shift per ock in
+      Ock n_ock
   end 
 
 let rec typing_delayfby_osynch oct d = match oct with
@@ -122,13 +154,12 @@ let rec typing_delayfby_osynch oct d = match oct with
     | Covar { contents = Coindex _ } ->
       failwith "Typing 1-synch delayfby - variable clock manipulation should not happen?"
       (* Does this only happen when we have a delay of a constant, or something like that? *)
-    | Cone (ph, per) ->
-      let nph = ph + d - per in  (* fby -> going into the next period *)
+    | _ ->
+      let per = Clocks.get_period_ock ock in
+      let shift = d - per in
       assert(0<=d);
-      assert(0<=nph);
-      assert(nph<per);
-      Ock (Cone (nph, per))
-    | _ -> failwith "Typing 1-synch delayfby - Ck clock unrecognized"
+      let n_ock = apply_shift_period shift per ock in
+      Ock n_ock
   end 
 
 
@@ -166,9 +197,8 @@ let rec typing_osych h pat e = match e.e_desc with
     let noct = typing_when_osynch octe ph ratio in
     noct
 
-  | Ecurrentmodel ((ph, ratio), eInit, e) ->
+  | Ecurrentmodel ((ph, ratio), _, e) ->
     let octe = typing_osych h pat e in
-    expect_osynch h pat octe eInit;
     let noct = typing_current_osynch octe ph ratio in
     noct
 
@@ -177,9 +207,8 @@ let rec typing_osych h pat e = match e.e_desc with
     let noct = typing_delay_osynch octe d in
     noct
 
-  | Edelayfby (d, eInit, e) ->
+  | Edelayfby (d, _, e) ->
     let octe = typing_osych h pat e in
-    expect_osynch h pat octe eInit;
     let noct = typing_delayfby_osynch octe d in
     noct
 
@@ -240,8 +269,7 @@ and typing_osynch_app h base pat op e_list = match op with
     (* REMARK - We forbid clock change inside a function called by a model node
         (ie, no "on" on the output of clocks => no clock on sign of function) *)
     let node = Modules.find_value f in
-    let pat_id_list = Hept_clocking.ident_list_of_pat pat in
-    let rec build_env a_l v_l env = match a_l, v_l with
+    (*let rec build_env a_l v_l env = match a_l, v_l with
       | [],[] -> env
       | a::a_l, v::v_l -> (match a.a_name with
           | None -> build_env a_l v_l env
@@ -251,8 +279,9 @@ and typing_osynch_app h base pat op e_list = match op with
           Misc.internal_error ("Clocking, non matching signature in call of "^
                                   Names.fullname f);
     in
+    let pat_id_list = Hept_clocking.ident_list_of_pat pat in
     let env_pat = build_env node.node_outputs pat_id_list [] in
-    let env_args = build_env node.node_inputs e_list [] in
+    let env_args = build_env node.node_inputs e_list [] in *)
     
     List.iter2 (fun _ e -> expect_osynch h pat (Ock base) e) node.node_inputs e_list;
     Ocprod (List.map (fun _ -> (Ock base)) node.node_outputs)
@@ -268,11 +297,15 @@ and expect_osynch h pat expected_oct e =
 (* ----- *)
 (* ----- *)
 let rec typing_model_eq h eqm =
+  if (debug_clocking) then
+    fprintf ffout "Entering model equation %a@\n" Hept_printer.print_eq_model eqm;
+
   let oct = typing_osych h eqm.eqm_lhs eqm.eqm_rhs in
   let pat_oct = typing_model_pat h eqm.eqm_lhs in
   (try unify_onect oct pat_oct
    with Unify ->
-     eprintf "Incoherent clock between right and left side of the equation.@\n";
+     eprintf "Incoherent clock between right and left side of the equation:@\n\t%a\n@?"
+      Hept_printer.print_eq_model eqm;
      error_message eqm.eqm_loc (Etypeclash (oct, pat_oct)))
 
 and typing_model_eqs h eq_list = List.iter (typing_model_eq h) eq_list
@@ -283,6 +316,10 @@ and append_model_env h vdms =
 
 and typing_block_model h {bm_local = l; bm_eqs = eq_list} =
   let h1 = append_model_env h l in
+
+  if (debug_clocking) then
+    fprintf ffout "Entering block_model - Environment is:\n%a@\n" print_henv h1;
+
   typing_model_eqs h1 eq_list;
   h1
 

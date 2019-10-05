@@ -177,17 +177,17 @@ and edesc funs acc ed = match ed with
 (*  | Emergemodel (per, le) ->
       let le, acc = mapfold (exp_it funs) acc le in
       Emergemodel (per, le), acc *)
-  | Ecurrentmodel ((ph,per), eInit, e) ->
-      let eInit, acc = exp_it funs acc eInit in
+  | Ecurrentmodel ((ph,per), seInit, e) ->
+      let eInit, acc = Global_mapfold.static_exp_it funs.global_funs acc seInit in
       let e, acc = exp_it funs acc e in
-      Ecurrentmodel ((ph,per), eInit, e), acc
+      Ecurrentmodel ((ph,per), seInit, e), acc
   | Edelay (d, e) ->
       let e, acc = exp_it funs acc e in
       Edelay (d, e), acc
-  | Edelayfby (d, eInit, e) ->
-      let eInit, acc = exp_it funs acc eInit in
+  | Edelayfby (d, seInit, e) ->
+      let seInit, acc = Global_mapfold.static_exp_it funs.global_funs acc seInit in
       let e, acc = exp_it funs acc e in
-      Edelayfby (d, eInit, e), acc
+      Edelayfby (d, seInit, e), acc
 
 and app_it funs acc a = funs.app funs acc a
 and app funs acc a =

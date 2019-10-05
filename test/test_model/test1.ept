@@ -1,0 +1,11 @@
+
+
+(* First test of model node *)
+model main(a:int; b:int) returns (c:int)
+var
+	d : int :: [0,2];
+let
+	d = a when [0,2];
+	c = current([1,2], 0, delay(1) (b when [0,2]));
+tel
+

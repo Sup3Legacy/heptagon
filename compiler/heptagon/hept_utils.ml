@@ -58,6 +58,13 @@ let mk_equation ?(loc=no_location) desc =
     eq_inits = Lno_init;
     eq_loc = loc; }
 
+let mk_equation_model p e ?(clock = Clocks.fresh_osynch_clock ()) stateful ?(loc=no_location) =
+  { eqm_lhs = p;
+    eqm_rhs = e;
+    eqm_clk = clock;
+    eqm_stateful = stateful; 
+    eqm_loc = loc }
+
 let mk_var_dec ?(last = Var) ?(clock = fresh_clock()) name ty ~linearity =
   { v_ident = name; v_type = ty; v_linearity = linearity; v_clock = clock;
     v_last = last; v_loc = no_location }

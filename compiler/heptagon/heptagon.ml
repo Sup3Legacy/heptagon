@@ -74,9 +74,9 @@ and desc =
   (* Expressions only allowed inside a "model" (clasiscal when/current cannot be) *)
   | Ewhenmodel of exp * (int * int)
 (*  | Emergemodel of int * (exp list)   (*period / matchs*) *)
-  | Ecurrentmodel of (int * int) * exp * exp
+  | Ecurrentmodel of (int * int) * static_exp * exp
   | Edelay of int * exp
-  | Edelayfby of int * exp * exp
+  | Edelayfby of int * static_exp * exp
 
 
 and app = {

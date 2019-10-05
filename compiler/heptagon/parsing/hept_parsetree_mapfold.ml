@@ -144,17 +144,17 @@ and edesc funs acc ed = match ed with
   | Ewhenmodel (e, (ph, per)) ->
     let e, acc = exp_it funs acc e in
     Ewhenmodel (e, (ph, per)), acc
-  | Ecurrentmodel ((ph, per), eInit, e) ->
-    let eInit, acc = exp_it funs acc eInit in
+  | Ecurrentmodel ((ph, per), seInit, e) ->
+    let seInit, acc = static_exp_it funs acc seInit in
     let e, acc = exp_it funs acc e in
-    Ecurrentmodel ((ph,per), eInit, e), acc
+    Ecurrentmodel ((ph,per), seInit, e), acc
   | Edelay (d,e) ->
     let e, acc = exp_it funs acc e in
     Edelay (d, e), acc
-  | Edelayfby (d, eInit, e) ->
-    let eInit, acc = exp_it funs acc eInit in
+  | Edelayfby (d, seInit, e) ->
+    let seInit, acc = static_exp_it funs acc seInit in
     let e, acc = exp_it funs acc e in
-    Edelayfby (d, eInit, e), acc
+    Edelayfby (d, seInit, e), acc
   | Esplit (x, e2) ->
       let e2, acc = exp_it funs acc e2 in
         Esplit(x, e2), acc

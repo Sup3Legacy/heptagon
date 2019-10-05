@@ -53,10 +53,17 @@ type onect =
 and oneck =
   | Covar of onelink ref  (* Needed for unification and clock variable *)
   | Cone of int * int     (* (phase, period) *)
+  | Cshift of int * oneck (* shift the phase of the clock by a constant *)
 
 and onelink =
-  | Coindex of int
-  | Colink of oneck  (* reference to another clock *)
+  | Coindex of int              (* 'a (phase and period unknown) *)
+  | Coper of onephase ref * int (* period known, phase unknown *)
+  | Colink of oneck             (* reference to another clock *)
+
+and onephase =
+  | Cophase of int          (* Phase value *)
+  | Cophshift of int * int  (* Shift + 'a *)
+  | Cophindex of int        (* 'a *)
 
 
 exception Unify
@@ -214,6 +221,9 @@ exception Variable_ock
 
 let fresh_osynch_clock () = Covar { contents = Coindex (gen_index ()); }
 
+let fresh_osynch_period per =
+  Covar { contents = Coper ({ contents = Cophindex (gen_index ())}, per) }
+
 let base_osynch_clock = Cone (0,1)
 
 let prod_osynch ck_l = match ck_l with
@@ -223,11 +233,25 @@ let prod_osynch ck_l = match ck_l with
 
 (* Contraction of links inside a clock *)
 let rec ock_repr ock = match ock with
+  (* Clock has been determinised *)
+  | Covar { contents = Coper ({ contents = Cophase ph}, per) } -> Cone (ph, per)
   | Cone _ | Covar { contents = Coindex _ } -> ock
   | Covar (({ contents = Colink ock } as link)) ->
     let ock = ock_repr ock in
     link.contents <- Colink ock;
     ock
+  | Covar { contents = Coper ({ contents = Cophindex _}, _) } -> ock
+  | Covar { contents = Coper ({ contents = Cophshift (d,phi)}, per) } ->
+    let nsock = Covar { contents = Coper ({ contents = Cophindex phi}, per)} in
+    let nock = Cshift (d, nsock) in
+    nock
+  | Cshift (d, ock1) ->
+    let ock1 = ock_repr ock1 in
+    begin match ock1 with
+      | Cone (ph, per) -> Cone (ph+d, per)
+      | Cshift (d2, ock2) -> Cshift (d+d2, ock2)
+      | _ -> Cshift (d, ock1)
+    end
 
 (* Clock tuple management *)
 let rec skeleton_osynch ock = function
@@ -244,6 +268,7 @@ let is_coherent_osync ock = match ock with
     if (per<=0) then false else
     if ((ph<0) || (ph>=per)) then false else
     true
+  | Cshift (d, ock) -> true (* Note: don't do the full computation there *)
   | Covar _ -> true
 
 (* Check the inclusion of a clock under another *)
@@ -267,19 +292,59 @@ let is_subclock_osync ock1 ock2 =
 
 
 (* Unification of one-synchronous clocks *)
-let unify_oneck ock1 ock2 =
+let rec unify_oneck ock1 ock2 =
   let ock1 = ock_repr ock1 in
   let ock2 = ock_repr ock2 in
   if ock1 == ock2 then () else
+  (* No Covar Colink at that point + No Covar Coper Cophase at that point *)
+  (* Total of 5 possibilities for ock1: Cone, Cshift, Covar Coindex, Covar Coper Cophindex *)
+
   match (ock1, ock2) with
+    (* Cases 1 - Everything is a constant (Cone + Cshift) *)
     | Cone (ph1, per1), Cone (ph2,per2) ->
       if ((ph1 == ph2) && (per1 == per2)) then ()   (* Remark: no implicit buffer here *)
       else raise Unify
-    | Covar { contents = Coindex n1 }, Covar { contents = Coindex n2 } when n1 = n2 -> ()
-    | Covar ({ contents = Coindex n } as v), ock
-    | ock, Covar ({ contents = Coindex n } as v) ->
-      (* Unification - note: no check for freshness here (is it useful?) *)
+      
+    | Cshift (d1, ock1), Cshift (d2, ock2) ->
+      if (d1=d2) then unify_oneck ock1 ock2 else raise Unify
+    | _, Cshift _ -> unify_oneck ock2 ock1
+    | Cshift (d1, ock1), Cone (ph2,per2) -> unify_oneck ock1 (Cone (ph2-d1, per2))
+
+    (* Cases 2 - Add Covar Coindex to the mix*)
+    | (Covar { contents = Coindex n1 }), (Covar { contents = Coindex n2 }) when n1=n2 -> ()
+    | ock, Covar ( { contents = Coindex n1 } as v)
+    | Covar ( { contents = Coindex n1 } as v), ock ->
       v.contents <- Colink ock
+
+    (* Cases 3 - Add Covar Coper Cophase to the mix *)
+    | Covar { contents = Coper (({contents = Cophindex n1} as vph), per1)},
+      Covar { contents = Coper ({contents = Cophindex n2}, per2)} ->
+      if (per1!=per2) then raise Unify else
+      vph.contents <- Cophindex n2;
+
+    | Covar { contents = Coper (({contents = Cophindex n} as v), per1)}, Cone (ph2, per2)
+    | Cone (ph2, per2), Covar { contents = Coper (({contents = Cophindex n} as v) ,per1)}->
+      if (per1!=per2) then raise Unify else
+      v.contents <- Cophase ph2
+    
+    | Cshift (sh, sock2), Covar { contents = Coper ({contents = Cophindex n}, per1)} -> begin
+      match sock2 with
+      | Cone _ | Cshift _ | Covar {contents = Colink _} ->
+        failwith "Unification of unsimplified clock was not supposed to happen."
+      
+      | Covar ({ contents = Coindex _} as v) ->
+        v.contents <- Colink (Covar { contents = Coper ({ contents = Cophshift(-sh,n)}, per1)})
+
+      | Covar {contents = Coper (rop, per2)} ->
+        if (per1!=per2) then raise Unify else (
+          match !rop with
+          | Cophase _ -> failwith "Unification of unsimplified clock was not supposed to happen."
+          | Cophindex phi ->
+            rop.contents <- Cophshift (-sh, n)
+          | Cophshift (d,phi) ->
+            rop.contents <- Cophshift (d-sh, n)
+        )
+    end
     | _ -> raise Unify
 
 let rec unify_onect t1 t2 =
@@ -302,7 +367,21 @@ let get_ph_per_from_ock ock =
   let ock = ock_repr ock in
   let (ph,per) = match ock with
     | Cone (ph, per) -> (ph, per)
+    | Cshift _ ->raise Variable_ock
     | Covar _ -> raise Variable_ock
   in
   (ph, per)
 
+
+exception Unknownperiod
+
+let rec get_period_ock ock =
+  let ock = ock_repr ock in match ock with
+    | Cone (_, per) -> per
+    | Cshift (_, ock) -> get_period_ock ock
+    | Covar { contents = ol } -> begin
+      match ol with
+      | Coindex _ -> raise Unknownperiod
+      | Coper (_, per) -> per
+      | Colink ock -> get_period_ock ock
+    end

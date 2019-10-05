@@ -81,7 +81,14 @@ let rec print_ck ff = function
 
 let rec print_oneck ff = function
   | Clocks.Cone (ph, per) -> fprintf ff "[%i,%i]" ph per
+  | Clocks.Cshift (d, ock) -> fprintf ff "%i+%a" d  print_oneck ock
   | Clocks.Covar { contents = Coindex i } -> fprintf ff "'a%i" i
+  | Clocks.Covar { contents = Coper ({ contents = Cophase ph}, per)} ->
+    fprintf ff "[(~>%i),%i]" ph per
+  | Clocks.Covar { contents = Coper ({ contents = Cophindex ph}, per)} ->
+    fprintf ff "[(~>'p%i),%i]" ph per
+  | Clocks.Covar { contents = Coper ({ contents = Cophshift (sh, ph)}, per)} ->
+    fprintf ff "[(~>(%i)+'p%i),%i]" sh ph per
   | Clocks.Covar { contents = Colink ck} ->
     if !Compiler_options.full_type_info then
       fprintf ff "~> %a" print_oneck ck

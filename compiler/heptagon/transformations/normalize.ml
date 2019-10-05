@@ -27,6 +27,7 @@
 (*                                                                     *)
 (***********************************************************************)
 open Misc
+open Idents
 open Location
 open Heptagon
 open Hept_utils
@@ -52,7 +53,9 @@ struct
     raise Errors.Error
 end
 
-exception StructureShouldHaveBeenRemoved
+let se_to_se_list se =  match se.se_desc with
+  | Stuple se_list -> se_list
+  | _ -> assert false
 
 let exp_list_of_static_exp_list se_list =
   let mk_one_const se =
@@ -80,13 +83,25 @@ let flatten_e_list l =
   in
     List.flatten (List.map flatten l)
 
+
+let var2per = ref Env.empty 
+
+let is_block_model = ref true
+
 (** Creates a new equation x = e, adds x to d_list
     and the equation to eq_list. *)
-let equation (d_list, eq_list) e =
+let equation (d_list, eq_list) e oper =
   let add_one_var ty lin d_list =
     let n = Idents.gen_var "normalize" "v" in
+    (if (!is_block_model) then
+      let per = match oper with
+        | None -> failwith "No period in block model expression"
+        | Some per -> per
+      in
+      var2per := Env.add n per !var2per
+    );
     let d_list = (mk_var_dec n ty ~linearity:lin) :: d_list in
-      n, d_list
+    n, d_list
   in
     match e.e_ty with
       | Tprod ty_list ->
@@ -119,24 +134,103 @@ let whenc context e c n e_orig =
        the value of the latter will be overwritten.  *)
     let context, e =
       if !Compiler_options.do_mem_alloc && Stateful.exp_is_stateful e then
-        let context, n = equation context e in
+        let context, n = equation context e None in
         context, { e with e_desc = n }
       else
         context, e
     in
     { e_orig with e_desc = Ewhen(e, c, n) }, context
   in
-    if is_list e then (
-      let e_list, context = Misc.mapfold (when_on_c c n) context (e_to_e_list e) in
-          context, { e_orig with e_desc = Eapp(mk_app Etuple, e_list, None) }
-    ) else
-      let e, context = when_on_c c n context e in
-      context, e
+  if is_list e then (
+    let e_list, context = Misc.mapfold (when_on_c c n) context (e_to_e_list e) in
+        context, { e_orig with e_desc = Eapp(mk_app Etuple, e_list, None) }
+  ) else
+    let e, context = when_on_c c n context e in
+    context, e
+
+let whencmodel context e (ph, per) oper e_orig =
+  let when_cmodel_aux (ph, per) oper context e =
+    let context, e =
+      if !Compiler_options.do_mem_alloc && Stateful.exp_is_stateful e then
+        let context, n = equation context e oper in
+        context, { e with e_desc = n }
+      else
+        context, e
+    in
+    { e_orig with e_desc = Ewhenmodel(e, (ph, per)) }, context
+  in
+  if is_list e then
+    let e_list, context = Misc.mapfold (when_cmodel_aux (ph, per) oper) context (e_to_e_list e) in
+    context, { e_orig with e_desc = Eapp(mk_app Etuple, e_list, None) }
+  else
+    let e, context = when_cmodel_aux (ph, per) oper context e in
+    context, e
+
+let currentcmodel context seInit e (ph, per) oper e_orig =
+  let currentcmodel_aux (ph, per) oper context (e, seInit) =
+    let context, e =
+      if !Compiler_options.do_mem_alloc && Stateful.exp_is_stateful e then
+        let context, n = equation context e oper in
+        context, { e with e_desc = n }
+      else
+        context, e
+    in
+    { e_orig with e_desc = Ecurrentmodel ((ph, per), seInit, e) }, context
+  in
+  if is_list e then
+    let elist = e_to_e_list e in
+    let seInitlist = se_to_se_list seInit in
+    let eseInitlist = List.combine elist seInitlist in
+    let e_list, context = Misc.mapfold (currentcmodel_aux (ph, per) oper) context eseInitlist in
+    context, { e_orig with e_desc = Eapp(mk_app Etuple, e_list, None) }
+  else
+    let e, context = currentcmodel_aux (ph, per) oper context (e, seInit) in
+    context, e
+
+let delaymodel context e d oper e_orig =
+  let delaymodel_aux d oper context e =
+    let context, e =
+      if !Compiler_options.do_mem_alloc && Stateful.exp_is_stateful e then
+        let context, n = equation context e oper in
+        context, { e with e_desc = n }
+      else
+        context, e
+    in
+    { e_orig with e_desc = Edelay(d, e) }, context
+  in
+  if is_list e then
+    let e_list, context = Misc.mapfold (delaymodel_aux d oper) context (e_to_e_list e) in
+    context, { e_orig with e_desc = Eapp(mk_app Etuple, e_list, None) }
+  else
+    let e, context = delaymodel_aux d oper context e in
+    context, e
+
+let delayfbymodel context seInit e d oper e_orig =
+  let delayfbymodel_aux d oper context (seInit, e) =
+    let context, e =
+      if !Compiler_options.do_mem_alloc && Stateful.exp_is_stateful e then
+        let context, n = equation context e oper in
+        context, { e with e_desc = n }
+      else
+        context, e
+    in
+    { e_orig with e_desc = Edelayfby (d, seInit, e) }, context
+  in
+  if is_list e then
+    let seInitlist = se_to_se_list seInit in
+    let elist = e_to_e_list e in
+    let seInitelist = List.combine seInitlist elist in
+    let e_list, context = Misc.mapfold (delayfbymodel_aux d oper) context seInitelist in
+    context, { e_orig with e_desc = Eapp(mk_app Etuple, e_list, None) }
+  else
+    let e, context = delayfbymodel_aux d oper context (seInit, e) in
+    context, e
+
 
 type kind = ExtValue | Any
 
 (** Creates an equation and add it to the context if necessary. *)
-let add context expected_kind e =
+let add context oper expected_kind e =
   let up = match e.e_desc, expected_kind with
      (* static arrays and records should be normalized to simplify code generation *)
     | Econst { se_desc = Sarray _ | Sarray_power _ | Srecord _ }, ExtValue -> true
@@ -145,44 +239,70 @@ let add context expected_kind e =
     | _ , ExtValue -> true
     | _ -> false in
   if up then
-    let context, n = equation context e in
+    let context, n = equation context e oper in
       context, { e with e_desc = n }
   else
     context, e
 
-let add_list context expected_kind e_list =
+let add_list context oper expected_kind e_list =
   let aux context e =
-    let context, e = add context expected_kind e in
+    let context, e = add context oper expected_kind e in
       e, context
   in
     mapfold aux context e_list
 
-let rec translate kind context e =
+let rec translate kind context oper e =
   let context, e' = match e.e_desc with
     | Econst _
-    | Evar _ -> context, e
-    | Epre(v, e1) -> fby kind context e v e1
-    | Efby({ e_desc = Econst v }, e1) -> fby kind context e (Some v) e1
+    | Evar _ -> context, e (* TODO : check oper? *)
+    | Epre(v, e1) -> fby kind context oper e v e1
+    | Efby({ e_desc = Econst v }, e1) -> fby kind context oper e (Some v) e1
     | Estruct l ->
         let translate_field context (f, e) =
-          let context, e = translate ExtValue context e in
+          let context, e = translate ExtValue context oper e in
             (f, e), context
         in
         let l, context = mapfold translate_field context l in
           context, { e with e_desc = Estruct l }
     | Ewhen(e1, c, n) ->
-        let context, e1 = translate kind context e1 in
+        assert(oper=None);
+        let context, e1 = translate kind context None e1 in
         whenc context e1 c n e
-    | Ecurrent _ -> raise StructureShouldHaveBeenRemoved
+    | Ecurrent _ -> 
+      failwith "Normalization : current should have been removed"
     | Emerge(n, tag_e_list) ->
-        merge context e n tag_e_list
+      assert(oper=None);
+      merge context oper e n tag_e_list
 
     (* Model expressions *)
-    | Ewhenmodel _ | Ecurrentmodel _ | Edelay _ | Edelayfby _ ->
-      failwith "Normalization : node contains constructs only allowed in a model node"
+    | Ewhenmodel (e1, (ph, per)) ->
+      let pere = match oper with
+        | None -> failwith "No period in block model expression"
+        | Some pere -> pere
+      in
 
+      (* DEBUG TODO *)
+      Format.fprintf (Format.formatter_of_out_channel stdout) "pere = %i | per = %i | e = %a\n@?"
+        pere per Hept_printer.print_exp e;
+
+      assert(pere mod per = 0);
+      let context, e1 = translate ExtValue context (Some (pere/per)) e1 in
+      whencmodel context e1 (ph, per) oper e
+    | Ecurrentmodel ((ph, per), seInit, e1) ->
+      let pere = match oper with
+        | None -> failwith "No period in block model expression"
+        | Some pere -> pere
+      in
+      let context, e1 = translate ExtValue context (Some (pere*per)) e1 in
+      currentcmodel context seInit e1 (ph, per) oper e
+    | Edelay (d, e1) ->
+      let context, e1 = translate kind context oper e1 in
+      delaymodel context e1 d oper e
+    | Edelayfby (d, seInit, e1) ->
+      let context, e1 = translate kind context oper e1 in
+      delayfbymodel context seInit e1 d oper e
     | Eapp({ a_op = Eifthenelse }, [e1; e2; e3], _) ->
-        ifthenelse context e e1 e2 e3
+        ifthenelse context oper e e1 e2 e3
     (* XXX Huge hack to avoid comparing tuples... (temporary, until this is
        fixed where it should be) *)
     | Eapp({ a_op = (Efun ({ Names.qual = Names.Pervasives; Names.name = "=" }) as op)},
@@ -194,18 +314,18 @@ let rec translate kind context e =
           dtrue
           x y
         in
-        translate kind context xy
+        translate kind context oper xy
     | Eapp(app, e_list, r) ->
-        let context, e_list = translate_list ExtValue context e_list in
+        let context, e_list = translate_list ExtValue context oper e_list in
           context, { e with e_desc = Eapp(app, flatten_e_list e_list, r) }
     | Eiterator (it, app, n, pe_list, e_list, reset) ->
-        let context, pe_list = translate_list ExtValue context pe_list in
-        let context, e_list = translate_list ExtValue context e_list in
+        let context, pe_list = translate_list ExtValue context oper pe_list in
+        let context, e_list = translate_list ExtValue context oper e_list in
         context, { e with e_desc = Eiterator(it, app, n, flatten_e_list pe_list,
                                              flatten_e_list e_list, reset) }
     | Esplit (x, e1) ->
-        let context, e1 = translate ExtValue context e1 in
-        let context, x = translate ExtValue context x in
+        let context, e1 = translate ExtValue context oper e1 in
+        let context, x = translate ExtValue context oper x in
         let id = match x.e_desc with Evar x -> x | _ -> assert false in
         let mk_when c = mk_exp ~linearity:e1.e_linearity (Ewhen (e1, c, id)) e1.e_ty in
           (match x.e_ty with
@@ -219,50 +339,50 @@ let rec translate kind context e =
 
     | Elast _ | Efby _ ->
         Error.message e.e_loc Error.Eunsupported_language_construct
-  in add context kind e'
+  in add context oper kind e'
 
-and translate_list kind context e_list =
+and translate_list kind context oper e_list =
   match e_list with
     | [] -> context, []
     | e :: e_list ->
-        let context, e = translate kind context e in
-        let context, e_list = translate_list kind context e_list in
+        let context, e = translate kind context oper e in
+        let context, e_list = translate_list kind context oper e_list in
           context, e :: e_list
 
-and fby kind context e v e1 =
+and fby kind context oper e v e1 =
   let mk_fby c e =
     mk_exp ~loc:e.e_loc (Epre(Some c, e)) e.e_ty ~linearity:Ltop in
   let mk_pre e =
     mk_exp ~loc:e.e_loc (Epre(None, e)) e.e_ty ~linearity:Ltop in
-  let context, e1 = translate ExtValue context e1 in
+  let context, e1 = translate ExtValue context oper e1 in
   match e1.e_desc, v with
     | Eapp({ a_op = Etuple } as app, e_list, r),
       Some { se_desc = Stuple se_list } ->
         let e_list = List.map2 mk_fby se_list e_list in
         let e = { e with e_desc = Eapp(app, e_list, r) } in
-          translate kind context e
+          translate kind context oper e
     | Econst { se_desc = Stuple se_list },
       Some { se_desc = Stuple v_list } ->
         let e_list = List.map2 mk_fby v_list
           (exp_list_of_static_exp_list se_list) in
         let e = { e with e_desc = Eapp(mk_app Etuple, e_list, None) } in
-          translate kind context e
+          translate kind context oper e
     | Eapp({ a_op = Etuple } as app, e_list, r), None ->
         let e_list = List.map mk_pre e_list in
         let e = { e with e_desc = Eapp(app, e_list, r) } in
-          translate kind context e
+          translate kind context oper e
     | Econst { se_desc = Stuple se_list }, None ->
         let e_list = List.map mk_pre (exp_list_of_static_exp_list se_list) in
         let e = { e with e_desc = Eapp(mk_app Etuple, e_list, None) } in
-          translate kind context e
+          translate kind context oper e
     | _ -> context, { e with e_desc = Epre(v, e1) }
 
 (** transforms [if x then e1, ..., en else e'1,..., e'n]
     into [if x then e1 else e'1, ..., if x then en else e'n]  *)
-and ifthenelse context e e1 e2 e3 =
-  let context, e1 = translate ExtValue context e1 in
-  let context, e2 = translate ExtValue context e2 in
-  let context, e3 = translate ExtValue context e3 in
+and ifthenelse context oper e e1 e2 e3 =
+  let context, e1 = translate ExtValue context oper e1 in
+  let context, e2 = translate ExtValue context oper e2 in
+  let context, e3 = translate ExtValue context oper e3 in
   let mk_ite_list e2_list e3_list =
     let mk_ite e'2 e'3 =
       mk_exp ~loc:e.e_loc
@@ -272,17 +392,17 @@ and ifthenelse context e e1 e2 e3 =
       { e with e_desc = Eapp(mk_app Etuple, e_list, None) }
   in
     if is_list e2 then (
-      let e2_list, context = add_list context ExtValue (e_to_e_list e2) in
-      let e3_list, context = add_list context ExtValue (e_to_e_list e3) in
+      let e2_list, context = add_list context oper ExtValue (e_to_e_list e2) in
+      let e3_list, context = add_list context oper ExtValue (e_to_e_list e3) in
         context, mk_ite_list e2_list e3_list
     ) else
       context, { e with e_desc = Eapp (mk_app Eifthenelse, [e1; e2; e3], None) }
 
 (** transforms [merge x (c1, (e11,...,e1n));...;(ck, (ek1,...,ekn))] into
     [merge x (c1, e11)...(ck, ek1),..., merge x (c1, e1n)...(ck, ekn)]    *)
-and merge context e x c_e_list =
+and merge context oper e x c_e_list =
     let translate_tag context (tag, e) =
-      let context, e = translate ExtValue context e in
+      let context, e = translate ExtValue context oper e in
         (tag, e), context
     in
     let mk_merge x c_list e_lists =
@@ -315,7 +435,7 @@ and merge context e x c_e_list =
               let e_lists = List.map (fun (_,e) -> e_to_e_list e) c_e_list in
               let e_lists, context =
                 mapfold
-                  (fun context e_list -> add_list context ExtValue e_list)
+                  (fun context e_list -> add_list context oper ExtValue e_list)
                   context e_lists in
               let e_list = mk_merge x c_list e_lists in
                 context, { e with
@@ -328,14 +448,11 @@ and merge context e x c_e_list =
 (* [(p1,...,pn) = (e1,...,en)] into [p1 = e1;...;pn = en] *)
 and distribute ((d_list, eq_list) as context) eq pat e =
   let dist_e_list pat_list e_list =
-    let mk_eq pat e =
-      mk_equation (Eeq (pat, e))
-    in
     let dis context eq = match eq.eq_desc with
       | Eeq (pat, e) -> distribute context eq pat e
       | _ -> assert false
     in
-    let eqs = List.map2 mk_eq pat_list e_list in
+    let eqs = List.map2 mk_simple_equation pat_list e_list in
       List.fold_left dis context eqs
   in
     match pat, e.e_desc with
@@ -347,9 +464,9 @@ and distribute ((d_list, eq_list) as context) eq pat e =
           let eq = mk_equation ~loc:eq.eq_loc (Eeq(pat, e)) in
             d_list,  eq :: eq_list
 
-and translate_eq ((d_list, eq_list) as context) eq = match eq.eq_desc with
+and translate_eq ((d_list, eq_list) as context) oper eq = match eq.eq_desc with
   | Eeq (pat, e) ->
-      let context, e = translate Any context e in
+      let context, e = translate Any context oper e in
         distribute context eq pat e
   | Eblock b ->
       let v, eqs = translate_eq_list [] b.b_equs in
@@ -361,31 +478,106 @@ and translate_eq ((d_list, eq_list) as context) eq = match eq.eq_desc with
 
 and translate_eq_list d_list eq_list =
   List.fold_left
-    (fun context eq -> translate_eq context eq)
+    (fun context eq -> translate_eq context None eq)
     (d_list, []) eq_list
 
 let eq _funs context eq =
-  let context = translate_eq context eq in
+  let context = translate_eq context None eq in
     eq, context
 
+let eq_model _funs context eqm =
+  (* Trick - convert eqm into a eq *)
+  let dummyeq = mk_simple_equation eqm.eqm_lhs eqm.eqm_rhs in
+  let per = Clocks.get_period_ock eqm.eqm_clk in
+  let context = translate_eq context (Some per) dummyeq in
+  eqm, context
+
+
 let block funs context b =
+  is_block_model := false;
   let _, (v_acc, eq_acc) = Hept_mapfold.block funs context b in
     { b with b_local = v_acc@b.b_local; b_equs = eq_acc}, ([], [])
+
+let block_model funs context bm =
+  var2per := Env.empty;
+  is_block_model := true;
+
+  (* Getting the eqm clock here *)
+  let rec get_first_var pat = match pat with
+    | Etuplepat pl ->
+      if pl=[] then None else get_first_var (List.hd pl)
+    | Evarpat vid -> Some vid
+  in
+  let rec search_vd vid lvdm = match lvdm with  (* TODO: optimise that with a map? *)
+    | [] -> raise Not_found
+    | h::t ->
+      if (h.vm_ident=vid) then h else search_vd vid t
+  in
+  let get_ock_from_var llocs pat =
+    match get_first_var pat with
+    | None ->
+      (* If an equation does not have any lhs, then put it in base clock *)
+      Clocks.base_osynch_clock
+    | Some vid ->
+      try 
+        let vdm = search_vd vid llocs in
+        vdm.vm_clock
+      with
+        (* The variable is not a local variable ==> base clock *)
+        Not_found -> Clocks.base_osynch_clock
+  in
+
+  (* Updating/creating eqm clock here , so that the eq_model function get the right "oper" *)
+  let nleqs = List.map (fun eqm ->
+      { eqm with eqm_clk = (get_ock_from_var bm.bm_local eqm.eqm_lhs)}
+    ) bm.bm_eqs
+  in
+  let bm = { bm with bm_eqs = nleqs } in
+
+  (* Recursion *)
+  let _, (v_acc, eq_acc) = Hept_mapfold.block_model funs context bm in
+
+  let vm_acc = List.map (fun vd ->
+    let per = try 
+        Env.find vd.v_ident !var2per
+      with Not_found ->
+        failwith ("Period of newly created variable " ^ (Idents.name vd.v_ident) ^ " was not found.")
+    in
+    let ock = Clocks.fresh_osynch_period per in
+    mk_var_dec_model ~clock:ock vd.v_ident vd.v_type
+  ) v_acc in
+
+  (* We convert the equations "eq" back to "eqm" *)
+  (* By construction, the only variable in v_acc have fresh clocks *)
+  (*  ===> We can translate "v_acc" to model variable declaration *)
+  let llocs = vm_acc@bm.bm_local in 
+  let eqm_acc = List.map (fun eq ->
+    match eq.eq_desc with
+    | Eeq (p, e) ->
+      let ock = get_ock_from_var llocs p in
+      mk_equation_model p e ~clock:ock eq.eq_stateful ~loc:eq.eq_loc
+    | _ -> failwith "Internal normalize error : Translated eqm equation should be in Eeq form"
+  ) eq_acc in
+
+
+  { bm with bm_local = llocs; bm_eqs = eqm_acc }, ([], [])
+
+
 
 let contract funs context c =
   let ({ c_block = b } as c), void_context =
     Hept_mapfold.contract funs context c in
   (* Non-void context could mean lost equations *)
   assert (void_context=([],[]));
-  let context, e_a = translate ExtValue ([],[]) c.c_assume in
+  let context, e_a = translate ExtValue ([],[]) None c.c_assume in
   let context, e_e =
     mapfold_right
       (fun o context ->
-         let context, e = translate ExtValue context o.o_exp in
+         let context, e = translate ExtValue context None o.o_exp in
 	 context, { o with o_exp = e })
       c.c_objectives context in
-  let local_context, e_a_loc = translate ExtValue ([],[]) c.c_assume_loc in
-  let local_context, e_e_loc = translate ExtValue local_context c.c_enforce_loc in
+  let local_context, e_a_loc = translate ExtValue ([],[]) None c.c_assume_loc in
+  let local_context, e_e_loc = translate ExtValue local_context None c.c_enforce_loc in
   let (d_list, eq_list) = context in
   { c with
       c_assume = e_a;
@@ -397,22 +589,15 @@ let contract funs context c =
                     b_equs = eq_list@b.b_equs; }
   }, local_context
 
-and node_dec funs context nd =
-  let n_input, context = mapfold (var_dec_it funs) context nd.n_input in
-  let n_output, context = mapfold (var_dec_it funs) context nd.n_output in
-  let n_params, context = mapfold (param_it funs.global_funs) context nd.n_params in
-  let n_contract, context =  optional_wacc (contract_it funs) context nd.n_contract in
-  let n_block, context = block_it funs context nd.n_block in
-  { nd with
-      n_input = n_input;
-      n_output = n_output;
-      n_block = n_block;
-      n_params = n_params;
-      n_contract = n_contract }
-  , context
+let node_dec nd =
+  let funs = { defaults with block = block; block_model = block_model;
+                eq = eq; eq_model = eq_model; contract = contract } in
+  let nd, _ = Hept_mapfold.node_dec funs ([], []) nd in
+  nd
 
 
 let program p =
-  let funs = { defaults with block = block; eq = eq; contract = contract } in
+  let funs = { defaults with block = block; block_model = block_model;
+                eq = eq; eq_model = eq_model; contract = contract } in
   let p, _ = Hept_mapfold.program funs ([], []) p in
     p

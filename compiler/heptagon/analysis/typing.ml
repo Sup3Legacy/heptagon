@@ -945,17 +945,17 @@ and typing cenv h e =
       | Ewhenmodel (e, (ph,per)) ->
         let typed_e, t = typing cenv h e in
         Ewhenmodel (typed_e, (ph,per)), t
-      | Ecurrentmodel ((ph,per), eInit, e) ->
-        let typed_e_init, t = typing cenv h eInit in
+      | Ecurrentmodel ((ph,per), seInit, e) ->
+        let typed_seInit, t = typing_static_exp cenv seInit in
         let typed_e = expect cenv h t e in
-        Ecurrentmodel ((ph,per), typed_e_init, typed_e), t
+        Ecurrentmodel ((ph,per), typed_seInit, typed_e), t
       | Edelay (d, e) ->
         let typed_e, t = typing cenv h e in
         Edelay (d, typed_e), t
-      | Edelayfby (d, eInit, e) ->
-        let typed_e_init, t = typing cenv h eInit in
+      | Edelayfby (d, seInit, e) ->
+        let typed_seInit, t = typing_static_exp cenv seInit in
         let typed_e = expect cenv h t e in
-        Edelayfby (d, typed_e_init, typed_e), t
+        Edelayfby (d, typed_seInit, typed_e), t
     in
       { e with e_desc = typed_desc; e_ty = ty; }, ty
   with

@@ -118,9 +118,9 @@ and edesc =
   | Ecurrent of constructor_name * var_name * exp * exp (* current(cons(clk), eInit, eCurr) *)
   | Esplit of var_name * exp
   | Ewhenmodel of exp * (int * int)
-  | Ecurrentmodel of (int * int) * exp * exp
+  | Ecurrentmodel of (int * int) * static_exp * exp
   | Edelay of int * exp
-  | Edelayfby of int * exp * exp
+  | Edelayfby of int * static_exp * exp
 
 
 and app = { a_op: op; a_params: exp list; a_inlined: bool }
