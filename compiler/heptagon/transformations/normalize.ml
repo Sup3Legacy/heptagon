@@ -595,6 +595,12 @@ let node_dec nd =
   let nd, _ = Hept_mapfold.node_dec funs ([], []) nd in
   nd
 
+let model_dec md =
+  let funs = { defaults with block = block; block_model = block_model;
+                eq = eq; eq_model = eq_model; contract = contract } in
+  let md, _ = Hept_mapfold.model_dec funs ([], []) md in
+  md
+
 
 let program p =
   let funs = { defaults with block = block; block_model = block_model;

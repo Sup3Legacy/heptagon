@@ -47,6 +47,7 @@
 open Format
 open Clocks
 open Types
+open Linearity
 
 open Heptagon
 open Hept_utils
@@ -61,7 +62,7 @@ let ffout = formatter_of_out_channel stdout
 (* Build an expression from a type *)
 let rec build_dummy_stexp t = match t with
   | Tid qname ->
-    let name = qname.name in
+    let name = qname.Names.name in
     let se_desc = match name with
       | "int" -> Sint 0
       | "real" -> Sfloat 0.0
@@ -97,19 +98,18 @@ let rec gcd a b =
 module IntIntSet = Set.Make(struct type t = int*int let compare = Pervasives.compare end)
 module IntIntMap = Map.Make(struct type t = int*int let compare = Pervasives.compare end)
 
-let var_dec_model_gather _ sacc vdm =
-  let ock = vdm.vm_clock in
-  let (ph,per) = Clocks.get_ph_per_from_ock ock in
-  vdm, (IntIntSet.add (ph, per) sacc)
 
 (* Main gathering function
   Returns [sacc] which is the set of all 1sync clock used in the program,
       and [saccInOut] which is the set of all 1sync clock used in the in/output.
  *)
 let gather_osyncclocks md =
-  let funs_gather = { Hept_mapfold.defaults with
-      var_dec_model = var_dec_model_gather;
-    } in
+  let var_dec_model_gather _ sacc vdm =
+    let ock = vdm.vm_clock in
+    let (ph,per) = Clocks.get_ph_per_from_ock ock in
+    vdm, (IntIntSet.add (ph, per) sacc)
+  in
+  let funs_gather = { Hept_mapfold.defaults with var_dec_model = var_dec_model_gather } in
   let _, sacc = funs_gather.model_dec funs_gather IntIntSet.empty md in
 
   (* Assume that the clocks of inputs and outputs are always the base clock*)
@@ -179,7 +179,7 @@ let counter_var_exp = ref 0
 
 let get_name_var_exp ph ratio = 
   counter_var_exp := !counter_var_exp + 1;
-  "var_" ^ (string_of_int !counter_var_exp) ^ (string_of_int ph) ^ "_" ^ (string_of_int ratio)
+  "var_" ^ (string_of_int !counter_var_exp) ^ "_" ^ (string_of_int ph) ^ "_" ^ (string_of_int ratio)
 
 let get_name_var_current _ = 
   counter_var_exp := !counter_var_exp + 1;
@@ -296,9 +296,6 @@ let translate_equations leqs =
   (lneqs, nloceq)
 
 
-
-(* ======================================== *)
-
 (* Conversion from model variable declaration to node variable declaration
     But only for input and output (for which the clock is always "Cbase") *)
 let vdm_2_vd_inout vdm =
@@ -316,35 +313,374 @@ let vdm_2_vd_local mock_loc_eq vdm =
   in
   mk_var_dec ~clock:ck vdm.vm_ident vdm.vm_type ~linearity:Linearity.Ltop
 
-let model2node md =
-  (* Step 1 - Management of 1-synchronous clocks *)
-  let sock = gather_osyncclocks md in
-  let mock_loc_eq = get_osync_var_eq sock in
+(* ======================================== *)
 
-  let nlocals = List.map (vdm_2_vd_local mock_loc_eq) md.m_block.bm_local in
-  (* TODO: old locals: associate the old vardecl to the new one *)
-  
-  let (loc_ock, eq_ock) = IntIntMap.fold
-    (fun _ (vd,eq) (accvd, acceq) -> (vd::accvd, eq::acceq))
-    mock_loc_eq ([],[])
+(* Re-implementation with locals *)
+
+let rec get_father lgr elem = match lgr with
+  | [] -> raise Not_found
+  | (e1,e2)::r ->
+    if (e2=elem) then e1 else get_father r elem
+
+
+let rec add_to_graph lgr (p1, p2) = match lgr with
+  | [] -> (p1,p2)::[]
+  | (h1,h2)::r ->
+    if (h2=p2) then lgr else (* If destination period already there, don't do anything *)
+    (h1,h2)::(add_to_graph r (p1,p2))
+
+(* Add the connexion from period 1 to periods with no father in the graph *)
+let connect_to_one lgr =
+  let lperiod : int list = List.fold_left (fun acc (e1,e2) ->
+      e1::e2::acc
+    ) [] lgr
   in
-  let nlocals = List.rev_append nlocals loc_ock in
+  let lperiod = List.sort_uniq Pervasives.compare lperiod in
+  List.fold_left (fun accgr per ->
+    if (per=1) then accgr else
+    add_to_graph accgr (1, per)
+  ) lgr lperiod
+  (* let lconnected :int list = List.map (fun (_,src) -> src) lgr in
+  let gr = List.fold_left (fun gracc per -> 
+    (* If the period have an ancestor *)
+    if (List.exists (fun pconn -> pconn=per) lconnected) then
+      gracc
+    else
+      if (per=1) then gracc else
+      (1, per)::gracc
+  ) gr lperiod in
+  gr *)
 
-  (* Step 2 - Management of the 1-synchronous temporal expressions *)
-  let (lneqs, nloceq) = translate_equations md.m_block.bm_eqs in
+(* Build the graph of periods, which is a list of (src, dst) = (int * int) list *)
+let build_period_graph md =
+  (* For all when/current expression from p to p', build the corresponding edge in the graph *)
+  let edesc_per_gr funs (gr, pereq) ed = match ed with
+    | Ewhenmodel (_, (_, ratio)) ->
+      assert(pereq mod ratio = 0);
+      let per2 = pereq / ratio in
+      let _, (gr,_) = Hept_mapfold.edesc funs (gr, per2) ed in
 
-  (* Final Step - Build and return the new node *)
-  let nlocals = List.rev_append nlocals nloceq in
-  let lneqs = List.rev_append lneqs eq_ock in
+      (* Add (per2, pereq) in the graph *)
+      let gr = add_to_graph gr (per2, pereq) in
+      ed, (gr, pereq)
 
-  let n_block = mk_block ~locals:nlocals lneqs in
+    | Ecurrentmodel ((_, ratio), _, _) ->
+      let per1 = pereq * ratio in
+      let _, (gr,_) = Hept_mapfold.edesc funs (gr, per1) ed in
+
+      (* Add (pereq, per1) in the graph *)
+      let gr = add_to_graph gr (pereq, per1) in
+      ed, (gr, pereq)
+
+    | _ -> Hept_mapfold.edesc funs (gr, pereq) ed 
+  in
+  let eqm_per_gr funs (gr,_) eqm =
+    let per = Clocks.get_period_ock eqm.eqm_clk in
+    Hept_mapfold.eq_model funs (gr, per) eqm
+  in
   
-  let ninputs = List.map vdm_2_vd_inout md.m_input in
-  let noutputs = List.map vdm_2_vd_inout md.m_output in
+  let funs_per_gr = { Hept_mapfold.defaults with edesc = edesc_per_gr; eq_model = eqm_per_gr } in
+  let _, (gracc, _) = funs_per_gr.model_dec funs_per_gr ([],0) md in
 
-  let n_nd = mk_node ~input:ninputs ~output:noutputs ~loc:md.m_loc
-    md.m_name n_block in
-  
+  (* Add link to 1 from roots of the graph *)
+  let gracc = connect_to_one gracc in
+
+  (* Finish by adding the periods of the variables decl to gr, if not already there *)
+  let vdm_per _ gr vdm =
+    let per = Clocks.get_period_ock vdm.vm_clock in
+    vdm, add_to_graph gr (1, per)  (* Add to the graph only if there is no connection to it already *)
+  in
+  let funs_per_vdm = { Hept_mapfold.defaults with var_dec_model = vdm_per } in
+  let _, gracc = funs_per_vdm.model_dec funs_per_vdm gracc md in
+
+  gracc
+
+
+(* --- *)
+
+(* Localisation of a ock into a succession of "on" which fits the graph of periods *)
+let rec localising_ock lgr ock =
+  let (ph, per) = Clocks.get_ph_per_from_ock ock in
+
+  (* Base case *)
+  if (per=1) then (
+    assert(ph=0);
+    []
+  ) else
+
+  (* We get the father of per in lgr *)
+  let per2 = get_father lgr per in
+  let ratio = per / per2 in
+
+  (* We need to find ph2 and k such that ph2 = ph - ratio * k *)
+  (*  aka [ph2, per2] on [k,ratio] = [ph, per] *)
+  let ph2 = ph mod ratio in
+  let k = (ph-ph2)/ratio in
+  (k, ratio) :: (localising_ock lgr (Cone (ph2, per2)))
+
+(* Localisation of a ock1->ock2 (cf when/current) into a
+    succession of "on" which fits the graph of periods *)
+let localising_ock_connection lgr ock1 ock2 =
+  (* We compare the start of the chain of "on" of ock1 and ock2 *)
+  let lonock1 = localising_ock lgr ock1 in
+  let lonock2 = localising_ock lgr ock2 in
+
+  let rec compare_on_chain common lonock1 lonock2 = match (lonock1, lonock2) with
+  | ([],_) | (_,[]) -> (common, lonock1, lonock2)
+  | ((k1,r1)::ronock1),((k2,r2)::ronock2) ->
+    if ((k1=k2) && (r1=r2)) then
+      compare_on_chain (common@[(k1,r1)]) ronock1 ronock2
+    else
+      (common, lonock1, lonock2)
+  in
+
+  let (common_ock, lon_rest_ock1, lon_rest_ock2) =
+    compare_on_chain [] lonock1 lonock2 in
+  (common_ock, lon_rest_ock1, lon_rest_ock2)
+
+let rec build_chain_when eBase lchain = match lchain with
+  | [] -> eBase
+  | (k,ratio)::rest ->
+    let edesc = Ewhenmodel (eBase, (k, ratio)) in
+    let exp = Hept_utils.mk_exp edesc eBase.e_ty ~linearity:Linearity.Ltop in
+    build_chain_when exp rest
+
+let rec build_chain_current seInit eBase lchain = match lchain with
+  | [] -> eBase
+  | (k, ratio)::rest ->
+    let eBase = build_chain_current seInit eBase rest in
+    let edesc = Ecurrentmodel ((k, ratio), seInit, eBase) in
+    let exp = Hept_utils.mk_exp edesc eBase.e_ty ~linearity:Linearity.Ltop in
+    exp
+
+
+
+    (* TODO *)
+
+
+(* Localise the when/current/delay/delayfby to make them fit the graph of periods *)
+let localise_equations lgr md =
+  let eqm_loc_eq _ _ eqm =
+    if debug_model2node then
+      fprintf ffout "Entering equation eqm = %a\n@?" Hept_printer.print_eq_model eqm;
+
+    (* Assume normalization *)
+    let erhs = eqm.eqm_rhs in
+    let eq_ock = eqm.eqm_clk in
+
+    let nerhs = match erhs.e_desc with
+      | Ewhenmodel (e1, (_, ratio)) ->
+        if (ratio==1) then e1 else
+
+        let (per_eq, ph_eq) = Clocks.get_ph_per_from_ock eq_ock in
+        assert(per_eq mod ratio = 0);
+        
+        (* ph_eq = ph_sexp + k * ratio *)
+        let per_sexp = per_eq / ratio in
+        let ph_sexp = ph_eq mod ratio in
+        let sexpr_ock = Cone (per_sexp, ph_sexp) in
+
+        let (_, lr_sexpr, lr_eq) = localising_ock_connection lgr sexpr_ock eq_ock in
+        
+        (* Build the chain of current/when which should replace the current when *)
+        let seInit = build_dummy_stexp e1.e_ty in
+        let ecurrent = build_chain_current seInit e1 lr_sexpr in
+        let ewhen = build_chain_when ecurrent lr_eq in
+        ewhen
+
+      | Ecurrentmodel ((k, ratio), seInit, e1) ->
+        if (ratio==1) then e1 else
+
+        let (per_eq, ph_eq) = Clocks.get_ph_per_from_ock eq_ock in
+
+        (* ph_sexp = ph_eq + k * ratio *)
+        let per_sexp = per_eq * ratio in
+        let ph_sexp = ph_eq + k * ratio in
+        let sexpr_ock = Cone (per_sexp, ph_sexp) in
+
+        let (_, lr_sexpr, lr_eq) = localising_ock_connection lgr sexpr_ock eq_ock in
+
+        let ecurrent = build_chain_current seInit e1 lr_sexpr in
+        let ewhen = build_chain_when ecurrent lr_eq in
+        ewhen
+
+      | Edelay (d,e1)  ->
+        let (per_eq, ph_eq) = Clocks.get_ph_per_from_ock eq_ock in
+        let ph_sexp = ph_eq - d in
+        assert(ph_sexp>=0);
+        let sexpr_ock = Cone (per_eq, ph_sexp) in
+
+        let (_, lr_sexpr, lr_eq) = localising_ock_connection lgr sexpr_ock eq_ock in
+        
+        (* Build the chain of current/when which should replace the current when *)
+        let seInit = build_dummy_stexp e1.e_ty in
+        let ecurrent = build_chain_current seInit e1 lr_sexpr in
+        let ewhen = build_chain_when ecurrent lr_eq in
+        ewhen
+
+      | Edelayfby (d, seInit, e1) ->
+        let (per_eq, ph_eq) = Clocks.get_ph_per_from_ock eq_ock in
+        let ph_sexp = ph_eq - d + per_eq in
+        assert(ph_sexp>=0);
+        assert(ph_sexp<per_eq);
+        let sexpr_ock = Cone (per_eq, ph_sexp) in
+
+        let (_, lr_sexpr, lr_eq) = localising_ock_connection lgr sexpr_ock eq_ock in
+        
+        (* Build the chain of current/when which should replace the current when *)
+        let ecurrent = build_chain_current seInit e1 lr_sexpr in
+        let ewhen = build_chain_when ecurrent lr_eq in
+        ewhen
+
+      (* Default case: no need to do anything *)
+      | _ -> erhs
+    in
+    { eqm with eqm_rhs = nerhs }, []
+  in
+
+  let funs_loc_eq = { Hept_mapfold.defaults with eq_model = eqm_loc_eq } in
+  let n_mbl, _ = funs_loc_eq.block_model funs_loc_eq [] md.m_block in
+  { md with m_block = n_mbl }
+
+
+(* --- *)
+
+(* (k, ratio, ph, per)  <===> (k, ratio) on (ph, per)  / associate with the actual id *)
+module Int4Map = Map.Make(struct type t = int*int*int*int let compare = Pervasives.compare end)
+
+let get_name_clock_id k ratio ph per = 
+  "var_" ^ (string_of_int k) ^ "_" ^ (string_of_int ratio)
+    ^ "_on_" ^ (string_of_int ph) ^ "_" ^ (string_of_int per)
+
+let add_new_clock_id mvarOck k ratio ph per =
+  try
+    let varid = Int4Map.find (k, ratio, ph, per) mvarOck in
+    (varid, mvarOck)
+  with Not_found ->
+    (* Create the new one and add it to mvarOck *)
+    let namevar = get_name_clock_id k ratio ph per in
+    let varid = Idents.gen_var "model2node" namevar in
+
+    let mvarOck = Int4Map.add (k, ratio, ph, per) varid mvarOck in
+    (varid, mvarOck)
+
+let rec period_phase_from_chain lchain = match lchain with
+  | [] -> (0,1)
+  | (k, ratio)::rest ->
+    let (ph,per) = period_phase_from_chain rest in
+    (ph + k*per, per*ratio)
+
+let rec get_clock_from_chain mvarOck lchainon = match lchainon with
+  | [] -> (Cbase, mvarOck)
+  | (k,ratio)::rest ->
+    let (ckrest, mvarOck) = get_clock_from_chain mvarOck rest in
+
+    let (phbase, perbase) = period_phase_from_chain rest in
+    let (var_id, mvarOck) = add_new_clock_id mvarOck k ratio phbase perbase in
+    Con (ckrest, Initial.ptrue, var_id), mvarOck
+
+let transform_to_node_dec lgr md =
+  let mvarOck = Int4Map.empty in
+
+  (* Expression transformation and equation translation (to standard eq) *)
+  let mbl = md.m_block in
+  let (leqs, lvdcurrent, mvarOck) = List.fold_left (fun (acceq, accvd, mvarOck) eqm ->
+    let erhs = eqm.eqm_rhs in
+    let (nerhs, lneq, lnvd, mvarOck) = match erhs.e_desc with
+      | Ewhenmodel (e1, (k, ratio)) ->
+        let (ph, per) = Clocks.get_ph_per_from_ock eqm.eqm_clk in
+        let per_sexp = per / ratio in
+        let ph_sexp = ph mod ratio in
+        let (var_id, mvarOck) = add_new_clock_id mvarOck k ratio ph_sexp per_sexp in
+
+        let nerhs = mk_exp (Ewhen (e1, Initial.ptrue, var_id)) erhs.e_ty ~linearity:Ltop in
+        (nerhs, [], [], mvarOck)
+      | Ecurrentmodel ((k, ratio), seInit, e1) ->
+        let (ph, per) = Clocks.get_ph_per_from_ock eqm.eqm_clk in
+        let per_sexp = per * ratio in
+        let ph_sexp = ph + k * ratio in
+        let (var_id, mvarOck) = add_new_clock_id mvarOck k ratio ph_sexp per_sexp in
+
+        (* Fabrication du current *)
+        (* Current variable : varcurrent = merge var_id (True => e1) (False => seInit fby varcurrent) *)
+        let var_current_id = Idents.gen_var "model2node" (get_name_var_current ()) in
+        let nloc_current = mk_var_dec var_current_id e1.e_ty ~linearity:Ltop in
+
+        let ebr_true = e1 in
+        let evarbr_false = mk_exp (Evar var_current_id) e1.e_ty ~linearity:Linearity.Ltop in
+        let ebr_false = mk_exp (Epre (Some seInit, evarbr_false)) e1.e_ty ~linearity:Linearity.Ltop in
+        let lbranch = (Initial.ptrue, ebr_true)::(Initial.pfalse, ebr_false)::[] in
+
+        let rhs_eq_current = mk_exp (Emerge (var_id, lbranch)) e1.e_ty ~linearity:Linearity.Ltop in
+        let neq_current = mk_simple_equation (Evarpat var_current_id) rhs_eq_current in
+
+        let nerhs = mk_exp (Evar var_current_id) e1.e_ty ~linearity:Linearity.Ltop in
+        (nerhs, neq_current::[], nloc_current::[], mvarOck)
+
+      | Edelay _ | Edelayfby _ ->
+        failwith "delay/delayfby should have been translated to when/current"
+      | _ -> (erhs, [], [], mvarOck)
+    in
+    let neq = mk_simple_equation eqm.eqm_lhs nerhs in
+    (neq::(List.rev_append lneq acceq),
+      List.rev_append lnvd accvd,
+      mvarOck)
+  ) ([], [], mvarOck) mbl.bm_eqs in
+
+  (* Variable declaration translation *)
+  let (lvdloc_orig, mvarOck) = List.fold_left (fun (accvd, mvarOck) vdm -> 
+    let ock = vdm.vm_clock in
+    let lchainon = localising_ock lgr ock in
+    let (ck, mvarOck) = get_clock_from_chain mvarOck lchainon in
+
+    let vd = mk_var_dec ~clock:ck vdm.vm_ident vdm.vm_type ~linearity:Linearity.Ltop in
+    (vd::accvd, mvarOck)
+  ) ([], mvarOck) mbl.bm_local in
+
+
+  (* Getting the equation and variable declaration of the boolean var expressing the clocks *)
+  let (lvarock, leqock) = Int4Map.fold (fun (k, ratio, _, _) var_id (accvd, acceq) ->
+    let nvd = mk_var_dec var_id Initial.tbool ~linearity:Ltop in
+
+    let ebase = mk_exp (Evar var_id) Initial.tbool ~linearity:Linearity.Ltop in
+    let rhs_eq = create_rhs_osync_eq ebase k ratio in
+    let neq = mk_simple_equation (Evarpat var_id) rhs_eq in
+
+    (nvd::accvd, neq::acceq)
+  ) mvarOck ([], []) in
+
+
+  (* Wrapping things up *)
+  let llocals = (List.rev_append lvdcurrent (List.rev_append lvarock lvdloc_orig)) in
+  let leqs = List.rev_append leqock leqs in
+
+  let bl = Hept_utils.mk_block ~locals:llocals leqs in 
+
+  let linputs = List.map vdm_2_vd_inout md.m_input in
+  let loutputs = List.map vdm_2_vd_inout md.m_output in
+  let nd = Hept_utils.mk_node ~input:linputs ~output:loutputs md.m_name bl in
+  nd
+
+
+
+(* ======================================== *)
+
+let model2node md =
+  (* Step 1 - build the graph of harmonic periods *)
+  let lgr_harm_per : (int * int) list = build_period_graph md in
+
+  (* Step 2 - go over all when/current/delay in eq_model
+    and convert them into smalled when/current/delay *)
+  let localised_md = localise_equations lgr_harm_per md in
+  let localised_md = Normalize.model_dec localised_md in
+
+  (* At that point, there is no delay/delayfby, and the only when remaining
+    are along the edges of the graph of harmonic periods *)
+
+  (* Step 3 - gather the list of local variables (IntIntIntIntMap)
+    and replace the whenmodel/currentmodel by classical when/current *)
+  let n_nd = transform_to_node_dec lgr_harm_per localised_md in
+
   (* Normalization of the node *)
   let n_nd = Normalize.node_dec n_nd in
   n_nd
