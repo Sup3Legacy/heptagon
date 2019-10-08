@@ -351,8 +351,15 @@ let rec unify_onect t1 t2 =
   if t1 == t2 then () else
   match (t1, t2) with
     | (Ock ck1, Ock ck2) -> unify_oneck ck1 ck2
+    | (Ocprod t1_list, Ock ck2) ->
+      if ((List.length t1_list) = 1) then
+        unify_onect (List.hd t1_list) t2
+      else raise Unify
+    | (Ock ck1, Ocprod t2_list) ->
+      if ((List.length t2_list) = 1) then
+        unify_onect t1 (List.hd t2_list)
+      else raise Unify
     | (Ocprod t1_list, Ocprod t2_list) -> unify_list_onect t1_list t2_list
-    | _ -> raise Unify
 
 and unify_list_onect t1_list t2_list =
   try List.iter2 unify_onect t1_list t2_list

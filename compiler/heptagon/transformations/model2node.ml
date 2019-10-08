@@ -367,6 +367,43 @@ let connect_to_one lgr =
   ) gr lperiod in
   gr *)
 
+(* Some heuristics to make the graph of period better *)
+let rectify_grper lgr =
+  (* Heursitic: (a,b) and (a,c) where (c mod b = 0) ==> (a,b) and (b,c) *)
+  let lsrc = List.map (fun (s,_) -> s) lgr in
+  let lsrc = List.sort_uniq Pervasives.compare lsrc in
+
+  let lngr = List.fold_left (fun lacc src ->
+    let ledges = List.filter (fun (s,_) -> s=src) lgr in
+    assert((List.length ledges)>0);
+
+    (* Find the right configuration *)
+    if ((List.tl ledges) = []) then ledges@lacc else
+
+    let lconfig = List.fold_left (fun acc (_,d1) ->
+      List.fold_left (fun acc (_,d2) ->
+        if (d1=d2) then acc else
+        if ((d1 mod d2) = 0) then  (* d2 divides d1 *)
+          (d1, d2)::acc
+        else acc
+      ) acc ledges
+    ) [] ledges in
+
+    (* DEBUG
+    fprintf ffout "lconfig = %a\n@?" print_gr_per lconfig; *)
+
+    (* For each (d1,d2) in lconfig, replace the edge (s,d1) by (d2,d1) *)
+    let lnedges:(int * int) list = List.map (fun (src,dst) ->
+      try 
+        let (d1,d2) = List.find (fun (d1,_) -> d1=dst) lconfig in
+        (d2, d1)
+      with Not_found -> (src,dst)
+    ) ledges in
+    lnedges@lacc
+  ) [] lsrc in
+  lngr
+
+
 (* Build the graph of periods, which is a list of (src, dst) = (int * int) list *)
 let build_period_graph md =
   (* For all when/current expression from p to p', build the corresponding edge in the graph *)
@@ -398,6 +435,11 @@ let build_period_graph md =
   let funs_per_gr = { Hept_mapfold.defaults with edesc = edesc_per_gr; eq_model = eqm_per_gr } in
   let _, (gracc, _) = funs_per_gr.model_dec funs_per_gr ([],0) md in
 
+  (* TODO DEBUG *)
+  if debug_model2node then (
+    fprintf ffout "gracc = %a\n@?" print_gr_per gracc;
+  );
+
   (* Add link to 1 from roots of the graph *)
   let gracc = connect_to_one gracc in
 
@@ -409,6 +451,8 @@ let build_period_graph md =
   in
   let funs_per_vdm = { Hept_mapfold.defaults with var_dec_model = vdm_per } in
   let _, gracc = funs_per_vdm.model_dec funs_per_vdm gracc md in
+
+  let gracc = rectify_grper gracc in
   gracc
 
 
@@ -432,12 +476,14 @@ let rec localising_ock lgr ock =
   let ratio = per / per2 in
 
   (* We need to find ph2 and k such that ph2 = ph - per2 * k *)
-  (*  aka [ph2, per2] on [k,ratio] = [ph, per] *)
+  (*  aka [ph2, per2] on [k,ratio] = [ph, per] <===> ph = per2*k + ph2 and per = ratio * per2 *)
   let ph2 = ph mod per2 in
   let k = (ph-ph2)/per2 in
   (* DEBUG
-  fprintf ffout "localising_ock :: ph = %i | ratio = %i\n@?" ph ratio;
+  fprintf ffout "\nlocalising_ock :: ph = %i | ratio = %i\n@?" ph ratio;
   fprintf ffout "localising_ock :: ph2 = %i | per2 = %i\n@?" ph2 per2; *)
+  assert(0<=k);
+  assert(k<ratio);
 
   (k, ratio) :: (localising_ock lgr (Cone (ph2, per2)))
 
@@ -448,6 +494,10 @@ let localising_ock_connection lgr ock1 ock2 =
   let lonock1 = localising_ock lgr ock1 in
   let lonock2 = localising_ock lgr ock2 in
 
+  (* DEBUG
+  fprintf ffout "localising_ock_connection::lonock1 = %a\n@?" print_gr_per lonock1;
+  fprintf ffout "localising_ock_connection::lonock2 = %a\n@?" print_gr_per lonock2; *)
+
   let rec compare_on_chain common lonock1 lonock2 = match (lonock1, lonock2) with
   | ([],_) | (_,[]) -> (common, lonock1, lonock2)
   | ((k1,r1)::ronock1),((k2,r2)::ronock2) ->
@@ -456,9 +506,12 @@ let localising_ock_connection lgr ock1 ock2 =
     else
       (common, lonock1, lonock2)
   in
+  let rev_lonock1 = List.rev lonock1 in
+  let rev_lonock2 = List.rev lonock2 in
 
-  let (common_ock, lon_rest_ock1, lon_rest_ock2) =
-    compare_on_chain [] lonock1 lonock2 in
+  let (common_ock, rev_lon_rest_ock1, rev_lon_rest_ock2) = compare_on_chain [] rev_lonock1 rev_lonock2 in
+  let lon_rest_ock1 = List.rev rev_lon_rest_ock1 in
+  let lon_rest_ock2 = List.rev rev_lon_rest_ock2 in
   (common_ock, lon_rest_ock1, lon_rest_ock2)
 
 let rec build_chain_when eBase lchain = match lchain with
@@ -496,11 +549,20 @@ let localise_equations lgr md =
         
         (* ph_eq = ph_sexp + k * ratio *)
         let per_sexp = per_eq / ratio in
-        let ph_sexp = ph_eq mod ratio in
+        let ph_sexp = ph_eq mod per_sexp in
         let sexpr_ock = Cone (ph_sexp, per_sexp) in
 
-        let (_, lr_sexpr, lr_eq) = localising_ock_connection lgr sexpr_ock eq_ock in
-        
+        let (_, lrev_r_sexpr, lrev_r_eq) = localising_ock_connection lgr sexpr_ock eq_ock in
+        let lr_sexpr = List.rev lrev_r_sexpr in
+        let lr_eq = List.rev lrev_r_eq in
+
+        (* DEBUG
+        fprintf ffout "sexpr_ock = %a\n@?" Global_printer.print_oneck sexpr_ock;
+        fprintf ffout "eq_ock = %a\n@?" Global_printer.print_oneck eq_ock;
+        fprintf ffout "common = %a\n@?" print_gr_per common;
+        fprintf ffout "lr_sexpr = %a\n@?" print_gr_per lr_sexpr;
+        fprintf ffout "lr_eq = %a\n@?" print_gr_per lr_eq; *)
+
         (* Build the chain of current/when which should replace the current when *)
         let seInit = build_dummy_stexp e1.e_ty in
         let ecurrent = build_chain_current seInit e1 lr_sexpr in
@@ -517,7 +579,9 @@ let localise_equations lgr md =
         let ph_sexp = ph_eq + k * per_eq in
         let sexpr_ock = Cone (ph_sexp, per_sexp) in
 
-        let (_, lr_sexpr, lr_eq) = localising_ock_connection lgr sexpr_ock eq_ock in
+        let (_, lrev_r_sexpr, lrev_r_eq) = localising_ock_connection lgr sexpr_ock eq_ock in
+        let lr_sexpr = List.rev lrev_r_sexpr in
+        let lr_eq = List.rev lrev_r_eq in
 
         let ecurrent = build_chain_current seInit e1 lr_sexpr in
         let ewhen = build_chain_when ecurrent lr_eq in
@@ -529,7 +593,9 @@ let localise_equations lgr md =
         assert(ph_sexp>=0);
         let sexpr_ock = Cone (ph_sexp, per_eq) in
 
-        let (_, lr_sexpr, lr_eq) = localising_ock_connection lgr sexpr_ock eq_ock in
+        let (_, lrev_r_sexpr, lrev_r_eq) = localising_ock_connection lgr sexpr_ock eq_ock in
+        let lr_sexpr = List.rev lrev_r_sexpr in
+        let lr_eq = List.rev lrev_r_eq in
         
         (* Build the chain of current/when which should replace the current when *)
         let seInit = build_dummy_stexp e1.e_ty in
@@ -544,7 +610,9 @@ let localise_equations lgr md =
         assert(ph_sexp<per_eq);
         let sexpr_ock = Cone (ph_sexp, per_eq) in
 
-        let (_, lr_sexpr, lr_eq) = localising_ock_connection lgr sexpr_ock eq_ock in
+        let (_, lrev_r_sexpr, lrev_r_eq) = localising_ock_connection lgr sexpr_ock eq_ock in
+        let lr_sexpr = List.rev lrev_r_sexpr in
+        let lr_eq = List.rev lrev_r_eq in
         
         (* Build the chain of current/when which should replace the current when *)
         let ecurrent = build_chain_current seInit e1 lr_sexpr in
@@ -714,14 +782,27 @@ let model2node md =
   (* Step 2 - go over all when/current/delay in eq_model
     and convert them into smalled when/current/delay *)
   let localised_md = localise_equations lgr_harm_per md in
+  
+  if debug_model2node then (
+    fprintf ffout "model2node : Equations localised.\n@?";
+    fprintf ffout "localised_md = %a\n@?" Hept_printer.print_model localised_md;
+  );
+
   let localised_md = Normalize.model_dec localised_md in
+
+
+  if debug_model2node then (
+    fprintf ffout "model2node : Equations normalized.\n@?";
+    fprintf ffout "localised_md = %a\n@?" Hept_printer.print_model localised_md;
+  );
+
   let localised_md = Model_clocking.typing_model localised_md in
 
   (* At that point, there is no delay/delayfby, and the only when remaining
     are along the edges of the graph of harmonic periods *)
 
   if debug_model2node then (
-    fprintf ffout "model2node : Equations localised.\n@?";
+    fprintf ffout "model2node : Equations normalized and clocked.\n@?";
     fprintf ffout "localised_md = %a\n@?" Hept_printer.print_model localised_md;
   );
 

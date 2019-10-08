@@ -123,8 +123,8 @@ let rec typing_current_osynch oct phCurr ratio = match oct with
       in *)
       
       (* DEBUG
-      fprintf ffout "ph = %i | per = %i | ratio = %i\n@?" ph per ratio;
-      fprintf ffout "nper = %i | nph = %i\n@?" nper nph; *)
+      fprintf ffout "ock = %a ===(shift = %i | nper = %i)===> nock = %a\n@?"
+        Global_printer.print_oneck ock  shift nper  Global_printer.print_oneck n_ock; *)
       Ock n_ock
   end 
 
@@ -186,6 +186,8 @@ let rec typing_osych h pat e = match e.e_desc with
     let ct1 = typing_osych h pat e1 in
     expect_osynch h pat ct1 e2;
     ct1
+  | Epre (_,e2) ->
+    typing_osych h pat e2
   | Estruct l ->
     let ock = fresh_osynch_clock () in
     List.iter (fun (_, e) -> expect_osynch h pat (Ock ock) e) l;
@@ -252,7 +254,7 @@ let rec typing_osych h pat e = match e.e_desc with
     in
     oct
   | Esplit _ | Elast _ | Ecurrent _ -> assert false
-  | Emerge _ | Epre _ | Ewhen _ -> failwith "Construction should not appear in a model node"
+  | Emerge _ | Ewhen _ -> failwith "Construction should not appear in a model node"
 
 and typing_osynch_app h base pat op e_list = match op with
   | Etuple (* to relax ? *)
@@ -304,8 +306,8 @@ let rec typing_model_eq h eqm =
   let pat_oct = typing_model_pat h eqm.eqm_lhs in
   (try unify_onect oct pat_oct
    with Unify ->
-     eprintf "Incoherent clock between right and left side of the equation:@\n\t%a\n@?"
-      Hept_printer.print_eq_model eqm;
+     eprintf "Incoherent clock between right and left side of the equation:@\n\t%a\nlhs :: %a  | rhs :: %a.@\n"
+      Hept_printer.print_eq_model eqm print_onect pat_oct  print_onect oct;
      error_message eqm.eqm_loc (Etypeclash (oct, pat_oct)))
 
 and typing_model_eqs h eq_list = List.iter (typing_model_eq h) eq_list

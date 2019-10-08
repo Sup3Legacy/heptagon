@@ -442,7 +442,12 @@ ock_annot:
   | COLONCOLON ock=ock { Some ock }
 ;
 
-ock : LBRACKET ph=INT COMMA per=INT RBRACKET  { Cone (ph, per) }
+ock : LBRACKET ph=INT COMMA per=INT RBRACKET  {
+    if ((ph<0) || (ph>=per)) then (
+      Format.eprintf "%a:Unvalid clocking argument.\n@?"
+        Location.print_location (Loc($startpos,$endpos));
+      failwith "Phase must be positive and strictly smaller than the period");
+    Cone (ph, per) }
 ;
 
 
@@ -663,9 +668,18 @@ _exp:
   
 
   | CURRENT LPAREN LBRACKET ph=INT COMMA ratio=INT RBRACKET COMMA seInit=const COMMA e=exp RPAREN
-      { Ecurrentmodel ((ph,ratio), seInit, e) }
+      { if ((ph<0) || (ph>=ratio)) then (
+          Format.eprintf "%a:Unvalid clocking argument.\n@?"
+            Location.print_location (Loc($startpos,$endpos));
+          failwith "Phase must be positive and strictly smaller than the period");
+        Ecurrentmodel ((ph,ratio), seInit, e) }
   | e=exp WHEN LBRACKET ph=INT COMMA ratio=INT RBRACKET
-      { Ewhenmodel (e, (ph,ratio)) }
+      { 
+        if ((ph<0) || (ph>=ratio)) then (
+          Format.eprintf "%a:Unvalid clocking argument.\n@?"
+            Location.print_location (Loc($startpos,$endpos));
+          failwith "Phase must be positive and strictly smaller than the period");
+        Ewhenmodel (e, (ph,ratio)) }
   | DELAY LPAREN d=INT RPAREN e=exp
       { Edelay (d, e) }
   | seInit=const DELAYFBY LPAREN d=INT RPAREN e=exp
