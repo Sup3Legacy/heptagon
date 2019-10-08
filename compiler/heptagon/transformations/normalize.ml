@@ -281,9 +281,9 @@ let rec translate kind context oper e =
         | Some pere -> pere
       in
 
-      (* DEBUG TODO *)
+      (* DEBUG
       Format.fprintf (Format.formatter_of_out_channel stdout) "pere = %i | per = %i | e = %a\n@?"
-        pere per Hept_printer.print_exp e;
+        pere per Hept_printer.print_exp e; *)
 
       assert(pere mod per = 0);
       let context, e1 = translate ExtValue context (Some (pere/per)) e1 in

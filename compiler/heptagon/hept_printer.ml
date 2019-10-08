@@ -67,10 +67,7 @@ let rec print_vd ff { v_ident = n; v_type = ty; v_linearity = lin; v_last = last
     print_type ty  print_linearity lin  print_last_value last
 
 and print_vdm ff { vm_ident = n; vm_type = ty; vm_clock = ock} =
-  if (!Compiler_options.full_type_info) then
-    fprintf ff "%a : %a :: %a"  print_ident n print_type ty print_oneck ock
-  else
-    fprintf ff "%a : %a"  print_ident n print_type ty
+  fprintf ff "%a : %a :: %a"  print_ident n print_type ty print_oneck ock
 
 and print_last ff = function
   | Last _ -> fprintf ff "last "
