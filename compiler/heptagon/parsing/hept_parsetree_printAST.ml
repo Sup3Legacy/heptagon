@@ -68,6 +68,7 @@ let rec print_ct ff ct = match ct with
 
 let print_ock ff ock = match ock with
   | Cone (ph, per) -> fprintf ff "Cone(%i,%i)" ph per
+  | Cper per -> fprintf ff "Cper(%i)" per
 
 let rec print_oct ff oct = match oct with
   | Ock ock -> fprintf ff "Ock %a" print_ock ock

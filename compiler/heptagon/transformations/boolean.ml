@@ -623,7 +623,8 @@ let rec translate env context ({e_desc = desc; e_ty = ty; e_ct_annot = ct} as e)
             context,Emerge(ck,l)
         end
     | Ecurrent _| Ewhenmodel _ | Ecurrentmodel _
-    | Edelay _ | Edelayfby _ -> raise StructureShouldHaveBeenRemoved
+    | Edelay _ | Edelayfby _
+    | Ebuffer _ | Ebufferfby _ | Ebufferlat _ -> raise StructureShouldHaveBeenRemoved
     | Esplit(e1,e2) ->
         let context,e1 = translate env context e1 in
         let context,e2 = translate env context e2 in

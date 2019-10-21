@@ -170,7 +170,9 @@ let rec translate ({ Heptagon.e_desc = desc; Heptagon.e_ty = ty;
         Emerge (x, List.map (fun (c,e)-> c, translate_extvalue e) c_e_list)
     | Heptagon.Ecurrent _ -> raise StructureShouldHaveBeenRemoved
     | Heptagon.Ewhenmodel _ | Heptagon.Ecurrentmodel _
-    | Heptagon.Edelay _ | Heptagon.Edelayfby _ -> raise StructureShouldHaveBeenRemoved
+    | Heptagon.Edelay _ | Heptagon.Edelayfby _
+    | Heptagon.Ebuffer _ | Heptagon.Ebufferfby _ | Heptagon.Ebufferlat _ ->
+      raise StructureShouldHaveBeenRemoved
   in
   match a_ct with
     | None -> mk_exp b_ck ty ~loc:loc ~linearity:linearity desc

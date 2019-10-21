@@ -38,21 +38,26 @@ open Names
 open Idents
 open Heptagon
 open Hept_utils
+open Hept_mapfold
 open Global_printer
 open Signature
 open Clocks
 open Location
 open Format
 
+open Affine_constraint_clocking
+
+
 let debug_clocking = false (* TODO DEBUG *)
 let ffout = formatter_of_out_channel stdout
+
+let constraint_bufferfby = true  (* TODO: mettre ca en option du compilo ? *)
+
 
 let print_henv ff h =
   Env.iter (fun k v ->
     fprintf ff "\t%a => %a\n@?"  print_ident k  print_oneck v
   ) h
-
-
 
 type error_kind =
   | Etypeclash of onect * onect
@@ -65,6 +70,10 @@ let error_message loc = function
         print_onect expected_ct;
       raise Errors.Error
 
+
+
+(* ==================================== *)
+(* Core clocking modification *)
 
 let apply_shift_period sh per ock =
   let rec apply_period nper ock = match ock with
@@ -80,7 +89,6 @@ let apply_shift_period sh per ock =
   let n_ock = Cshift (sh, n_ock) in
   let n_ock = ock_repr n_ock in
   n_ock
-
 
 (* Phase manipulation, corresponding to the time operators *)
 let rec typing_when_osynch oct phWhen ratio = match oct with
@@ -129,7 +137,7 @@ let rec typing_current_osynch oct phCurr ratio = match oct with
   end 
 
 let rec typing_delay_osynch oct d = match oct with
- | Ocprod loct->
+  | Ocprod loct->
     Ocprod ((List.map (fun oct -> typing_delay_osynch oct d) ) loct)
   | Ock ock -> begin
     let ock = ock_repr ock in
@@ -162,6 +170,136 @@ let rec typing_delayfby_osynch oct d = match oct with
       Ock n_ock
   end 
 
+(* ==================================== *)
+
+(* Constraint generation for buffer operators *)
+
+let rec typing_buffer_osynch oct = match oct with
+  | Ocprod loct->
+    let loct, lac = Misc.mapfold (fun lac_acc oct ->
+      let noct, nlac = typing_buffer_osynch oct in
+      noct, nlac@lac_acc
+    ) [] loct in
+    (Ocprod loct), lac
+  | Ock ock -> begin
+    let ock = ock_repr ock in
+    match ock with
+    | Covar { contents = Coindex _ } ->
+      failwith "Typing 1-synch delay - variable clock manipulation should not happen?"
+      (* Does this only happen when we have a delay of a constant, or something like that? *)
+    | _ ->
+      let per = Clocks.get_period_ock ock in
+      let n_ock = fresh_osynch_period per in
+      let (varopt_nock,_) = get_phase_ock n_ock in
+      let idvar_nock = match varopt_nock with
+        | None -> failwith "Internal error"
+        | Some idvar -> idvar
+      in
+      let varname_n_ock = varname_from_phase_index idvar_nock in
+
+      (* Affine constraint generation / ph_{n_ock} >= expr_{ock} *)
+      let (varopt, ph) = get_phase_ock ock in
+
+      let lcoeffVar = (1, varname_n_ock) :: [] in
+      let lcoeffVar = match varopt with
+        | None -> lcoeffVar
+        | Some idvar ->
+          (-1, varname_from_phase_index idvar)::lcoeffVar
+      in
+      let affconstr = mk_affconstr false lcoeffVar ph in
+
+      (Ock n_ock, affconstr::[])
+  end 
+
+let rec typing_bufferfby_osynch oct = match oct with
+  | Ocprod loct->
+    let loct, lac = Misc.mapfold (fun lac_acc oct ->
+      let noct, nlac = typing_bufferfby_osynch oct in
+      noct, nlac@lac_acc
+    ) [] loct in
+    (Ocprod loct), lac
+  | Ock ock -> begin
+    let ock = ock_repr ock in
+    match ock with
+    | Covar { contents = Coindex _ } ->
+      failwith "Typing 1-synch delay - variable clock manipulation should not happen?"
+      (* Does this only happen when we have a delay of a constant, or something like that? *)
+    | _ ->
+      let per = Clocks.get_period_ock ock in
+      let n_ock = fresh_osynch_period per in
+
+      let laffconstr = if (constraint_bufferfby) then begin
+        let (varopt_nock,_) = get_phase_ock n_ock in
+        let idvar_nock = match varopt_nock with
+          | None -> failwith "Internal error"
+          | Some idvar -> idvar
+        in
+        let varname_n_ock = varname_from_phase_index idvar_nock in
+
+        (* Affine constraint generation / expr_{ock} >= ph_{n_ock} +1 *)
+        let (varopt, ph) = get_phase_ock ock in
+
+        let lcoeffVar = (-1, varname_n_ock) :: [] in
+        let lcoeffVar = match varopt with
+          | None -> lcoeffVar
+          | Some idvar ->
+            (1, varname_from_phase_index idvar)::lcoeffVar
+        in
+        let affconstr = mk_affconstr false lcoeffVar (1-ph) in
+        affconstr::[]
+      end else [] in
+      (Ock n_ock, laffconstr)
+  end 
+
+let rec typing_bufferlat_osynch oct lat =match oct with
+  | Ocprod loct ->
+    let loct, lac = Misc.mapfold (fun lac_acc oct ->
+      let noct, nlac = typing_bufferlat_osynch oct lat in
+      noct, nlac@lac_acc
+    ) [] loct in
+    (Ocprod loct), lac
+  | Ock ock -> begin
+    let ock = ock_repr ock in
+    match ock with
+    | Covar { contents = Coindex _ } ->
+      failwith "Typing 1-synch delay - variable clock manipulation should not happen?"
+      (* Does this only happen when we have a delay of a constant, or something like that? *)
+    | _ ->
+      let per = Clocks.get_period_ock ock in
+      let n_ock = fresh_osynch_period per in
+      
+      let (varopt_nock,_) = get_phase_ock n_ock in
+      let idvar_nock = match varopt_nock with
+        | None -> failwith "Internal error"
+        | Some idvar -> idvar
+      in
+      let varname_n_ock = varname_from_phase_index idvar_nock in
+
+      let (varopt, ph) = get_phase_ock ock in
+
+      (* Affine constraint generation / lat >= ph_{n_ock} - ph_{ock} >= 0 *)
+
+      (* ph_{ock} - ph_{n_ock} >= -lat *)
+      let lcoeffVar_lat = (-1, varname_n_ock) :: [] in
+      let lcoeffVar_lat = match varopt with
+        | None -> lcoeffVar_lat
+        | Some idvar ->
+          (1, varname_from_phase_index idvar)::lcoeffVar_lat
+      in
+      let affconstr_lat = mk_affconstr false lcoeffVar_lat (-lat-ph) in
+
+      (* ph_{n_ock} - ph_{ock} >= 0  *)
+      let lcoeffVar_0 = (1, varname_n_ock) :: [] in
+      let lcoeffVar_0 = match varopt with
+        | None -> lcoeffVar_0
+        | Some idvar ->
+          (-1, varname_from_phase_index idvar)::lcoeffVar_0
+      in
+      let affconstr_0 = mk_affconstr false lcoeffVar_0 ph in
+
+      let laffconstr = affconstr_0::affconstr_lat::[] in
+      (Ock n_ock, laffconstr)
+  end
 
 
 (* ==================================== *)
@@ -175,56 +313,76 @@ let rec typing_model_pat h = function
   | Evarpat x -> Ock (ock_of_name h x)
   | Etuplepat pat_list -> Ocprod (List.map (typing_model_pat h) pat_list)
 
-let rec typing_osych h pat e = match e.e_desc with
+let rec typing_osych h lcst pat e = match e.e_desc with
   | Econst _ -> 
     let ock = fresh_osynch_clock () in
-      Ock ock
+    (Ock ock, lcst)
   | Evar x ->
     let ock = ock_of_name h x in
-    Ock ock
+    (Ock ock, lcst)
   | Efby (e1, e2) ->
-    let ct1 = typing_osych h pat e1 in
-    expect_osynch h pat ct1 e2;
-    ct1
+    let ct1, lcst = typing_osych h lcst pat e1 in
+    let lcst = expect_osynch h lcst pat ct1 e2 in
+    (ct1, lcst)
   | Epre (_,e2) ->
-    typing_osych h pat e2
+    typing_osych h lcst pat e2
   | Estruct l ->
     let ock = fresh_osynch_clock () in
-    List.iter (fun (_, e) -> expect_osynch h pat (Ock ock) e) l;
-    Ock ock
+    let lcst = List.fold_left (fun lcst (_, e) ->
+      expect_osynch h lcst pat (Ock ock) e
+    ) lcst l in
+    (Ock ock, lcst)
 
-  (* Expressions speficic to model *)
+  (* Expressions specific to model *)
   | Ewhenmodel (e, (ph,ratio)) ->
-    let octe = typing_osych h pat e in
+    let (octe, lcst) = typing_osych h lcst pat e in
     let noct = typing_when_osynch octe ph ratio in
-    noct
+    (noct, lcst)
 
   | Ecurrentmodel ((ph, ratio), _, e) ->
-    let octe = typing_osych h pat e in
+    let (octe, lcst) = typing_osych h lcst pat e in
     let noct = typing_current_osynch octe ph ratio in
-    noct
+    (noct, lcst)
 
   | Edelay (d, e) ->
-    let octe = typing_osych h pat e in
+    let (octe, lcst) = typing_osych h lcst pat e in
     let noct = typing_delay_osynch octe d in
-    noct
+    (noct, lcst)
 
   | Edelayfby (d, _, e) ->
-    let octe = typing_osych h pat e in
+    let (octe, lcst) = typing_osych h lcst pat e in
     let noct = typing_delayfby_osynch octe d in
-    noct
+    (noct, lcst)
+
+  | Ebuffer e ->
+    let (octe, lcst) = typing_osych h lcst pat e in
+    let (noct, laffconstr) = typing_buffer_osynch octe in
+    let (al,bl) = lcst in
+    (noct, (laffconstr@al,bl))
+
+  | Ebufferfby (_, e) ->
+    let (octe, lcst) = typing_osych h lcst pat e in
+    let (noct, laffconstr) = typing_bufferfby_osynch octe in
+    let (al,bl) = lcst in
+    (noct, (laffconstr@al,bl))
+
+  | Ebufferlat (lat, e) ->
+    let (octe, lcst) = typing_osych h lcst pat e in
+    let (noct, laffconstr) = typing_bufferlat_osynch octe lat in
+    let (al,bl) = lcst in
+    (noct, (laffconstr@al,bl))
 
   | Eapp({a_op = op}, args, _) ->
       let base_ock = fresh_osynch_clock () in
-      let oct = typing_osynch_app h base_ock pat op args in
-      oct
+      let (oct, lcst) = typing_osynch_app h lcst base_ock pat op args in
+      (oct, lcst)
 
   (* TODO: iterators needed ??? :/ *)
   | Eiterator (it, {a_op = op}, nl, pargs, args, _) ->
     let base_ock = fresh_osynch_clock () in
-    let oct = match it with
+    let (oct, lcst) = match it with
       | Imap -> (* exactly as if clocking the node *)
-          typing_osynch_app h base_ock pat op (pargs@args)
+          typing_osynch_app h lcst base_ock pat op (pargs@args)
       | Imapi -> (* clocking the node with the extra i input on [ck_r] *)
           let il (* stubs i as 0 *) =
             List.map (fun _ -> mk_exp
@@ -232,11 +390,11 @@ let rec typing_osych h pat e = match e.e_desc with
                 Initial.tint ~linearity:Linearity.Ltop
             ) nl
           in
-          typing_osynch_app h base_ock pat op (pargs@args@il)
+          typing_osynch_app h lcst base_ock pat op (pargs@args@il)
       | Ifold | Imapfold ->
           (* clocking node with equality constaint on last input and last output *)
-          let oct = typing_osynch_app h base_ock pat op (pargs@args) in
-          oct
+          let (oct, lcst) = typing_osynch_app h lcst base_ock pat op (pargs@args) in
+          (oct, lcst)
       | Ifoldi -> (* clocking the node with the extra i and last in/out constraints *)
           let il (* stubs i as 0 *) =
             List.map (fun _ -> mk_exp
@@ -249,23 +407,27 @@ let rec typing_osych h pat e = match e.e_desc with
             | [l] -> il @ [l]
             | h::l -> h::(insert_i l)
           in
-          let oct = typing_osynch_app h base_ock pat op (pargs@(insert_i args)) in
-          oct
+          let (oct, lcst) = typing_osynch_app h lcst base_ock pat op (pargs@(insert_i args)) in
+          (oct, lcst)
     in
-    oct
+    (oct, lcst)
   | Esplit _ | Elast _ | Ecurrent _ -> assert false
   | Emerge _ | Ewhen _ -> failwith "Construction should not appear in a model node"
 
-and typing_osynch_app h base pat op e_list = match op with
+and typing_osynch_app h lcst base pat op e_list = match op with
   | Etuple (* to relax ? *)
   | Earrow
   | Earray_fill | Eselect | Eselect_dyn | Eselect_trunc | Eupdate
   | Eselect_slice | Econcat | Earray | Efield | Efield_update | Eifthenelse | Ereinit ->
-    List.iter (expect_osynch h pat (Ock base)) e_list;
-    Ock base
+    let lcst = List.fold_left (fun lcst e ->
+      expect_osynch h lcst pat (Ock base) e
+    ) lcst e_list in
+    (Ock base, lcst)
   | Efun { qual = Module "Iostream"; name = "printf" } | Efun { qual = Module "Iostream"; name = "fprintf" } ->
-    List.iter (expect_osynch h pat (Ock base)) e_list;
-    Ocprod []
+    let lcst = List.fold_left (fun lcst e ->
+      expect_osynch h lcst pat (Ock base) e
+    ) lcst e_list in
+    (Ocprod [], lcst)
   | (Efun f | Enode f) ->
     (* Big one - function call *)
     (* REMARK - We forbid clock change inside a function called by a model node
@@ -283,26 +445,27 @@ and typing_osynch_app h base pat op e_list = match op with
     in
     let pat_id_list = Hept_clocking.ident_list_of_pat pat in
     let env_pat = build_env node.node_outputs pat_id_list [] in
-    let env_args = build_env node.node_inputs e_list [] in *)
-    
-    List.iter2 (fun _ e -> expect_osynch h pat (Ock base) e) node.node_inputs e_list;
-    Ocprod (List.map (fun _ -> (Ock base)) node.node_outputs)
+    let env_args = build_env node.node_inputs e_list [] in 
+    List.iter2 (fun _ e -> expect_osynch h lcst pat (Ock base) e) node.node_inputs e_list; *)
+    let lcst = List.fold_left (fun lcst e -> expect_osynch h lcst pat (Ock base) e) lcst e_list in
+    Ocprod (List.map (fun _ -> (Ock base)) node.node_outputs), lcst
 
-and expect_osynch h pat expected_oct e =
-  let actual_oct = typing_osych h pat e in
+and expect_osynch h lcst pat expected_oct e =
+  let (actual_oct, lcst) = typing_osych h lcst pat e in
   (try unify_onect actual_oct expected_oct
    with Unify ->
     error_message e.e_loc (Etypeclash (actual_oct, expected_oct))
-  )
+  );
+  lcst
 
 
 (* ----- *)
 (* ----- *)
-let rec typing_model_eq h eqm =
+let rec typing_model_eq h lcst eqm =
   if (debug_clocking) then
     fprintf ffout "Entering model equation %a@\n" Hept_printer.print_eq_model eqm;
 
-  let oct = typing_osych h eqm.eqm_lhs eqm.eqm_rhs in
+  let (oct, lcst) = typing_osych h lcst eqm.eqm_lhs eqm.eqm_rhs in
   let pat_oct = typing_model_pat h eqm.eqm_lhs in
   (try unify_onect oct pat_oct
    with Unify ->
@@ -310,31 +473,96 @@ let rec typing_model_eq h eqm =
       Hept_printer.print_eq_model eqm print_onect pat_oct  print_onect oct;
      error_message eqm.eqm_loc (Etypeclash (oct, pat_oct)))
 
-and typing_model_eqs h eq_list = List.iter (typing_model_eq h) eq_list
+and typing_model_eqs h lcst eq_list = List.iter (typing_model_eq h lcst) eq_list
 
 (* Block management *)
-and append_model_env h vdms =
-  List.fold_left (fun h { vm_ident = n; vm_clock = ock } -> Env.add n ock h) h vdms 
+and append_model_env h lcst vdms =
+  let (h, lcst) = List.fold_left (fun (h,lcst) { vm_ident = n; vm_clock = ock } ->
+    (* Create a new boundary condition from ock, if phase variable *)
+    let (varopt, ph) = get_phase_ock ock in
+    let nlaffcst = match varopt with
+      | None -> lcst   (* The check that the phase is valid was done during parsing*)
+      | Some varid ->
+        assert(ph==0);    (* No shift in variable declaration *)
+        let varname = varname_from_phase_index varid in
+        let per = get_period_ock ock in
 
-and typing_block_model h {bm_local = l; bm_eqs = eq_list} =
-  let h1 = append_model_env h l in
+        let bcond = mk_bound_constr varname 0 per in
+        let (laffcst, lbndcst) = lcst in
+        (laffcst, bcond::lbndcst)
+    in
+
+    (* Update h *)
+    let nh = Env.add n ock h in
+    (nh, nlaffcst)
+  ) (h,lcst) vdms in
+  (h, lcst)
+
+and typing_block_model h lcst {bm_local = l; bm_eqs = eq_list} =
+  let (h1, lcst) = append_model_env h lcst l in
 
   if (debug_clocking) then
     fprintf ffout "Entering block_model - Environment is:\n%a@\n" print_henv h1;
 
-  typing_model_eqs h1 eq_list;
-  h1
+  typing_model_eqs h1 lcst eq_list;
+  (h1, lcst)
 
-let typing_model md = 
-  let h0 = append_model_env Env.empty md.m_input in
-  let h = append_model_env h0 md.m_output in
-  let h = typing_block_model h md.m_block in
 
+(* Substitution of the phase solution in the program *)
+let rec subst_solution msol ock = match ock with
+  | Cone _ -> ock
+  | Cshift (sh, ock1) ->
+    let ock1 = subst_solution msol ock1 in
+    ock_repr (Cshift (sh, ock1))
+  | Covar { contents = ol } -> (match ol with
+    | Coindex _ ->
+      failwith "Internal error: Period and phase unknown during solution substitution"
+    | Colink ock -> subst_solution msol ock
+    | Coper ({ contents = op }, per) -> (match op with
+      | Cophase ph -> Cone (ph, per)
+      | Cophshift (sh, phid) ->  (* Shift + 'a *)
+        let ph_val = IntMap.find phid msol in
+        Cone (ph_val+sh, per)
+      | Cophindex phid -> (* 'a *)
+        let ph_val = IntMap.find phid msol in
+        Cone (ph_val, per)
+    )
+  )
+
+let eq_model_replace funs msol eqm =
+  { eqm with eqm_clk = subst_solution msol eqm.eqm_clk }, msol
+
+let var_dec_model_replace funs msol vdm =
+ { vdm with vm_clock = subst_solution msol vdm.vm_clock }, msol
+
+
+(* Main functions *)
+let typing_model md =
+  let lcst : ((affconstr list) * (boundconstr list)) = ([],[]) in
+
+  let (h0, lcst) = append_model_env Env.empty lcst md.m_input in
+  let (h, lcst) = append_model_env h0 lcst md.m_output in
+  let (h, lcst) = typing_block_model h lcst md.m_block in
   (* Update clock info in variable descriptions *)
   let set_clock vdm = { vdm with vm_clock = Env.find vdm.vm_ident h } in
   let md = { md with m_input = List.map set_clock md.m_input;
                      m_output = List.map set_clock md.m_output }
   in
+
+  if debug_clocking then
+    print_constraint_environment ffout lcst;
+
+  (* Solve the constraints *)
+  let msol = Affine_constraint_clocking.solve_constraints lcst in
+
+  (* Use solution to replace all phindex of the system *)
+  let funs_replacement = { Hept_mapfold.defaults with
+      eq_model = eq_model_replace;
+      var_dec_model = var_dec_model_replace;
+  } in
+  let md, _ = funs_replacement.model_dec funs_replacement msol md in
+
+
   (* No update of signature: model should be the top-level node *)
   (* update_signature_model h md; *)
   md

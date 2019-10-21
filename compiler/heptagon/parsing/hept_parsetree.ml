@@ -94,6 +94,7 @@ and ct =
 
 and oneck =
   | Cone of int * int
+  | Cper of int
 
 and onect =
   | Ock of oneck

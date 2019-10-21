@@ -442,12 +442,19 @@ ock_annot:
   | COLONCOLON ock=ock { Some ock }
 ;
 
-ock : LBRACKET ph=INT COMMA per=INT RBRACKET  {
+ock :
+  | LBRACKET ph=INT COMMA per=INT RBRACKET  {
     if ((ph<0) || (ph>=per)) then (
       Format.eprintf "%a:Unvalid clocking argument.\n@?"
         Location.print_location (Loc($startpos,$endpos));
       failwith "Phase must be positive and strictly smaller than the period");
     Cone (ph, per) }
+  | LBRACKET DOUBLE_DOT COMMA per=INT RBRACKET {
+    if (per<=0) then (
+      Format.eprintf "%a:Unvalid clocking argument.\n@?"
+        Location.print_location (Loc($startpos,$endpos));
+      failwith "Period must be strictly positive");
+    Cper per }
 ;
 
 

@@ -348,6 +348,7 @@ let rec translate_some_one_clock isInOutput loc env ock = match ock with
 
 and translate_one_clock loc env ock = match ock with
   | Cone (ph, per) -> Clocks.Cone (ph, per)
+  | Cper per -> Clocks.fresh_osynch_period per
 
 let rec translate_ct loc env ct = match ct with
   | Ck ck -> Clocks.Ck (translate_clock loc env ck)

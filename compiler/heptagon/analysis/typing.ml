@@ -956,6 +956,16 @@ and typing cenv h e =
         let typed_seInit, t = typing_static_exp cenv seInit in
         let typed_e = expect cenv h t e in
         Edelayfby (d, typed_seInit, typed_e), t
+      | Ebuffer e ->
+        let typed_e, t = typing cenv h e in
+        Ebuffer typed_e, t
+      | Ebufferfby (seInit, e) ->
+        let typed_seInit, t = typing_static_exp cenv seInit in
+        let typed_e = expect cenv h t e in
+        Ebufferfby (typed_seInit, typed_e), t
+      | Ebufferlat (lat, e) -> 
+        let typed_e, t = typing cenv h e in
+        Ebufferlat (lat, typed_e), t
     in
       { e with e_desc = typed_desc; e_ty = ty; }, ty
   with

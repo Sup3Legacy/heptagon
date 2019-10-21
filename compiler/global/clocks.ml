@@ -268,7 +268,7 @@ let is_coherent_osync ock = match ock with
     if (per<=0) then false else
     if ((ph<0) || (ph>=per)) then false else
     true
-  | Cshift (d, ock) -> true (* Note: don't do the full computation there *)
+  | Cshift _ -> true (* Note: don't do the full computation there *)
   | Covar _ -> true
 
 (* Check the inclusion of a clock under another *)
@@ -312,8 +312,8 @@ let rec unify_oneck ock1 ock2 =
 
     (* Cases 2 - Add Covar Coindex to the mix*)
     | (Covar { contents = Coindex n1 }), (Covar { contents = Coindex n2 }) when n1=n2 -> ()
-    | ock, Covar ( { contents = Coindex n1 } as v)
-    | Covar ( { contents = Coindex n1 } as v), ock ->
+    | ock, Covar ( { contents = Coindex _ } as v)
+    | Covar ( { contents = Coindex _ } as v), ock ->
       v.contents <- Colink ock
 
     (* Cases 3 - Add Covar Coper Cophase to the mix *)
@@ -322,8 +322,8 @@ let rec unify_oneck ock1 ock2 =
       if (per1!=per2) then raise Unify else
       vph.contents <- Cophindex n2;
 
-    | Covar { contents = Coper (({contents = Cophindex n} as v), per1)}, Cone (ph2, per2)
-    | Cone (ph2, per2), Covar { contents = Coper (({contents = Cophindex n} as v) ,per1)}->
+    | Covar { contents = Coper (({contents = Cophindex _} as v), per1)}, Cone (ph2, per2)
+    | Cone (ph2, per2), Covar { contents = Coper (({contents = Cophindex _} as v) ,per1)}->
       if (per1!=per2) then raise Unify else
       v.contents <- Cophase ph2
     
@@ -339,9 +339,9 @@ let rec unify_oneck ock1 ock2 =
         if (per1!=per2) then raise Unify else (
           match !rop with
           | Cophase _ -> failwith "Unification of unsimplified clock was not supposed to happen."
-          | Cophindex phi ->
+          | Cophindex _ ->
             rop.contents <- Cophshift (-sh, n)
-          | Cophshift (d,phi) ->
+          | Cophshift (d,_) ->
             rop.contents <- Cophshift (d-sh, n)
         )
     end
@@ -392,3 +392,4 @@ let rec get_period_ock ock =
       | Coper (_, per) -> per
       | Colink ock -> get_period_ock ock
     end
+

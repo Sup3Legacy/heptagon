@@ -226,6 +226,65 @@ let delayfbymodel context seInit e d oper e_orig =
     let e, context = delayfbymodel_aux d oper context (seInit, e) in
     context, e
 
+let buffer context e oper e_orig =
+  let buffer_aux oper context e =
+    let context, e =
+      if !Compiler_options.do_mem_alloc && Stateful.exp_is_stateful e then
+        let context, n = equation context e oper in
+        context, { e with e_desc = n }
+      else
+        context, e
+    in
+    { e_orig with e_desc = Ebuffer e }, context
+  in
+  if is_list e then
+    let e_list, context = Misc.mapfold (buffer_aux oper) context (e_to_e_list e) in
+    context, { e_orig with e_desc = Eapp(mk_app Etuple, e_list, None) }
+  else
+    let e, context = buffer_aux oper context e in
+    context, e
+
+let bufferfby context seInit e oper e_orig =
+  let bufferfby_aux oper context (seInit, e) =
+    let context, e =
+      if !Compiler_options.do_mem_alloc && Stateful.exp_is_stateful e then
+        let context, n = equation context e oper in
+        context, { e with e_desc = n }
+      else
+        context, e
+    in
+    { e_orig with e_desc = Ebufferfby (seInit, e) }, context
+  in
+  if is_list e then
+    let seInitlist = se_to_se_list seInit in
+    let elist = e_to_e_list e in
+    let seInitelist = List.combine seInitlist elist in
+    let e_list, context = Misc.mapfold (bufferfby_aux oper) context seInitelist in
+    context, { e_orig with e_desc = Eapp(mk_app Etuple, e_list, None) }
+  else
+    let e, context = bufferfby_aux oper context (seInit, e) in
+    context, e
+
+let bufferlat context e lat oper e_orig =
+  let bufferlat_aux lat oper context e =
+    let context, e =
+      if !Compiler_options.do_mem_alloc && Stateful.exp_is_stateful e then
+        let context, n = equation context e oper in
+        context, { e with e_desc = n }
+      else
+        context, e
+    in
+    { e_orig with e_desc = Ebufferlat(lat, e) }, context
+  in
+  if is_list e then
+    let e_list, context = Misc.mapfold (bufferlat_aux lat oper) context (e_to_e_list e) in
+    context, { e_orig with e_desc = Eapp(mk_app Etuple, e_list, None) }
+  else
+    let e, context = bufferlat_aux lat oper context e in
+    context, e
+
+(* ===== *)
+
 
 type kind = ExtValue | Any
 
@@ -280,11 +339,9 @@ let rec translate kind context oper e =
         | None -> failwith "No period in block model expression"
         | Some pere -> pere
       in
-
       (* DEBUG
       Format.fprintf (Format.formatter_of_out_channel stdout) "pere = %i | per = %i | e = %a\n@?"
         pere per Hept_printer.print_exp e; *)
-
       assert(pere mod per = 0);
       let context, e1 = translate ExtValue context (Some (pere/per)) e1 in
       whencmodel context e1 (ph, per) oper e
@@ -301,6 +358,19 @@ let rec translate kind context oper e =
     | Edelayfby (d, seInit, e1) ->
       let context, e1 = translate kind context oper e1 in
       delayfbymodel context seInit e1 d oper e
+    
+    | Ebuffer e1 ->
+      let context, e1 = translate kind context oper e1 in
+      buffer context e1 oper e
+
+    | Ebufferfby (seInit, e1) ->
+      let context, e1 = translate kind context oper e1 in
+      bufferfby context seInit e1 oper e
+
+    | Ebufferlat (lat, e1) ->
+      let context, e1 = translate kind context oper e1 in
+      bufferlat context e1 lat oper e
+
     | Eapp({ a_op = Eifthenelse }, [e1; e2; e3], _) ->
         ifthenelse context oper e e1 e2 e3
     (* XXX Huge hack to avoid comparing tuples... (temporary, until this is

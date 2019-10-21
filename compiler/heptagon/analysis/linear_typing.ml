@@ -453,7 +453,8 @@ let rec typing_exp env e =
     | Estruct _ -> Ltop, env
     | Emerge _ | Esplit _ | Eapp _ | Eiterator _ -> assert false
     (* Linear typing should not happen on model nodes *)
-    | Ewhenmodel _ | Ecurrentmodel _ | Edelay _ | Edelayfby _ -> assert false
+    | Ewhenmodel _ | Ecurrentmodel _ | Edelay _ | Edelayfby _
+    | Ebuffer _ | Ebufferfby _ | Ebufferlat _ -> assert false
   in
     e.e_linearity <- l;
     l, env

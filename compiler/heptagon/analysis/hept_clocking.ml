@@ -173,7 +173,8 @@ let rec typing h pat e =
         ct, base_ck
     | Esplit _ | Elast _ -> assert false
     (* In model *)
-    | Ewhenmodel _ | Ecurrentmodel _ | Edelay _ | Edelayfby _ ->
+    | Ewhenmodel _ | Ecurrentmodel _ | Edelay _ | Edelayfby _
+    | Ebuffer _ | Ebufferfby _ | Ebufferlat _ ->
       failwith "Model operators inside a node is forbidden."
   in
   begin match e.e_ct_annot with

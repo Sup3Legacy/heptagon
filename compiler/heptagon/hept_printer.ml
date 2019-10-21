@@ -200,6 +200,13 @@ and print_exp_desc ff = function
   | Edelayfby (d, seInit, e) ->
       fprintf ff "@[%a delayfby(%i) %a@]"
         Global_printer.print_static_exp seInit   d  print_exp e
+  | Ebuffer e ->
+      fprintf ff "@[buffer %a@]" print_exp e
+  | Ebufferfby (seInit, e) ->
+      fprintf ff "@[%a bufferfby %a@]"
+        Global_printer.print_static_exp seInit print_exp e
+  | Ebufferlat (l, e) ->
+      fprintf ff "@[bufferlat(%i) %a@]" l  print_exp e
 
 
 and print_handler ff c =

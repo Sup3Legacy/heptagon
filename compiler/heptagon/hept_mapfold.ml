@@ -188,6 +188,16 @@ and edesc funs acc ed = match ed with
       let seInit, acc = Global_mapfold.static_exp_it funs.global_funs acc seInit in
       let e, acc = exp_it funs acc e in
       Edelayfby (d, seInit, e), acc
+  | Ebuffer e ->
+      let e, acc = exp_it funs acc e in
+      Ebuffer e, acc
+  | Ebufferfby (seInit, e) ->
+      let seInit, acc = Global_mapfold.static_exp_it funs.global_funs acc seInit in
+      let e, acc = exp_it funs acc e in
+      Ebufferfby (seInit, e), acc
+  | Ebufferlat (lat, e) ->
+      let e, acc = exp_it funs acc e in
+      Ebufferlat (lat, e), acc
 
 and app_it funs acc a = funs.app funs acc a
 and app funs acc a =

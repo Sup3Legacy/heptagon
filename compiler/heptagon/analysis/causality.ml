@@ -151,8 +151,11 @@ let rec typing e =
     | Ecurrentmodel(_, seInit, e) ->
         let t = pre (typing e) in
         t
-    | Edelay (_, e) -> typing e
-    | Edelayfby (_, seInit, e) ->
+    | Edelay (_, e)
+      | Ebuffer e
+      | Ebufferlat (_,e) -> typing e
+    | Edelayfby (_, seInit, e)
+      | Ebufferfby (seInit, e) ->
         let t = pre (typing e) in
         t
 

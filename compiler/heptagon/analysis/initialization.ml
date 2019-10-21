@@ -287,9 +287,12 @@ let rec typing h e =
       (* initialized_exp h e2;
       skeleton (itype (typing h e1)) e.e_ty *)
       skeleton (itype (typing h e2)) e2.e_ty
-    | Edelay (_, e) ->
+    | Edelay (_, e)
+      | Ebuffer e
+      | Ebufferlat (_,e) ->
       skeleton (itype (typing h e)) e.e_ty
-    | Edelayfby (_, _, e2) ->
+    | Edelayfby (_, _, e2)
+      | Ebufferfby (_, e2) ->
       (*initialized_exp h e2;
       skeleton (itype (typing h e1)) e.e_ty *)
       skeleton (itype (typing h e2)) e2.e_ty
