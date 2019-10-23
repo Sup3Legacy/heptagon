@@ -148,6 +148,9 @@ let main () =
         "-cg_memfirst", Arg.Set cg_memfirst, doc_cg_memfirst;
         "-cg_outlist", Arg.Set cg_outlist, doc_cg_outlist;
 
+        "-genphconstr", Arg.String set_constraint_filename, doc_genphconstr;
+        "-solphconstr", Arg.String set_solution_filename, doc_solphconstr;
+
         "-assert", Arg.String add_assert, doc_assert;
         "-nopervasives", Arg.Unit set_no_pervasives, doc_no_pervasives;
         "-target", Arg.String add_target_language, doc_target;

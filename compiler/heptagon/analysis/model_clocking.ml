@@ -36,6 +36,8 @@
 
 open Names
 open Idents
+open Containers
+
 open Heptagon
 open Hept_utils
 open Hept_mapfold
@@ -529,10 +531,10 @@ let rec subst_solution msol ock = match ock with
     )
   )
 
-let eq_model_replace funs msol eqm =
+let eq_model_replace _ msol eqm =
   { eqm with eqm_clk = subst_solution msol eqm.eqm_clk }, msol
 
-let var_dec_model_replace funs msol vdm =
+let var_dec_model_replace _ msol vdm =
  { vdm with vm_clock = subst_solution msol vdm.vm_clock }, msol
 
 
@@ -553,14 +555,19 @@ let typing_model md =
     print_constraint_environment ffout lcst;
 
   (* Solve the constraints *)
-  let msol = Affine_constraint_clocking.solve_constraints lcst in
+  (* Note: no boundary constraint missing for the created phase variable, because
+      the system is normalised *)
+  let msol = Affine_constraint_clocking.solve_constraints_main lcst in
 
+  (* Convert the solution back to a mapping from phase id to its value *)
+  let misol = Affine_constraint_clocking.solution_to_phase_number msol in
+  
   (* Use solution to replace all phindex of the system *)
   let funs_replacement = { Hept_mapfold.defaults with
       eq_model = eq_model_replace;
       var_dec_model = var_dec_model_replace;
   } in
-  let md, _ = funs_replacement.model_dec funs_replacement msol md in
+  let md, _ = funs_replacement.model_dec funs_replacement misol md in
 
 
   (* No update of signature: model should be the top-level node *)

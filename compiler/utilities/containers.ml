@@ -43,3 +43,9 @@ struct
     with
       | Not_found -> add k vl m
 end
+
+
+module IntMap = Map.Make(struct type t=int let compare = Pervasives.compare end)
+
+module StringMap = Map.Make(struct type t=string let compare = Pervasives.compare end)
+module StringSet = Set.Make(struct type t=string let compare = Pervasives.compare end)

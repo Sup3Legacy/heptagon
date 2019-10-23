@@ -30,7 +30,15 @@
 (* Functions to manage affine constraints (used in model_clocking about phase values) *)
 
 open Format
+open Containers
 open Clocks
+
+(* For debugging *)
+let debug = false
+let ffout = Format.formatter_of_out_channel stdout
+
+let max_default_phase_for_solving = 7777 (* Should be distinctive enough *)
+
 
 
 type affterm = (int * string) list
@@ -50,6 +58,8 @@ type boundconstr = {  (* lbound <= varName <= ubound *)
 
 (* ==================================================== *)
 (* Pretty-printers *)
+
+let num_elem_max_per_line = 7  (* TODO: expose option ? *)
 
 (* Auxilliary list functions *)
 let rec extract_n_first_elems n l =
@@ -115,6 +125,30 @@ let print_constraint_environment ff (lcst : (affconstr list) * (boundconstr list
   fprintf ff "Boundary constraints:\n@?";
   List.iter (fun bc -> fprintf ff "\t%a\n@?" print_bound_constr bc) lbc
 
+let print_list_aff_constr ff (lconstr:affconstr list) =
+  List.iter (fun constr -> print_aff_constr ff constr) lconstr
+
+let print_list_bound_constr ff (lbconstr: boundconstr list) =
+  List.iter (fun constr -> print_bound_constr ff constr) lbconstr
+
+let print_list_binary ff lbinary =
+  List.iter (fun v -> fprintf ff "\t%s\n@?" v) lbinary
+
+
+(* Print-out constraints using the CPLEX LP format (cf glpk doc, Appendix C) *)
+let print_out_cplex_constraint ff obj_func lac lbc lbinary =
+  fprintf ff "Minimize\n@?";
+  print_affterm_multilines ~bfirst:true num_elem_max_per_line ff obj_func;
+  fprintf ff "Subject To\n@?";
+  print_list_aff_constr ff lac;
+  fprintf ff "Bounds\n@?";
+  print_list_bound_constr ff lbc;
+  if (lbinary!=[]) then begin
+    fprintf ff "Binary\n@?";
+    print_list_binary ff lbinary;
+  end;
+  fprintf ff "End\n\n@?"
+
 
 (* ==================================================== *)
 
@@ -162,27 +196,460 @@ let rec get_phase_ock ock =
 
 (* ==================================================== *)
 
-module IntMap = Map.Make(struct type t=int let compare = Pervasives.compare end)
+(* IntMap; Type of the output of the constraint resolution *)
+(* StringMap: Internal type of the constraint resolution: Var_name ==> value *)
+
+(* Convert the StringMap solution to a IntMap solution *)
+let solution_to_phase_number smap =
+  StringMap.fold (fun strk v imap ->
+    let intk = get_phase_index_from_varname strk in
+    IntMap.add intk v imap
+  ) smap IntMap.empty
+
+let check_coherency (lac : affconstr list) (lbc : boundconstr list) (lbinary : string list) msol =
+  (* Check the binary constraints *)
+  List.iter (fun vname ->
+    try (
+      let value = StringMap.find vname msol in
+      if (value<0) then
+        failwith ("Solution invalid - binary variable " ^ vname ^ " is negative.");
+      if (value>1) then
+        failwith ("Solution invalid - binary variable " ^ vname ^ " is greater than 2.");
+    ) with
+    | Not_found ->
+      failwith ("Solution invalid - binary variable " ^ vname ^ " not found.")
+  ) lbinary;
+
+  (* Check the boundary constraints *)
+  List.iter (fun bc ->
+    try
+      let value = StringMap.find bc.varName msol in
+      if (value<bc.lbound) then
+        failwith ("Solution invalid - variable " ^ bc.varName
+            ^ " violates the lbound of a boundary constraint.");
+      if (value>=bc.ubound) then
+        failwith ("Solution invalid - binary variable " ^ bc.varName
+            ^ " violates the ubound of a boundary constraint.");
+    with
+    | Not_found ->
+      eprintf "Solution invalid - boundary constraint variable %a was not found."
+        print_bound_constr bc;
+      failwith "Solution invalid"
+  ) lbc;
+
+  (* Check the affine constraints *)
+  List.iter (fun ac ->
+    (* We evaluate the value of lcoeffVar *)
+    let valcoeff = List.fold_left (fun acc (c,var) ->
+      try
+        let value = StringMap.find var msol in
+        acc + c * value
+      with
+      | Not_found ->
+        eprintf "Solution invalid - variable %s in constraint %a was not found."
+          var  print_aff_constr ac;
+        failwith "Solution invalid"
+    ) 0 ac.lcoeffVar in
+
+    (* Check the constraint *)
+    if (ac.isEq) then (
+      if (valcoeff!=ac.cst) then (
+        eprintf "Solution invalid - equality constraint %a is not satisfied (valcoeff = %i)."
+          print_aff_constr ac  valcoeff;
+        failwith "Solution invalid"
+      )
+    ) else (
+      if (valcoeff<ac.cst) then (
+        eprintf "Solution invalid - inequality constraint %a is not satisfied (valcoeff = %i)."
+          print_aff_constr ac  valcoeff;
+        failwith "Solution invalid"
+      )
+    )
+  ) lac
+
+
+(* ==================================================== *)
+
+(* Internal solver of constraint. Limited compared to the general case
+  => It only tries to find the minimal solution to a list of affine and boundary constraint.
+    "minimal" in the sense of "the earliest phase possible" *)
+
+(* Graph structure for the constraint resolution (discarded once a solution is found ??? ) *)
+(* Edge (varL, varR, c) = "varL + c <= varR" *)
+type grConstrNodes = {
+  name : string;
+  ind : int;                      (* Position in the array of containing "grConstr" *)
+  in_edges : (int * int) list;    (* (elem_index, weight) *)
+  out_edges : (int * int) list;   (* (elem_index, weight) *)
+  max_val : int;                  (* Max value from the cycle (min_val with same rules is 0) *)
+
+  (* Solution currently found *)
+  val_sol : int;
+
+  (* val_sol \in [min_val_sol; max_val_sol] *)
+  (* Deduced from the dependence graph and max_val *)
+  min_val_sol : int;
+  max_val_sol : int;
+}
+
+type grConstr = grConstrNodes array
+
+(* Pretty-printing *)
+let print_sol_grConstr ff grConstr =
+  Array.iter (fun elem ->
+    Format.fprintf ff "\t(i=%i) %s -> %i  ( < %i  | [%i ; %i[ )\n@?"
+      elem.ind elem.name
+      elem.val_sol  elem.max_val
+      elem.min_val_sol elem.max_val_sol
+  ) grConstr
+
+(* --- *)
+
+(* Construction of the list of variables and associated upper bound *) 
+let get_list_variable lac lbc =
+  let (lres, svar_registered) = List.fold_left (fun (lacc, sreg) bc ->
+    let nlacc = (bc.varName, bc.lbound, bc.ubound)::lacc in
+    let nsreg = StringSet.add bc.varName sreg in
+    (nlacc, nsreg)
+  ) ([], StringSet.empty) lbc in
+
+  (* Check that we did not miss any variable from lac *)
+  (* By default: lbound = 0 / ubound = max_default_phase_for_solving *)
+  let (lres, _) = List.fold_left (fun (lacc, sreg) ac ->
+    let lvarac = List.map (fun (_,v) -> v) ac.lcoeffVar in
+    let (lacc, sreg) = List.fold_left (fun (lacc, sreg) var ->
+      if (StringSet.mem var sreg) then (lacc, sreg) else (* No issue *)
+      (* New variable not in bounds !!! *)
+      let nlacc = (var, 0, max_default_phase_for_solving)::lacc in
+      let nsreg = StringSet.add var sreg in
+      (nlacc, nsreg)
+    ) (lacc, sreg) lvarac in
+    (lacc, sreg)
+  ) (lres, svar_registered) lac in
+  lres
+
+
+(* Construction of a table associating a variable to the affine constraints containing it *)
+let build_htbl_var_to_constraint lvarname depConstrs =
+  let numVars = List.length lvarname in
+  let htblVar2Constr = Hashtbl.create numVars in
+
+  List.iter (fun depConstr ->
+      assert(depConstr.isEq=false);
+      List.iter (fun (_,varName) ->
+        try
+          let lDepConstr = Hashtbl.find htblVar2Constr varName in
+          let lnDepConstr = depConstr::lDepConstr in
+          Hashtbl.replace htblVar2Constr varName lnDepConstr
+        with
+        | Not_found -> (* New element found! *)
+          Hashtbl.add htblVar2Constr varName (depConstr::[])
+      ) depConstr.lcoeffVar
+    ) depConstrs;
+  htblVar2Constr
+
+(* Assume that we have only constraints of the form p_1 - p_2 >= c*)
+let get_edge_from_dep_affconstr affconstr =
+  assert(affconstr.isEq=false);
+  assert((List.length affconstr.lcoeffVar)=2);
+  let (c1,v1) = List.hd affconstr.lcoeffVar in
+  let (c2,v2) = List.hd (List.tl affconstr.lcoeffVar) in
+  assert(c1 * c2 = (-1));
+  let (varL, varR) = if (c1=1) then (v2,v1) else (v1,v2) in
+  (varL, varR, affconstr.cst)  (* varL + c <= varR *)
+
+(* Split "ledges" into the one coming to "elem" and the one leaving "elem" *)
+let partition_inout_edges elem ledges =
+  List.fold_left (fun (accIn, accOut) edge ->
+    let (varSrc, varDst, c) = edge in
+    if (varDst=elem) then ((varSrc,c)::accIn, accOut) else
+    if (varSrc=elem) then (accIn, (varDst,c)::accOut) else
+    failwith ("Edge associated to element " ^ elem ^ " does not have it as src/dst")
+  ) ([],[]) ledges
+
+(* Initialization of the grConstr data structure *)
+let build_graph_from_constraints lvarname htblVar2Constr =
+  (* Build the nodes mapping preemptively, in order to use it later *)
+  let mvarNameNodeGrConstr = StringMap.empty in
+  let mvarNameNodeGrConstr = List.fold_left (fun macc (strVar, lb, ub) ->
+    let constrNode = {
+      name = strVar;
+      ind = -1;
+      in_edges = [];
+      out_edges = [];
+      max_val = ub;
+
+      min_val_sol = lb;
+      max_val_sol = ub;
+      
+      val_sol = (-1);
+    } in
+    StringMap.add strVar constrNode macc
+  ) mvarNameNodeGrConstr lvarname in
+
+  (* Build the array *)
+  let (_, nodeRandom) = StringMap.choose mvarNameNodeGrConstr in
+  let gr = Array.make (StringMap.cardinal mvarNameNodeGrConstr) nodeRandom in (* cardinal correct? *)
+  let indgr = ref 0 in
+
+  let mvarNameNodeGrConstr = StringMap.fold (fun varName node nmap ->
+    let node = { node with ind = !indgr } in
+    Array.set gr !indgr node;
+    indgr := !indgr + 1;
+    StringMap.add varName node nmap
+  ) mvarNameNodeGrConstr StringMap.empty in
+
+  
+  (* Build the edges *)
+  Hashtbl.iter (fun varName lconstr ->
+    let ledges = List.map get_edge_from_dep_affconstr lconstr in
+    let (lInedges, lOutedges) = partition_inout_edges varName ledges in
+
+    let lInedges = List.map (fun (strName, w) ->
+      let nodeStrName = StringMap.find strName mvarNameNodeGrConstr in
+      (nodeStrName.ind, w)
+    ) lInedges in
+    let lOutedges = List.map (fun (strName, w) ->
+      let nodeStrName = StringMap.find strName mvarNameNodeGrConstr in
+      (nodeStrName.ind, w)
+    ) lOutedges in
+
+    let constrNode = StringMap.find varName mvarNameNodeGrConstr in
+    let nConstrNode = {constrNode with in_edges = lInedges; out_edges = lOutedges } in
+    Array.set gr nConstrNode.ind nConstrNode
+  ) htblVar2Constr;
+  gr
+
+
+
+(* --- *)
+
+(* Conversion of a grConstr to a matrix of coefficient *)
+let conversion_to_mat_coeff grConstr =
+  let fill_row_conv_to_mat_coeff matRow grConstrNode =
+    let loutEdges = grConstrNode.out_edges in
+    List.iter (fun (elem_ind, w) ->
+      matRow.(elem_ind) <- Some w;
+    ) loutEdges;
+    matRow;
+  in
+
+  let n = Array.length grConstr in
+
+  (* Alloc *)
+  let arr1 = Array.make n None in
+  let mat = Array.make n arr1 in
+  for i = 0 to n-1 do
+    let arrTemp = Array.make n None in
+    arrTemp.(i) <- Some 0;
+    mat.(i) <- arrTemp;
+  done;
+
+  (* Filling mat *)
+  for i = 0 to n-1 do
+    mat.(i) <- fill_row_conv_to_mat_coeff mat.(i) grConstr.(i);
+  done;
+  mat
+
+(* Uses the dependences of the graph to obtain tighter intevals in which the solution MUST belong *)
+let find_boundaries_from_constraints grConstr =
+  (* Building the matrix of coefficient *)
+  let mat_coeff = conversion_to_mat_coeff grConstr in
+
+  (* Algebraic path algorithm *)
+  let cl_op = (fun iopt -> iopt) in
+  let plus_op = (fun aopt bopt -> match aopt with
+    | None -> bopt
+    | Some a -> begin
+      match bopt with
+      | None -> aopt
+      | Some b -> Some (max a b)
+    end
+  ) in
+  let mul_op = (fun aopt bopt -> match aopt with
+    | None -> None
+    | Some a -> begin
+      match bopt with
+      | None -> None
+      | Some b -> Some (a + b)
+    end
+  ) in
+  let mat_coeff = AlgebraicPath.algebraic_path_problem_sequential cl_op plus_op mul_op mat_coeff in
+  
+  (* Update grConstr *)
+  let n = Array.length grConstr in
+  for i = 0 to (n-1) do
+    let grNodei = grConstr.(i) in
+
+    (* min_val_sol = maximum weigth of any path from any node to the node i *)
+    let minvsol = ref 0 in
+    for j = 0 to (n-1) do
+      match mat_coeff.(j).(i) with
+      | None -> ()
+      | Some e -> minvsol := max !minvsol e;
+    done;
+
+    (* max_val_sol = min (max_val.nodej - max weigth of any path from i to this node j) *)
+    let maxvsol = ref grNodei.max_val in
+    for j = 0 to (n-1) do
+      match mat_coeff.(i).(j) with
+      | None -> ()
+      | Some e ->
+        let candidate = grConstr.(j).max_val - e in
+        maxvsol := min !maxvsol candidate;
+    done;
+
+    (* Update *)
+    let grNodei = { grNodei with min_val_sol = !minvsol; max_val_sol = !maxvsol } in
+    grConstr.(i) <- grNodei;
+  done;
+
+  grConstr
+
+(* Build the solution using grConstr *)
+let build_initial_solution grConstr =
+  let grConstr = find_boundaries_from_constraints grConstr in
+
+  (* Minimal solution = lower boundary *)
+  let linfoStrongOver = ref [] in
+  let linfoSoftOver = ref [] in
+  for i = 0 to (Array.length grConstr)-1 do
+    let grConstrNodei = grConstr.(i) in
+
+    (* Detection of no solution *)
+    if (grConstrNodei.min_val_sol>=grConstrNodei.max_val) then
+      linfoStrongOver := grConstrNodei :: !linfoStrongOver;
+    if (grConstrNodei.min_val_sol>=grConstrNodei.max_val_sol) then
+      linfoSoftOver := grConstrNodei :: !linfoSoftOver;
+
+    let grConstrNodei = { grConstrNodei with val_sol = grConstrNodei.min_val_sol } in
+    grConstr.(i) <- grConstrNodei;
+  done;
+
+  (* Error management *)
+  if (!linfoStrongOver!=[]) then (
+    Format.fprintf ffout "%a\n@?" print_sol_grConstr grConstr;
+    List.iter (fun node ->
+      Format.fprintf ffout "Overflow node - violent : %s (min_val = %i / max_absolute_val = %i)\n@?"
+        node.name node.min_val_sol node.max_val
+    ) !linfoStrongOver;
+    List.iter (fun node ->
+      Format.fprintf ffout "Overflow node - soft : %s (min_val = %i / max_val = %i)\n@?"
+        node.name node.min_val_sol node.max_val_sol
+    ) !linfoSoftOver;
+    failwith ("System not solvable - constraints before the nodes makes its minimal solution overflow")
+  );
+
+  grConstr
+
+
+(* --- *)
+
+(* Main solving function *)
+let solve_constraint_on_our_own lac lbc =
+  (* List of variables and associated upper bound *)  
+  let lvarname : (string * int * int) list = get_list_variable lac lbc in
+  
+  (* Table associated a variable to the affine constraints containing it *)
+  let htblVar2Constr = build_htbl_var_to_constraint lvarname lac in
+  
+  (* Build the graph of constraint (initialized) *)
+  let grConstr = build_graph_from_constraints lvarname htblVar2Constr in
+
+  if (debug) then
+    Format.fprintf ffout "DEBUG - graph of constraints built\n@?";
+
+  (* Solving ! *)
+  let grConstr = build_initial_solution grConstr in
+
+  if (debug) then
+    Format.fprintf ffout "DEBUG - minimal solution found\n@?";
+
+  (* Going back to a StringMap *)
+  let msol = Array.fold_left (fun macc grConstrNode ->
+    StringMap.add grConstrNode.name grConstrNode.val_sol macc
+  ) StringMap.empty grConstr in
+  msol
+
+
+(* ==================================================== *)
+
+let default_obj_func lbc =
+ let vname = (List.hd lbc).varName in
+ (1, vname)::[]
+
+(* Parsing function for the solution *)
+let parse_file parse filename =
+  let chan = open_in filename in
+  let lexbuf = Lexing.from_channel chan in
+  let res = 
+    try parse lexbuf with
+    | _ -> 
+       close_in chan;
+       let open Lexing in
+       let pos = lexbuf.lex_curr_p in
+       Printf.eprintf "Error in file \"%s\", line %d, character %d:\n"
+          filename
+          pos.pos_lnum
+          (pos.pos_cnum-pos.pos_bol);
+       failwith "Parsing error"
+  in close_in chan; res
 
 (* Solve the system of affine and boundary constraints.
-  Returns a IntMap, associating the phase number to its value
-*)
-let solve_constraints (lcst : (affconstr list) * (boundconstr list)) =
-  (* TODO: if list of affconstraint empty, take a default solution *)
+  Returns a StringMap, associating the variable name to its value *)
+let solve_constraints_main (lcst : (affconstr list) * (boundconstr list)) =
+  let (lac, lbc) = lcst in
+
+  (* Base case - no affine constraint (aka, no buffer operator) *)
+  if (lac = []) then
+    (* Default Solution: get the minimum for all boundconstr *)
+    (* Note: cover all phase variable, because the system was normalized beforehand *)
+    let msol = List.fold_left (fun msol bc ->
+      StringMap.add bc.varName bc.lbound msol
+    ) StringMap.empty lbc in
+    msol
+  else
+
+  (* TODO: objective function management (cf WCET extension)  *)
+  (* Add compiler option "-ldb" for load balancing obj function, with WCETs: no objective function *)
+  (* Default: no objective function *)
+  let (obj_func:affterm) = default_obj_func lbc in (* No cost function*)
+  let lbinary = [] in
+
+  (* TODO: if varation of the constraints, put it here *)
+  
+
+  (* Generate a constraint file, then stop the compilation flow *)
+  (* Option: -genphconstr [file_name] *)
+  if (!Compiler_options.generate_constraint_file) then
+    let ocout = open_out !Compiler_options.constraint_filename in
+    let ffout = formatter_of_out_channel ocout in
+    print_out_cplex_constraint ffout obj_func lac lbc lbinary;
+    close_out ocout;
+
+    (* === Stopping compiler flow now === *)
+    failwith "Constraint file generation successfully done - compilation flow terminated."
+  else
 
 
-  (* TODO *)
+  let msol = if (!Compiler_options.parse_solution_file) then
+    (* Option: -solphconstr [file] *)
+    (* Solution file is a serie of lines "[namevar] => [integral value]"*)
+    let lsol = parse_file (Parser_sol.solution Lexer_sol.main)
+                    !Compiler_options.solution_filename in
+    let msol = List.fold_left (fun macc (k,v) ->
+      StringMap.add k v macc
+    ) StringMap.empty lsol in
 
+    check_coherency lac lbc lbinary msol;
+    msol
+  else (
+    (* We do our own resolution - Note: only on limited options when ND *)
+    if (lbinary!=[]) then
+      failwith ("Internal constraint resolution algorithm is "
+          ^ "limited - please use an external tool.");
 
-  (* Base option: no objective function *)
-
-  (* TODO:
-    base option: do our own resolution
-    option 2: generate the constraint file
-    option 3: get the sol form constraint file*)
-
-  (* Add compiler option "-ldb" for load balancing obj function, with WCETs: no objectif function *)
-
-  IntMap.empty
-
-
+    (* Note: no objective function managed here - TODO: check that and issue a warning if option *)
+    solve_constraint_on_our_own lac lbc
+  ) in
+  msol

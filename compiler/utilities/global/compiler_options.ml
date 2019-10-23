@@ -131,6 +131,26 @@ let exposeintstate = ref false
 let cg_memfirst = ref false
 let cg_outlist = ref false (* TODO: inplace management missing? *)
 
+
+(* Options for constraint solving *)
+
+(* => Output constraints on phases *)
+let generate_constraint_file = ref false
+let constraint_filename : name ref = ref "constr_phase.txt"  (* Default name *)
+let set_constraint_filename s =
+  generate_constraint_file := true;
+  constraint_filename := s
+
+
+let parse_solution_file = ref false
+let solution_filename : name ref = ref "solution.txt"  (* Default name *)
+let set_solution_filename s =
+  parse_solution_file := true;
+  solution_filename := s
+
+
+
+
 let deadcode = ref false
 
 let tomato = ref false
@@ -208,6 +228,11 @@ and doc_mainnode = "\t\tSpecify a main node. The nodes not used by a main node i
   ^ "\n\t\t\tBy default, the parameterless nodes are the main nodes."
 and doc_prune = "\t\tRemove the nodes unused by the main nodes."
 and doc_exposeintstate = "\t\tExpose the internal states of nodes as a new first input/output."
+
+and doc_genphconstr = "\t\tOutput the constraints on the phase in the given file, then stop the compilation."
+and doc_solphconstr = "\t\tParse a solution file, obtained from a previously generated constraint on the same program."
+
+
 and doc_target =
   "<lang>\tGenerate code in language <lang>\n\t\t\t(with <lang>=c,"
   ^ " java, z3z or ctrln)"
