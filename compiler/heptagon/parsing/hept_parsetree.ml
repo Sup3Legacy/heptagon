@@ -122,6 +122,9 @@ and edesc =
   | Ecurrentmodel of (int * int) * static_exp * exp
   | Edelay of int * exp
   | Edelayfby of int * static_exp * exp
+  | Ebuffer of exp
+  | Ebufferfby of static_exp * exp
+  | Ebufferlat of int * exp
 
 
 and app = { a_op: op; a_params: exp list; a_inlined: bool }

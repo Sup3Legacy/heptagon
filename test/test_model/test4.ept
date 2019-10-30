@@ -1,0 +1,10 @@
+
+(* First test of undefined phase *)
+
+model main(a:int) returns (c:int)
+var
+	b : int :: [..,4];
+let
+	b = buffer (a when [1,4]);
+	c = current([3,4], 0, (buffer b));
+tel

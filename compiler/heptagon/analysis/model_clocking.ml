@@ -61,6 +61,20 @@ let print_henv ff h =
     fprintf ff "\t%a => %a\n@?"  print_ident k  print_oneck v
   ) h
 
+let print_lsubst ff (lsubst : (int * int option * int) list) =
+  let print_subst ff (id1, oid2, sh) = match oid2 with
+    | None -> fprintf ff "(%i => None, %i)" id1 sh
+    | Some id2 -> fprintf ff "(%i => %i, %i)" id1 id2 sh
+  in
+  fprintf ff "%a\n@?" (Pp_tools.print_list print_subst "[" "; " "]") lsubst
+
+let print_msubst ff msubst =
+  StringMap.iter (fun id1 (oid2, sh) -> match oid2 with
+    | None -> fprintf ff "\t(%s => None, %i)\n" id1 sh
+    | Some id2 -> fprintf ff "\t(%s => %s, %i)\n" id1 id2 sh
+  ) msubst
+
+
 type error_kind =
   | Etypeclash of onect * onect
 
@@ -72,6 +86,12 @@ let error_message loc = function
         print_onect expected_ct;
       raise Errors.Error
 
+let assert_Evar e = match e.e_desc with
+  | Evar varid -> varid
+  | _ ->
+    Format.eprintf "Error: expression (%a) is expected to be a variable.\n@?"
+      Hept_printer.print_exp e;
+    failwith "Internal error - expression should be a variable"
 
 
 (* ==================================== *)
@@ -463,19 +483,128 @@ and expect_osynch h lcst pat expected_oct e =
 
 (* ----- *)
 (* ----- *)
+(* Substitution management *)
+
+let rec reorient_lsubst lsubst = match lsubst with
+  | [] -> []
+  | (blsubstr, n1, None, sh)::r ->
+    (n1, None, sh)::(reorient_lsubst r)
+  | (blsubstr, n1, Some n2, sh)::r ->
+    if blsubstr then
+      (n1, (Some n2), sh)::(reorient_lsubst r)
+    else
+      (n2, (Some n1),(-sh))::(reorient_lsubst r)
+
+let rec unroll_substitution msubst sh phid =
+  try
+    let (ophid2, sh2) = StringMap.find phid msubst in
+    match ophid2 with
+    | None -> (None, sh+sh2)
+    | Some phid2 -> unroll_substitution msubst (sh+sh2) phid2
+  with
+  | Not_found -> (Some phid, sh)
+
+let closure_subst msubst =
+  let msubst = StringMap.fold (fun phid1 (optphid2, sh) macc ->
+    match optphid2 with
+    | None -> StringMap.add phid1 (optphid2, sh) macc
+    | Some phid2 ->
+      let (optphid_unr, sh_unr) = unroll_substitution msubst sh phid2 in
+      StringMap.add phid1 (optphid_unr, sh_unr) macc
+  ) msubst StringMap.empty in
+  msubst
+
+  (* TODO *)
+
+(* Update the constraints from lcst, depending on the substitution
+  obtained from the unification process at the equation level *)
+let update_lcst msubst (lcst,lbcst) =
+  let lcst = List.map (fun cst ->
+    let cst = List.fold_left (fun constr (coeff,var) -> 
+      try
+        let (optphid2, sh) = StringMap.find var msubst in
+        let constr = subst_constraint (var, optphid2, sh) constr in
+        constr
+      with
+      | Not_found -> constr
+    ) cst cst.lcoeffVar in
+    cst
+  ) lcst in
+
+  (* DEBUG
+  fprintf ffout "lbcst = %a\n@?" print_list_bound_constr lbcst;
+  fprintf ffout "msubst = %a\n@?" print_msubst msubst; *)
+
+  let rec pop_boundary_constraint var lbcst = match lbcst with
+    | [] -> raise Not_found (* Because some variable comes from subexpressions *)
+    | h::t ->
+      if (h.varName=var) then (h,t) else
+      let (bcst, nt) = pop_boundary_constraint var t in
+      (bcst,h::nt)
+  in
+
+  let rec update_bound_constraint var2 sh bconst1 lbcst = match lbcst with
+    | [] -> failwith "Boundary constraint not found (update)"
+    | h::t ->
+      if (h.varName=var2) then
+        let nh = { h with lbound = max h.lbound (bconst1.lbound - sh);
+                          ubound = min h.ubound (bconst1.ubound - sh);
+        } in
+        nh::t
+      else
+        h::(update_bound_constraint var2 sh bconst1 t)
+  in
+
+  let lbcst = StringMap.fold (fun k (optvarph2, sh) acc ->
+    (* Propagate the substitution from msubst to the boundary constraints *)
+    (* k is replaced by the infos in (optvarph2, sh)
+        => propagate the bound constraint from k in the bound contraint of (optvarph2, sh)
+        => then remove the bound contraint of k *)
+    try
+      let (bconst, acc) = pop_boundary_constraint k acc in
+      let acc = match optvarph2 with
+        | None ->
+          assert(bconst.lbound <= sh);
+          assert(bconst.ubound > sh);
+          acc
+        | Some var2 -> update_bound_constraint var2 sh bconst acc
+      in
+      acc
+    with Not_found -> acc  (* TODO: check that *)
+  ) msubst lbcst in
+  (lcst,lbcst)
+
+(* ----- *)
+(* ----- *)
+
+(* Typing model equations  *)
 let rec typing_model_eq h lcst eqm =
   if (debug_clocking) then
     fprintf ffout "Entering model equation %a@\n" Hept_printer.print_eq_model eqm;
 
   let (oct, lcst) = typing_osych h lcst eqm.eqm_lhs eqm.eqm_rhs in
   let pat_oct = typing_model_pat h eqm.eqm_lhs in
-  (try unify_onect oct pat_oct
-   with Unify ->
-     eprintf "Incoherent clock between right and left side of the equation:@\n\t%a\nlhs :: %a  | rhs :: %a.@\n"
-      Hept_printer.print_eq_model eqm print_onect pat_oct  print_onect oct;
-     error_message eqm.eqm_loc (Etypeclash (oct, pat_oct)))
 
-and typing_model_eqs h lcst eq_list = List.iter (typing_model_eq h lcst) eq_list
+  let (lcst, lsubst) = (try
+    if (debug_clocking) then 
+      fprintf ffout "unification between pat => %a and rhs => %a\n"
+        print_onect pat_oct  print_onect oct;
+
+    let lsubst : (bool * int * int option * int) list = unify_onect_constr oct pat_oct in
+    let lsubst : (int * int option * int) list = reorient_lsubst lsubst in
+
+    (lcst, lsubst)
+  with Unify ->
+    eprintf "Incoherent clock between right and left side of the equation:@\n\t%a\nlhs :: %a  | rhs :: %a.@\n"
+     Hept_printer.print_eq_model eqm print_onect pat_oct  print_onect oct;
+    error_message eqm.eqm_loc (Etypeclash (oct, pat_oct))) in
+  (lcst,lsubst)
+
+and typing_model_eqs h lcst eq_list =
+  List.fold_left (fun (lcst_acc, lsubst_acc) eqm ->
+    let (lcst, lsubst) = typing_model_eq h lcst_acc eqm in
+    (lcst, lsubst @ lsubst_acc)
+  ) (lcst,[]) eq_list
 
 (* Block management *)
 and append_model_env h lcst vdms =
@@ -485,11 +614,10 @@ and append_model_env h lcst vdms =
     let nlaffcst = match varopt with
       | None -> lcst   (* The check that the phase is valid was done during parsing*)
       | Some varid ->
-        assert(ph==0);    (* No shift in variable declaration *)
         let varname = varname_from_phase_index varid in
         let per = get_period_ock ock in
 
-        let bcond = mk_bound_constr varname 0 per in
+        let bcond = mk_bound_constr varname (-ph) (per-ph) in
         let (laffcst, lbndcst) = lcst in
         (laffcst, bcond::lbndcst)
     in
@@ -500,17 +628,56 @@ and append_model_env h lcst vdms =
   ) (h,lcst) vdms in
   (h, lcst)
 
+
 and typing_block_model h lcst {bm_local = l; bm_eqs = eq_list} =
   let (h1, lcst) = append_model_env h lcst l in
 
   if (debug_clocking) then
     fprintf ffout "Entering block_model - Environment is:\n%a@\n" print_henv h1;
 
-  typing_model_eqs h1 lcst eq_list;
-  (h1, lcst)
+  let (lcst, lsubst) = typing_model_eqs h1 lcst eq_list in
+
+  if (debug_clocking) then (
+    fprintf ffout "DEBUG-typing_model_eq - constraints =\n %a\n@?"
+      print_constraint_environment lcst (*;
+    fprintf ffout "lsubst = %a@?" print_lsubst lsubst *)
+  );
+
+  (* Manages subtitutions *)
+  let msubst = List.fold_left (fun macc (phid1, optphid2, sh) ->
+    let varph1 = varname_from_phase_index phid1 in
+    let optvarph2 = match optphid2 with
+      | None -> None
+      | Some phid2 -> Some (varname_from_phase_index phid2)
+    in
+    StringMap.add varph1 (optvarph2, sh) macc
+  ) StringMap.empty lsubst in
+  
+  (* Closure on the substitutions of msubst *)
+  let msubst = closure_subst msubst in
+
+  (* Update constraints with substitutions *)
+  let lcst = update_lcst msubst lcst in
+
+  if (debug_clocking) then (
+    fprintf ffout "DEBUG-typing_model_eq - constraints =\n %a\n@?"
+      print_constraint_environment lcst;
+  );
+  (h1, lcst, msubst)
 
 
 (* Substitution of the phase solution in the program *)
+let enrich_sol_with_msubst msubst msol =
+  let msol = StringMap.fold (fun k (ov, sh) msol_acc ->
+    match ov with
+    | None -> StringMap.add k sh msol_acc
+    | Some v2 ->
+      (* msubst was already closure-ed => no need for recursion *)
+      let val_v2 = StringMap.find v2 msol in
+      StringMap.add k (val_v2+sh) msol_acc
+  ) msubst msol in
+  msol
+
 let rec subst_solution msol ock = match ock with
   | Cone _ -> ock
   | Cshift (sh, ock1) ->
@@ -523,19 +690,75 @@ let rec subst_solution msol ock = match ock with
     | Coper ({ contents = op }, per) -> (match op with
       | Cophase ph -> Cone (ph, per)
       | Cophshift (sh, phid) ->  (* Shift + 'a *)
-        let ph_val = IntMap.find phid msol in
+        let ph_val = try IntMap.find phid msol
+          with Not_found -> failwith ("Subst_solution: phase " ^ (string_of_int phid) ^ " was not found.")
+        in
         Cone (ph_val+sh, per)
       | Cophindex phid -> (* 'a *)
-        let ph_val = IntMap.find phid msol in
+        let ph_val = try IntMap.find phid msol
+          with Not_found -> failwith ("Subst_solution: phase " ^ (string_of_int phid) ^ " was not found.")
+        in
         Cone (ph_val, per)
     )
   )
 
-let eq_model_replace _ msol eqm =
-  { eqm with eqm_clk = subst_solution msol eqm.eqm_clk }, msol
+let eq_model_replace _ (hfull,msol) eqm =
+  let ock_eq = subst_solution msol eqm.eqm_clk in
+  let (ph_eq, per_eq) = get_ph_per_from_ock ock_eq in
 
-let var_dec_model_replace _ msol vdm =
- { vdm with vm_clock = subst_solution msol vdm.vm_clock }, msol
+  let rhs = eqm.eqm_rhs in
+  let rhs = match rhs.e_desc with
+    | Ebuffer e ->
+      let varid = assert_Evar e in
+      let ock_sexp = Env.find varid hfull in
+      let ock_sexp = subst_solution msol ock_sexp in
+
+      let (ph_sexp, per_sexp) = get_ph_per_from_ock ock_sexp in
+
+      (* DEBUG
+      fprintf ffout "eqm ::: %a\n@?" Hept_printer.print_eq_model eqm;
+      fprintf ffout "ph_eq = %i | ph_sexp = %i\n@?" ph_eq ph_sexp; *)
+
+      assert(per_eq = per_sexp);
+      assert(ph_eq >= ph_sexp);
+      let d = ph_eq - ph_sexp in
+
+      if (d>0) then
+        { rhs with e_desc = Edelay(d, e) }
+      else
+        e
+    | Ebufferfby (seInit, e) ->
+      let varid = assert_Evar e in
+      let ock_sexp = Env.find varid hfull in
+      let ock_sexp = subst_solution msol ock_sexp in
+      
+      let (ph_sexp, per_sexp) = get_ph_per_from_ock ock_sexp in
+      assert(per_eq = per_sexp);
+      assert(ph_eq < ph_sexp);    (* Cf question in comment in typing_bufferfby_osynch *)
+      let d = ph_eq - ph_sexp + per_eq in
+
+      { rhs with e_desc = Edelayfby(d, seInit, e) }
+    | Ebufferlat (l, e) ->
+      let varid = assert_Evar e in
+      let ock_sexp = Env.find varid hfull in
+      let ock_sexp = subst_solution msol ock_sexp in
+
+      let (ph_sexp, per_sexp) = get_ph_per_from_ock ock_sexp in
+      assert(per_eq = per_sexp);
+      assert(ph_eq >= ph_sexp);
+      let d = ph_eq - ph_sexp in
+      assert(l>=d);
+
+      if (d>0) then
+        { rhs with e_desc = Edelay(d, e) }
+      else
+        e
+    | _ -> rhs
+  in
+  { eqm with eqm_clk = ock_eq; eqm_rhs = rhs }, (hfull, msol)
+
+let var_dec_model_replace _ (hfull,msol) vdm =
+ { vdm with vm_clock = subst_solution msol vdm.vm_clock }, (hfull, msol)
 
 
 (* Main functions *)
@@ -544,7 +767,7 @@ let typing_model md =
 
   let (h0, lcst) = append_model_env Env.empty lcst md.m_input in
   let (h, lcst) = append_model_env h0 lcst md.m_output in
-  let (h, lcst) = typing_block_model h lcst md.m_block in
+  let (h, lcst, msubst) = typing_block_model h lcst md.m_block in
   (* Update clock info in variable descriptions *)
   let set_clock vdm = { vdm with vm_clock = Env.find vdm.vm_ident h } in
   let md = { md with m_input = List.map set_clock md.m_input;
@@ -559,15 +782,29 @@ let typing_model md =
       the system is normalised *)
   let msol = Affine_constraint_clocking.solve_constraints_main lcst in
 
+  (* DEBUG
+  print_msol ffout msol; *)
+
+  (* Enrich the solution with the substitutions previously performed *)
+  let msol = enrich_sol_with_msubst msubst msol in
+
+  (* DEBUG
+  print_msol ffout msol; *)
+
   (* Convert the solution back to a mapping from phase id to its value *)
   let misol = Affine_constraint_clocking.solution_to_phase_number msol in
   
+
+  if debug_clocking then
+    fprintf ffout "Starting substitution of solution in model clocking\n@?";
+
   (* Use solution to replace all phindex of the system *)
+  let (hfull, _) = append_model_env h ([],[]) md.m_block.bm_local in
   let funs_replacement = { Hept_mapfold.defaults with
       eq_model = eq_model_replace;
       var_dec_model = var_dec_model_replace;
   } in
-  let md, _ = funs_replacement.model_dec funs_replacement misol md in
+  let md, _ = funs_replacement.model_dec funs_replacement (hfull, misol) md in
 
 
   (* No update of signature: model should be the top-level node *)

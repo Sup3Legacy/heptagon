@@ -156,6 +156,10 @@ and print_edesc ff edesc = match edesc with
   | Edelay (d, e) -> fprintf ff "Edelay(%i) %a" d  print_exp e
   | Edelayfby (d, seInit, e) ->
     fprintf ff "(%a Edelayfby(%i) %a)" print_static_exp seInit  d  print_exp e
+  | Ebuffer e -> fprintf ff "Ebuffer %a" print_exp e
+  | Ebufferfby (seInit, e) -> 
+    fprintf ff "(%a Ebufferfby %a)" print_static_exp seInit  print_exp e
+  | Ebufferlat (l,e) -> fprintf ff "Ebufferlat(%i) %a" l  print_exp e
   | Emerge (var_name, lconstname_exp) -> fprintf ff "Emerge %a%a" print_var_name var_name
      (print_list (print_couple print_const_name print_exp "" "|" "") "" "," "") lconstname_exp
   | Ecurrent (cons_name, var_name, expInit, exp) -> fprintf ff "Ecurrent(%a(%a), %a, %a)"

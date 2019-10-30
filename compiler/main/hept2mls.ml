@@ -172,7 +172,8 @@ let rec translate ({ Heptagon.e_desc = desc; Heptagon.e_ty = ty;
     | Heptagon.Ewhenmodel _ | Heptagon.Ecurrentmodel _
     | Heptagon.Edelay _ | Heptagon.Edelayfby _
     | Heptagon.Ebuffer _ | Heptagon.Ebufferfby _ | Heptagon.Ebufferlat _ ->
-      raise StructureShouldHaveBeenRemoved
+      (Format.eprintf "Expression e = %a\n@?" Hept_printer.print_exp e;
+      raise StructureShouldHaveBeenRemoved )
   in
   match a_ct with
     | None -> mk_exp b_ck ty ~loc:loc ~linearity:linearity desc

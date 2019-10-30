@@ -69,7 +69,8 @@ open Hept_parsetree
 %token REACHABLE
 %token ATTRACTIVE
 %token WITH
-%token WHEN WHENOT MERGE ON ONOT CURRENT DELAY DELAYFBY
+%token WHEN WHENOT MERGE ON ONOT CURRENT
+%token DELAY DELAYFBY BUFFER BUFFERFBY BUFFERLAT
 %token INLINED
 %token POWER
 %token LBRACKET LBRACKETGREATER
@@ -691,7 +692,12 @@ _exp:
       { Edelay (d, e) }
   | seInit=const DELAYFBY LPAREN d=INT RPAREN e=exp
       { Edelayfby (d, seInit, e) }
-
+  | BUFFER e=exp
+      { Ebuffer e }
+  | seInit=const BUFFERFBY e=exp
+      { Ebufferfby (seInit, e) }
+  | BUFFERLAT LPAREN l=INT RPAREN e=exp
+      { Ebufferlat (l, e) }
   
   | exp INFIX1 exp
       { mk_op_call $2 [$1; $3] }

@@ -536,7 +536,7 @@ and distribute ((d_list, eq_list) as context) eq pat e =
 
 and translate_eq ((d_list, eq_list) as context) oper eq = match eq.eq_desc with
   | Eeq (pat, e) ->
-      let context, e = translate Any context oper e in
+      let context, e = translate ExtValue context oper e in
         distribute context eq pat e
   | Eblock b ->
       let v, eqs = translate_eq_list [] b.b_equs in

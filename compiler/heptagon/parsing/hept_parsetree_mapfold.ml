@@ -155,6 +155,16 @@ and edesc funs acc ed = match ed with
     let seInit, acc = static_exp_it funs acc seInit in
     let e, acc = exp_it funs acc e in
     Edelayfby (d, seInit, e), acc
+  | Ebuffer e ->
+    let e, acc = exp_it funs acc e in
+    Ebuffer e, acc
+  | Ebufferfby (seInit, e) ->
+    let seInit, acc = static_exp_it funs acc seInit in
+    let e, acc = exp_it funs acc e in
+    Ebufferfby (seInit, e), acc
+  | Ebufferlat (l, e) ->
+    let e, acc = exp_it funs acc e in
+    Ebufferlat (l,e), acc
   | Esplit (x, e2) ->
       let e2, acc = exp_it funs acc e2 in
         Esplit(x, e2), acc

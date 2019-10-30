@@ -91,6 +91,9 @@ List.iter (fun (str,tok) -> Hashtbl.add keyword_table str tok) [
  "current", CURRENT;
  "delay", DELAY;
  "delayfby", DELAYFBY;
+ "buffer", BUFFER;
+ "bufferfby", BUFFERFBY;
+ "bufferlat", BUFFERLAT;
  "on", ON;
  "onot", ONOT;
  "map", MAP;

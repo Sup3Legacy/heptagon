@@ -293,76 +293,108 @@ let is_subclock_osync ock1 ock2 =
 
 (* Unification of one-synchronous clocks *)
 let rec unify_oneck ock1 ock2 =
+  let _ = unify_oneck_constr ock1 ock2 in
+  ()
+
+(* Return a potential substitution performed on the phase *)
+(* If None is returned, no substitution was performed
+   If Some (leftsubstright, phname1, phname2opt, sh) is returned:
+     - either phname2opt=None => phname1 was replaced by sh
+     - or phname2opt=Some phname2 => phname1 was replaced by (phname2+sh)
+    leftsubstright is true iff the substitution replace a variable from the left with smthing on the right *)
+and unify_oneck_constr ock1 ock2 =
   let ock1 = ock_repr ock1 in
   let ock2 = ock_repr ock2 in
-  if ock1 == ock2 then () else
+  if ock1 == ock2 then None else
   (* No Covar Colink at that point + No Covar Coper Cophase at that point *)
   (* Total of 5 possibilities for ock1: Cone, Cshift, Covar Coindex, Covar Coper Cophindex *)
 
   match (ock1, ock2) with
     (* Cases 1 - Everything is a constant (Cone + Cshift) *)
     | Cone (ph1, per1), Cone (ph2,per2) ->
-      if ((ph1 == ph2) && (per1 == per2)) then ()   (* Remark: no implicit buffer here *)
+      if ((ph1 == ph2) && (per1 == per2)) then None   (* Remark: no implicit buffer here *)
       else raise Unify
       
-    | Cshift (d1, ock1), Cshift (d2, ock2) ->
-      if (d1=d2) then unify_oneck ock1 ock2 else raise Unify
-    | _, Cshift _ -> unify_oneck ock2 ock1
-    | Cshift (d1, ock1), Cone (ph2,per2) -> unify_oneck ock1 (Cone (ph2-d1, per2))
+    | Cshift (d1, ock1), Cshift (d2, ock2) -> (* Note: ock was normalized d1=d2 is the right condition *)
+      if (d1=d2) then unify_oneck_constr ock1 ock2 else raise Unify
+    | _, Cshift _ ->
+      let osubst = unify_oneck_constr ock2 ock1 in
+      (match osubst with
+        | None -> None
+        | Some (lsubr, x, y, z) -> Some ((not lsubr), x, y, z)
+      )
+    | Cshift (d1, ock1), Cone (ph2,per2) -> unify_oneck_constr ock1 (Cone (ph2-d1, per2))
 
     (* Cases 2 - Add Covar Coindex to the mix*)
-    | (Covar { contents = Coindex n1 }), (Covar { contents = Coindex n2 }) when n1=n2 -> ()
+    | (Covar { contents = Coindex n1 }), (Covar { contents = Coindex n2 }) when n1=n2 -> None
     | ock, Covar ( { contents = Coindex _ } as v)
     | Covar ( { contents = Coindex _ } as v), ock ->
-      v.contents <- Colink ock
+      v.contents <- Colink ock;
+      None  (* No constraint if just aliasing entire clocks *)
 
     (* Cases 3 - Add Covar Coper Cophase to the mix *)
     | Covar { contents = Coper (({contents = Cophindex n1} as vph), per1)},
       Covar { contents = Coper ({contents = Cophindex n2}, per2)} ->
       if (per1!=per2) then raise Unify else
       vph.contents <- Cophindex n2;
+      Some (true, n1, Some n2, 0)  (* n1 substituted by n2 *)
 
-    | Covar { contents = Coper (({contents = Cophindex _} as v), per1)}, Cone (ph2, per2)
-    | Cone (ph2, per2), Covar { contents = Coper (({contents = Cophindex _} as v) ,per1)}->
+    | Covar { contents = Coper (({contents = Cophindex n2} as v), per1)}, Cone (ph2, per2)
+    | Cone (ph2, per2), Covar { contents = Coper (({contents = Cophindex n2} as v) ,per1)}->
       if (per1!=per2) then raise Unify else
-      v.contents <- Cophase ph2
+      v.contents <- Cophase ph2;
+      Some (true, n2, None, ph2)   (* n2 substituted by constant ph2 *)
     
     | Cshift (sh, sock2), Covar { contents = Coper ({contents = Cophindex n}, per1)} -> begin
       match sock2 with
       | Cone _ | Cshift _ | Covar {contents = Colink _} ->
         failwith "Unification of unsimplified clock was not supposed to happen."
       
-      | Covar ({ contents = Coindex _} as v) ->
-        v.contents <- Colink (Covar { contents = Coper ({ contents = Cophshift(-sh,n)}, per1)})
+      | Covar ({ contents = Coindex n2} as v) ->
+        v.contents <- Colink (Covar { contents = Coper ({ contents = Cophshift(-sh,n)}, per1)});
+        Some(true, n2, Some n, -sh)
 
       | Covar {contents = Coper (rop, per2)} ->
         if (per1!=per2) then raise Unify else (
           match !rop with
           | Cophase _ -> failwith "Unification of unsimplified clock was not supposed to happen."
-          | Cophindex _ ->
-            rop.contents <- Cophshift (-sh, n)
-          | Cophshift (d,_) ->
-            rop.contents <- Cophshift (d-sh, n)
+          | Cophindex n2 ->
+            rop.contents <- Cophshift (-sh, n);
+            Some(true, n2, Some n, -sh)
+
+          | Cophshift (d, n2) ->
+            rop.contents <- Cophshift (d-sh, n);
+            Some(true, n2, Some n, d-sh)
         )
     end
     | _ -> raise Unify
 
 let rec unify_onect t1 t2 =
-  if t1 == t2 then () else
+  let _ = unify_onect_constr t1 t2 in
+  ()
+
+and unify_onect_constr t1 t2 =
+  if t1 == t2 then [] else
   match (t1, t2) with
-    | (Ock ck1, Ock ck2) -> unify_oneck ck1 ck2
+    | (Ock ck1, Ock ck2) ->
+      let osubst = unify_oneck_constr ck1 ck2 in
+      (match osubst with
+        | None -> []
+        | Some subst -> subst::[]
+      )
     | (Ocprod t1_list, Ock ck2) ->
       if ((List.length t1_list) = 1) then
-        unify_onect (List.hd t1_list) t2
+        unify_onect_constr (List.hd t1_list) t2
       else raise Unify
     | (Ock ck1, Ocprod t2_list) ->
       if ((List.length t2_list) = 1) then
-        unify_onect t1 (List.hd t2_list)
+        unify_onect_constr t1 (List.hd t2_list)
       else raise Unify
     | (Ocprod t1_list, Ocprod t2_list) -> unify_list_onect t1_list t2_list
 
 and unify_list_onect t1_list t2_list =
-  try List.iter2 unify_onect t1_list t2_list
+  try 
+    List.fold_left2 (fun lacc t1 t2 -> (unify_onect_constr t1 t2)@lacc) [] t1_list t2_list
   with _ -> raise Unify
 
 

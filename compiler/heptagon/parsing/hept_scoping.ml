@@ -436,6 +436,16 @@ and translate_desc loc env = function
     let seInit = translate_static_exp seInit in
     let e1 = translate_exp env e1 in
     Heptagon.Edelayfby (d, seInit, e1)
+  | Ebuffer e1 ->
+    let e1 = translate_exp env e1 in
+    Heptagon.Ebuffer e1
+  | Ebufferfby (seInit, e1) ->
+    let seInit = translate_static_exp seInit in
+    let e1 = translate_exp env e1 in
+    Heptagon.Ebufferfby (seInit, e1)
+  | Ebufferlat (l, e1) ->
+    let e1 = translate_exp env e1 in
+    Heptagon.Ebufferlat (l, e1)
 
 
 and translate_op = function

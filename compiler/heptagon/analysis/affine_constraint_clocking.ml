@@ -121,9 +121,9 @@ let print_bound_constr ff (bconstr:boundconstr) =
 let print_constraint_environment ff (lcst : (affconstr list) * (boundconstr list)) =
   let (lac, lbc) = lcst in
   fprintf ff "Affine constraints:\n@?";
-  List.iter (fun ac -> fprintf ff "\t%a\n@?" print_aff_constr ac) lac;
+  List.iter (fun ac -> fprintf ff "\t%a@?" print_aff_constr ac) lac;
   fprintf ff "Boundary constraints:\n@?";
-  List.iter (fun bc -> fprintf ff "\t%a\n@?" print_bound_constr bc) lbc
+  List.iter (fun bc -> fprintf ff "\t%a@?" print_bound_constr bc) lbc
 
 let print_list_aff_constr ff (lconstr:affconstr list) =
   List.iter (fun constr -> print_aff_constr ff constr) lconstr
@@ -192,7 +192,74 @@ let rec get_phase_ock ock =
       )
       | Colink ock -> get_phase_ock ock
     end
-  
+
+
+(* ==================================================== *)
+
+(* Constraint manipulation*)
+
+(* Add a term of an affine term, in order to maintain the "max 1 term per variable" property *)
+let rec add_term (a,v) affterm = match affterm with
+  | [] -> (a,v)::[]
+  | (at,vt)::rt ->
+    if (vt=v) then (at+a,v)::rt else
+    (at,vt)::(add_term (a,v) rt)
+
+(* Substitution inside a constraint *)
+let subst_constraint (var, optphid2, sh) constr =
+  let rec subst_constraint_aux (var, optphid2, sh) affterm = match affterm with
+    | [] -> ([],0)
+    | (a,v)::r ->
+      let (nr, shcst) = subst_constraint_aux (var, optphid2, sh) r in
+      if (v=var) then (
+        let nshcst = shcst - a*sh in  (* constant is in the other side of the (in)equality *)
+        match optphid2 with
+        | None -> (nr, nshcst)
+        | Some var2 -> ((add_term (a,var2) nr), nshcst)
+      )
+      else
+        ((a,v)::nr,shcst)
+  in
+  let (lcoeffVar, shcst) = subst_constraint_aux (var, optphid2, sh) constr.lcoeffVar in
+  { constr with lcoeffVar = lcoeffVar; cst = constr.cst + shcst }
+
+(* Update bound constraint with a cst<=varname pr a varname<=cst *)
+let rec update_bound_constraints isLowBound varname cst lbc = match lbc with
+  | [] ->
+    failwith "update_bound_constraints : Boundary constraint not found"
+  | bc::r ->
+    if (bc.varName = varname) then (
+      if (isLowBound) then
+        { bc with lbound = max bc.lbound cst }::r
+      else
+        { bc with ubound = min bc.ubound (cst+1) }::r  (* Bound constraint is "var < cst"*)
+    ) else
+      bc::(update_bound_constraints isLowBound varname cst r)
+
+let transfer_1term_ac_to_bc lbc lac =
+  let (lac,lbc) = List.fold_left (fun (lac_acc, lbc_acc) affconstr ->
+    (* Note: The following case should probably be managed separately *)
+    if (affconstr.isEq=true) then (affconstr::lac_acc, lbc_acc) else
+    if ((List.length affconstr.lcoeffVar)>1) then (affconstr::lac_acc, lbc_acc) else
+
+    if ((List.length affconstr.lcoeffVar)=0) then ( (* While we are at it... *)
+      assert(0>=affconstr.cst);
+      (lac_acc, lbc_acc)
+    ) else (
+      assert((List.length affconstr.lcoeffVar)=1);
+      let (c,v) = List.hd affconstr.lcoeffVar in
+      let lbc_acc = if (c=1) then
+          update_bound_constraints true v affconstr.cst lbc_acc
+        else if (c=(-1)) then
+          update_bound_constraints false v (- affconstr.cst) lbc_acc
+        else
+          failwith "Coefficient in from of variable not a 1 or a (-1)."
+      in
+      (lac_acc, lbc_acc)
+    )
+  ) ([],lbc) lac in
+  (lac, lbc)
+
 
 (* ==================================================== *)
 
@@ -301,7 +368,20 @@ let print_sol_grConstr ff grConstr =
       elem.ind elem.name
       elem.val_sol  elem.max_val
       elem.min_val_sol elem.max_val_sol
+  ) grConstr;
+  Format.fprintf ff "Edges:\n";
+  Array.iter (fun elem ->
+    List.iter (fun (e_dst, w) ->
+      Format.fprintf ff "\t%i ==(%i)==> %i\n@?"
+        elem.ind w e_dst
+    ) elem.out_edges
   ) grConstr
+
+
+let print_msol ff msol =
+  StringMap.iter (fun k v ->
+    fprintf ff "\t%s => %i\n@?" k v
+  ) msol
 
 (* --- *)
 
@@ -482,15 +562,15 @@ let find_boundaries_from_constraints grConstr =
     let grNodei = grConstr.(i) in
 
     (* min_val_sol = maximum weigth of any path from any node to the node i *)
-    let minvsol = ref 0 in
+    let minvsol = ref grNodei.min_val_sol in
     for j = 0 to (n-1) do
       match mat_coeff.(j).(i) with
       | None -> ()
-      | Some e -> minvsol := max !minvsol e;
+      | Some e -> minvsol := max !minvsol (e + grConstr.(j).min_val_sol);
     done;
 
     (* max_val_sol = min (max_val.nodej - max weigth of any path from i to this node j) *)
-    let maxvsol = ref grNodei.max_val in
+    let maxvsol = ref grNodei.max_val_sol in
     for j = 0 to (n-1) do
       match mat_coeff.(i).(j) with
       | None -> ()
@@ -503,12 +583,17 @@ let find_boundaries_from_constraints grConstr =
     let grNodei = { grNodei with min_val_sol = !minvsol; max_val_sol = !maxvsol } in
     grConstr.(i) <- grNodei;
   done;
-
   grConstr
+
 
 (* Build the solution using grConstr *)
 let build_initial_solution grConstr =
   let grConstr = find_boundaries_from_constraints grConstr in
+
+  if (debug) then (
+    Format.fprintf ffout "DEBUG - find_boundaries_from_constraints done\n@?";
+    Format.fprintf ffout "grConstr = %a\n@?" print_sol_grConstr grConstr
+  );
 
   (* Minimal solution = lower boundary *)
   let linfoStrongOver = ref [] in
@@ -556,14 +641,18 @@ let solve_constraint_on_our_own lac lbc =
   (* Build the graph of constraint (initialized) *)
   let grConstr = build_graph_from_constraints lvarname htblVar2Constr in
 
-  if (debug) then
+  if (debug) then (
     Format.fprintf ffout "DEBUG - graph of constraints built\n@?";
+    Format.fprintf ffout "grConstr = %a\n@?" print_sol_grConstr grConstr
+  );
 
   (* Solving ! *)
   let grConstr = build_initial_solution grConstr in
 
-  if (debug) then
+  if (debug) then (
     Format.fprintf ffout "DEBUG - minimal solution found\n@?";
+    Format.fprintf ffout "grConstr = %a\n@?" print_sol_grConstr grConstr
+  );
 
   (* Going back to a StringMap *)
   let msol = Array.fold_left (fun macc grConstrNode ->
@@ -600,6 +689,21 @@ let parse_file parse filename =
 let solve_constraints_main (lcst : (affconstr list) * (boundconstr list)) =
   let (lac, lbc) = lcst in
 
+  (* DEBUG *)
+  if (debug) then (
+    fprintf ffout "Affine constraints:\n%a\n@?" print_list_aff_constr lac;
+    fprintf ffout "Boundary constraints:\n%a\n@?" print_list_bound_constr lbc
+  );
+
+  (* We transfer the 1-term affine constraints to the boundary constraints *)
+  let (lac, lbc) = transfer_1term_ac_to_bc lbc lac in
+
+  (* DEBUG *)
+  if (debug) then (
+    fprintf ffout "Affine constraints (after 1term elim):\n%a\n@?" print_list_aff_constr lac;
+    fprintf ffout "Boundary constraints (after 1term elim):\n%a\n@?" print_list_bound_constr lbc
+  );
+
   (* Base case - no affine constraint (aka, no buffer operator) *)
   if (lac = []) then
     (* Default Solution: get the minimum for all boundconstr *)
@@ -607,6 +711,11 @@ let solve_constraints_main (lcst : (affconstr list) * (boundconstr list)) =
     let msol = List.fold_left (fun msol bc ->
       StringMap.add bc.varName bc.lbound msol
     ) StringMap.empty lbc in
+
+    (* DEBUG *)
+    if (debug) then
+      fprintf ffout "Solution found:\n%a\n@?" print_msol msol;
+
     msol
   else
 
@@ -652,4 +761,9 @@ let solve_constraints_main (lcst : (affconstr list) * (boundconstr list)) =
     (* Note: no objective function managed here - TODO: check that and issue a warning if option *)
     solve_constraint_on_our_own lac lbc
   ) in
+
+  (* DEBUG *)
+  if (debug) then
+    fprintf ffout "Solution found:\n%a\n@?" print_msol msol;
+
   msol
