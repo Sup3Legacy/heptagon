@@ -504,6 +504,7 @@ and translate_eq_model env eqm =
     Heptagon.eqm_rhs = translate_exp env eqm.eqm_rhs;
     Heptagon.eqm_clk = translate_some_one_clock false eqm.eqm_loc env None;
     Heptagon.eqm_stateful = false;
+    Heptagon.eqm_annot = [];      (* TODO - fill that later *)
     Heptagon.eqm_loc = eqm.eqm_loc; }
 
 and translate_block env tenv b =
@@ -518,6 +519,7 @@ and translate_block_model env bm =
   let env = Rename.append_vdm env bm.bm_local in
   { Heptagon.bm_local = translate_vd_model_list false env bm.bm_local;
     Heptagon.bm_eqs = List.map (translate_eq_model env) bm.bm_eqs;
+    Heptagon.bm_annot = [];      (* TODO - fill that later *)
     Heptagon.bm_loc = bm.bm_loc }, env
 
 

@@ -58,11 +58,15 @@ let mk_equation ?(loc=no_location) desc =
     eq_inits = Lno_init;
     eq_loc = loc; }
 
-let mk_equation_model p e ?(clock = Clocks.fresh_osynch_clock ()) stateful ?(loc=no_location) =
+let mk_annot_eq_model aeqmdesc =
+  { anneqm_desc = aeqmdesc; anneqm_loc = no_location }
+
+let mk_equation_model p e ?(clock = Clocks.fresh_osynch_clock ()) lanneqm stateful ?(loc=no_location) =
   { eqm_lhs = p;
     eqm_rhs = e;
     eqm_clk = clock;
-    eqm_stateful = stateful; 
+    eqm_stateful = stateful;
+    eqm_annot = lanneqm;
     eqm_loc = loc }
 
 let mk_var_dec ?(last = Var) ?(clock = fresh_clock()) name ty ~linearity =
@@ -76,8 +80,11 @@ let mk_block ?(stateful = true) ?(defnames = Env.empty) ?(locals = []) eqs =
   { b_local = locals; b_equs = eqs; b_defnames = defnames;
     b_stateful = stateful; b_loc = no_location; }
 
-let mk_block_model ?(locals = []) eqs =
-  { bm_local = locals; bm_eqs = eqs; bm_loc = no_location }
+let mk_annot_model amdesc =
+  { annm_desc = amdesc; annm_loc = no_location }
+
+let mk_block_model ?(locals = []) lannm eqs =
+  { bm_local = locals; bm_eqs = eqs; bm_annot = lannm; bm_loc = no_location }
 
 let dfalse =
   mk_exp (Econst (mk_static_bool false)) (Tid Initial.pbool) ~linearity:Ltop

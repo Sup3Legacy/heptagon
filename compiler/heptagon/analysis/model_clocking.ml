@@ -483,6 +483,182 @@ and expect_osynch h lcst pat expected_oct e =
 
 (* ----- *)
 (* ----- *)
+(* Constraints from annotation management *)
+let add_constraint_from_annot lcst eqm_list lbann =
+  (* Constraints from equations *)
+  (* mlabel : label -> ock / associate a label with the ock info *)
+  let (lcst, mlabel) = List.fold_left (fun (lcst_acc, mlabel) eqm ->
+    let (ophid, sh, per) = extract_ock_info eqm.eqm_clk in
+
+    List.fold_left (fun (lcst_acc, mlabel) eqmann ->
+      let (lac, lbc) = lcst_acc in
+      match eqmann.anneqm_desc with
+      | Anneqm_minphase mphase ->
+        (assert(mphase<per); assert(mphase>=0);
+        match ophid with
+          | None ->
+            if (mphase > sh) then (
+              eprintf "%aIn equation (%a), minphase annotation cannot be respected (clock is %a)\n@?"
+                print_location eqm.eqm_loc Hept_printer.print_eq_model eqm  print_oneck eqm.eqm_clk;
+              failwith "Minimal phase constraint is not respected by constant clock."
+            );
+            (lcst_acc, mlabel)
+          | Some phid ->
+            (* Create constraint phid >= mphase-sh *)
+            let lcoeffVar = (1, (varname_from_phase_index phid))::[] in
+            let ac = mk_affconstr false lcoeffVar (mphase-sh) in
+            ((ac::lac, lbc), mlabel)
+        )
+      | Anneqm_maxphase mphase ->
+        (assert(mphase<per); assert(mphase>=0);
+        match ophid with
+          | None ->
+            if (mphase < sh) then (
+              eprintf "%aIn equation (%a), maxphase annotation cannot be respected (clock is %a)\n@?"
+                print_location eqm.eqm_loc Hept_printer.print_eq_model eqm  print_oneck eqm.eqm_clk;
+              failwith "Maximal phase constraint is not respected by constant clock."
+            );
+            (lcst_acc, mlabel)
+          | Some phid ->
+            (* Create constraint phid+sh <= maxphase , aka -phid >= sh-maxphase *)
+            let lcoeffVar = ((-1), (varname_from_phase_index phid))::[] in
+            let ac = mk_affconstr false lcoeffVar (sh-mphase) in
+            ((ac::lac, lbc), mlabel)
+        )
+      | Anneqm_label ln ->
+        (lcst, StringMap.add ln eqm.eqm_clk mlabel)
+    ) (lcst_acc, mlabel) eqm.eqm_annot
+  ) (lcst, StringMap.empty) eqm_list in
+
+  (* Constraint from block *)
+  let lcst = List.fold_left (fun lcst_acc bmann -> match bmann.annm_desc with
+    (* Low/Upper bound the phase between 2 equations on same period *)
+    | Ann_range (l, u, lab1, lab2) -> begin
+      let ock1 = try StringMap.find lab1 mlabel
+        with Not_found ->
+        failwith ("Equation of label " ^ lab1 ^ " was not found.")
+      in
+      let ock2 = try StringMap.find lab2 mlabel
+        with Not_found ->
+        failwith ("Equation of label " ^ lab1 ^ " was not found.")
+      in
+      let (ophid1, sh2, per1) = extract_ock_info ock1 in
+      let (ophid2, sh1, per2) = extract_ock_info ock2 in
+      assert(per1=per2);   (* Same period... should we keep that condition ? *)
+      let diff = sh2 - sh1 in
+      let (lac,lbc) = lcst_acc in
+      (match (ophid1, ophid2) with
+        | (None, None) ->
+          (if (diff<l) then (
+            eprintf "%aIn constraint (%a), min is not respected (lab1.ock = %a | lab2.ock = %a)\n@?"
+              print_location bmann.annm_loc  Hept_printer.print_annot_model bmann
+              print_oneck ock1  print_oneck ock2;
+            failwith "Minimal phase difference constraint is not respected by constant clocks."
+          );
+          if (diff>u) then (
+            eprintf "%aIn constraint (%a), max is not respected (lab1.ock = %a | lab2.ock = %a)\n@?"
+              print_location bmann.annm_loc  Hept_printer.print_annot_model bmann
+              print_oneck ock1  print_oneck ock2;
+            failwith "Maximal phase difference constraint is not respected by constant clocks."
+          );
+          lcst_acc)
+        | (None, Some phid2) ->
+          let varph2 = varname_from_phase_index phid2 in
+
+          (* Constraint: varph2 >= l- diff *)
+          let lcoeffVar1 = (1,varph2)::[] in
+          let ac1 = mk_affconstr false lcoeffVar1 (l-diff) in
+
+          (* Constraint: u >= varph2 + diff  ==>  -varph2 >= diff-u *)
+          let lcoeffVar2 = ((-1),varph2)::[] in
+          let ac2 = mk_affconstr false lcoeffVar2 (diff-u) in
+
+          (ac1::ac2::lac, lbc)
+        | (Some phid1, None) ->
+          let varph1 = varname_from_phase_index phid1 in
+
+          (* Constraint: diff - varph1 >=l  *)
+          let lcoeffVar1 = ((-1),varph1)::[] in
+          let ac1 = mk_affconstr false lcoeffVar1 (l-diff) in
+
+          (* Constraint: u >= diff - varph1 *)
+          let lcoeffVar2 = (1,varph1)::[] in
+          let ac2 = mk_affconstr false lcoeffVar2 (diff-u) in
+
+          (ac1::ac2::lac, lbc)
+        | (Some phid1, Some phid2) ->
+          let varph1 = varname_from_phase_index phid1 in
+          let varph2 = varname_from_phase_index phid2 in
+
+          (* Constraint: varph2 - varph1 + diff >=l  *)
+          let lcoeffVar1 = (1,varph2)::((-1),varph1)::[] in
+          let ac1 = mk_affconstr false lcoeffVar1 (l-diff) in
+
+          (* Constraint: u >= varph2 - varph1 + diff *)
+          let lcoeffVar2 = ((-1),varph2)::(1,varph1)::[] in
+          let ac2 = mk_affconstr false lcoeffVar2 (diff-u) in
+
+          (ac1::ac2::lac, lbc)
+      )
+    end
+    
+    (* Precedence constraint on the phase *)
+    | Ann_before (lab1, lab2) -> begin
+      let ock1 = try StringMap.find lab1 mlabel
+        with Not_found ->
+        failwith ("Equation of label " ^ lab1 ^ " was not found.")
+      in
+      let ock2 = try StringMap.find lab2 mlabel
+        with Not_found ->
+        failwith ("Equation of label " ^ lab1 ^ " was not found.")
+      in
+      let (ophid1, sh2, per1) = extract_ock_info ock1 in
+      let (ophid2, sh1, per2) = extract_ock_info ock2 in
+      assert(per1=per2);   (* Same period... should we keep that condition ? *)
+      let diff = sh2 - sh1 in
+      let (lac,lbc) = lcst_acc in
+      (match (ophid1, ophid2) with
+        | (None, None) ->
+          if (diff<0) then (
+            eprintf "%aIn constraint (%a), precedence is not respected (lab1.ock = %a | lab2.ock = %a)\n@?"
+              print_location bmann.annm_loc  Hept_printer.print_annot_model bmann
+              print_oneck ock1  print_oneck ock2;
+            failwith "Precedence constraint is not respected by constant clocks."
+          );
+          lcst_acc
+        | (None, Some phid2) ->
+          let varph2 = varname_from_phase_index phid2 in
+
+          (* Constraint: varph2 >= - diff *)
+          let lcoeffVar = (1,varph2)::[] in
+          let ac = mk_affconstr false lcoeffVar (-diff) in
+          (ac::lac, lbc)
+
+        | (Some phid1, None) ->
+          let varph1 = varname_from_phase_index phid1 in
+
+          (* Constraint: diff - varph1 >= 0  *)
+          let lcoeffVar = ((-1),varph1)::[] in
+          let ac = mk_affconstr false lcoeffVar (-diff) in
+          (ac::lac, lbc)
+
+        | (Some phid1, Some phid2) ->
+          let varph1 = varname_from_phase_index phid1 in
+          let varph2 = varname_from_phase_index phid2 in
+          
+          (* Constraint: varph2 - varph1 + diff >= 0 *)
+          let lcoeffVar = (1,varph2)::((-1),varph1)::[] in
+          let ac = mk_affconstr false lcoeffVar (-diff) in
+          (ac::lac, lbc)
+      )
+    end
+  ) lcst lbann in
+
+  lcst
+
+
+(* ----- *)
+(* ----- *)
 (* Substitution management *)
 
 let rec reorient_lsubst lsubst = match lsubst with
@@ -629,7 +805,7 @@ and append_model_env h lcst vdms =
   (h, lcst)
 
 
-and typing_block_model h lcst {bm_local = l; bm_eqs = eq_list} =
+and typing_block_model h lcst {bm_local = l; bm_eqs = eq_list; bm_annot = lbann} =
   let (h1, lcst) = append_model_env h lcst l in
 
   if (debug_clocking) then
@@ -642,6 +818,9 @@ and typing_block_model h lcst {bm_local = l; bm_eqs = eq_list} =
       print_constraint_environment lcst (*;
     fprintf ffout "lsubst = %a@?" print_lsubst lsubst *)
   );
+
+  (* Adding the constraints from the annotations *)
+  let lcst = add_constraint_from_annot lcst eq_list lbann in
 
   (* Manages subtitutions *)
   let msubst = List.fold_left (fun macc (phid1, optphid2, sh) ->

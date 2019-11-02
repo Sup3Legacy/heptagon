@@ -77,10 +77,14 @@ type 'a hept_it_funs = {
   app            : 'a hept_it_funs -> 'a -> app -> app * 'a;
   block          : 'a hept_it_funs -> 'a -> block -> block * 'a;
   block_model    : 'a hept_it_funs -> 'a -> block_model -> block_model * 'a;
+  annot_model    : 'a hept_it_funs -> 'a -> annot_model -> annot_model * 'a;
+  annot_model_desc: 'a hept_it_funs -> 'a -> annot_model_desc -> annot_model_desc * 'a;
   edesc          : 'a hept_it_funs -> 'a -> desc -> desc * 'a;
   eq             : 'a hept_it_funs -> 'a -> eq -> eq * 'a;
   eqdesc         : 'a hept_it_funs -> 'a -> eqdesc -> eqdesc * 'a;
   eq_model       : 'a hept_it_funs -> 'a -> eq_model -> eq_model * 'a;
+  annot_eq_model : 'a hept_it_funs -> 'a -> annot_eq_model -> annot_eq_model * 'a;
+  annot_eq_model_desc: 'a hept_it_funs -> 'a -> annot_eq_model_desc -> annot_eq_model_desc * 'a;
   escape_unless  : 'a hept_it_funs -> 'a -> escape -> escape * 'a;
   escape_until   : 'a hept_it_funs -> 'a -> escape -> escape * 'a;
   exp            : 'a hept_it_funs -> 'a -> exp -> exp * 'a;
@@ -255,8 +259,16 @@ and eq_model funs acc eqm =
   let lhs, acc = pat_it funs acc eqm.eqm_lhs in
   let rhs, acc = exp_it funs acc eqm.eqm_rhs in
   let clk, acc = Global_mapfold.oneck_it funs.global_funs acc eqm.eqm_clk in
-  { eqm with eqm_lhs = lhs; eqm_rhs = rhs; eqm_clk = clk }, acc
+  let ann, acc = mapfold (annot_eq_model_it funs) acc eqm.eqm_annot in
+  { eqm with eqm_lhs = lhs; eqm_rhs = rhs; eqm_clk = clk; eqm_annot = ann}, acc
 
+and annot_eq_model_it funs acc anneqm = funs.annot_eq_model funs acc anneqm
+and annot_eq_model funs acc anneqm =
+  let anneqdesc, acc = annot_eq_model_desc funs acc anneqm.anneqm_desc in
+  { anneqm with anneqm_desc = anneqdesc }, acc
+
+and annot_eq_model_desc_it funs acc anneqmd = funs.annot_eq_model_desc funs acc anneqmd
+and annot_eq_model_desc funs acc anneqmd = anneqmd, acc (* All branches are leaves *)
 
 and block_it funs acc b = funs.block funs acc b
 and block funs acc b =
@@ -277,8 +289,16 @@ and block_model_it funs acc bm = funs.block_model funs acc bm
 and block_model funs acc bm =
   let bm_local, acc = mapfold (var_dec_model_it funs) acc bm.bm_local in
   let bm_eqs, acc = mapfold (eq_model_it funs) acc bm.bm_eqs in
-  { bm with bm_local = bm_local; bm_eqs = bm_eqs }, acc
+  let ann, acc = mapfold (annot_model_it funs) acc bm.bm_annot in
+  { bm with bm_local = bm_local; bm_eqs = bm_eqs; bm_annot = ann }, acc
 
+and annot_model_it funs acc annm = funs.annot_model funs acc annm
+and annot_model funs acc annm =
+  let anndesc, acc = annot_model_desc funs acc annm.annm_desc in
+  { annm with annm_desc = anndesc }, acc
+
+and annot_model_desc_it funs acc annmd = funs.annot_model_desc funs acc annmd
+and annot_model_desc funs acc annmd = annmd, acc (* All branches are leaves *)
 
 and state_handler_it funs acc s = funs.state_handler funs acc s
 and state_handler funs acc s =
@@ -432,10 +452,14 @@ let defaults = {
   app = app;
   block = block;
   block_model = block_model;
+  annot_model = annot_model;
+  annot_model_desc = annot_model_desc;
   edesc = edesc;
   eq = eq;
   eqdesc = eqdesc;
   eq_model = eq_model;
+  annot_eq_model = annot_eq_model;
+  annot_eq_model_desc = annot_eq_model_desc;
   escape_unless = escape;
   escape_until = escape;
   exp = exp;
@@ -463,10 +487,14 @@ let defaults_stop = {
   app = stop;
   block = stop;
   block_model = stop;
+  annot_model = stop;
+  annot_model_desc = stop;
   edesc = stop;
   eq = stop;
   eqdesc = stop;
   eq_model = stop;
+  annot_eq_model = stop;
+  annot_eq_model_desc = stop;
   escape_unless = stop;
   escape_until = stop;
   exp = stop;

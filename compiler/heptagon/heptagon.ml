@@ -36,6 +36,7 @@ open Linearity
 open Clocks
 
 type state_name = name
+type labelname = name
 
 type iterator_type =
   | Imap
@@ -133,17 +134,41 @@ and block = {
   b_stateful  : bool;
   b_loc       : location; }
 
+and annot_eq_model = {
+  anneqm_desc : annot_eq_model_desc;
+  anneqm_loc  : location
+}
+
+and annot_eq_model_desc =
+  | Anneqm_minphase of int
+  | Anneqm_maxphase of int
+  | Anneqm_label of labelname
+
 and eq_model = {
   eqm_lhs : pat;
   eqm_rhs : exp;
   eqm_clk : Clocks.oneck;
   eqm_stateful : bool;
+  eqm_annot : annot_eq_model list;
   eqm_loc : location;
 }
+
+and annot_model = {
+  annm_desc : annot_model_desc;
+  annm_loc : location
+}
+
+and annot_model_desc =
+  (* Low/Upper bound the phase between 2 equations on same period *)
+  | Ann_range of int * int * labelname * labelname
+  (* Precedence constraint on the phase *)
+  | Ann_before of labelname * labelname
+
 
 and block_model = {
   bm_local    : var_dec_model list;
   bm_eqs      : eq_model list;
+  bm_annot    : annot_model list;
   bm_loc      : location }
 
 and state_handler = {

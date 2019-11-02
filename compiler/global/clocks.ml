@@ -402,6 +402,7 @@ let is_base_ock ock = match (ock_repr ock) with
   | Cone (ph, per) -> ((ph==0) && (per==1))
   | _ -> false
 
+(* TODO: redundance with next function => correct that? *)
 let get_ph_per_from_ock ock =
   let ock = ock_repr ock in
   let (ph,per) = match ock with
@@ -411,8 +412,28 @@ let get_ph_per_from_ock ock =
   in
   (ph, per)
 
-
 exception Unknownperiod
+
+(* Returns (ophid, sh, per) *)
+let rec extract_ock_info ock =
+  let ock = ock_repr ock in match ock with
+    | Cone (ph, per) -> (None, ph, per)
+    | Cshift (sh, ock) ->
+      let (ophid, sh2, per) = extract_ock_info ock in
+      (ophid, sh+sh2, per)
+    | Covar { contents = ol } -> begin
+      match ol with
+      | Coindex _ -> raise Unknownperiod
+      | Colink ock -> extract_ock_info ock
+      | Coper ({ contents = op}, per) -> begin
+        match op with
+        | Cophase ph -> (None, ph, per)
+        | Cophshift (sh, phid) -> (Some phid, sh, per)
+        | Cophindex phid -> (Some phid, 0, per)
+      end
+    end
+
+
 
 let rec get_period_ock ock =
   let ock = ock_repr ock in match ock with

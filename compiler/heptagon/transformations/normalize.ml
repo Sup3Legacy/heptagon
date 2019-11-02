@@ -53,6 +53,24 @@ struct
     raise Errors.Error
 end
 
+(* Utilities concerning patterns and variable declaration *)
+let rec get_first_var pat = match pat with
+  | Etuplepat pl ->
+    if pl=[] then None else get_first_var (List.hd pl)
+  | Evarpat vid -> Some vid
+
+let rec get_list_var pat = match pat with
+  | Etuplepat pl ->
+    List.fold_left (fun acc p -> (get_list_var p)@acc) [] pl
+  | Evarpat vid -> [vid]
+
+ let rec search_vd vid lvdm = match lvdm with  (* TODO: optimise that with a map? *)
+  | [] -> raise Not_found
+  | h::t ->
+    if (h.vm_ident=vid) then h else search_vd vid t
+
+
+
 let se_to_se_list se =  match se.se_desc with
   | Stuple se_list -> se_list
   | _ -> assert false
@@ -573,40 +591,53 @@ let block_model funs context bm =
   is_block_model := true;
 
   (* Getting the eqm clock here *)
-  let rec get_first_var pat = match pat with
-    | Etuplepat pl ->
-      if pl=[] then None else get_first_var (List.hd pl)
-    | Evarpat vid -> Some vid
-  in
-  let rec search_vd vid lvdm = match lvdm with  (* TODO: optimise that with a map? *)
-    | [] -> raise Not_found
-    | h::t ->
-      if (h.vm_ident=vid) then h else search_vd vid t
-  in
   let get_ock_from_var llocs pat =
     match get_first_var pat with
-    | None ->
-      (* If an equation does not have any lhs, then put it in base clock *)
+    | None -> (* If an equation does not have any lhs, then put it in base clock *)
       Clocks.base_osynch_clock
     | Some vid ->
       try 
         let vdm = search_vd vid llocs in
         vdm.vm_clock
-      with
-        (* The variable is not a local variable ==> base clock *)
+      with (* The variable is not a local variable ==> base clock *)
         Not_found -> Clocks.base_osynch_clock
   in
 
-  (* Updating/creating eqm clock here , so that the eq_model function get the right "oper" *)
+  (* Step 0 - Updating/creating eqm clock here , so that the eq_model function get the right "oper" *)
   let nleqs = List.map (fun eqm ->
       { eqm with eqm_clk = (get_ock_from_var bm.bm_local eqm.eqm_lhs)}
     ) bm.bm_eqs
   in
   let bm = { bm with bm_eqs = nleqs } in
 
-  (* Recursion *)
+  (* Step 0.5 - keeping track of the annotations of the equations *)
+  (* mannoteq : varname => annot_eq_model list *)
+  let mannoteq = List.fold_left (fun macc eqm ->
+    if (eqm.eqm_annot = []) then macc else
+
+    let plist = get_list_var eqm.eqm_lhs in
+    if (plist=[]) then
+      failwith "Annotation on model equations with no lhs forbidden.";
+
+    (* Label goes to the first one *)
+    let lannot_nlabel = List.filter (fun eqmann -> match eqmann.anneqm_desc with
+      | Anneqm_label _ -> false
+      | _ -> true
+    ) eqm.eqm_annot in
+    let first_varid = List.hd plist in
+
+    let macc = Env.add first_varid eqm.eqm_annot macc in
+    let macc = List.fold_left (fun macc vid ->
+      Env.add vid lannot_nlabel macc
+    ) macc (List.tl plist) in
+    macc
+  ) Env.empty bm.bm_eqs in
+
+
+  (* Step 1 - Recursion *)
   let _, (v_acc, eq_acc) = Hept_mapfold.block_model funs context bm in
 
+  (* Step 2 - rebuilding the equation model after the normalisation *)
   let vm_acc = List.map (fun vd ->
     let per = try 
         Env.find vd.v_ident !var2per
@@ -624,8 +655,19 @@ let block_model funs context bm =
   let eqm_acc = List.map (fun eq ->
     match eq.eq_desc with
     | Eeq (p, e) ->
+
+      (* Get annotation of the equation from record previously established *)
+      (* All eq annotations are distributed. Label goes to the first term of the plhs *)
+      (* Because normalisation does not create tuple, looking for first of pat is enough *)
+      let vidfirst = List.hd (get_list_var p) in
+      let lanneqm = try
+        Env.find vidfirst mannoteq
+      with
+        | Not_found -> []
+      in
+
       let ock = get_ock_from_var llocs p in
-      mk_equation_model p e ~clock:ock eq.eq_stateful ~loc:eq.eq_loc
+      mk_equation_model p e ~clock:ock lanneqm eq.eq_stateful ~loc:eq.eq_loc
     | _ -> failwith "Internal normalize error : Translated eqm equation should be in Eeq form"
   ) eq_acc in
 

@@ -307,14 +307,30 @@ let rec print_eq ff eq =
     | Eblock b ->
       fprintf ff "@[<v>do@[<v>@ @[%a@]@]@ done@]" (print_sblock " in ") b
 
+and print_annot_eq_model ff eqmann = match eqmann.anneqm_desc with
+  | Anneqm_minphase m -> fprintf ff "minphase(%i)" m
+  | Anneqm_maxphase m -> fprintf ff "maxphase(%i)" m
+  | Anneqm_label ln -> fprintf ff "label(%s)" ln
+
 and print_eq_model ff eqm =
   if (!Compiler_options.full_type_info) then
-    fprintf ff "@[<2>%a ::%a =@ %a@]"
+    fprintf ff "@[<2>%a %a ::%a =@ %a@]"
+      (print_list_r print_annot_eq_model """ """) eqm.eqm_annot
       print_pat_init (eqm.eqm_lhs, Lno_init)
       Global_printer.print_oneck eqm.eqm_clk
       print_exp eqm.eqm_rhs
   else
-  fprintf ff "@[<2>%a =@ %a@]" print_pat_init (eqm.eqm_lhs, Lno_init)  print_exp eqm.eqm_rhs
+  fprintf ff "@[<2>%a %a =@ %a@]"
+    (print_list_r print_annot_eq_model """ """) eqm.eqm_annot
+    print_pat_init (eqm.eqm_lhs, Lno_init)
+    print_exp eqm.eqm_rhs
+
+and print_annot_model ff annm = match annm.annm_desc with
+  | Ann_range (l, u, l1, l2) ->
+    fprintf ff "range(%i, %i, %s, %s)" l u l1 l2
+  | Ann_before (l1, l2) ->
+    fprintf ff "before(%s, %s)" l1 l2
+
 
 and print_state_handler_list ff tag_act_list =
   print_list
@@ -366,6 +382,9 @@ and print_eq_model_list ff = function
   | [] -> ()
   | l -> print_list_r print_eq_model """;""" ff l
 
+and print_annot_model_list ff = function
+  | [] -> ()
+  | l -> print_list_r print_annot_model """;""" ff l
 
 and print_block sep ff { b_local = v_list; b_equs = eqs; b_stateful = s } =
   fprintf ff "%a@[<v>%a%a@]" print_stateful s (print_local_vars sep) v_list print_eq_list eqs
@@ -429,12 +448,13 @@ let print_node ff
 
 let print_model ff
     { m_name = n; m_input = mi; m_output = mo; m_block = mb } =
-  fprintf ff "@[model %a%a@ returns %a@]\n%a@[<v2>let@ %a@]@\ntel@]\n@."
+  fprintf ff "@[model %a%a@ returns %a@]\n%a@[<v2>let@ %a@]@\ntel@]@[<v2>requiring@ %a@]@\nend@]\n@."
     print_qualname n
     print_vdm_tuple mi
     print_vdm_tuple mo
     (print_local_vars_model "") mb.bm_local
     print_eq_model_list mb.bm_eqs
+    print_annot_model_list mb.bm_annot
 
 let print_class_dec ff cdec = 
   fprintf ff "class %a@\n" print_qualname cdec.c_nameclass
