@@ -51,6 +51,7 @@ List.iter (fun (str,tok) -> Hashtbl.add keyword_table str tok) [
  "let", LET;
  "tel", TEL;
  "end", END;
+ "requiring", REQUIRING;
  "fby", FBY;
  "switch", SWITCH;
  "type", TYPE;
@@ -107,6 +108,14 @@ List.iter (fun (str,tok) -> Hashtbl.add keyword_table str tok) [
  "reinit", REINIT;
  "unsafe", UNSAFE;
  "external", EXTERNAL;
+
+ "min_phase", MINPHASE;
+ "max_phase", MAXPHASE;
+ "label", LABEL;
+ "latency", LATENCY;
+ "range", RANGE;
+ "before", BEFORE;
+
  "quo", INFIX3("quo");
  "mod", INFIX3("mod");
  "land", INFIX3("land");

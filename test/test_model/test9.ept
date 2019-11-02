@@ -1,0 +1,16 @@
+
+(* Third test of undefined phase with annotations - precedence *)
+
+model main(a:int) returns (d:int)
+var
+	b : int :: [..,4];
+	c : int :: [..,4];
+let
+	label(eqb) b = buffer (a when [0,4]);
+	label(eqc) c = buffer (a when [0,4]);
+	d = current([3,4], 0, (buffer b) + (buffer c));
+tel
+requiring
+	range(1, 1, eqb, eqc);
+	before(eqb, eqc)  (* Note: redundant, but still works :) *)
+end

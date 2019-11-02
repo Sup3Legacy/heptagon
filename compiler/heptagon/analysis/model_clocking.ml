@@ -540,10 +540,10 @@ let add_constraint_from_annot lcst eqm_list lbann =
       in
       let ock2 = try StringMap.find lab2 mlabel
         with Not_found ->
-        failwith ("Equation of label " ^ lab1 ^ " was not found.")
+        failwith ("Equation of label " ^ lab2 ^ " was not found.")
       in
-      let (ophid1, sh2, per1) = extract_ock_info ock1 in
-      let (ophid2, sh1, per2) = extract_ock_info ock2 in
+      let (ophid1, sh1, per1) = extract_ock_info ock1 in
+      let (ophid2, sh2, per2) = extract_ock_info ock2 in
       assert(per1=per2);   (* Same period... should we keep that condition ? *)
       let diff = sh2 - sh1 in
       let (lac,lbc) = lcst_acc in
@@ -610,12 +610,13 @@ let add_constraint_from_annot lcst eqm_list lbann =
       in
       let ock2 = try StringMap.find lab2 mlabel
         with Not_found ->
-        failwith ("Equation of label " ^ lab1 ^ " was not found.")
+        failwith ("Equation of label " ^ lab2 ^ " was not found.")
       in
-      let (ophid1, sh2, per1) = extract_ock_info ock1 in
-      let (ophid2, sh1, per2) = extract_ock_info ock2 in
+      let (ophid1, sh1, per1) = extract_ock_info ock1 in
+      let (ophid2, sh2, per2) = extract_ock_info ock2 in
       assert(per1=per2);   (* Same period... should we keep that condition ? *)
       let diff = sh2 - sh1 in
+
       let (lac,lbc) = lcst_acc in
       (match (ophid1, ophid2) with
         | (None, None) ->

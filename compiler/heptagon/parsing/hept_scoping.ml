@@ -499,12 +499,21 @@ and translate_eq_desc loc env tenv = function
       let b, _ = translate_block env tenv b in
       Heptagon.Eblock b
 
+and translate_eqm_annot eqmann =
+  let desc = match eqmann.anneqm_desc with
+    | Anneqm_minphase m -> Heptagon.Anneqm_minphase m
+    | Anneqm_maxphase m -> Heptagon.Anneqm_maxphase m
+    | Anneqm_label ln -> Heptagon.Anneqm_label ln
+  in
+  { Heptagon.anneqm_desc = desc;
+    Heptagon.anneqm_loc = eqmann.anneqm_loc; }
+
 and translate_eq_model env eqm =
   { Heptagon.eqm_lhs = translate_pat eqm.eqm_loc env eqm.eqm_lhs;
     Heptagon.eqm_rhs = translate_exp env eqm.eqm_rhs;
     Heptagon.eqm_clk = translate_some_one_clock false eqm.eqm_loc env None;
     Heptagon.eqm_stateful = false;
-    Heptagon.eqm_annot = [];      (* TODO - fill that later *)
+    Heptagon.eqm_annot = List.map translate_eqm_annot eqm.eqm_annot;
     Heptagon.eqm_loc = eqm.eqm_loc; }
 
 and translate_block env tenv b =
@@ -515,14 +524,20 @@ and translate_block env tenv b =
     Heptagon.b_stateful = false;
     Heptagon.b_loc = b.b_loc; }, env
 
+and translate_bm_annot bmann =
+  let desc = match bmann.annm_desc with
+    | Ann_range (l, u, lab1, lab2) -> Heptagon.Ann_range (l, u, lab1, lab2)
+    | Ann_before (lab1, lab2) -> Heptagon.Ann_before (lab1, lab2)
+  in
+  { Heptagon.annm_desc = desc;
+    Heptagon.annm_loc = bmann.annm_loc; }
+
 and translate_block_model env bm =
   let env = Rename.append_vdm env bm.bm_local in
   { Heptagon.bm_local = translate_vd_model_list false env bm.bm_local;
     Heptagon.bm_eqs = List.map (translate_eq_model env) bm.bm_eqs;
-    Heptagon.bm_annot = [];      (* TODO - fill that later *)
+    Heptagon.bm_annot = List.map translate_bm_annot bm.bm_annot;
     Heptagon.bm_loc = bm.bm_loc }, env
-
-
 
 and translate_state_handler env tenv sh =
   let b, env = translate_block env tenv sh.s_block in

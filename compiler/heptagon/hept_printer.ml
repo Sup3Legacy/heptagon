@@ -448,7 +448,7 @@ let print_node ff
 
 let print_model ff
     { m_name = n; m_input = mi; m_output = mo; m_block = mb } =
-  fprintf ff "@[model %a%a@ returns %a@]\n%a@[<v2>let@ %a@]@\ntel@]@[<v2>requiring@ %a@]@\nend@]\n@."
+  fprintf ff "@[model %a%a@ returns %a@]\n%a@[<v2>let@ %a@]@\ntel@]\n@[<v2>requiring@ %a@]@\nend@]\n@."
     print_qualname n
     print_vdm_tuple mi
     print_vdm_tuple mo

@@ -36,7 +36,7 @@ open Hept_parsetree
 %}
 
 %token DOT LPAREN LESS_LPAREN RPAREN RPAREN_GREATER LBRACE RBRACE COLON COLONCOLON SEMICOL
-%token EQUAL EQUALEQUAL LESS_GREATER BARBAR COMMA BAR ARROW LET TEL
+%token EQUAL EQUALEQUAL LESS_GREATER BARBAR COMMA BAR ARROW LET TEL REQUIRING
 %token <string> Constructor
 %token <string> IDENT
 %token <int> INT
@@ -81,6 +81,7 @@ open Hept_parsetree
 %token MAP MAPI FOLD FOLDI MAPFOLD
 %token AT INIT SPLIT REINIT
 %token THREE_DOTS
+%token MINPHASE MAXPHASE LABEL LATENCY RANGE BEFORE
 %token <string> PREFIX
 %token <string> INFIX0
 %token <string> INFIX1
@@ -218,6 +219,15 @@ model_dec:
        m_output = o;
        m_block = b;
        m_loc = (Loc($startpos,$endpos)) }}
+  | MODEL f=ident LPAREN i=in_params_model RPAREN
+    returns LPAREN o=out_params_model RPAREN
+    b=block_model(LET) TEL REQUIRING ann=slist(SEMICOL, modelannot)  END
+    { let b = { b with bm_annot = ann } in
+      { m_name = f;
+       m_input = i;
+       m_output = o;
+       m_block = b;
+       m_loc = (Loc($startpos,$endpos)) }}
 ;
 
 
@@ -330,6 +340,16 @@ node_params:
   | /* empty */ { [],[] }
   | DOUBLE_LESS p=nonmt_params c=constraints DOUBLE_GREATER { p,c }
 ;
+
+modelannot:
+  | LATENCY LPAREN u=INT COMMA lab1=IDENT COMMA lab2=IDENT RPAREN
+    { mk_annot_model (Ann_range (0, u, lab1, lab2)) (Loc($startpos,$endpos)) }
+  | RANGE LPAREN l=INT COMMA u=INT COMMA lab1=IDENT COMMA lab2=IDENT RPAREN
+    { mk_annot_model (Ann_range (l, u, lab1, lab2)) (Loc($startpos,$endpos)) }
+  | BEFORE LPAREN lab1=IDENT COMMA lab2=IDENT RPAREN
+    { mk_annot_model (Ann_before (lab1, lab2)) (Loc($startpos,$endpos)) }
+;
+
 
 contract:
   | /* empty */ {None}
@@ -488,8 +508,8 @@ sblock(S) :
   | eq=equs                    { mk_block [] eq (Loc($startpos,$endpos)) }
 
 block_model(S) :
-  | VAR l=loc_params_model S eq=equs_model { mk_block_model l eq (Loc($startpos,$endpos)) }
-  | S eq=equs_model                        { mk_block_model [] eq (Loc($startpos,$endpos)) }
+  | VAR l=loc_params_model S eq=equs_model { mk_block_model l eq [] (Loc($startpos,$endpos)) }
+  | S eq=equs_model                        { mk_block_model [] eq [] (Loc($startpos,$endpos)) }
 
 
 
@@ -516,11 +536,18 @@ _equ:
 ;
 
 equ_model:
-  | pat=pat EQUAL e=exp
-    { mk_equation_model (fst pat) e (Loc($startpos,$endpos)) }
+  | anneq=list(anneq_model) pat=pat EQUAL e=exp
+    { mk_equation_model anneq (fst pat) e (Loc($startpos,$endpos)) }
 ;
 
-
+anneq_model:
+  | MINPHASE LPAREN m=INT RPAREN
+    { mk_annot_eq_model (Anneqm_minphase m) (Loc($startpos,$endpos)) }
+  | MAXPHASE LPAREN m=INT RPAREN
+    { mk_annot_eq_model (Anneqm_maxphase m) (Loc($startpos,$endpos)) }
+  | LABEL LPAREN ln=IDENT RPAREN
+    { mk_annot_eq_model (Anneqm_label ln) (Loc($startpos,$endpos)) }
+;
 
 automaton_handler:
   | STATE Constructor b=block(DO) ut=opt_until_escapes ul=opt_unless_escapes

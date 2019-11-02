@@ -509,7 +509,12 @@ let conversion_to_mat_coeff grConstr =
   let fill_row_conv_to_mat_coeff matRow grConstrNode =
     let loutEdges = grConstrNode.out_edges in
     List.iter (fun (elem_ind, w) ->
-      matRow.(elem_ind) <- Some w;
+      (* If already a constraint (redundancy), take the max *)
+      match matRow.(elem_ind) with
+      | None ->
+        matRow.(elem_ind) <- Some w
+      | Some w0 ->
+        matRow.(elem_ind) <- Some (max w0 w)
     ) loutEdges;
     matRow;
   in

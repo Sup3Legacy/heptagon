@@ -41,7 +41,11 @@ type 'a hept_it_funs = {
   block           : 'a hept_it_funs -> 'a -> block -> block * 'a;
   edesc           : 'a hept_it_funs -> 'a -> edesc -> edesc * 'a;
   eq              : 'a hept_it_funs -> 'a -> eq -> eq * 'a;
+  annot_eq_model  : 'a hept_it_funs -> 'a -> annot_eq_model -> annot_eq_model * 'a;
+  annot_eq_model_desc: 'a hept_it_funs -> 'a -> annot_eq_model_desc -> annot_eq_model_desc * 'a;
   eq_model        : 'a hept_it_funs -> 'a -> eq_model -> eq_model * 'a;
+  annot_model     : 'a hept_it_funs -> 'a -> annot_model -> annot_model * 'a;
+  annot_model_desc: 'a hept_it_funs -> 'a -> annot_model_desc -> annot_model_desc * 'a;
   block_model     : 'a hept_it_funs -> 'a -> block_model -> block_model * 'a;
   eqdesc          : 'a hept_it_funs -> 'a -> eqdesc -> eqdesc * 'a;
   escape_unless   : 'a hept_it_funs -> 'a -> escape -> escape * 'a;
@@ -237,17 +241,36 @@ and block funs acc b =
   let b_equs, acc = mapfold (eq_it funs) acc b.b_equs in
   { b with b_local = b_local; b_equs = b_equs }, acc
 
+
+and annot_eq_model_desc_it funs acc ad = funs.annot_eq_model_desc funs acc ad
+and annot_eq_model_desc funs acc ad = ad, acc (* None of the branch requires recursion *)
+
+and annot_eq_model_it funs acc a = funs.annot_eq_model funs acc a
+and annot_eq_model funs acc a =
+  let anneqm_desc, acc = annot_eq_model_desc_it funs acc a.anneqm_desc in
+  { a with anneqm_desc = anneqm_desc }, acc
+
 and eq_model_it funs acc eqm = funs.eq_model funs acc eqm
 and eq_model funs acc eqm =
   let eqm_lhs, acc = pat_it funs acc eqm.eqm_lhs in
   let eqm_rhs, acc = exp_it funs acc eqm.eqm_rhs in
-  { eqm with eqm_lhs = eqm_lhs; eqm_rhs = eqm_rhs }, acc
+  let eqm_annot, acc = mapfold (annot_eq_model_it funs) acc eqm.eqm_annot in
+  { eqm with eqm_lhs = eqm_lhs; eqm_rhs = eqm_rhs; eqm_annot = eqm_annot }, acc
+
+and annot_model_desc_it funs acc ad = funs.annot_model_desc funs acc ad
+and annot_model_desc funs acc ad = ad, acc (* None of the branch requires recursion *)
+
+and annot_model_it funs acc a = funs.annot_model funs acc a
+and annot_model funs acc a =
+  let annm_desc, acc = annot_model_desc_it funs acc a.annm_desc in
+  { a with annm_desc = annm_desc }, acc
 
 and block_model_it funs acc bm = funs.block_model funs acc bm
 and block_model funs acc bm =
   let bm_local, acc = mapfold (var_dec_model_it funs) acc bm.bm_local in
   let bm_eqs, acc = mapfold (eq_model_it funs) acc bm.bm_eqs in
-  { bm with bm_local = bm_local; bm_eqs = bm_eqs }, acc
+  let bm_annot, acc = mapfold (annot_model_it funs) acc bm.bm_annot in
+  { bm with bm_local = bm_local; bm_eqs = bm_eqs; bm_annot = bm_annot }, acc
 
 
 and state_handler_it funs acc s = funs.state_handler funs acc s
@@ -451,7 +474,11 @@ let defaults = {
   block = block;
   edesc = edesc;
   eq = eq;
+  annot_eq_model = annot_eq_model;
+  annot_eq_model_desc = annot_eq_model_desc;
   eq_model = eq_model;
+  annot_model = annot_model;
+  annot_model_desc = annot_model_desc;
   block_model = block_model;
   eqdesc = eqdesc;
   escape_unless = escape;
@@ -490,7 +517,11 @@ let defaults_stop = {
   block = Global_mapfold.stop;
   edesc = Global_mapfold.stop;
   eq = Global_mapfold.stop;
+  annot_eq_model = Global_mapfold.stop;
+  annot_eq_model_desc = Global_mapfold.stop;
   eq_model = Global_mapfold.stop;
+  annot_model = Global_mapfold.stop;
+  annot_model_desc = Global_mapfold.stop;
   block_model = Global_mapfold.stop;
   eqdesc = Global_mapfold.stop;
   escape_unless = Global_mapfold.stop;

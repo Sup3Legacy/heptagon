@@ -44,6 +44,8 @@ type module_name = Names.modul
 (** state_names, [automata] translate them in constructors with a fresh type. *)
 type state_name = Names.name
 
+type labelname = Names.name
+
 
 type qualname =
   | Q of Names.qualname (* already qualified name *)
@@ -168,15 +170,38 @@ and block =
     b_equs  : eq list;
     b_loc   : location; }
 
+and annot_eq_model = {
+  anneqm_desc : annot_eq_model_desc;
+  anneqm_loc  : location
+}
+
+and annot_eq_model_desc =
+  | Anneqm_minphase of int
+  | Anneqm_maxphase of int
+  | Anneqm_label of labelname
+
 and eq_model = {
   eqm_lhs : pat;
   eqm_rhs : exp;
+  eqm_annot : annot_eq_model list;
   eqm_loc : location;
 }
+
+and annot_model = {
+  annm_desc : annot_model_desc;
+  annm_loc : location
+}
+
+and annot_model_desc =
+  (* Low/Upper bound the phase between 2 equations on same period *)
+  | Ann_range of int * int * labelname * labelname
+  (* Precedence constraint on the phase *)
+  | Ann_before of labelname * labelname
 
 and block_model = {
   bm_local    : var_dec_model list;
   bm_eqs      : eq_model list;
+  bm_annot    : annot_model list;
   bm_loc      : location }
 
 and state_handler =
@@ -356,8 +381,11 @@ let mk_class_dec nameclass lnametypes loc =
 let mk_equation desc loc =
   { eq_desc = desc; eq_loc = loc }
 
-let mk_equation_model plhs erhs loc =
-  { eqm_lhs = plhs; eqm_rhs = erhs; eqm_loc = loc }
+let mk_annot_eq_model desc loc =
+  { anneqm_desc = desc; anneqm_loc = loc }
+
+let mk_equation_model annot plhs erhs loc =
+  { eqm_annot = annot; eqm_lhs = plhs; eqm_rhs = erhs; eqm_loc = loc }
 
 let mk_var_dec ?(linearity=Linearity.Ltop) name ty ck last loc =
   { v_name = name; v_type = ty; v_linearity = linearity;
@@ -370,8 +398,11 @@ let mk_block locals eqs loc =
   { b_local = locals; b_equs = eqs;
     b_loc = loc; }
 
-let mk_block_model locals eqs loc =
-  { bm_local = locals; bm_eqs = eqs; bm_loc = loc }
+let mk_annot_model desc loc =
+  { annm_desc = desc; annm_loc = loc }
+
+let mk_block_model locals eqs annot loc =
+  { bm_local = locals; bm_eqs = eqs; bm_loc = loc; bm_annot = annot }
 
 let mk_objective kind exp =
   { o_kind = kind; o_exp = exp }

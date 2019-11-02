@@ -232,12 +232,27 @@ and print_eqdesc ff eqd = match eqd with
 
 and print_eq ff {eq_desc=eqd} = fprintf ff "%a" print_eqdesc eqd
 
+and print_annot_eq_model ff eqmann = match eqmann.anneqm_desc with
+  | Anneqm_minphase m -> fprintf ff "minphase(%i)" m
+  | Anneqm_maxphase m -> fprintf ff "maxphase(%i)" m
+  | Anneqm_label ln -> fprintf ff "label(%s)" ln
+
 and print_eq_model ff eqm =
-  fprintf ff "%a = %a"  print_pat eqm.eqm_lhs  print_exp eqm.eqm_rhs
+  fprintf ff "%a %a = %a"
+    (print_list print_annot_eq_model "" " " "") eqm.eqm_annot
+    print_pat eqm.eqm_lhs  print_exp eqm.eqm_rhs
+
+
+and print_annot_model ff annm = match annm.annm_desc with
+  | Ann_range (l, u, l1, l2) ->
+    fprintf ff "range(%i, %i, %s, %s)" l u l1 l2
+  | Ann_before (l1, l2) ->
+    fprintf ff "before(%s, %s)" l1 l2
 
 and print_block_model ff bm =
-  fprintf ff "%a@\n%a" (print_list print_var_dec_model "(" "," ")") bm.bm_local
+  fprintf ff "%a@\n%a\n%a" (print_list print_var_dec_model "(" "," ")") bm.bm_local
      (print_list print_eq_model "(" "," ")") bm.bm_eqs
+     (print_list print_annot_model "" ";\n" "") bm.bm_annot
 
 (* Node declaration *)
 let print_objective_kind ff objkind = match objkind with
