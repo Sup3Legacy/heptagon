@@ -797,7 +797,8 @@ let translate_signature s =
   let c = List.map translate_constrnt s.sig_param_constraints in
   let sig_node =
     Signature.mk_node
-      ~extern:s.sig_external ~typeparams:tp s.sig_loc i o s.sig_stateful s.sig_unsafe p in
+      ~extern:s.sig_external ~typeparams:tp s.sig_loc i o s.sig_stateful s.sig_unsafe p
+      ~owcet:s.sig_wcet in
   Check_signature.check_signature sig_node;
   safe_add s.sig_loc add_value n sig_node;
   mk_signature n ~typeparamdecs:tpdecs i o s.sig_stateful p c s.sig_wcet s.sig_loc ~extern:s.sig_external

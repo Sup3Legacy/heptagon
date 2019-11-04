@@ -291,6 +291,7 @@ let signature s =
     sig_params = s.Heptagon.sig_params;
     sig_param_constraints = s.Heptagon.sig_param_constraints;
     sig_external = s.Heptagon.sig_external;
+    (* Note: we drop sig_wcet here, because it was already used for model_clocking *)
     sig_loc = s.Heptagon.sig_loc }
 
 let interface i =

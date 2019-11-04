@@ -34,7 +34,10 @@ open Linearity
 
 (** Warning: Whenever these types are modified,
     interface_format_version should be incremented. *)
-let interface_format_version = "4.1"  (* last change: add type parameters & type class (Guillaume I) *)
+let interface_format_version = "4.2"
+(* last changes:
+    - added type parameters & type class (Guillaume I)
+    - added wcet (as a int option) (Guillaume I) *)
 
 type ck =
   | Cbase
@@ -67,6 +70,7 @@ type node = {
   node_params             : param list;
   node_param_constraints  : constrnt list;
   node_external           : bool;
+  node_wcet               : int option;
   node_loc                : location}
 
 type field = { f_name : field_name; f_type : ty }
@@ -120,7 +124,8 @@ let mk_instance_def tname cname = { i_nametype = tname; i_nameclass = cname }
 let mk_typeparam_def ntype nclass =
   { tp_nametype = ntype; tp_nameclass = nclass }
 
-let mk_node ?(constraints = []) loc ~extern ?(typeparams = []) ins outs stateful unsafe params =
+let mk_node ?(constraints = []) loc ~extern ?(typeparams = []) ins outs
+        stateful unsafe params ?(owcet = None) =
   { node_inputs = ins;
     node_outputs  = outs;
     node_stateful = stateful;
@@ -129,6 +134,7 @@ let mk_node ?(constraints = []) loc ~extern ?(typeparams = []) ins outs stateful
     node_params = params;
     node_param_constraints = constraints;
     node_external = extern;
+    node_wcet = owcet;
     node_loc = loc}
 
 let rec field_assoc f = function

@@ -181,4 +181,5 @@ let signature_of_node n =
       node_params = n.n_params;
       node_param_constraints = n.n_param_constraints;
       node_external = false;
+      node_wcet = None;  (* TODO: do some kind of summation here? :/ *)
       node_loc = n.n_loc }
