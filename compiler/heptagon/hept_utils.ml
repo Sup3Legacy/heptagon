@@ -107,7 +107,7 @@ let mk_class_dec classname linsts loc =
   { c_nameclass = classname; c_insttypes = linsts; c_loc = loc }
 
 
-let mk_signature name ~extern ?(typeparamdecs=[]) ins outs stateful params constraints loc =
+let mk_signature name ~extern ?(typeparamdecs=[]) ins outs stateful params constraints wcet loc =
   { sig_name = name;
     sig_typeparamdecs = typeparamdecs;
     sig_inputs = ins;
@@ -116,6 +116,7 @@ let mk_signature name ~extern ?(typeparamdecs=[]) ins outs stateful params const
     sig_params = params;
     sig_param_constraints = constraints;
     sig_external = extern;
+    sig_wcet = wcet;
     sig_loc = loc }
 
 let mk_node

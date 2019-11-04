@@ -772,3 +772,5 @@ let solve_constraints_main (lcst : (affconstr list) * (boundconstr list)) =
     fprintf ffout "Solution found:\n%a\n@?" print_msol msol;
 
   msol
+
+

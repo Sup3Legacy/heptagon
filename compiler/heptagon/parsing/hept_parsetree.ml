@@ -333,6 +333,7 @@ type signature =
     sig_params            : var_dec list;
     sig_param_constraints : exp list;
     sig_external          : bool;
+    sig_wcet              : int option;
     sig_loc               : location }
 
 type interface =

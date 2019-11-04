@@ -290,6 +290,7 @@ type signature = {
   sig_params            : param list;
   sig_param_constraints : constrnt list;
   sig_external          : bool;
+  sig_wcet              : int option;
   sig_loc               : location }
 
 type interface =

@@ -115,6 +115,7 @@ List.iter (fun (str,tok) -> Hashtbl.add keyword_table str tok) [
  "latency", LATENCY;
  "range", RANGE;
  "before", BEFORE;
+ "wcet", WCET;
 
  "quo", INFIX3("quo");
  "mod", INFIX3("mod");
