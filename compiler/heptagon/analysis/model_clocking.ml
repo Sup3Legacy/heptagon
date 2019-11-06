@@ -753,12 +753,12 @@ let update_lcst msubst (lcst,lbcst) =
 (* ----- *)
 (* ----- *)
 
-(* Get the wcet of a function *)
-let get_wcet funname =
+(* Get the wcet and ressources of a function *)
+let get_wcet_ressource funname =
   try
     let sign = Modules.find_value funname in
-    sign.node_wcet
-  with Not_found -> None
+    (sign.node_wcet, sign.node_ressource)
+  with Not_found -> (None, [])
 
 (* Build the wcet mapping - useful for the load balancing cost function *)
 (* Assume normalisation of the program *)
@@ -767,16 +767,18 @@ let build_wcet_info leqms =
     match eqm.eqm_rhs.e_desc with
       | Eapp (a, _, _) -> begin match a.a_op with
         | Efun fn | Enode fn -> (
-          let ow = get_wcet fn in
-          match ow with
-          | None -> lwacc
-          | Some w ->
-            let (ophid, sh, per) = Clocks.extract_ock_info eqm.eqm_clk in
-            let ovarph = match ophid with
-              | None -> None
-              | Some phid -> Some (varname_from_phase_index phid)
-            in
-            (ovarph, sh, per, w)::lwacc
+          let (ow, lress) = get_wcet_ressource fn in
+
+          (* Default case - nothing to see there *)
+          if ((ow=None) && (lress=[])) then lwacc else
+
+          (* Else, register information *)
+          let (ophid, sh, per) = Clocks.extract_ock_info eqm.eqm_clk in
+          let ovarph = match ophid with
+            | None -> None
+            | Some phid -> Some (varname_from_phase_index phid)
+          in
+          (ovarph, sh, per, ow, lress)::lwacc
         )
         | _ -> lwacc
       end
@@ -786,25 +788,32 @@ let build_wcet_info leqms =
 
 (* Update the wcet using the msubst done in the block *)
 let update_wcet msubst lwcet =
-  List.map (fun (ovarname, sh, per, wcet) -> match ovarname with
-    | None -> (None, sh, per, wcet)
+  List.map (fun (ovarname, sh, per, owcet, lress) -> match ovarname with
+    | None -> (None, sh, per, owcet, lress)
     | Some varname ->
     try
       let (ovarname2, sh2) = StringMap.find varname msubst in
-      (ovarname2, sh+sh2, per, wcet)
+      (ovarname2, sh+sh2, per, owcet, lress)
     with
-      | Not_found -> (ovarname, sh, per, wcet)
+      | Not_found -> (ovarname, sh, per, owcet, lress)
   ) lwcet
 
 (* Pretty-printer for debugging *)
-let print_lwcet ff (lwcet: (string option * int * int * int) list) =
+let print_lwcet ff (lwcet: (string option * int * int * (int option) * (string * int) list) list) =
   let print_opt_string ff ovarph = match ovarph with
     | None -> fprintf ff "None"
     | Some varph -> fprintf ff "%s" varph
   in
-  let print_elem_lwcet ff (ovarph, sh, per, wcet) =
-    fprintf ff "\t(%a + %i, per = %i => wcet = %i);\n"
-      print_opt_string ovarph  sh per wcet
+  let print_opt_int ff owcet = match owcet with
+    | None -> fprintf ff "None"
+    | Some w -> fprintf ff "%i" w
+  in
+  let print_ress ff (n,v) = fprintf ff "(%s, %i)" n v in
+  let print_elem_lwcet ff (ovarph, sh, per, owcet, lress) =
+    fprintf ff "\t(%a + %i, per = %i => wcet = %a | ress = %a);\n"
+      print_opt_string ovarph  sh per
+      print_opt_int owcet
+      (Pp_tools.print_list print_ress "(" "" ")") lress
   in
   fprintf ff "lwcet = %a\n@?"
     (Pp_tools.print_list print_elem_lwcet "[" "" "]") lwcet
@@ -905,8 +914,8 @@ and typing_block_model h lcst {bm_local = l; bm_eqs = eq_list; bm_annot = lbann}
   );
 
   (* Build the wcet mapping - useful for the load balancing cost function *)
-  (* lwcet : (potential phase_variable_name, shift of ock, period of ock, potential assigned WCET *)
-  let lwcet : (string option * int * int * int) list = build_wcet_info eq_list in
+  (* lwcet : (potential phase_variable_name, shift of ock, period of ock, potential assigned WCET, list of ressources used *)
+  let (lwcet : (string option * int * int * (int option) * (string * int) list) list) = build_wcet_info eq_list in
 
   (* Substitute infos in lwcet using msubst *)
   let lwcet = update_wcet msubst lwcet in

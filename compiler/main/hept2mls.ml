@@ -296,11 +296,14 @@ let signature s =
 
 let interface i =
   let interface_decl id = match id with
-    | Heptagon.Itypedef td -> Itypedef (typedec td)
-    | Heptagon.Iconstdef cd -> Iconstdef (const_dec cd)
-    | Heptagon.Isignature s -> Isignature (signature s)
-    | Heptagon.Iclassdef cd -> Iclasstype (class_dec cd)
+    | Heptagon.Itypedef td -> (Itypedef (typedec td))::[]
+    | Heptagon.Iconstdef cd -> (Iconstdef (const_dec cd))::[]
+    | Heptagon.Isignature s -> (Isignature (signature s))::[]
+    | Heptagon.Iclassdef cd -> (Iclasstype (class_dec cd))::[]
+    | Heptagon.Iressourcedef _ -> []  (* No need for ressourcedef anymore - we drop it *)
   in
   { i_modname = i.Heptagon.i_modname;
     i_opened = i.Heptagon.i_opened;
-    i_desc = List.map interface_decl i.Heptagon.i_desc }
+    i_desc = List.fold_left (fun lacc idecl ->
+          (interface_decl idecl) @ lacc
+      ) [] i.Heptagon.i_desc }

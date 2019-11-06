@@ -144,6 +144,7 @@ let qualify_class = _qualify_with_error "class" qualify_class check_class
 let qualify_constrs =
   _qualify_with_error "constructor" qualify_constrs check_constrs
 let qualify_field = _qualify_with_error "field" qualify_field check_field
+let qualify_ressource = _qualify_with_error "ressource" qualify_ressource check_ressource
 
 (** Qualify a var name as a constant variable,
     if not in local_const or global_const then raise Not_found *)
@@ -245,7 +246,8 @@ let mk_app ?(params=[]) ?(ty_subst=[]) ?(unsafe=false) ?(inlined = false) op =
     Heptagon.a_unsafe = unsafe;
     Heptagon.a_inlined = inlined }
 
-let mk_signature name ~extern ?(typeparamdecs=[]) ins outs stateful params constraints wcet loc =
+let mk_signature name ~extern ?(typeparamdecs=[]) ins outs stateful params constraints
+    wcet lressutil loc =
   { Heptagon.sig_name = name;
     Heptagon.sig_typeparamdecs = typeparamdecs;
     Heptagon.sig_inputs = ins;
@@ -255,6 +257,7 @@ let mk_signature name ~extern ?(typeparamdecs=[]) ins outs stateful params const
     Heptagon.sig_param_constraints = constraints;
     Heptagon.sig_external = extern;
     Heptagon.sig_wcet = wcet;
+    Heptagon.sig_ressource = lressutil;
     Heptagon.sig_loc = loc }
 
 
@@ -752,6 +755,15 @@ let translate_classdec cd =
   with
     | ScopingError err -> Error.message cd.c_loc err
 
+
+let translate_ressourcedec rd =
+  try
+    let r_qname = current_qual rd.r_name in
+    replace_ressource r_qname (Signature.mk_ressource_def rd.r_name rd.r_max);    
+    Hept_utils.mk_ressource_dec rd.r_name rd.r_max rd.r_loc
+  with
+    | ScopingError err -> Error.message rd.r_loc err
+
 let translate_program p =
   let translate_program_desc pd = match pd with
     | Ppragma _ -> Misc.unsupported "pragma in scoping"
@@ -778,6 +790,7 @@ let translate_signature s =
   and translate_arg tenv a =
     Signature.mk_arg a.a_name (translate_type s.sig_loc tenv a.a_type)
       a.a_linearity (translate_some_clock a.a_clock)
+(*  and translate_ressource_util (nress, v) = ( (qualify_ressource nress), v) *)
   in
   let n = current_qual s.sig_name in
   let tp = List.map 
@@ -795,20 +808,24 @@ let translate_signature s =
   let o = List.map (translate_arg tenv) s.sig_outputs in
   let p, _ = params_of_var_decs Rename.empty s.sig_params in
   let c = List.map translate_constrnt s.sig_param_constraints in
+  (*let lress_used = List.map translate_ressource_util s.sig_ressource in *)
+
   let sig_node =
     Signature.mk_node
       ~extern:s.sig_external ~typeparams:tp s.sig_loc i o s.sig_stateful s.sig_unsafe p
-      ~owcet:s.sig_wcet in
+      ~lressutil:s.sig_ressource ~owcet:s.sig_wcet in
   Check_signature.check_signature sig_node;
   safe_add s.sig_loc add_value n sig_node;
-  mk_signature n ~typeparamdecs:tpdecs i o s.sig_stateful p c s.sig_wcet s.sig_loc ~extern:s.sig_external
+  mk_signature n ~typeparamdecs:tpdecs i o s.sig_stateful p c s.sig_wcet
+      s.sig_ressource s.sig_loc ~extern:s.sig_external
 
 
 let translate_interface_desc = function
   | Itypedef tydec -> Heptagon.Itypedef (translate_typedec tydec)
   | Iconstdef const_dec -> Heptagon.Iconstdef (translate_const_dec const_dec)
-  | Isignature s -> Heptagon.Isignature (translate_signature s)
   | Iclassdef cd -> Heptagon.Iclassdef (translate_classdec cd)
+  | Iressourcedef rd ->  Heptagon.Iressourcedef (translate_ressourcedec rd)
+  | Isignature s -> Heptagon.Isignature (translate_signature s)
 
 let translate_interface i =
   let desc = List.map translate_interface_desc i.i_desc in

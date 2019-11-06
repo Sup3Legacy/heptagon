@@ -44,7 +44,8 @@ type module_name = Names.modul
 (** state_names, [automata] translate them in constructors with a fresh type. *)
 type state_name = Names.name
 
-type labelname = Names.name
+type label_name = Names.name
+type ressource_name = Names.name
 
 
 type qualname =
@@ -178,7 +179,7 @@ and annot_eq_model = {
 and annot_eq_model_desc =
   | Anneqm_minphase of int
   | Anneqm_maxphase of int
-  | Anneqm_label of labelname
+  | Anneqm_label of label_name
 
 and eq_model = {
   eqm_lhs : pat;
@@ -194,9 +195,9 @@ and annot_model = {
 
 and annot_model_desc =
   (* Low/Upper bound the phase between 2 equations on same period *)
-  | Ann_range of int * int * labelname * labelname
+  | Ann_range of int * int * label_name * label_name
   (* Precedence constraint on the phase *)
-  | Ann_before of labelname * labelname
+  | Ann_before of label_name * label_name
 
 and block_model = {
   bm_local    : var_dec_model list;
@@ -303,6 +304,11 @@ type class_dec =
     c_insttypes   : type_name list;
     c_loc         : location }
 
+type ressource_dec =
+  { r_name : ressource_name;
+    r_max  : int;
+    r_loc  : location }
+
 type program =
   { p_modname : dec_name;
     p_opened  : module_name list;
@@ -334,6 +340,7 @@ type signature =
     sig_param_constraints : exp list;
     sig_external          : bool;
     sig_wcet              : int option;
+    sig_ressource         : (ressource_name * int) list;
     sig_loc               : location }
 
 type interface =
@@ -345,6 +352,7 @@ and interface_desc =
   | Itypedef of type_dec
   | Iconstdef of const_dec
   | Iclassdef of class_dec
+  | Iressourcedef of ressource_dec
   | Isignature of signature
 
 (* {3 Helper functions to create AST} *)
@@ -410,6 +418,9 @@ let mk_objective kind exp =
 
 let mk_const_dec id ty e loc =
   { c_name = id; c_type = ty; c_value = e; c_loc = loc }
+
+let mk_ressource_dec id max loc =
+  { r_name = id; r_max = max; r_loc = loc }
 
 let mk_arg name (ty,lin) ck =
   { a_type = ty; a_linearity = lin; a_name = name; a_clock = ck }

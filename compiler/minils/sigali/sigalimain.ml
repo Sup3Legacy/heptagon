@@ -517,7 +517,7 @@ let translate_node
               sig_ctrl in
           let ctrlr_signature =
             Signature.mk_node Location.no_location ~extern:false
-              ctrlr_inputs ctrlr_outputs false false [] ~owcet:None in
+              ctrlr_inputs ctrlr_outputs false false [] ~owcet:None ~lressutil:[] in
           (* Add controller into modules *)
           Modules.add_value ctrlr_fun_name ctrlr_signature;
           [ctrlr_call]

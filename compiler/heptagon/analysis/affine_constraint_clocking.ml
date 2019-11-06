@@ -685,7 +685,7 @@ let lcm a b =
   let g = gcd a b in
   a*(b/g)
 
-let get_lcm_period lwcet = List.fold_left (fun acc (_,_,per,_) -> lcm acc per) 1 lwcet
+let get_lcm_period lwcet = List.fold_left (fun acc (_,_,per,_,_) -> lcm acc per) 1 lwcet
 
 (* mmbinary: [varname : string] --> ( [phase_num : int] --> [binvarname : string]) *)
 let get_mmbinary lbc =
@@ -755,14 +755,15 @@ let load_balancing_int lwcet lac lbc =
 
   (* c) (\forall j) \sum_{T} delAct_{j mod per(T),T} * W_T <= [varobj] *)
   (*  We get this constraint from the information from lwcet *)
-  (* Note: lwcet : (opt_varphase, sh, per, wcet) list *)
-
+  (* Note: lwcet : (opt_varphase, sh, per, owcet, lress) list *)
   let max_phase = get_lcm_period lwcet in
 
   let arr_lcoeff = Array.make max_phase [] in (* jth cell => - \sum_{T} delAct_{j mod per(T),T} * W_T *)
   let arr_const = Array.make max_phase 0 in   (* jth cell => Const of the jth constraint *)
 
-  List.iter (fun (opt_varphase, sh, per, wcet) ->
+  List.iter (fun (opt_varphase, sh, per, owcet, lress) ->
+    match owcet with None -> () | Some wcet -> (* ASSUMPTION "no wcet" => "wcet = 0" *)
+
     assert(max_phase mod per = 0);
     let ninstance = max_phase / per in
     
@@ -794,7 +795,17 @@ let load_balancing_int lwcet lac lbc =
         for k = 0 to (ninstance-1) do
           arr_lcoeff.(k*per + sh + shvar) <- ((-wcet), binvar) :: arr_lcoeff.(k*per + sh + shvar)
         done
-      ) mbinvar      
+      ) mbinvar
+
+
+
+
+      (* TODO: ressource constraint management here !!!! *)
+
+
+
+
+
   ) lwcet;
 
   (* DEBUG
@@ -936,7 +947,9 @@ let get_lower_bound_solution lbc =
 
 (* Solve the system of affine and boundary constraints.
   Returns a StringMap, associating the variable name to its value *)
-let solve_constraints_main bquickres lwcet (lcst : (affconstr list) * (boundconstr list)) =
+let solve_constraints_main bquickres
+  (lwcet : (string option * int * int * (int option) * (string * int) list) list)
+  (lcst : (affconstr list) * (boundconstr list)) =
   let (lac, lbc) = preprocess_constraints lcst in
 
   (* Needs to be there, because of model2node transformation *)
@@ -962,12 +975,8 @@ let solve_constraints_main bquickres lwcet (lcst : (affconstr list) * (boundcons
 
   (* Base case - no affine constraint - simplest resolution *)
   (* Happens when there are no buffer operator used in the program *)
-  if (lac = [] && (version_constr=Default)) then
-    
-
-    (* TODO: add no "ressource constraint" here (later !!!) *)
-
-
+  let no_ressource_used = List.exists (fun (_,_,_,_,lress) -> lress!=[]) lwcet in
+  if (lac = [] && (version_constr=Default) && no_ressource_used) then
     get_lower_bound_solution lbc
   else
 

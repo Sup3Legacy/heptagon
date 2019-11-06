@@ -47,6 +47,7 @@ type module_object =
     m_types   : type_def NamesEnv.t;
     m_classes : type_class NamesEnv.t;
     m_consts  : const_def NamesEnv.t;
+    m_ress    : ressource_def NamesEnv.t;
     m_constrs : name NamesEnv.t;
     m_fields  : name NamesEnv.t;
     m_format_version : string; }
@@ -59,6 +60,7 @@ type env = {
   mutable types   : type_def QualEnv.t;  (** Type definitions *)
   mutable classes : type_class QualEnv.t; (** Class definitions *)
   mutable consts  : const_def QualEnv.t; (** Constants definitions *)
+  mutable ressources: ressource_def QualEnv.t;  (** Ressources definitions *)
   mutable constrs  : qualname QualEnv.t; (** Constructors mapped to their corresponding type *)
   mutable fields  : qualname QualEnv.t;  (** Fields mapped to their corresponding type *)
   format_version  : string               (** Accepted compiled interface version *)
@@ -73,6 +75,7 @@ let g_env =
     types     = QualEnv.empty;
     classes   = QualEnv.empty;
     constrs   = QualEnv.empty;
+    ressources = QualEnv.empty;
     fields    = QualEnv.empty;
     consts    = QualEnv.empty;
     format_version = interface_format_version }
@@ -102,7 +105,8 @@ let _append_module mo =
   g_env.classes <- QualEnv.append (qualify mo.m_classes) g_env.classes;
   g_env.constrs <- QualEnv.append (qualify_all mo.m_constrs) g_env.constrs;
   g_env.fields <- QualEnv.append (qualify_all mo.m_fields) g_env.fields;
-  g_env.consts <- QualEnv.append (qualify mo.m_consts) g_env.consts
+  g_env.consts <- QualEnv.append (qualify mo.m_consts) g_env.consts;
+  g_env.ressources <- QualEnv.append (qualify mo.m_ress) g_env.ressources
 
 (** Load a module into the global environment unless already loaded *)
 let _load_module modul =
@@ -186,7 +190,9 @@ let add_field f v =
 let add_const f v =
   _check_not_defined g_env.consts f;
   g_env.consts <- QualEnv.add f v g_env.consts
-
+let add_ressource f v =
+  _check_not_defined g_env.ressources f;
+  g_env.ressources <- QualEnv.add f v g_env.ressources
 
 
 (** Same as add_value but without checking for redefinition *)
@@ -198,7 +204,8 @@ let replace_class f v =
   g_env.classes <- QualEnv.add f v g_env.classes
 let replace_const f v =
   g_env.consts <- QualEnv.add f v g_env.consts
-
+let replace_ressource f v = 
+  g_env.ressources <- QualEnv.add f v g_env.ressources
 
 
 (** {3 Find functions look in the global environement, nothing more} *)
@@ -209,7 +216,7 @@ let find_class x = QualEnv.find x g_env.classes
 let find_constrs x = QualEnv.find x g_env.constrs
 let find_field x = QualEnv.find x g_env.fields
 let find_const x = QualEnv.find x g_env.consts
-
+let find_ressource x = QualEnv.find x g_env.ressources
 
 
 (** @return the fields of a record type. *)
@@ -241,7 +248,9 @@ let check_field q =
 let check_const q =
   _load_module q.qual;
   try let _ = QualEnv.find q g_env.consts in true with Not_found -> false
-
+let check_ressource q =
+  _load_module q.qual;
+  try let _ = QualEnv.find q g_env.ressources in true with Not_found -> false
 
 
 (** {3 Qualify functions}
@@ -266,7 +275,7 @@ let qualify_class name = _qualify g_env.classes name
 let qualify_constrs name = _qualify g_env.constrs name
 let qualify_field name = _qualify g_env.fields name
 let qualify_const name = _qualify g_env.consts name
-
+let qualify_ressource name = _qualify g_env.ressources name
 
 (** @return the name as qualified with the current module
     (should not be used..)*)
@@ -335,6 +344,16 @@ let rec fresh_constr pass_name name =
   then fresh_constr pass_name (name ^ Misc.gen_symbol())
   else q
 
+let rec fresh_ressource pass_name name =
+  let fname =
+    if !Compiler_options.full_name
+    then ("__"^ pass_name ^"_"^ name)
+    else name in
+  let q = current_qual fname in
+  if QualEnv.mem q g_env.ressources
+  then fresh_ressource pass_name (name ^ Misc.gen_symbol())
+  else q
+
 
 exception Undefined_type of qualname
 
@@ -393,5 +412,6 @@ let current_module () =
       m_classes = unqualify g_env.classes;
       m_consts = unqualify g_env.consts;
       m_constrs = unqualify_all g_env.constrs;
+      m_ress   = unqualify g_env.ressources;
       m_fields = unqualify_all g_env.fields;
       m_format_version = g_env.format_version }

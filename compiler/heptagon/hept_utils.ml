@@ -106,8 +106,11 @@ let mk_typeparam_dec nametype nameclass =
 let mk_class_dec classname linsts loc =
   { c_nameclass = classname; c_insttypes = linsts; c_loc = loc }
 
+let mk_ressource_dec name max loc =
+  { r_name = name; r_max = max; r_loc = loc }
 
-let mk_signature name ~extern ?(typeparamdecs=[]) ins outs stateful params constraints wcet loc =
+let mk_signature name ~extern ?(typeparamdecs=[]) ins outs stateful params constraints
+      wcet lressutil loc =
   { sig_name = name;
     sig_typeparamdecs = typeparamdecs;
     sig_inputs = ins;
@@ -117,6 +120,7 @@ let mk_signature name ~extern ?(typeparamdecs=[]) ins outs stateful params const
     sig_param_constraints = constraints;
     sig_external = extern;
     sig_wcet = wcet;
+    sig_ressource = lressutil;
     sig_loc = loc }
 
 let mk_node
@@ -182,4 +186,5 @@ let signature_of_node n =
       node_param_constraints = n.n_param_constraints;
       node_external = false;
       node_wcet = None;  (* TODO: do some kind of summation here? :/ *)
+      node_ressource = [];  (* TODO: do some kind of merge here? :/ *)
       node_loc = n.n_loc }

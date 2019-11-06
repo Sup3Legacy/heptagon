@@ -82,7 +82,7 @@ open Hept_parsetree
 %token AT INIT SPLIT REINIT
 %token THREE_DOTS
 %token MINPHASE MAXPHASE LABEL LATENCY RANGE BEFORE
-%token WCET
+%token WCET USE RESSOURCE
 %token <string> PREFIX
 %token <string> INFIX0
 %token <string> INFIX1
@@ -187,6 +187,10 @@ type_dec:
 
 class_dec:
   | CLASS c=IDENT LPAREN lt=snlist(COMMA, ty_id) RPAREN   { mk_class_dec c lt (Loc($startpos,$endpos)) }
+
+ressource_dec:
+  | RESSOURCE r=IDENT m=INT { mk_ressource_dec r m (Loc($startpos,$endpos)) }
+;
 
 enum_ty_desc:
   | Constructor                   {[$1]}
@@ -885,7 +889,15 @@ interface:
 wcet_info:
   | WCET w=INT { Some w }
   | /*empty*/  { None }
+;
 
+ressource_infos:
+  | USE lr=list(ressource_info) { lr }
+  | /* empty */                       { [] }
+;
+
+ressource_info:
+  | n=IDENT LPAREN v=INT RPAREN ressource_info { (n,v) }
 ;
 
 unsafe:
@@ -904,8 +916,9 @@ interface_desc:
   | type_dec         { Itypedef $1 }
   | const_dec        { Iconstdef $1 }
   | class_dec        { Iclassdef $1 }
+  | ressource_dec    { Iressourcedef $1 }
   | e=extern u=unsafe val_or_empty n=node_or_fun f=ident pc=node_params tp=type_params LPAREN i=params_signature RPAREN
-    returns LPAREN o=params_signature RPAREN ow=wcet_info
+    returns LPAREN o=params_signature RPAREN ow=wcet_info lr=ressource_infos
     { Isignature({ sig_name = f;
                    sig_typeparams = tp;
                    sig_inputs = i;
@@ -916,6 +929,7 @@ interface_desc:
                    sig_param_constraints = snd pc;
                    sig_external = e;
                    sig_wcet = ow;
+                   sig_ressource = lr;
                    sig_loc = (Loc($startpos,$endpos)) }) }
 ;
 

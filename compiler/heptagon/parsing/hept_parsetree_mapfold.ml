@@ -66,6 +66,7 @@ type 'a hept_it_funs = {
   model_dec       : 'a hept_it_funs -> 'a -> model_dec -> model_dec * 'a;
   const_dec       : 'a hept_it_funs -> 'a -> const_dec -> const_dec * 'a;
   class_dec       : 'a hept_it_funs -> 'a -> class_dec -> class_dec * 'a;
+  ressource_dec   : 'a hept_it_funs -> 'a -> ressource_dec -> ressource_dec * 'a;
   type_dec        : 'a hept_it_funs -> 'a -> type_dec -> type_dec * 'a;
   type_desc       : 'a hept_it_funs -> 'a -> type_desc -> type_desc * 'a;
   program         : 'a hept_it_funs -> 'a -> program -> program * 'a;
@@ -401,6 +402,8 @@ and const_dec funs acc c =
 and class_dec_it funs acc c = funs.class_dec funs acc c
 and class_dec _ acc c = c, acc (* nothing to parse below that *)
 
+and ressource_dec_it funs acc r = funs.ressource_dec funs acc r
+and ressource_dec _ acc r = r, acc
 
 and type_dec_it funs acc td = funs.type_dec funs acc td
 and type_dec funs acc td =
@@ -444,6 +447,7 @@ and interface_desc funs acc id = match id with
   | Itypedef t -> let t, acc = type_dec_it funs acc t in Itypedef t, acc
   | Iconstdef c -> let c, acc = const_dec_it funs acc c in Iconstdef c, acc
   | Iclassdef c -> let c, acc = class_dec_it funs acc c in Iclassdef c, acc
+  | Iressourcedef r -> let r, acc = ressource_dec_it funs acc r in Iressourcedef r, acc
   | Isignature s -> let s, acc = signature_it funs acc s in Isignature s, acc
 
 and interface_it funs acc i = funs.interface funs acc i
@@ -498,6 +502,7 @@ let defaults = {
   model_dec = model_dec;
   const_dec = const_dec;
   class_dec = class_dec;
+  ressource_dec = ressource_dec;
   type_dec = type_dec;
   type_desc = type_desc;
   program = program;
@@ -541,6 +546,7 @@ let defaults_stop = {
   model_dec = Global_mapfold.stop;
   const_dec = Global_mapfold.stop;
   class_dec = Global_mapfold.stop;
+  ressource_dec = Global_mapfold.stop;
   type_dec = Global_mapfold.stop;
   type_desc = Global_mapfold.stop;
   program = Global_mapfold.stop;

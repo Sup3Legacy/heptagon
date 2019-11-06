@@ -34,10 +34,12 @@ open Linearity
 
 (** Warning: Whenever these types are modified,
     interface_format_version should be incremented. *)
-let interface_format_version = "4.2"
+let interface_format_version = "4.3"
 (* last changes:
-    - added type parameters & type class (Guillaume I)
-    - added wcet (as a int option) (Guillaume I) *)
+    - 4.1 -> added type parameters & type class (Guillaume I)
+    - 4.2 -> added wcet (as a int option) (Guillaume I)
+    - 4.3 -> added ressource utilisation (in signature + other type) (Guillaume I)
+  *)
 
 type ck =
   | Cbase
@@ -71,7 +73,8 @@ type node = {
   node_param_constraints  : constrnt list;
   node_external           : bool;
   node_wcet               : int option;
-  node_loc                : location}
+  node_ressource          : (name * int) list;
+  node_loc                : location }
 
 type field = { f_name : field_name; f_type : ty }
 type structure = field list
@@ -87,6 +90,8 @@ type const_def = { c_type : ty; c_value : static_exp option}
 type class_def = { c_class : name }
 
 type instance_def = { i_nametype : name; i_nameclass : name }
+
+type ressource_def = { r_name : name; r_max : int }
 
 
 (** {3 Signature helper functions} *)
@@ -121,11 +126,13 @@ let mk_class_def cname = { c_class = cname }
 
 let mk_instance_def tname cname = { i_nametype = tname; i_nameclass = cname }
 
+let mk_ressource_def rname rmax = { r_name = rname; r_max = rmax }
+
 let mk_typeparam_def ntype nclass =
   { tp_nametype = ntype; tp_nameclass = nclass }
 
 let mk_node ?(constraints = []) loc ~extern ?(typeparams = []) ins outs
-        stateful unsafe params ?(owcet = None) =
+        stateful unsafe params ?(owcet = None) ?(lressutil=[]) =
   { node_inputs = ins;
     node_outputs  = outs;
     node_stateful = stateful;
@@ -135,6 +142,7 @@ let mk_node ?(constraints = []) loc ~extern ?(typeparams = []) ins outs
     node_param_constraints = constraints;
     node_external = extern;
     node_wcet = owcet;
+    node_ressource = lressutil;
     node_loc = loc}
 
 let rec field_assoc f = function

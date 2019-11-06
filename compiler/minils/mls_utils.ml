@@ -292,4 +292,5 @@ let signature_of_node n =
     node_param_constraints = n.n_param_constraints;
     node_external = false;
     node_wcet = None;
+    node_ressource = [];
     node_loc = n.n_loc }

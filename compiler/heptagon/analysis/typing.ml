@@ -1795,6 +1795,7 @@ let interface i =
       | Iconstdef c -> Iconstdef (typing_const_dec c)
       | Itypedef t -> Itypedef (typing_typedec t)
       | Iclassdef c -> Iclassdef (typing_classdec c)
+      | Iressourcedef r -> Iressourcedef r
       | Isignature i -> Isignature (typing_signature i)
   in
   { i with i_desc = List.map interface_desc i.i_desc }
