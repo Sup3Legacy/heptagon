@@ -53,7 +53,7 @@ open Affine_constraint_clocking
 let debug_clocking = false (* TODO DEBUG *)
 let ffout = formatter_of_out_channel stdout
 
-let constraint_bufferfby = true  (* TODO: mettre ca en option du compilo ? *)
+let constraint_bufferfby = not (!Compiler_options.no_constraint_bufferfby)
 
 
 let print_henv ff h =
@@ -245,7 +245,6 @@ let rec typing_bufferfby_osynch oct = match oct with
     match ock with
     | Covar { contents = Coindex _ } ->
       failwith "Typing 1-synch delay - variable clock manipulation should not happen?"
-      (* Does this only happen when we have a delay of a constant, or something like that? *)
     | _ ->
       let per = Clocks.get_period_ock ock in
       let n_ock = fresh_osynch_period per in
@@ -691,7 +690,6 @@ let closure_subst msubst =
   ) msubst StringMap.empty in
   msubst
 
-  (* TODO *)
 
 (* Update the constraints from lcst, depending on the substitution
   obtained from the unification process at the equation level *)
@@ -751,8 +749,70 @@ let update_lcst msubst (lcst,lbcst) =
   ) msubst lbcst in
   (lcst,lbcst)
 
+
 (* ----- *)
 (* ----- *)
+
+(* Get the wcet of a function *)
+let get_wcet funname =
+  try
+    let sign = Modules.find_value funname in
+    sign.node_wcet
+  with Not_found -> None
+
+(* Build the wcet mapping - useful for the load balancing cost function *)
+(* Assume normalisation of the program *)
+let build_wcet_info leqms =
+  let lwcet = List.fold_left (fun lwacc eqm ->
+    match eqm.eqm_rhs.e_desc with
+      | Eapp (a, _, _) -> begin match a.a_op with
+        | Efun fn | Enode fn -> (
+          let ow = get_wcet fn in
+          match ow with
+          | None -> lwacc
+          | Some w ->
+            let (ophid, sh, per) = Clocks.extract_ock_info eqm.eqm_clk in
+            let ovarph = match ophid with
+              | None -> None
+              | Some phid -> Some (varname_from_phase_index phid)
+            in
+            (ovarph, sh, per, w)::lwacc
+        )
+        | _ -> lwacc
+      end
+      | _ -> lwacc
+  ) [] leqms in
+  lwcet
+
+(* Update the wcet using the msubst done in the block *)
+let update_wcet msubst lwcet =
+  List.map (fun (ovarname, sh, per, wcet) -> match ovarname with
+    | None -> (None, sh, per, wcet)
+    | Some varname ->
+    try
+      let (ovarname2, sh2) = StringMap.find varname msubst in
+      (ovarname2, sh+sh2, per, wcet)
+    with
+      | Not_found -> (ovarname, sh, per, wcet)
+  ) lwcet
+
+(* Pretty-printer for debugging *)
+let print_lwcet ff (lwcet: (string option * int * int * int) list) =
+  let print_opt_string ff ovarph = match ovarph with
+    | None -> fprintf ff "None"
+    | Some varph -> fprintf ff "%s" varph
+  in
+  let print_elem_lwcet ff (ovarph, sh, per, wcet) =
+    fprintf ff "\t(%a + %i, per = %i => wcet = %i);\n"
+      print_opt_string ovarph  sh per wcet
+  in
+  fprintf ff "lwcet = %a\n@?"
+    (Pp_tools.print_list print_elem_lwcet "[" "" "]") lwcet
+
+
+(* ----- *)
+(* ----- *)
+
 
 (* Typing model equations  *)
 let rec typing_model_eq h lcst eqm =
@@ -843,8 +903,22 @@ and typing_block_model h lcst {bm_local = l; bm_eqs = eq_list; bm_annot = lbann}
     fprintf ffout "DEBUG-typing_model_eq - constraints =\n %a\n@?"
       print_constraint_environment lcst;
   );
-  (h1, lcst, msubst)
 
+  (* Build the wcet mapping - useful for the load balancing cost function *)
+  (* lwcet : (potential phase_variable_name, shift of ock, period of ock, potential assigned WCET *)
+  let lwcet : (string option * int * int * int) list = build_wcet_info eq_list in
+
+  (* Substitute infos in lwcet using msubst *)
+  let lwcet = update_wcet msubst lwcet in
+
+  (* TODO DEBUG *)
+  if (debug_clocking) then print_lwcet ffout lwcet;
+
+  (h1, lcst, msubst, lwcet)
+
+
+(* ----- *)
+(* ----- *)
 
 (* Substitution of the phase solution in the program *)
 let enrich_sol_with_msubst msubst msol =
@@ -914,7 +988,7 @@ let eq_model_replace _ (hfull,msol) eqm =
       
       let (ph_sexp, per_sexp) = get_ph_per_from_ock ock_sexp in
       assert(per_eq = per_sexp);
-      assert(ph_eq < ph_sexp);    (* Cf question in comment in typing_bufferfby_osynch *)
+      assert(ph_eq < ph_sexp);
       let d = ph_eq - ph_sexp + per_eq in
 
       { rhs with e_desc = Edelayfby(d, seInit, e) }
@@ -941,13 +1015,14 @@ let var_dec_model_replace _ (hfull,msol) vdm =
  { vdm with vm_clock = subst_solution msol vdm.vm_clock }, (hfull, msol)
 
 
-(* Main functions *)
-let typing_model md =
+(* Main functions
+  bquickres = try simplest solution resolution or fail. Used for model2node *)
+let typing_model bquickres md =
   let lcst : ((affconstr list) * (boundconstr list)) = ([],[]) in
 
   let (h0, lcst) = append_model_env Env.empty lcst md.m_input in
   let (h, lcst) = append_model_env h0 lcst md.m_output in
-  let (h, lcst, msubst) = typing_block_model h lcst md.m_block in
+  let (h, lcst, msubst, lwcet) = typing_block_model h lcst md.m_block in
   (* Update clock info in variable descriptions *)
   let set_clock vdm = { vdm with vm_clock = Env.find vdm.vm_ident h } in
   let md = { md with m_input = List.map set_clock md.m_input;
@@ -957,10 +1032,11 @@ let typing_model md =
   if debug_clocking then
     print_constraint_environment ffout lcst;
 
+  
   (* Solve the constraints *)
   (* Note: no boundary constraint missing for the created phase variable, because
       the system is normalised *)
-  let msol = Affine_constraint_clocking.solve_constraints_main lcst in
+  let msol = Affine_constraint_clocking.solve_constraints_main bquickres lwcet lcst in
 
   (* DEBUG
   print_msol ffout msol; *)
@@ -993,7 +1069,7 @@ let typing_model md =
 
 let program p =
   let program_desc pd = match pd with
-    | Pmodel md -> Pmodel (typing_model md)
+    | Pmodel md -> Pmodel (typing_model false md)
     | _ -> pd
   in
   { p with p_desc = List.map program_desc p.p_desc; }

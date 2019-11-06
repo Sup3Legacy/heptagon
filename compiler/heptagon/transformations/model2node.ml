@@ -796,7 +796,8 @@ let model2node md =
     fprintf ffout "localised_md = %a\n@?" Hept_printer.print_model localised_md;
   );
 
-  let localised_md = Model_clocking.typing_model localised_md in
+  (* There should not be any buffer this time => simpler clocking analysis *)
+  let localised_md = Model_clocking.typing_model true localised_md in
 
   (* At that point, there is no delay/delayfby, and the only when remaining
     are along the edges of the graph of harmonic periods *)

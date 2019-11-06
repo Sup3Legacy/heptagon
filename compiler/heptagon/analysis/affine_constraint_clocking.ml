@@ -34,7 +34,7 @@ open Containers
 open Clocks
 
 (* For debugging *)
-let debug = false
+let debug = false  (* TODO DEBUG *)
 let ffout = Format.formatter_of_out_channel stdout
 
 let max_default_phase_for_solving = 7777 (* Should be distinctive enough *)
@@ -668,9 +668,176 @@ let solve_constraint_on_our_own lac lbc =
 
 (* ==================================================== *)
 
-let default_obj_func lbc =
- let vname = (List.hd lbc).varName in
- (1, vname)::[]
+(* Name of the variable in the constraint to minimize *)
+let varobj = "upBoundWeight"
+
+let get_binary_varname varname k =
+  varname ^ "_ph_" ^ (string_of_int k)
+
+let rec gcd a b =
+  assert(a>0);
+  assert(b>=0);
+  if (a<b) then gcd b a else
+  if (b=0) then a else
+  gcd b (a mod b)
+
+let lcm a b =
+  let g = gcd a b in
+  a*(b/g)
+
+let get_lcm_period lwcet = List.fold_left (fun acc (_,_,per,_) -> lcm acc per) 1 lwcet
+
+(* mmbinary: [varname : string] --> ( [phase_num : int] --> [binvarname : string]) *)
+let get_mmbinary lbc =
+  let rec fill_int_maps varname k lbound imDeltaAct =
+    assert(k>=lbound);
+    if (k=lbound) then imDeltaAct else (* Termination *)
+
+    let varDeltaAct = get_binary_varname varname (k-1) in
+    let imDeltaAct = IntMap.add (k-1) varDeltaAct imDeltaAct in
+    fill_int_maps varname (k-1) lbound imDeltaAct
+  in
+  
+  (* mmbinary: [varname : string] --> ( [phase_num : int] --> [binvarname : string]) *)
+  let mmbinary = List.fold_left (fun mmacc bc -> 
+    let mvarbin = fill_int_maps bc.varName bc.ubound bc.lbound IntMap.empty in
+    StringMap.add bc.varName mvarbin mmacc
+  ) StringMap.empty lbc in
+  mmbinary
+
+
+(* Load_balancing cost function *)
+let load_balancing_int lwcet lac lbc =
+  (* * Binary variable to create:
+       For each phase variable T, create (u-l) variable delAct_{i,T}, as described in "lbc"
+     * Set of constraints to add:
+      -> (\forall T) \sum_i i*delAct_{i,T} - v_T = 0
+      -> \forall T) \sum_i delAct_{i,T} = 1
+      -> (\forall j) \sum_{T} delAct_{j mod per(T),T} * W_T \leq [varobj]
+     * Objective function is "minimize [varobj]" *)
+
+  (* 1) Binary variables - lbc should list all variable needed *)
+  
+  (* mmbinary: [varname : string] --> ( [phase_num : int] --> [binvarname : string]) *)
+  let mmbinary = get_mmbinary lbc in
+  let lbinary = StringMap.fold (fun _ mv acc ->
+    IntMap.fold (fun _ binvar acc ->
+      binvar::acc
+    ) mv acc
+  ) mmbinary [] in
+
+  (* 2) Objective function *)
+  let obj_func = (1, varobj)::[] in
+
+
+  (* 3) Adding affine constraints *)
+  let lac_link_unic = List.fold_left (fun acc bc ->
+    let varname_int = bc.varName in
+    let mbinvar = StringMap.find varname_int mmbinary in
+
+    (* a) Link between integral and binary constraints:
+      (\forall T) \sum_i i*delAct_{i,T} - v_T = 0 *)
+    let lcoeff_link = (-1, varname_int)::[] in
+    let lcoeff_link = IntMap.fold (fun i varbin acc -> 
+      if (i!=0) then (i, varbin)::acc else acc
+    ) mbinvar lcoeff_link in
+    let ac_link = mk_affconstr true lcoeff_link 0 in
+
+    (* b) Unicity of the 1 value acrodd binary constraints:
+      (\forall T) \sum_i delAct_{i,T} = 1  *)
+    let lcoeff_unicity = IntMap.fold (fun _ varbin acc ->
+      (1, varbin)::acc
+    ) mbinvar [] in
+    let ac_unicity = mk_affconstr true lcoeff_unicity 1 in
+
+    ac_link :: ac_unicity :: acc
+  ) [] lbc in
+
+  (* c) (\forall j) \sum_{T} delAct_{j mod per(T),T} * W_T <= [varobj] *)
+  (*  We get this constraint from the information from lwcet *)
+  (* Note: lwcet : (opt_varphase, sh, per, wcet) list *)
+
+  let max_phase = get_lcm_period lwcet in
+
+  let arr_lcoeff = Array.make max_phase [] in (* jth cell => - \sum_{T} delAct_{j mod per(T),T} * W_T *)
+  let arr_const = Array.make max_phase 0 in   (* jth cell => Const of the jth constraint *)
+
+  List.iter (fun (opt_varphase, sh, per, wcet) ->
+    assert(max_phase mod per = 0);
+    let ninstance = max_phase / per in
+    
+    match opt_varphase with
+    | None ->
+      (* We update the constant
+        The constant is on the right side of the >=, so it's a "+" *)
+      for k = 0 to (ninstance-1) do
+        arr_const.(sh + k*per) <- arr_const.(sh + k*per) + wcet
+      done
+    | Some varname_int ->
+      (* TODO DEBUG
+      fprintf ffout "\t(%s + %i, per = %i => wcet = %i);\n" varname_int  sh per wcet;
+      fprintf ffout "\t(ninstance = %i);\n" ninstance;
+      *)
+
+      (* We recover the binary variables *)
+      let mbinvar = try
+          StringMap.find varname_int mmbinary
+        with Not_found -> failwith ("Internal error: lwcet contains a contribution to "
+            ^ varname_int ^ " which is not part of the constraint variables.")
+      in
+      IntMap.iter (fun shvar binvar ->
+        (* By construction, we should not have an overflow there *)
+        assert(0<=sh+shvar);
+        assert(sh+shvar<per);
+
+        (* The terms are on the left side of the >=, so it's a "-" *)
+        for k = 0 to (ninstance-1) do
+          arr_lcoeff.(k*per + sh + shvar) <- ((-wcet), binvar) :: arr_lcoeff.(k*per + sh + shvar)
+        done
+      ) mbinvar      
+  ) lwcet;
+
+  (* DEBUG
+  fprintf ffout "arr_lcoeff = [";
+  Array.iter (fun lelem ->
+    fprintf ffout "%a; " (print_affterm ~bfirst:true) lelem
+  ) arr_lcoeff;
+  fprintf ffout "]\n@?";
+
+  fprintf ffout "arr_const = [";
+  Array.iter (fun el ->
+    fprintf ffout "%i; " el
+  ) arr_const;
+  fprintf ffout "]\n@?"; *)
+
+  
+  let arr_ac_weight = Array.map2 (fun lcoeff_weight cst ->
+    let lcoeff_weight = (1, varobj)::lcoeff_weight in
+    mk_affconstr false lcoeff_weight cst
+  ) arr_lcoeff arr_const in
+  let lac_weight = Array.to_list arr_ac_weight in
+
+
+  (* Wrapping things up! *)
+  let lac = List.rev_append lac_weight (List.rev_append lac_link_unic lac) in
+  (lac, lbc, lbinary, obj_func)
+
+
+(* Load_balacing cost function where all integral values are removed *)
+let load_balancing_bool lwcet lac lbc =
+
+  (* TODO: use load_balancing_int there, then adapt the "lac" ? *)
+  (* TODO: need to get mmbinary info here too *)
+
+
+  (* TODO *)
+  failwith "Option not implemented yet"
+
+
+
+
+(* ==================================================== *)
+(* Export of constraints and import of solution *)
 
 (* Parsing function for the solution *)
 let parse_file parse filename =
@@ -689,9 +856,51 @@ let parse_file parse filename =
        failwith "Parsing error"
   in close_in chan; res
 
-(* Solve the system of affine and boundary constraints.
-  Returns a StringMap, associating the variable name to its value *)
-let solve_constraints_main (lcst : (affconstr list) * (boundconstr list)) =
+(* Generate a constraint file, then stop the compilation flow *)
+(* Option: -genphconstr [file_name] *)
+let generate_constraint lac lbc lbinary obj_func =
+  let ocout = open_out !Compiler_options.constraint_filename in
+  let ffout = formatter_of_out_channel ocout in
+  print_out_cplex_constraint ffout obj_func lac lbc lbinary;
+  close_out ocout;
+
+  (* === Stopping compiler flow now === *)
+  failwith "Constraint file generation successfully done - compilation flow terminated."
+
+(* Solution file is a serie of lines "[namevar] -> [integral value]"*)
+(* Option: -solphconstr [file] *)
+let parse_solution lac lbc lbinary =
+  let lsol = parse_file (Parser_sol.solution Lexer_sol.main)
+                  !Compiler_options.solution_filename in
+  let msol = List.fold_left (fun macc (k,v) ->
+    StringMap.add k v macc
+  ) StringMap.empty lsol in
+
+  (* DEBUG *)
+  if (debug) then
+    fprintf ffout "Solution found:\n%a\n@?" print_msol msol;
+
+  check_coherency lac lbc lbinary msol;
+  msol
+
+
+(* ==================================================== *)
+
+(* Main flow functions  *)
+type v_constr_type =
+  | Default
+  | Load_Balancing_Int
+  | Load_Balancing_Bool
+
+let get_version_constraint _ = match !Compiler_options.v_constr with
+  | 0 -> Default
+  | 1 -> Load_Balancing_Int
+  | 2 -> Load_Balancing_Bool
+  | _ -> failwith "Unrecognized constraints version."
+
+
+(* Preprocessing of the constraints *)
+let preprocess_constraints lcst =
   let (lac, lbc) = lcst in
 
   (* DEBUG *)
@@ -708,64 +917,78 @@ let solve_constraints_main (lcst : (affconstr list) * (boundconstr list)) =
     fprintf ffout "Affine constraints (after 1term elim):\n%a\n@?" print_list_aff_constr lac;
     fprintf ffout "Boundary constraints (after 1term elim):\n%a\n@?" print_list_bound_constr lbc
   );
+  (lac, lbc)
 
-  (* Base case - no affine constraint (aka, no buffer operator) *)
-  if (lac = []) then
-    (* Default Solution: get the minimum for all boundconstr *)
-    (* Note: cover all phase variable, because the system was normalized beforehand *)
-    let msol = List.fold_left (fun msol bc ->
-      StringMap.add bc.varName bc.lbound msol
-    ) StringMap.empty lbc in
 
-    (* DEBUG *)
-    if (debug) then
-      fprintf ffout "Solution found:\n%a\n@?" print_msol msol;
+(* Default Solution: get the minimum for all boundconstr *)
+(* Note: cover all phase variable, because the system was normalized beforehand *)
+let get_lower_bound_solution lbc =
+  let msol = List.fold_left (fun msol bc ->
+    StringMap.add bc.varName bc.lbound msol
+  ) StringMap.empty lbc in
 
-    msol
+  (* DEBUG *)
+  if (debug) then
+    fprintf ffout "Solution found:\n%a\n@?" print_msol msol;
+
+  msol
+
+
+(* Solve the system of affine and boundary constraints.
+  Returns a StringMap, associating the variable name to its value *)
+let solve_constraints_main bquickres lwcet (lcst : (affconstr list) * (boundconstr list)) =
+  let (lac, lbc) = preprocess_constraints lcst in
+
+  (* Needs to be there, because of model2node transformation *)
+  if (bquickres) then (
+    assert(lac=[]);
+    get_lower_bound_solution lbc
+  ) else
+
+  let version_constr = get_version_constraint () in
+  let (lac, lbc, lbinary, obj_func) = match version_constr with
+    | Default ->
+      (* No cost function - default option *)
+      let vname = (List.hd lbc).varName in
+      let (obj_func:affterm) = (1, vname)::[] in
+      let lbinary = [] in
+      (lac, lbc, lbinary, obj_func)
+    | Load_Balancing_Int ->
+      load_balancing_int lwcet lac lbc
+    | Load_Balancing_Bool ->
+      load_balancing_bool lwcet lac lbc
+  in
+
+
+  (* Base case - no affine constraint - simplest resolution *)
+  (* Happens when there are no buffer operator used in the program *)
+  if (lac = [] && (version_constr=Default)) then
+    
+
+    (* TODO: add no "ressource constraint" here (later !!!) *)
+
+
+    get_lower_bound_solution lbc
   else
 
-  (* TODO: objective function management (cf WCET extension)  *)
-  (* Add compiler option "-ldb" for load balancing obj function, with WCETs: no objective function *)
-  (* Default: no objective function *)
-  let (obj_func:affterm) = default_obj_func lbc in (* No cost function*)
-  let lbinary = [] in
-
-  (* TODO: if varation of the constraints, put it here *)
-  
-
-  (* Generate a constraint file, then stop the compilation flow *)
-  (* Option: -genphconstr [file_name] *)
+  (* Export of constraints and import of solution *)
+  (* Option: -genphconstr [file_name]   and   -solphconstr [file] *)
   if (!Compiler_options.generate_constraint_file) then
-    let ocout = open_out !Compiler_options.constraint_filename in
-    let ffout = formatter_of_out_channel ocout in
-    print_out_cplex_constraint ffout obj_func lac lbc lbinary;
-    close_out ocout;
-
-    (* === Stopping compiler flow now === *)
-    failwith "Constraint file generation successfully done - compilation flow terminated."
+    generate_constraint lac lbc lbinary obj_func
   else
 
+  if (!Compiler_options.parse_solution_file) then (
+    parse_solution lac lbc lbinary
+  ) else
 
-  let msol = if (!Compiler_options.parse_solution_file) then
-    (* Option: -solphconstr [file] *)
-    (* Solution file is a serie of lines "[namevar] => [integral value]"*)
-    let lsol = parse_file (Parser_sol.solution Lexer_sol.main)
-                    !Compiler_options.solution_filename in
-    let msol = List.fold_left (fun macc (k,v) ->
-      StringMap.add k v macc
-    ) StringMap.empty lsol in
+  (* We do our own resolution - Note: only on limited options when ND *)
+  if (version_constr!=Default) then
+    failwith ("Internal constraint resolution algorithm is limited. "
+        ^ "Please use the -genphconstr options and an external ILP solver.")
+  else
 
-    check_coherency lac lbc lbinary msol;
-    msol
-  else (
-    (* We do our own resolution - Note: only on limited options when ND *)
-    if (lbinary!=[]) then
-      failwith ("Internal constraint resolution algorithm is "
-          ^ "limited - please use an external tool.");
-
-    (* Note: no objective function managed here - TODO: check that and issue a warning if option *)
-    solve_constraint_on_our_own lac lbc
-  ) in
+  (* Note: no objective function managed here - TODO: check that and issue a warning if option *)
+  let msol = solve_constraint_on_our_own lac lbc in
 
   (* DEBUG *)
   if (debug) then

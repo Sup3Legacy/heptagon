@@ -150,6 +150,10 @@ let main () =
 
         "-genphconstr", Arg.String set_constraint_filename, doc_genphconstr;
         "-solphconstr", Arg.String set_solution_filename, doc_solphconstr;
+        "-noconstrbuffby", Arg.Set no_constraint_bufferfby, doc_noconstrbuffby;
+
+        "-phcost_default", Arg.Unit set_default_cost_func, doc_default_cost_func;
+        "-phcost_loadbal", Arg.Unit set_loadbal_cost_func, doc_loadbal_cost_func;
 
         "-assert", Arg.String add_assert, doc_assert;
         "-nopervasives", Arg.Unit set_no_pervasives, doc_no_pervasives;

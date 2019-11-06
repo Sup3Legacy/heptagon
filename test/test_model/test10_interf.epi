@@ -1,0 +1,6 @@
+(* Compile that with "" ../../heptc test10_interf.epi "" *)
+
+fun f1 (int) returns (int) wcet 10
+fun f2 (int) returns (int) wcet 20
+fun f3 (int) returns (int) wcet 30
+fun f4 (int) returns (int) wcet 40

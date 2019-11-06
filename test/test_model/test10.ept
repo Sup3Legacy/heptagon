@@ -1,0 +1,17 @@
+
+(* Test 5, but with functions with wcet (in order to test the option -phconst_loadbal) *)
+(* Compile interface file test10_interf.epi beforehand *)
+
+open Test10_interf
+
+model main(a:int) returns (e:int)
+var
+	b : int :: [..,2];
+	c : int :: [..,6];
+	d : int :: [..,2];
+let
+	b = buffer ( f1(a when [1,2]) );
+	c = buffer ( f2(b when [0,3]) );
+	d = buffer current([2,3], 0, (f3 (buffer c)) );
+	e = buffer current([1,2], 0, (f4 (buffer d)) );
+tel

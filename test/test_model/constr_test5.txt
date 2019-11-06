@@ -1,0 +1,15 @@
+Minimize
+	ph_7
+Subject To
+	-ph_7 + ph_19 >= -1
+	-ph_22 + ph_7 >= 0
+	-ph_6 + ph_22 >= -4
+	-ph_25 + ph_6 >= 0
+Bounds
+	0 <= ph_7 < 2
+	0 <= ph_6 < 6
+	1 <= ph_25 < 2
+	0 <= ph_22 < 2
+	0 <= ph_19 < 1
+End
+

@@ -149,6 +149,15 @@ let set_solution_filename s =
   solution_filename := s
 
 
+let no_constraint_bufferfby = ref false
+
+(* Version of the set of constraint generated for phase resolution *)
+let v_constr = ref 0
+let set_default_cost_func _ = v_constr := 0
+let set_loadbal_cost_func _ = v_constr := 1
+let set_loadbal_bool_cost_func _ = v_constr := 2
+
+
 
 
 let deadcode = ref false
@@ -231,7 +240,10 @@ and doc_exposeintstate = "\t\tExpose the internal states of nodes as a new first
 
 and doc_genphconstr = "\t\tOutput the constraints on the phase in the given file, then stop the compilation."
 and doc_solphconstr = "\t\tParse a solution file, obtained from a previously generated constraint on the same program."
+and doc_noconstrbuffby = "\t\tMakes the bufferfby generate no constraint on phase (for memory usage)."
 
+and doc_default_cost_func = "\t\tUse no cost function for the phase resolution (enabled by default)."
+and doc_loadbal_cost_func = "\t\tUse the load balancing cost function for the phase resolution."
 
 and doc_target =
   "<lang>\tGenerate code in language <lang>\n\t\t\t(with <lang>=c,"
