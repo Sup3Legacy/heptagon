@@ -1,0 +1,45 @@
+Minimize
+	upBoundWeight
+Subject To
+	-ph_23_ph_0 - 2 ph_31_ph_1 >= -4
+	-ph_23_ph_0 >= -4
+	-2 ph_27_ph_0 >= -5
+	-ph_23_ph_0 - 2 ph_27_ph_1 >= -4
+	upBoundWeight - 40 ph_23_ph_0 - 30 ph_27_ph_1 >= 10
+	upBoundWeight - 30 ph_27_ph_0 >= 0
+	upBoundWeight - 40 ph_23_ph_0 >= 10
+	upBoundWeight >= 0
+	upBoundWeight - 40 ph_23_ph_0 - 20 ph_31_ph_1 >= 10
+	upBoundWeight >= 0
+	ph_7_ph_1 + ph_7_ph_0 = 1
+	ph_6_ph_5 + ph_6_ph_4 + ph_6_ph_3 + ph_6_ph_2 + ph_6_ph_1 + ph_6_ph_0 = 1
+	ph_31_ph_1 = 1
+	ph_27_ph_1 + ph_27_ph_0 = 1
+	ph_23_ph_0 = 1
+	ph_6_ph_5 + ph_6_ph_4 + ph_6_ph_3 + ph_6_ph_2 + ph_6_ph_1 - ph_31_ph_1 >= 0
+	ph_27_ph_1 + ph_27_ph_0 - ph_6_ph_0 >= 0
+	ph_27_ph_1 + ph_27_ph_0 - ph_6_ph_1 >= 0
+	ph_27_ph_1 + ph_27_ph_0 - ph_6_ph_2 >= 0
+	ph_27_ph_1 + ph_27_ph_0 - ph_6_ph_3 >= 0
+	ph_27_ph_1 + ph_27_ph_0 - ph_6_ph_4 >= 0
+	ph_27_ph_1 - ph_6_ph_5 >= 0
+	ph_7_ph_1 + ph_7_ph_0 - ph_27_ph_0 >= 0
+	ph_7_ph_1 - ph_27_ph_1 >= 0
+	ph_23_ph_0 - ph_7_ph_0 >= 0
+	ph_23_ph_0 - ph_7_ph_1 >= 0
+Bounds
+Binary
+	ph_7_ph_1
+	ph_7_ph_0
+	ph_6_ph_5
+	ph_6_ph_4
+	ph_6_ph_3
+	ph_6_ph_2
+	ph_6_ph_1
+	ph_6_ph_0
+	ph_31_ph_1
+	ph_27_ph_1
+	ph_27_ph_0
+	ph_23_ph_0
+End
+

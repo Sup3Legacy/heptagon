@@ -154,6 +154,7 @@ let main () =
 
         "-phcost_default", Arg.Unit set_default_cost_func, doc_default_cost_func;
         "-phcost_loadbal", Arg.Unit set_loadbal_cost_func, doc_loadbal_cost_func;
+        "-phcost_loadbal_bin", Arg.Unit set_loadbal_bool_cost_func, doc_loadbal_bin_cost_func;
 
         "-assert", Arg.String add_assert, doc_assert;
         "-nopervasives", Arg.Unit set_no_pervasives, doc_no_pervasives;

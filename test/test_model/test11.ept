@@ -1,0 +1,20 @@
+
+(* Test 5, but with functions with wcet (in order to test the option -phconst_loadbal)
+	and ressource constraints *)
+(* Compile interface file test11_interf.epi beforehand *)
+(* "" ../../heptc -genphconstr constr_lb_test11.txt -phcost_loadbal test11.ept "" *)
+(* "" ../../heptc -genphconstr constr_lb_test11_bin.txt -phcost_loadbal_bin test11.ept "" *)
+
+open Test11_interf
+
+model main(a:int) returns (e:int)
+var
+	b : int :: [..,2];
+	c : int :: [..,6];
+	d : int :: [..,2];
+let
+	b = buffer ( f1(a when [1,2]) );
+	c = buffer ( f2(b when [0,3]) );
+	d = buffer current([2,3], 0, (f3 (buffer c)) );
+	e = buffer current([1,2], 0, (f4 (buffer d)) );
+tel

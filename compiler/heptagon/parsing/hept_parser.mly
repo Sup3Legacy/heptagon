@@ -897,7 +897,7 @@ ressource_infos:
 ;
 
 ressource_info:
-  | n=IDENT LPAREN v=INT RPAREN ressource_info { (n,v) }
+  | n=IDENT LPAREN v=INT RPAREN { (n,v) }
 ;
 
 unsafe:

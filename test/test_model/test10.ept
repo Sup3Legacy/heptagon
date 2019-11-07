@@ -1,6 +1,7 @@
 
 (* Test 5, but with functions with wcet (in order to test the option -phconst_loadbal) *)
 (* Compile interface file test10_interf.epi beforehand *)
+(* "" ../../heptc -genphconstr constr_lb_test10.txt -phcost_loadbal test10.ept "" *)
 
 open Test10_interf
 

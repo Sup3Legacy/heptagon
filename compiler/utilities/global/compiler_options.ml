@@ -244,6 +244,7 @@ and doc_noconstrbuffby = "\t\tMakes the bufferfby generate no constraint on phas
 
 and doc_default_cost_func = "\t\tUse no cost function for the phase resolution (enabled by default)."
 and doc_loadbal_cost_func = "\t\tUse the load balancing cost function for the phase resolution."
+and doc_loadbal_bin_cost_func = "\t\tUse the binary load balancing cost function for the phase resolution."
 
 and doc_target =
   "<lang>\tGenerate code in language <lang>\n\t\t\t(with <lang>=c,"
