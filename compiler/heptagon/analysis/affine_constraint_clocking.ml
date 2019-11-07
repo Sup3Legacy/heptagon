@@ -269,8 +269,10 @@ let transfer_1term_ac_to_bc lbc lac =
 (* Convert the StringMap solution to a IntMap solution *)
 let solution_to_phase_number smap =
   StringMap.fold (fun strk v imap ->
-    let intk = get_phase_index_from_varname strk in
-    IntMap.add intk v imap
+    try
+      let intk = get_phase_index_from_varname strk in
+      IntMap.add intk v imap
+    with Failure _ -> imap  (* If variable is not ph_NNNN, then it's a binary var *)
   ) smap IntMap.empty
 
 let check_coherency (lac : affconstr list) (lbc : boundconstr list) (lbinary : string list) msol =
