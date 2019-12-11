@@ -61,17 +61,23 @@ let print_henv ff h =
     fprintf ff "\t%a => %a\n@?"  print_ident k  print_oneck v
   ) h
 
-let print_lsubst ff (lsubst : (int * int option * int) list) =
-  let print_subst ff (id1, oid2, sh) = match oid2 with
-    | None -> fprintf ff "(%i => None, %i)" id1 sh
-    | Some id2 -> fprintf ff "(%i => %i, %i)" id1 id2 sh
+let print_lsubst ff (lsubst : (int * int option * int * (int*int) list) list) =
+  let print_subst ff (id1, oid2, sh, laffterm) =
+  let laffterm = List.map (fun (c,v) -> (c, varname_from_phase_index v)) laffterm in
+  match oid2 with
+    | None -> fprintf ff "(%i => None, %a, %i)"
+                id1 (Affine_constraint_clocking.print_affterm ~bfirst:true) laffterm sh
+    | Some id2 -> fprintf ff "(%i => %i, %a, %i)"
+                    id1 id2 (Affine_constraint_clocking.print_affterm ~bfirst:true) laffterm sh
   in
   fprintf ff "%a\n@?" (Pp_tools.print_list print_subst "[" "; " "]") lsubst
 
 let print_msubst ff msubst =
-  StringMap.iter (fun id1 (oid2, sh) -> match oid2 with
-    | None -> fprintf ff "\t(%s => None, %i)\n" id1 sh
-    | Some id2 -> fprintf ff "\t(%s => %s, %i)\n" id1 id2 sh
+  StringMap.iter (fun id1 (oid2, sh, laffterm) -> match oid2 with
+    | None -> fprintf ff "\t(%s => None, %a, %i)\n"
+                id1 (Affine_constraint_clocking.print_affterm ~bfirst:true) laffterm sh
+    | Some id2 -> fprintf ff "\t(%s => %s, %a, %i)\n"
+              id1 id2 (Affine_constraint_clocking.print_affterm ~bfirst:true) laffterm sh
   ) msubst
 
 
@@ -212,15 +218,16 @@ let rec typing_buffer_osynch oct = match oct with
     | _ ->
       let per = Clocks.get_period_ock ock in
       let n_ock = fresh_osynch_period per in
-      let (varopt_nock,_) = get_phase_ock n_ock in
+      let (varopt_nock, laffterm, sh) = Clocks.get_phase_ock n_ock in
       let idvar_nock = match varopt_nock with
         | None -> failwith "Internal error"
         | Some idvar -> idvar
       in
+      assert(laffterm=[]); assert(sh=0);
       let varname_n_ock = varname_from_phase_index idvar_nock in
 
       (* Affine constraint generation / ph_{n_ock} >= expr_{ock} *)
-      let (varopt, ph) = get_phase_ock ock in
+      let (varopt, laffterm, ph) = Clocks.get_phase_ock ock in
 
       let lcoeffVar = (1, varname_n_ock) :: [] in
       let lcoeffVar = match varopt with
@@ -228,6 +235,7 @@ let rec typing_buffer_osynch oct = match oct with
         | Some idvar ->
           (-1, varname_from_phase_index idvar)::lcoeffVar
       in
+      let lcoeffVar = List.fold_left (fun acc (c,v) -> (-c, varname_from_phase_index v)::acc) lcoeffVar laffterm in
       let affconstr = mk_affconstr false lcoeffVar ph in
 
       (Ock n_ock, affconstr::[])
@@ -250,15 +258,16 @@ let rec typing_bufferfby_osynch oct = match oct with
       let n_ock = fresh_osynch_period per in
 
       let laffconstr = if (constraint_bufferfby) then begin
-        let (varopt_nock,_) = get_phase_ock n_ock in
+        let (varopt_nock, laffterm, sh) = Clocks.get_phase_ock n_ock in
         let idvar_nock = match varopt_nock with
           | None -> failwith "Internal error"
           | Some idvar -> idvar
         in
+        assert(laffterm=[]); assert(sh=0);
         let varname_n_ock = varname_from_phase_index idvar_nock in
 
         (* Affine constraint generation / expr_{ock} >= ph_{n_ock} +1 *)
-        let (varopt, ph) = get_phase_ock ock in
+        let (varopt, laffterm, ph) = Clocks.get_phase_ock ock in
 
         let lcoeffVar = (-1, varname_n_ock) :: [] in
         let lcoeffVar = match varopt with
@@ -266,6 +275,7 @@ let rec typing_bufferfby_osynch oct = match oct with
           | Some idvar ->
             (1, varname_from_phase_index idvar)::lcoeffVar
         in
+        let lcoeffVar = List.fold_left (fun acc (c,v) -> (c, varname_from_phase_index v)::acc) lcoeffVar laffterm in
         let affconstr = mk_affconstr false lcoeffVar (1-ph) in
         affconstr::[]
       end else [] in
@@ -289,14 +299,15 @@ let rec typing_bufferlat_osynch oct lat =match oct with
       let per = Clocks.get_period_ock ock in
       let n_ock = fresh_osynch_period per in
       
-      let (varopt_nock,_) = get_phase_ock n_ock in
+      let (varopt_nock, laffterm, sh) = Clocks.get_phase_ock n_ock in
       let idvar_nock = match varopt_nock with
         | None -> failwith "Internal error"
         | Some idvar -> idvar
       in
+      assert(laffterm=[]); assert(sh=0);
       let varname_n_ock = varname_from_phase_index idvar_nock in
 
-      let (varopt, ph) = get_phase_ock ock in
+      let (varopt, laffterm, ph) = Clocks.get_phase_ock ock in
 
       (* Affine constraint generation / lat >= ph_{n_ock} - ph_{ock} >= 0 *)
 
@@ -307,6 +318,10 @@ let rec typing_bufferlat_osynch oct lat =match oct with
         | Some idvar ->
           (1, varname_from_phase_index idvar)::lcoeffVar_lat
       in
+      let lcoeffVar_lat = List.fold_left (fun acc (c,v) ->
+          (c, varname_from_phase_index v)::acc
+        ) lcoeffVar_lat laffterm
+      in
       let affconstr_lat = mk_affconstr false lcoeffVar_lat (-lat-ph) in
 
       (* ph_{n_ock} - ph_{ock} >= 0  *)
@@ -315,6 +330,10 @@ let rec typing_bufferlat_osynch oct lat =match oct with
         | None -> lcoeffVar_0
         | Some idvar ->
           (-1, varname_from_phase_index idvar)::lcoeffVar_0
+      in
+      let lcoeffVar_0 = List.fold_left (fun acc (c,v) ->
+          (-c, varname_from_phase_index v)::acc
+        ) lcoeffVar_0 laffterm
       in
       let affconstr_0 = mk_affconstr false lcoeffVar_0 ph in
 
@@ -487,7 +506,7 @@ let add_constraint_from_annot lcst eqm_list lbann =
   (* Constraints from equations *)
   (* mlabel : label -> ock / associate a label with the ock info *)
   let (lcst, mlabel) = List.fold_left (fun (lcst_acc, mlabel) eqm ->
-    let (ophid, sh, per) = extract_ock_info eqm.eqm_clk in
+    let (ophid, laffterm, sh, _, per) = extract_ock_info eqm.eqm_clk in
 
     List.fold_left (fun (lcst_acc, mlabel) eqmann ->
       let (lac, lbc) = lcst_acc in
@@ -503,8 +522,11 @@ let add_constraint_from_annot lcst eqm_list lbann =
             );
             (lcst_acc, mlabel)
           | Some phid ->
-            (* Create constraint phid >= mphase-sh *)
+            (* Create constraint phid+laffterm >= mphase-sh *)
             let lcoeffVar = (1, (varname_from_phase_index phid))::[] in
+            let lcoeffVar = List.fold_left (fun acc (c,v) ->
+              (c, varname_from_phase_index v)::acc
+            ) lcoeffVar laffterm in
             let ac = mk_affconstr false lcoeffVar (mphase-sh) in
             ((ac::lac, lbc), mlabel)
         )
@@ -519,8 +541,11 @@ let add_constraint_from_annot lcst eqm_list lbann =
             );
             (lcst_acc, mlabel)
           | Some phid ->
-            (* Create constraint phid+sh <= maxphase , aka -phid >= sh-maxphase *)
+            (* Create constraint phid+laffterm+sh <= maxphase , aka -phid-laffterm >= sh-maxphase *)
             let lcoeffVar = ((-1), (varname_from_phase_index phid))::[] in
+            let lcoeffVar = List.fold_left (fun acc (c,v) ->
+              (-c, varname_from_phase_index v)::acc
+            ) lcoeffVar laffterm in
             let ac = mk_affconstr false lcoeffVar (sh-mphase) in
             ((ac::lac, lbc), mlabel)
         )
@@ -541,47 +566,73 @@ let add_constraint_from_annot lcst eqm_list lbann =
         with Not_found ->
         failwith ("Equation of label " ^ lab2 ^ " was not found.")
       in
-      let (ophid1, sh1, per1) = extract_ock_info ock1 in
-      let (ophid2, sh2, per2) = extract_ock_info ock2 in
+      let (ophid1, laffterm1, sh1, _, per1) = extract_ock_info ock1 in
+      let (ophid2, laffterm2, sh2, _, per2) = extract_ock_info ock2 in
       assert(per1=per2);   (* Same period... should we keep that condition ? *)
       let diff = sh2 - sh1 in
+      let laffterm2m1 = substract_laffterm laffterm2 laffterm1 in
+
       let (lac,lbc) = lcst_acc in
       (match (ophid1, ophid2) with
         | (None, None) ->
-          (if (diff<l) then (
-            eprintf "%aIn constraint (%a), min is not respected (lab1.ock = %a | lab2.ock = %a)\n@?"
-              print_location bmann.annm_loc  Hept_printer.print_annot_model bmann
-              print_oneck ock1  print_oneck ock2;
-            failwith "Minimal phase difference constraint is not respected by constant clocks."
-          );
-          if (diff>u) then (
-            eprintf "%aIn constraint (%a), max is not respected (lab1.ock = %a | lab2.ock = %a)\n@?"
-              print_location bmann.annm_loc  Hept_printer.print_annot_model bmann
-              print_oneck ock1  print_oneck ock2;
-            failwith "Maximal phase difference constraint is not respected by constant clocks."
-          );
-          lcst_acc)
+          if (laffterm2m1=[]) then
+            (if (diff<l) then (
+              eprintf "%aIn constraint (%a), min is not respected (lab1.ock = %a | lab2.ock = %a)\n@?"
+                print_location bmann.annm_loc  Hept_printer.print_annot_model bmann
+                print_oneck ock1  print_oneck ock2;
+              failwith "Minimal phase difference constraint is not respected by constant clocks."
+            );
+            if (diff>u) then (
+              eprintf "%aIn constraint (%a), max is not respected (lab1.ock = %a | lab2.ock = %a)\n@?"
+                print_location bmann.annm_loc  Hept_printer.print_annot_model bmann
+                print_oneck ock1  print_oneck ock2;
+              failwith "Maximal phase difference constraint is not respected by constant clocks."
+            );
+            lcst_acc)
+          else (
+            (* Constraint: laffterm2m1 >= l-diff *)
+            let lcoeffVar1 = List.map (fun (c,v) -> (c, varname_from_phase_index v)) laffterm2m1 in
+            let ac1 = mk_affconstr false lcoeffVar1 (l-diff) in
+
+            (* Constraint: u >= laffterm2m1+diff => -laffterm2m1 >= diff-u *)
+            let lcoeffVar2 = List.map (fun (c,v) -> (-c, varname_from_phase_index v)) laffterm2m1 in
+            let ac2 = mk_affconstr false lcoeffVar2 (diff-u) in
+
+            (ac1::ac2::lac, lbc)
+          )
         | (None, Some phid2) ->
           let varph2 = varname_from_phase_index phid2 in
 
-          (* Constraint: varph2 >= l- diff *)
+          (* Constraint: varph2 + laffterm2m1 >= l- diff *)
           let lcoeffVar1 = (1,varph2)::[] in
+          let lcoeffVar1 = List.fold_left (fun acc (c,v) ->
+            (c, varname_from_phase_index v)::acc
+          ) lcoeffVar1 laffterm2m1 in
           let ac1 = mk_affconstr false lcoeffVar1 (l-diff) in
 
-          (* Constraint: u >= varph2 + diff  ==>  -varph2 >= diff-u *)
+          (* Constraint: u >= varph2 + laffterm2m1 + diff  ==>  -varph2 - laffterm2m1 >= diff-u *)
           let lcoeffVar2 = ((-1),varph2)::[] in
+          let lcoeffVar2 = List.fold_left (fun acc (c,v) ->
+            (-c, varname_from_phase_index v)::acc
+          ) lcoeffVar2 laffterm2m1 in
           let ac2 = mk_affconstr false lcoeffVar2 (diff-u) in
 
           (ac1::ac2::lac, lbc)
         | (Some phid1, None) ->
           let varph1 = varname_from_phase_index phid1 in
 
-          (* Constraint: diff - varph1 >=l  *)
+          (* Constraint: diff - varph1 + laffterm2m1 >=l  *)
           let lcoeffVar1 = ((-1),varph1)::[] in
+          let lcoeffVar1 = List.fold_left (fun acc (c,v) ->
+            (c, varname_from_phase_index v)::acc
+          ) lcoeffVar1 laffterm2m1 in
           let ac1 = mk_affconstr false lcoeffVar1 (l-diff) in
 
-          (* Constraint: u >= diff - varph1 *)
+          (* Constraint: u >= diff - varph1 + laffterm2m1 *)
           let lcoeffVar2 = (1,varph1)::[] in
+          let lcoeffVar2 = List.fold_left (fun acc (c,v) ->
+            (-c, varname_from_phase_index v)::acc
+          ) lcoeffVar2 laffterm2m1 in
           let ac2 = mk_affconstr false lcoeffVar2 (diff-u) in
 
           (ac1::ac2::lac, lbc)
@@ -589,12 +640,18 @@ let add_constraint_from_annot lcst eqm_list lbann =
           let varph1 = varname_from_phase_index phid1 in
           let varph2 = varname_from_phase_index phid2 in
 
-          (* Constraint: varph2 - varph1 + diff >=l  *)
+          (* Constraint: varph2 - varph1 + laffterm2m1 + diff >=l  *)
           let lcoeffVar1 = (1,varph2)::((-1),varph1)::[] in
+          let lcoeffVar1 = List.fold_left (fun acc (c,v) ->
+            (c, varname_from_phase_index v)::acc
+          ) lcoeffVar1 laffterm2m1 in
           let ac1 = mk_affconstr false lcoeffVar1 (l-diff) in
 
-          (* Constraint: u >= varph2 - varph1 + diff *)
+          (* Constraint: u >= varph2 - varph1 + laffterm2m1 + diff *)
           let lcoeffVar2 = ((-1),varph2)::(1,varph1)::[] in
+          let lcoeffVar2 = List.fold_left (fun acc (c,v) ->
+            (-c, varname_from_phase_index v)::acc
+          ) lcoeffVar2 laffterm2m1 in
           let ac2 = mk_affconstr false lcoeffVar2 (diff-u) in
 
           (ac1::ac2::lac, lbc)
@@ -611,34 +668,50 @@ let add_constraint_from_annot lcst eqm_list lbann =
         with Not_found ->
         failwith ("Equation of label " ^ lab2 ^ " was not found.")
       in
-      let (ophid1, sh1, per1) = extract_ock_info ock1 in
-      let (ophid2, sh2, per2) = extract_ock_info ock2 in
+      let (ophid1, laffterm1, sh1, _, per1) = extract_ock_info ock1 in
+      let (ophid2, laffterm2, sh2, _, per2) = extract_ock_info ock2 in
       assert(per1=per2);   (* Same period... should we keep that condition ? *)
       let diff = sh2 - sh1 in
+      let laffterm2m1 = substract_laffterm laffterm2 laffterm1 in
+
+      (* TODO - add laffterm2m1 contrib here !!! *)
 
       let (lac,lbc) = lcst_acc in
       (match (ophid1, ophid2) with
         | (None, None) ->
-          if (diff<0) then (
-            eprintf "%aIn constraint (%a), precedence is not respected (lab1.ock = %a | lab2.ock = %a)\n@?"
-              print_location bmann.annm_loc  Hept_printer.print_annot_model bmann
-              print_oneck ock1  print_oneck ock2;
-            failwith "Precedence constraint is not respected by constant clocks."
-          );
-          lcst_acc
+          if (laffterm2m1=[]) then (
+            if (diff<0) then (
+              eprintf "%aIn constraint (%a), precedence is not respected (lab1.ock = %a | lab2.ock = %a)\n@?"
+                print_location bmann.annm_loc  Hept_printer.print_annot_model bmann
+                print_oneck ock1  print_oneck ock2;
+              failwith "Precedence constraint is not respected by constant clocks."
+            );
+            lcst_acc
+          ) else (
+            (* Constraint: laffterm2m1 + diff >= 0 *)
+            let lcoeffVar1 = List.map (fun (c,v) -> (c, varname_from_phase_index v)) laffterm2m1 in
+            let ac = mk_affconstr false lcoeffVar1 (-diff) in
+            (ac::lac, lbc)
+          )
         | (None, Some phid2) ->
           let varph2 = varname_from_phase_index phid2 in
 
-          (* Constraint: varph2 >= - diff *)
+          (* Constraint: varph2+laffterm2m1 >= - diff *)
           let lcoeffVar = (1,varph2)::[] in
+          let lcoeffVar = List.fold_left (fun acc (c,v) ->
+            (c, varname_from_phase_index v)::acc
+          ) lcoeffVar laffterm2m1 in
           let ac = mk_affconstr false lcoeffVar (-diff) in
           (ac::lac, lbc)
 
         | (Some phid1, None) ->
           let varph1 = varname_from_phase_index phid1 in
 
-          (* Constraint: diff - varph1 >= 0  *)
+          (* Constraint: diff - varph1 + laffterm2m1 >= 0  *)
           let lcoeffVar = ((-1),varph1)::[] in
+          let lcoeffVar = List.fold_left (fun acc (c,v) ->
+            (c, varname_from_phase_index v)::acc
+          ) lcoeffVar laffterm2m1 in
           let ac = mk_affconstr false lcoeffVar (-diff) in
           (ac::lac, lbc)
 
@@ -646,8 +719,11 @@ let add_constraint_from_annot lcst eqm_list lbann =
           let varph1 = varname_from_phase_index phid1 in
           let varph2 = varname_from_phase_index phid2 in
           
-          (* Constraint: varph2 - varph1 + diff >= 0 *)
+          (* Constraint: varph2 - varph1 + laffterm2m1 + diff >= 0 *)
           let lcoeffVar = (1,varph2)::((-1),varph1)::[] in
+          let lcoeffVar = List.fold_left (fun acc (c,v) ->
+            (c, varname_from_phase_index v)::acc
+          ) lcoeffVar laffterm2m1 in
           let ac = mk_affconstr false lcoeffVar (-diff) in
           (ac::lac, lbc)
       )
@@ -663,30 +739,33 @@ let add_constraint_from_annot lcst eqm_list lbann =
 
 let rec reorient_lsubst lsubst = match lsubst with
   | [] -> []
-  | (blsubstr, n1, None, sh)::r ->
-    (n1, None, sh)::(reorient_lsubst r)
-  | (blsubstr, n1, Some n2, sh)::r ->
+  | (blsubstr, n1, None, sh, laffterm)::r ->
+    (n1, None, sh, laffterm)::(reorient_lsubst r)
+  | (blsubstr, n1, Some n2, sh, laffterm)::r ->
     if blsubstr then
-      (n1, (Some n2), sh)::(reorient_lsubst r)
+      (n1, (Some n2), sh, laffterm)::(reorient_lsubst r)
     else
-      (n2, (Some n1),(-sh))::(reorient_lsubst r)
+      (n2, (Some n1),(-sh), negate_laffterm laffterm)::(reorient_lsubst r)
 
-let rec unroll_substitution msubst sh phid =
+let rec unroll_substitution msubst sh laffterm phid =
   try
-    let (ophid2, sh2) = StringMap.find phid msubst in
+    let (ophid2, sh2, laffterm2) = StringMap.find phid msubst in
+    let laffterm12 = List.fold_left (fun lacc (a,v) ->
+      add_term (a,v) lacc
+    ) laffterm laffterm2 in
     match ophid2 with
-    | None -> (None, sh+sh2)
-    | Some phid2 -> unroll_substitution msubst (sh+sh2) phid2
+    | None -> (None, sh+sh2, laffterm12)
+    | Some phid2 -> unroll_substitution msubst (sh+sh2) laffterm12 phid2
   with
-  | Not_found -> (Some phid, sh)
+  | Not_found -> (Some phid, sh, laffterm)
 
 let closure_subst msubst =
-  let msubst = StringMap.fold (fun phid1 (optphid2, sh) macc ->
+  let msubst = StringMap.fold (fun phid1 (optphid2, sh, laffterm) macc ->
     match optphid2 with
-    | None -> StringMap.add phid1 (optphid2, sh) macc
+    | None -> StringMap.add phid1 (optphid2, sh, laffterm) macc
     | Some phid2 ->
-      let (optphid_unr, sh_unr) = unroll_substitution msubst sh phid2 in
-      StringMap.add phid1 (optphid_unr, sh_unr) macc
+      let (optphid_unr, sh_unr, laffterm_unr) = unroll_substitution msubst sh laffterm phid2 in
+      StringMap.add phid1 (optphid_unr, sh_unr, laffterm_unr) macc
   ) msubst StringMap.empty in
   msubst
 
@@ -697,8 +776,8 @@ let update_lcst msubst (lcst,lbcst) =
   let lcst = List.map (fun cst ->
     let cst = List.fold_left (fun constr (coeff,var) -> 
       try
-        let (optphid2, sh) = StringMap.find var msubst in
-        let constr = subst_constraint (var, optphid2, sh) constr in
+        let (optphid2, sh, laffterm) = StringMap.find var msubst in
+        let constr = subst_constraint (var, optphid2, laffterm, sh) constr in
         constr
       with
       | Not_found -> constr
@@ -730,23 +809,47 @@ let update_lcst msubst (lcst,lbcst) =
         h::(update_bound_constraint var2 sh bconst1 t)
   in
 
-  let lbcst = StringMap.fold (fun k (optvarph2, sh) acc ->
+  let (lcst, lbcst) = StringMap.fold (fun k (optvarph2, sh, laffterm2) (acc_lac, acc_lbc) ->
     (* Propagate the substitution from msubst to the boundary constraints *)
     (* k is replaced by the infos in (optvarph2, sh)
         => propagate the bound constraint from k in the bound contraint of (optvarph2, sh)
         => then remove the bound contraint of k *)
     try
-      let (bconst, acc) = pop_boundary_constraint k acc in
-      let acc = match optvarph2 with
-        | None ->
-          assert(bconst.lbound <= sh);
-          assert(bconst.ubound > sh);
-          acc
-        | Some var2 -> update_bound_constraint var2 sh bconst acc
-      in
-      acc
-    with Not_found -> acc  (* TODO: check that *)
-  ) msubst lbcst in
+      let (bconst, acc_lbc) = pop_boundary_constraint k acc_lbc in
+
+      if (laffterm2=[]) then (
+        let acc_lbc = match optvarph2 with
+          | None ->
+            assert(bconst.lbound <= sh);
+            assert(bconst.ubound > sh);
+            acc_lbc
+          | Some var2 -> update_bound_constraint var2 sh bconst acc_lbc
+        in
+        (acc_lac, acc_lbc)
+      ) else (
+        (* We build 2 affine constraints here, instead of a boundary constraint *)
+        (* l<= optvarph2 + sh + laffterm2 <=u *)
+
+        (* First constraint: optvarph2 + laffterm2 >= l-sh *)
+        let lcoeffVar1 = match optvarph2 with
+          | None -> []
+          | Some varph2 -> (1,varph2)::[]
+        in
+        let lcoeffVar1 = List.fold_left (fun acc (c,v) -> (c, v)::acc) lcoeffVar1 laffterm2 in
+        let ac1 = mk_affconstr false lcoeffVar1 (bconst.lbound-sh) in
+
+        (* Second constraint: - optvarph2 - laffterm2 >= sh-u *)
+        let lcoeffVar2 = match optvarph2 with
+          | None -> []
+          | Some varph2 -> ((-1),varph2)::[]
+        in
+        let lcoeffVar2 = List.fold_left (fun acc (c,v) -> (-c, v)::acc) lcoeffVar2 laffterm2 in
+        let ac2 = mk_affconstr false lcoeffVar2 (sh-bconst.ubound) in
+
+        (ac1::ac2::acc_lac, acc_lbc)
+      )
+    with Not_found -> (acc_lac, acc_lbc)  (* TODO: check that *)
+  ) msubst (lcst, lbcst) in
   (lcst,lbcst)
 
 
@@ -773,12 +876,15 @@ let build_wcet_info leqms =
           if ((ow=None) && (lress=[])) then lwacc else
 
           (* Else, register information *)
-          let (ophid, sh, per) = Clocks.extract_ock_info eqm.eqm_clk in
+          let (ophid, laffterm, sh, _, per) = Clocks.extract_ock_info eqm.eqm_clk in
           let ovarph = match ophid with
             | None -> None
             | Some phid -> Some (varname_from_phase_index phid)
           in
-          (ovarph, sh, per, ow, lress)::lwacc
+          let laffterm = List.map (fun (c,v) ->
+            (c,varname_from_phase_index v)
+          ) laffterm in
+          (ovarph, laffterm, sh, per, ow, lress)::lwacc
         )
         | _ -> lwacc
       end
@@ -788,18 +894,21 @@ let build_wcet_info leqms =
 
 (* Update the wcet using the msubst done in the block *)
 let update_wcet msubst lwcet =
-  List.map (fun (ovarname, sh, per, owcet, lress) -> match ovarname with
-    | None -> (None, sh, per, owcet, lress)
+  List.map (fun (ovarname, laffterm, sh, per, owcet, lress) -> match ovarname with
+    | None -> (None, laffterm, sh, per, owcet, lress)
     | Some varname ->
     try
-      let (ovarname2, sh2) = StringMap.find varname msubst in
-      (ovarname2, sh+sh2, per, owcet, lress)
+      let (ovarname2, sh2, laffterm2) = StringMap.find varname msubst in
+      let laffterm12 = List.fold_left (fun lacc (a,v) ->
+        add_term (a,v) lacc
+      ) laffterm laffterm2 in
+      (ovarname2, laffterm12, sh+sh2, per, owcet, lress)
     with
-      | Not_found -> (ovarname, sh, per, owcet, lress)
+      | Not_found -> (ovarname, laffterm, sh, per, owcet, lress)
   ) lwcet
 
 (* Pretty-printer for debugging *)
-let print_lwcet ff (lwcet: (string option * int * int * (int option) * (string * int) list) list) =
+let print_lwcet ff (lwcet: (string option * ((int * string) list) * int * int * (int option) * (string * int) list) list) =
   let print_opt_string ff ovarph = match ovarph with
     | None -> fprintf ff "None"
     | Some varph -> fprintf ff "%s" varph
@@ -809,9 +918,11 @@ let print_lwcet ff (lwcet: (string option * int * int * (int option) * (string *
     | Some w -> fprintf ff "%i" w
   in
   let print_ress ff (n,v) = fprintf ff "(%s, %i)" n v in
-  let print_elem_lwcet ff (ovarph, sh, per, owcet, lress) =
-    fprintf ff "\t(%a + %i, per = %i => wcet = %a | ress = %a);\n"
-      print_opt_string ovarph  sh per
+  let print_elem_lwcet ff (ovarph, laffterm, sh, per, owcet, lress) =
+    fprintf ff "\t(%a + %a + %i, per = %i => wcet = %a | ress = %a);\n"
+      print_opt_string ovarph
+      (Affine_constraint_clocking.print_affterm ~bfirst:true) laffterm
+      sh per
       print_opt_int owcet
       (Pp_tools.print_list print_ress "(" "" ")") lress
   in
@@ -836,14 +947,15 @@ let rec typing_model_eq h lcst eqm =
       fprintf ffout "unification between pat => %a and rhs => %a\n"
         print_onect pat_oct  print_onect oct;
 
-    let lsubst : (bool * int * int option * int) list = unify_onect_constr oct pat_oct in
-    let lsubst : (int * int option * int) list = reorient_lsubst lsubst in
+    let lsubst : (bool * int * int option * int * (int*int) list) list = unify_onect_constr oct pat_oct in
+    let lsubst : (int * int option * int * (int*int) list) list = reorient_lsubst lsubst in
 
     (lcst, lsubst)
   with Unify ->
     eprintf "Incoherent clock between right and left side of the equation:@\n\t%a\nlhs :: %a  | rhs :: %a.@\n"
      Hept_printer.print_eq_model eqm print_onect pat_oct  print_onect oct;
-    error_message eqm.eqm_loc (Etypeclash (oct, pat_oct))) in
+    error_message eqm.eqm_loc (Etypeclash (oct, pat_oct))
+  ) in
   (lcst,lsubst)
 
 and typing_model_eqs h lcst eq_list =
@@ -856,7 +968,8 @@ and typing_model_eqs h lcst eq_list =
 and append_model_env h lcst vdms =
   let (h, lcst) = List.fold_left (fun (h,lcst) { vm_ident = n; vm_clock = ock } ->
     (* Create a new boundary condition from ock, if phase variable *)
-    let (varopt, ph) = get_phase_ock ock in
+    let (varopt, laffterm,  ph) = Clocks.get_phase_ock ock in
+    assert(laffterm=[]);
     let nlaffcst = match varopt with
       | None -> lcst   (* The check that the phase is valid was done during parsing*)
       | Some varid ->
@@ -893,13 +1006,16 @@ and typing_block_model h lcst {bm_local = l; bm_eqs = eq_list; bm_annot = lbann}
   let lcst = add_constraint_from_annot lcst eq_list lbann in
 
   (* Manages subtitutions *)
-  let msubst = List.fold_left (fun macc (phid1, optphid2, sh) ->
+  let msubst = List.fold_left (fun macc (phid1, optphid2, sh, laffterm) ->
     let varph1 = varname_from_phase_index phid1 in
     let optvarph2 = match optphid2 with
       | None -> None
       | Some phid2 -> Some (varname_from_phase_index phid2)
     in
-    StringMap.add varph1 (optvarph2, sh) macc
+    let laffterm = List.map (fun (c,vid) ->
+      (c,varname_from_phase_index vid)
+    ) laffterm in
+    StringMap.add varph1 (optvarph2, sh, laffterm) macc
   ) StringMap.empty lsubst in
   
   (* Closure on the substitutions of msubst *)
@@ -914,8 +1030,10 @@ and typing_block_model h lcst {bm_local = l; bm_eqs = eq_list; bm_annot = lbann}
   );
 
   (* Build the wcet mapping - useful for the load balancing cost function *)
-  (* lwcet : (potential phase_variable_name, shift of ock, period of ock, potential assigned WCET, list of ressources used *)
-  let (lwcet : (string option * int * int * (int option) * (string * int) list) list) = build_wcet_info eq_list in
+  (* lwcet : (potential phase_variable_name, list of affine terms, shift of ock, period of ock,
+                    potential assigned WCET, list of ressources used *)
+  let (lwcet : (string option * ((int * string) list) * int * int
+                  * (int option) * (string * int) list) list) = build_wcet_info eq_list in
 
   (* Substitute infos in lwcet using msubst *)
   let lwcet = update_wcet msubst lwcet in
@@ -931,17 +1049,46 @@ and typing_block_model h lcst {bm_local = l; bm_eqs = eq_list; bm_annot = lbann}
 
 (* Substitution of the phase solution in the program *)
 let enrich_sol_with_msubst msubst msol =
-  let msol = StringMap.fold (fun k (ov, sh) msol_acc ->
-    match ov with
-    | None -> StringMap.add k sh msol_acc
-    | Some v2 ->
-      (* msubst was already closure-ed => no need for recursion *)
-      let val_v2 = StringMap.find v2 msol in
-      StringMap.add k (val_v2+sh) msol_acc
+  let msol = StringMap.fold (fun k (ov, sh, laffterm) msol_acc ->
+    (* msubst was already closure-ed => no need for recursion *)
+    let val_k = sh in
+    let val_k = match ov with
+      | None -> val_k
+      | Some v2 ->
+        let val_v2 = StringMap.find v2 msol in
+        val_v2 + val_k
+    in
+    let val_k = List.fold_left (fun accval (c,vafft) ->
+      let val_vafft = StringMap.find vafft msol in
+      accval + c * val_vafft
+    ) val_k laffterm in
+
+    (* Enriching msol with the new value for the var which was substituted *)
+    StringMap.add k val_k msol_acc
   ) msubst msol in
   msol
 
-let rec subst_solution msol ock = match ock with
+let rec subst_solution msol ock =
+  let rec aux_phase_subst_solution msol oph = match oph with
+    | Cophase ph -> ph
+    | Cophshift (sh, phid) ->
+      let ph_val = try IntMap.find phid msol
+        with Not_found -> failwith ("Subst_solution: phase " ^ (string_of_int phid) ^ " was not found.")
+      in
+      ph_val+sh
+    | Cophindex phid -> (* 'a *)
+      let ph_val = try IntMap.find phid msol
+        with Not_found -> failwith ("Subst_solution: phase " ^ (string_of_int phid) ^ " was not found.")
+      in
+      ph_val
+    | Cophlinexp ((c,v), noph) ->
+      let ph_val_noph = aux_phase_subst_solution msol noph in
+      let val_v = try IntMap.find v msol
+        with Not_found -> failwith ("Subst_solution: phase " ^ (string_of_int v) ^ " was not found.")
+      in
+      (c * val_v + ph_val_noph)
+  in
+  match ock with
   | Cone _ -> ock
   | Cshift (sh, ock1) ->
     let ock1 = subst_solution msol ock1 in
@@ -950,19 +1097,9 @@ let rec subst_solution msol ock = match ock with
     | Coindex _ ->
       failwith "Internal error: Period and phase unknown during solution substitution"
     | Colink ock -> subst_solution msol ock
-    | Coper ({ contents = op }, per) -> (match op with
-      | Cophase ph -> Cone (ph, per)
-      | Cophshift (sh, phid) ->  (* Shift + 'a *)
-        let ph_val = try IntMap.find phid msol
-          with Not_found -> failwith ("Subst_solution: phase " ^ (string_of_int phid) ^ " was not found.")
-        in
-        Cone (ph_val+sh, per)
-      | Cophindex phid -> (* 'a *)
-        let ph_val = try IntMap.find phid msol
-          with Not_found -> failwith ("Subst_solution: phase " ^ (string_of_int phid) ^ " was not found.")
-        in
-        Cone (ph_val, per)
-    )
+    | Coper ({ contents = op }, per) ->
+      let val_op = aux_phase_subst_solution msol op in
+      Cone (val_op, per)
   )
 
 let eq_model_replace _ (hfull,msol) eqm =

@@ -148,7 +148,11 @@ and onelink funs acc l = match l with
   | Colink ock -> let ock, acc = oneck_it funs acc ock in Colink ock, acc
 
 and onephase_it funs acc ph = try funs.onephase funs acc ph with Fallback -> onephase funs acc ph
-and onephase _ acc ph = ph, acc
+and onephase funs acc ph = match ph with
+  | Cophlinexp ((c,v), nph) ->
+    let nph, acc = onephase_it funs acc nph in
+    Cophlinexp ((c,v), nph), acc
+  | Cophase _ | Cophshift _  | Cophindex _ -> ph, acc
 
 
 and var_ident_it funs acc i = funs.var_ident funs acc i
