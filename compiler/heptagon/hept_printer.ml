@@ -207,6 +207,17 @@ and print_exp_desc ff = function
         Global_printer.print_static_exp seInit print_exp e
   | Ebufferlat (l, e) ->
       fprintf ff "@[bufferlat(%i) %a@]" l  print_exp e
+  | Efbyq (seInit, e) ->
+      fprintf ff "@[<2>%a fby?@ %a@]" print_static_exp seInit  print_exp e
+  | Ewhenq (e, (min,max), ratio) ->
+      fprintf ff "@[<2>(%a@ when?(%i,%i) %i)@]"
+        print_exp e  min max ratio
+  | Ecurrentq (ratio, (min,max), seInit, e) ->
+      fprintf ff "@[<2>current?(%i,%i)(%i,@ %a,@ %a)@]"
+        min max ratio  Global_printer.print_static_exp seInit  print_exp e
+  | Ebufferfbyq (seInit, e) ->
+      fprintf ff "@[%a bufferfby? %a@]"
+        Global_printer.print_static_exp seInit print_exp e
 
 
 and print_handler ff c =

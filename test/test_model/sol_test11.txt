@@ -6,19 +6,19 @@ ph_31 -> 1
 ph_27 -> 0
 ph_23 -> 0
 
-ph_7_ph_1 -> 0
-ph_7_ph_0 -> 1
+ph_7_phval_1 -> 0
+ph_7_phval_0 -> 1
 
-ph_6_ph_5 -> 0
-ph_6_ph_4 -> 0
-ph_6_ph_3 -> 0
-ph_6_ph_2 -> 1
-ph_6_ph_1 -> 0
-ph_6_ph_0 -> 0
+ph_6_phval_5 -> 0
+ph_6_phval_4 -> 0
+ph_6_phval_3 -> 0
+ph_6_phval_2 -> 1
+ph_6_phval_1 -> 0
+ph_6_phval_0 -> 0
 
-ph_31_ph_1 -> 1
+ph_31_phval_1 -> 1
 
-ph_27_ph_1 -> 0
-ph_27_ph_0 -> 1
+ph_27_phval_1 -> 0
+ph_27_phval_0 -> 1
 
-ph_23_ph_0 -> 1
+ph_23_phval_0 -> 1

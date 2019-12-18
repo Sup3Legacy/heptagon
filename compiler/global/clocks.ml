@@ -359,6 +359,26 @@ let rec get_phase_ock ock =
 
 
 
+(* Constructor of clock *)
+let build_clock varopt laffterm sh per =
+  (* Building the onephase *)
+  let oph = match varopt with
+    | None -> Cophase sh
+    | Some varid ->
+      if (sh=0) then (Cophindex varid) else (Cophshift (sh, varid))
+  in
+  let oph = List.fold_left (fun acc affterm ->
+    Cophlinexp (affterm, acc)
+  ) oph laffterm in
+
+  let roph = ref oph in
+  let olink = Coper (roph, per) in
+  let rolink = ref olink in
+  let ock = Covar rolink in
+
+  ock_repr ock
+
+
 (* -- Unification -- *)
 
 (* Perform l1 - l2 on a list of laffterm *)
@@ -406,7 +426,7 @@ let rec unify_oneck ock1 ock2 =
   let _ = unify_oneck_constr ock1 ock2 in
   ()
 
-(* Return a potential substitution performed on the phase *)
+(* Return a potential substitution performed on the phase + list of constraint on the decision variables *)
 (* If None is returned, no substitution was performed
    If Some (leftsubstright, phname1, phname2opt, sh) is returned:
      - either phname2opt=None => phname1 was replaced by sh
@@ -416,30 +436,25 @@ and unify_oneck_constr ock1 ock2 =
   (* Manage the links *)
   let ock1 = ock_repr ock1 in
   let ock2 = ock_repr ock2 in
-  if ock1 == ock2 then None else
+  if ock1 == ock2 then (None, []) else
 
   match (ock1, ock2) with
-    (* Covar Coindex management (whole clock variable) *)
-    | (Covar { contents = Coindex n1 }), (Covar { contents = Coindex n2 }) when n1=n2 -> None
+    (* "Covar Coindex" case management (whole clock variable) *)
+    | (Covar { contents = Coindex n1 }), (Covar { contents = Coindex n2 }) when n1=n2 -> (None, [])
     | ock, Covar ( { contents = Coindex _ } as v)
     | Covar ( { contents = Coindex _ } as v), ock ->
       v.contents <- Colink ock;
-      None  (* No constraint if just aliasing entire clocks *)
+      (None,[])  (* No constraint if just aliasing entire clocks *)
 
-    (* Cases where everything is a constant (Cone + Cshift) *)
+    (* Cases where everything is a constant (case of a Cone + case of a Cshift) *)
     | Cone (ph1, per1), Cone (ph2,per2) ->
-      if ((ph1 == ph2) && (per1 == per2)) then None   (* Remark: no implicit buffer *)
+      if ((ph1 == ph2) && (per1 == per2)) then (None,[])   (* Remark: no implicit buffer *)
       else raise Unify
       
     | Cshift (d1, ock1), Cshift (d2, ock2) -> (* Note: ock was normalized d1=d2 is the right condition *)
       if (d1=d2) then unify_oneck_constr ock1 ock2 else raise Unify
-    | _, Cshift _ ->
-      let osubst = unify_oneck_constr ock2 ock1 in
-      (match osubst with
-        | None -> None
-        | Some (lsubr, x, y, z, l) -> Some ((not lsubr), x, y, z, l)
-      )
     | Cshift (d1, ock1), Cone (ph2,per2) -> unify_oneck_constr ock1 (Cone (ph2-d1, per2))
+    | Cone (ph1, per1), Cshift (d2, ock2) -> unify_oneck_constr (Cone (ph1-d2, per1)) ock2
 
 
     (* Cases where it gets "a bit" more complicated here...*)
@@ -450,42 +465,55 @@ and unify_oneck_constr ock1 ock2 =
       let (ophid2, laffterm2, sh2, oroph2, per2) = extract_ock_info ock2 in
       assert(per1=per2);
 
-      (* In order to have oroph1!=None *)
+      (* In order to have oroph1!=None / note that both oroph1 and oroph2 cannot be None *)
       if (oroph1=None) then (
         assert(oroph2!=None);
-        let osubst = unify_oneck_constr ock2 ock1 in
+        let (osubst, constr) = unify_oneck_constr ock2 ock1 in
         (match osubst with
-          | None -> None
-          | Some (lsubr, x, y, z, l) -> Some ((not lsubr), x, y, z, l)
+          | None -> (None, constr)
+          | Some (lsubr, x, y, z, l) -> (Some ((not lsubr), x, y, z, l), constr)
         )
       ) else
       let roph1 = match oroph1 with
         | None -> failwith "Internal unification error: oroph1 should not be None"
         | Some r -> r
       in
-      let phid1 = match ophid1 with
-        | None -> failwith "Internal unification error: ophid1 should not ne None"
-        | Some pi -> pi
-      in
 
-      (* Managing roph1: we have (sh1 + [roph1, per]) <-> (sh2 + [(laffterm2 + `phid2), per])
-          => roph1 <- (sh2-sh1) + laffterm2 + `phid2
-      *)
-      let noph2_init = match ophid2 with
-        | None -> Cophase (sh2-sh1)
-        | Some phid2 -> if (sh2=sh1) then Cophindex phid2 else Cophshift (sh2-sh1, phid2)
-      in
-      let noph2 = List.fold_left (fun acc affterm -> Cophlinexp (affterm,acc)) noph2_init laffterm2 in
-      roph1.contents <- noph2;
-
-      (* Building the substitution constraint between `phid1 and `phid2
-          => `phid1 <- (sh2-sh1) + (laffterm2 - laffterm1) + `phid2
-      *)
+      let sh2m1 = sh2-sh1 in
       let laffterm2m1 = substract_laffterm laffterm2 laffterm1 in
-      Some (true, phid1, ophid2, sh2-sh1, laffterm2m1)
+
+      (* Check if we have a phase variable to perform a substitution with *)
+      match (ophid1, ophid2) with
+      | (None, None) ->
+        (* Constraint on the decision variable only laffterm2m1 + sh2m1 = 0 *)
+        let constr_dec = (laffterm2m1, sh2m1) in
+        (None, constr_dec::[])
+
+      | (Some phid1, None) ->
+        let noph2_init = Cophase sh2m1 in
+        let noph2 = List.fold_left (fun acc affterm -> Cophlinexp (affterm,acc)) noph2_init laffterm2 in
+        roph1.contents <- noph2;
+        (Some (true, phid1, ophid2, sh2m1, laffterm2m1), [])
+
+      | (Some phid1, Some phid2) ->
+        let noph2_init = if (sh2m1 = 0) then Cophindex phid2 else Cophshift (sh2m1, phid2) in
+        let noph2 = List.fold_left (fun acc affterm -> Cophlinexp (affterm,acc)) noph2_init laffterm2 in
+        roph1.contents <- noph2;
+        (Some (true, phid1, ophid2, sh2m1, laffterm2m1), [])
+
+      | (None, Some phid2) ->
+        let roph2 = match oroph2 with
+          | None -> failwith "Internal unification error: oroph2 cannot be None if ophid2 is not None."
+          | Some roph2 -> roph2
+        in
+
+        let noph1_init = Cophase (-sh2m1) in
+        let noph1 = List.fold_left (fun acc affterm -> Cophlinexp (affterm,acc)) noph1_init laffterm1 in
+        roph2.contents <- noph1;
+
+        let laffterm2m1_opp = List.map (fun (c,v) -> (-c,v)) laffterm2m1 in
+        (Some (false, phid2, ophid1, -sh2m1, laffterm2m1_opp), [])
     end
-
-
 
 (* OLD version of unify_oneck_constr
   and unify_oneck_constr ock1 ock2 =
@@ -565,17 +593,17 @@ and unify_oneck_constr ock1 ock2 =
     | _ -> raise Unify *)
 
 let rec unify_onect t1 t2 =
-  let _ = unify_onect_constr t1 t2 in
+  let (_,_) = unify_onect_constr t1 t2 in
   ()
 
 and unify_onect_constr t1 t2 =
-  if t1 == t2 then [] else
+  if t1 == t2 then ([],[]) else
   match (t1, t2) with
     | (Ock ck1, Ock ck2) ->
-      let osubst = unify_oneck_constr ck1 ck2 in
+      let (osubst, lconstr) = unify_oneck_constr ck1 ck2 in
       (match osubst with
-        | None -> []
-        | Some subst -> subst::[]
+        | None -> ([], lconstr)
+        | Some subst -> (subst::[], lconstr)
       )
     | (Ocprod t1_list, Ock _) ->
       if ((List.length t1_list) = 1) then
@@ -589,6 +617,9 @@ and unify_onect_constr t1 t2 =
 
 and unify_list_onect t1_list t2_list =
   try 
-    List.fold_left2 (fun lacc t1 t2 -> (unify_onect_constr t1 t2)@lacc) [] t1_list t2_list
+    List.fold_left2 (fun (lsubst_acc, lconstr_acc) t1 t2 ->
+      let (nlsubst, nlconstr) = unify_onect_constr t1 t2 in
+      (nlsubst@lsubst_acc, nlconstr@lconstr_acc) 
+    ) ([],[]) t1_list t2_list
   with _ -> raise Unify
 

@@ -956,6 +956,7 @@ and typing cenv h e =
         let typed_seInit, t = typing_static_exp cenv seInit in
         let typed_e = expect cenv h t e in
         Edelayfby (d, typed_seInit, typed_e), t
+      
       | Ebuffer e ->
         let typed_e, t = typing cenv h e in
         Ebuffer typed_e, t
@@ -966,6 +967,24 @@ and typing cenv h e =
       | Ebufferlat (lat, e) -> 
         let typed_e, t = typing cenv h e in
         Ebufferlat (lat, typed_e), t
+
+      | Efbyq (seInit, e) ->
+        let typed_seInit, t = typing_static_exp cenv seInit in
+        let typed_e = expect cenv h t e in
+        Efbyq (typed_seInit, typed_e), t
+      | Ewhenq (e, (min,max), ratio) ->
+        let typed_e, t = typing cenv h e in
+        Ewhenq (typed_e, (min,max), ratio), t
+      | Ecurrentq (ratio, (min,max), seInit, e) ->
+        let typed_seInit, t = typing_static_exp cenv seInit in
+        let typed_e = expect cenv h t e in
+        Ecurrentq (ratio, (min,max), typed_seInit, typed_e), t
+      | Ebufferfbyq (seInit, e) ->
+        let typed_seInit, t = typing_static_exp cenv seInit in
+        let typed_e = expect cenv h t e in
+        Ebufferfbyq (typed_seInit, typed_e), t
+
+
     in
       { e with e_desc = typed_desc; e_ty = ty; }, ty
   with

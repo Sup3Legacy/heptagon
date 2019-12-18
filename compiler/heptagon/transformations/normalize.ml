@@ -301,6 +301,85 @@ let bufferlat context e lat oper e_orig =
     let e, context = bufferlat_aux lat oper context e in
     context, e
 
+let fbyq context seInit e oper e_orig =
+  let fbyq_aux seInit oper context e =
+    let context, e =
+      if !Compiler_options.do_mem_alloc && Stateful.exp_is_stateful e then
+        let context, n = equation context e oper in
+        context, { e with e_desc = n }
+      else
+        context, e
+    in
+    { e_orig with e_desc = Efbyq(seInit, e) }, context
+  in
+  if is_list e then
+    let e_list, context = Misc.mapfold (fbyq_aux seInit oper) context (e_to_e_list e) in
+    context, { e_orig with e_desc = Eapp(mk_app Etuple, e_list, None) }
+  else
+    let e, context = fbyq_aux seInit oper context e in
+    context, e
+
+let whenqcmodel context e min max ratio oper e_orig =
+  let whenq_cmodel_aux min max ratio oper context e =
+    let context, e =
+      if !Compiler_options.do_mem_alloc && Stateful.exp_is_stateful e then
+        let context, n = equation context e oper in
+        context, { e with e_desc = n }
+      else
+        context, e
+    in
+    { e_orig with e_desc = Ewhenq(e, (min,max), ratio) }, context
+  in
+  if is_list e then
+    let e_list, context = Misc.mapfold (whenq_cmodel_aux min max ratio oper) context (e_to_e_list e) in
+    context, { e_orig with e_desc = Eapp(mk_app Etuple, e_list, None) }
+  else
+    let e, context = whenq_cmodel_aux min max ratio oper context e in
+    context, e
+
+let currentqcmodel context seInit e min max ratio oper e_orig =
+  let currentqcmodel_aux min max ratio oper context (e, seInit) =
+    let context, e =
+      if !Compiler_options.do_mem_alloc && Stateful.exp_is_stateful e then
+        let context, n = equation context e oper in
+        context, { e with e_desc = n }
+      else
+        context, e
+    in
+    { e_orig with e_desc = Ecurrentq (ratio, (min,max), seInit, e) }, context
+  in
+  if is_list e then
+    let elist = e_to_e_list e in
+    let seInitlist = se_to_se_list seInit in
+    let eseInitlist = List.combine elist seInitlist in
+    let e_list, context = Misc.mapfold (currentqcmodel_aux min max ratio oper) context eseInitlist in
+    context, { e_orig with e_desc = Eapp(mk_app Etuple, e_list, None) }
+  else
+    let e, context = currentqcmodel_aux min max ratio oper context (e, seInit) in
+    context, e
+
+let bufferfbyq context seInit e oper e_orig = 
+  let bufferfbyq_aux oper context (seInit, e) =
+    let context, e =
+      if !Compiler_options.do_mem_alloc && Stateful.exp_is_stateful e then
+        let context, n = equation context e oper in
+        context, { e with e_desc = n }
+      else
+        context, e
+    in
+    { e_orig with e_desc = Ebufferfbyq (seInit, e) }, context
+  in
+  if is_list e then
+    let seInitlist = se_to_se_list seInit in
+    let elist = e_to_e_list e in
+    let seInitelist = List.combine seInitlist elist in
+    let e_list, context = Misc.mapfold (bufferfbyq_aux oper) context seInitelist in
+    context, { e_orig with e_desc = Eapp(mk_app Etuple, e_list, None) }
+  else
+    let e, context = bufferfbyq_aux oper context (seInit, e) in
+    context, e
+
+
 (* ===== *)
 
 
@@ -388,6 +467,34 @@ let rec translate kind context oper e =
     | Ebufferlat (lat, e1) ->
       let context, e1 = translate kind context oper e1 in
       bufferlat context e1 lat oper e
+
+    | Efbyq (seInit, e1) ->
+      let context, e1 = translate kind context oper e1 in
+      fbyq context seInit e1 oper e
+
+    | Ewhenq (e1, (min,max), ratio) ->
+      let pere = match oper with
+        | None -> failwith "No period in block model expression"
+        | Some pere -> pere
+      in
+      (* DEBUG
+      Format.fprintf (Format.formatter_of_out_channel stdout) "pere = %i | per = %i | e = %a\n@?"
+        pere per Hept_printer.print_exp e; *)
+      assert(pere mod ratio = 0);
+      let context, e1 = translate ExtValue context (Some (pere/ratio)) e1 in
+      whenqcmodel context e1 min max ratio oper e
+
+    | Ecurrentq (ratio, (min,max), seInit, e1) ->
+      let pere = match oper with
+        | None -> failwith "No period in block model expression"
+        | Some pere -> pere
+      in
+      let context, e1 = translate ExtValue context (Some (pere*ratio)) e1 in
+      currentqcmodel context seInit e1 min max ratio oper e
+
+    | Ebufferfbyq (seInit, e1) ->
+      let context, e1 = translate kind context oper e1 in
+      bufferfbyq context seInit e1 oper e
 
     | Eapp({ a_op = Eifthenelse }, [e1; e2; e3], _) ->
         ifthenelse context oper e e1 e2 e3

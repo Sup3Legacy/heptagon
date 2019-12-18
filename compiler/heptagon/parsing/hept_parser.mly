@@ -71,6 +71,7 @@ open Hept_parsetree
 %token WITH
 %token WHEN WHENOT MERGE ON ONOT CURRENT
 %token DELAY DELAYFBY BUFFER BUFFERFBY BUFFERLAT
+%token WHENQ CURRENTQ FBYQ BUFFERFBYQ
 %token INLINED
 %token POWER
 %token LBRACKET LBRACKETGREATER
@@ -730,7 +731,29 @@ _exp:
       { Ebufferfby (seInit, e) }
   | BUFFERLAT LPAREN l=INT RPAREN e=exp
       { Ebufferlat (l, e) }
-  
+  | e=exp WHENQ ratio=INT
+      { if (ratio<=0) then (
+          Format.eprintf "%a:Unvalid ratio argument.\n@?"
+            Location.print_location (Loc($startpos,$endpos));
+          failwith "Ratio must be strictly positive");
+        let min = 0 in     (* Default values: can sample anything *)
+        let max = ratio-1 in
+        Ewhenq (e, (min,max), ratio)
+      }
+  | CURRENTQ LPAREN ratio=INT COMMA seInit=const COMMA e=exp RPAREN
+      { if (ratio<=0) then (
+          Format.eprintf "%a:Unvalid ratio argument.\n@?"
+            Location.print_location (Loc($startpos,$endpos));
+          failwith "Ratio must be strictly positive");
+        let min = 0 in     (* Default values: can sample anything *)
+        let max = ratio-1 in
+        Ecurrentq (ratio, (min,max), seInit, e)
+      }
+  | seInit=const FBYQ e=exp
+      { Efbyq (seInit, e) }
+  | seInit=const BUFFERFBYQ e=exp
+      { Ebufferfbyq (seInit, e) }
+
   | exp INFIX1 exp
       { mk_op_call $2 [$1; $3] }
   | exp INFIX0 exp

@@ -1,0 +1,10 @@
+
+
+(* First test of model node with underspecified operator - similar to test1.ept *)
+model main(a:int; b:int) returns (c:int)
+var
+	d : int :: [..,2];
+let
+	d = a when? 2;
+	c = current?(2, 0, buffer (d + (b when? 2)));
+tel

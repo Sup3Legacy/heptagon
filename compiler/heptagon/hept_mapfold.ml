@@ -182,7 +182,7 @@ and edesc funs acc ed = match ed with
       let le, acc = mapfold (exp_it funs) acc le in
       Emergemodel (per, le), acc *)
   | Ecurrentmodel ((ph,per), seInit, e) ->
-      let eInit, acc = Global_mapfold.static_exp_it funs.global_funs acc seInit in
+      let seInit, acc = Global_mapfold.static_exp_it funs.global_funs acc seInit in
       let e, acc = exp_it funs acc e in
       Ecurrentmodel ((ph,per), seInit, e), acc
   | Edelay (d, e) ->
@@ -202,6 +202,22 @@ and edesc funs acc ed = match ed with
   | Ebufferlat (lat, e) ->
       let e, acc = exp_it funs acc e in
       Ebufferlat (lat, e), acc
+  | Efbyq (seInit, e) ->
+      let seInit, acc = Global_mapfold.static_exp_it funs.global_funs acc seInit in
+      let e, acc = exp_it funs acc e in
+      Efbyq (seInit, e), acc
+  | Ewhenq (e, (min,max), ratio) ->
+      let e, acc = exp_it funs acc e in
+      Ewhenq (e, (min,max), ratio), acc
+  | Ecurrentq (ratio, (min,max), seInit, e) ->
+      let seInit, acc = Global_mapfold.static_exp_it funs.global_funs acc seInit in
+      let e, acc = exp_it funs acc e in
+      Ecurrentq (ratio, (min,max), seInit, e), acc
+  | Ebufferfbyq (seInit, e) ->
+      let seInit, acc = Global_mapfold.static_exp_it funs.global_funs acc seInit in
+      let e, acc = exp_it funs acc e in
+      Ebufferfbyq (seInit, e), acc
+
 
 and app_it funs acc a = funs.app funs acc a
 and app funs acc a =

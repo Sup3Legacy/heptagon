@@ -170,6 +170,21 @@ and edesc funs acc ed = match ed with
   | Ebufferlat (l, e) ->
     let e, acc = exp_it funs acc e in
     Ebufferlat (l,e), acc
+  | Efbyq (seInit, e) ->
+    let seInit, acc = static_exp_it funs acc seInit in
+    let e, acc = exp_it funs acc e in
+    Efbyq (seInit, e), acc
+  | Ewhenq (e, (min,max), ratio) ->
+    let e, acc = exp_it funs acc e in
+    Ewhenq (e, (min,max), ratio), acc
+  | Ecurrentq (ratio, (min,max), seInit, e) ->
+    let seInit, acc = static_exp_it funs acc seInit in
+    let e, acc = exp_it funs acc e in
+    Ecurrentq (ratio, (min,max), seInit, e), acc
+  | Ebufferfbyq (seInit, e) ->
+    let seInit, acc = static_exp_it funs acc seInit in
+    let e, acc = exp_it funs acc e in
+    Ebufferfbyq (seInit, e), acc
   | Esplit (x, e2) ->
       let e2, acc = exp_it funs acc e2 in
         Esplit(x, e2), acc

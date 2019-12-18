@@ -95,6 +95,11 @@ List.iter (fun (str,tok) -> Hashtbl.add keyword_table str tok) [
  "buffer", BUFFER;
  "bufferfby", BUFFERFBY;
  "bufferlat", BUFFERLAT;
+ "when?", WHENQ;
+ "current?", CURRENTQ;
+ "fby?", FBYQ;
+ "bufferfby?", BUFFERFBYQ;
+
  "on", ON;
  "onot", ONOT;
  "map", MAP;
@@ -199,7 +204,7 @@ rule token = parse
   | "..."           {THREE_DOTS}
   | (['A'-'Z']('_' ? ['A'-'Z' 'a'-'z' ''' '0'-'9']) * as id)
       {Constructor id}
-  | (['A'-'Z' 'a'-'z']('_' ? ['A'-'Z' 'a'-'z' ''' '0'-'9']) * as id)
+  | (['A'-'Z' 'a'-'z']('_' ? ['A'-'Z' 'a'-'z' ''' '?' '0'-'9']) * as id)
       { let s = Lexing.lexeme lexbuf in
           begin try
       Hashtbl.find keyword_table s

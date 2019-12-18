@@ -280,10 +280,12 @@ let rec typing h e =
     | Esplit (c, e2) ->
         let i = imax (itype (typing h c)) (itype (typing h e2)) in
           skeleton i e.e_ty
-    | Ewhenmodel (e, _) ->
+    | Ewhenmodel (e, _)
+      | Ewhenq (e, _, _) ->
         let i = itype (typing h e) in
         skeleton i e.e_ty
-    | Ecurrentmodel (_, _, e2) -> 
+    | Ecurrentmodel (_, _, e2)
+      | Ecurrentq (_, _, _, e2) -> 
       (* initialized_exp h e2;
       skeleton (itype (typing h e1)) e.e_ty *)
       skeleton (itype (typing h e2)) e2.e_ty
@@ -292,11 +294,12 @@ let rec typing h e =
       | Ebufferlat (_,e) ->
       skeleton (itype (typing h e)) e.e_ty
     | Edelayfby (_, _, e2)
-      | Ebufferfby (_, e2) ->
+      | Ebufferfby (_, e2)
+      | Efbyq (_, e2)
+      | Ebufferfbyq (_, e2) ->
       (*initialized_exp h e2;
       skeleton (itype (typing h e1)) e.e_ty *)
       skeleton (itype (typing h e2)) e2.e_ty
-
 
 
 (** Typing an application *)

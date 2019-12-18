@@ -171,7 +171,8 @@ let rec translate ({ Heptagon.e_desc = desc; Heptagon.e_ty = ty;
     | Heptagon.Ecurrent _ -> raise StructureShouldHaveBeenRemoved
     | Heptagon.Ewhenmodel _ | Heptagon.Ecurrentmodel _
     | Heptagon.Edelay _ | Heptagon.Edelayfby _
-    | Heptagon.Ebuffer _ | Heptagon.Ebufferfby _ | Heptagon.Ebufferlat _ ->
+    | Heptagon.Ebuffer _ | Heptagon.Ebufferfby _ | Heptagon.Ebufferlat _
+    | Heptagon.Efbyq _ | Heptagon.Ewhenq _ | Heptagon.Ecurrentq _ | Heptagon.Ebufferfbyq _ ->
       (Format.eprintf "Expression e = %a\n@?" Hept_printer.print_exp e;
       raise StructureShouldHaveBeenRemoved )
   in

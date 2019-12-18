@@ -50,7 +50,7 @@ open Format
 open Affine_constraint_clocking
 
 
-let debug_clocking = false (* TODO DEBUG *)
+let debug_clocking = true (* TODO DEBUG *)
 let ffout = formatter_of_out_channel stdout
 
 let constraint_bufferfby = not (!Compiler_options.no_constraint_bufferfby)
@@ -282,7 +282,7 @@ let rec typing_bufferfby_osynch oct = match oct with
       (Ock n_ock, laffconstr)
   end 
 
-let rec typing_bufferlat_osynch oct lat =match oct with
+let rec typing_bufferlat_osynch oct lat = match oct with
   | Ocprod loct ->
     let loct, lac = Misc.mapfold (fun lac_acc oct ->
       let noct, nlac = typing_bufferlat_osynch oct lat in
@@ -343,6 +343,182 @@ let rec typing_bufferlat_osynch oct lat =match oct with
 
 
 (* ==================================== *)
+
+(* Constraint generation for underspecified operators (the "?" operators) *)
+
+let rec typing_whenq_osynch octe min max ratio dvarid = match octe with
+  | Ocprod loct ->
+    let loct, lac = Misc.mapfold (fun lac_acc oct ->
+      let (noct, nlac) = typing_whenq_osynch oct min max ratio dvarid in
+      noct, nlac@lac_acc
+    ) [] loct in
+    (Ocprod loct), lac
+  | Ock ock -> begin
+    let ock = ock_repr ock in
+    match ock with
+    | Covar { contents = Coindex _ } ->
+      failwith "Typing 1-synch when? - variable clock manipulation should not happen?"
+      (* Does this only happen when we have a when of a constant, or something like that? *)
+    | _ ->
+      (* Coherence of min/max related to the ratio *)
+      assert(0<=min);
+      assert(min<=max);
+      assert(max<ratio);    (* min <= d <= max *)
+      
+      (* The shift is parametrised by a new integer variable "d" (decision variable) *)
+      let dvarname = varname_from_phase_index dvarid in
+      
+      (* We build the clock [sh + ( (per,dvar)::laffterm) + idvar_ock , per * ratio ] *)
+      let (varopt_ock, laffterm, sh, _, per) = Clocks.extract_ock_info ock in
+      let nper = per * ratio in
+      let nlaffterm = (per, dvarid)::laffterm in
+      let n_ock =  build_clock varopt_ock nlaffterm sh nper in
+
+      (* Constraint on the phase of n_ock *)
+      (* idvar_ock + ( (per,dvar)::laffterm) + sh >= 0 *)
+      let nlaffterm_str = List.map (fun (c,v) -> (c, varname_from_phase_index v)) nlaffterm in
+      let lcoeffVar3 = match varopt_ock with
+        | None -> nlaffterm_str
+        | Some varid -> (1, varname_from_phase_index varid)::nlaffterm_str
+      in
+      let affconstr3 = mk_affconstr false lcoeffVar3 (-sh) in
+
+      (* idvar_ock + ( (per,dvar)::laffterm) + sh <= nper *)
+      let nlaffterm_op = List.map (fun (c,v) -> (-c,v)) nlaffterm_str in
+      let lcoeffVar4 = match varopt_ock with
+        | None -> nlaffterm_op
+        | Some varid -> (-1, varname_from_phase_index varid)::nlaffterm_op
+      in
+      let affconstr4 = mk_affconstr false lcoeffVar4 (sh-nper) in
+
+      ((Ock n_ock), affconstr3::affconstr4::[])
+  end 
+
+let rec typing_currentq_osynch octe min max ratio dvarid = match octe with
+  | Ocprod loct ->
+    let loct, lac = Misc.mapfold (fun lac_acc oct ->
+      let noct, nlac = typing_currentq_osynch oct min max ratio dvarid in
+      noct, nlac@lac_acc
+    ) [] loct in
+    (Ocprod loct), lac
+  | Ock ock -> begin
+    let ock = ock_repr ock in
+    match ock with
+    | Covar { contents = Coindex _ } ->
+      failwith "Typing 1-synch current? - variable clock manipulation should not happen?"
+      (* Does this only happen when we have a when of a constant, or something like that? *)
+    | _ ->
+      (* Coherence of min/max related to the ratio *)
+      assert(0<=min);
+      assert(min<=max);
+      assert(max<ratio);    (* min <= d <= max *)
+      
+      (* The shift is parametrised by a new integer variable "d" (decision variable) *)
+      let dvarname = varname_from_phase_index dvarid in
+      
+      (* We build the clock [sh + ( (-nper,dvar)::laffterm) + idvar_ock , per * ratio ] *)
+      let (varopt_ock, laffterm, sh, _, per) = Clocks.extract_ock_info ock in
+      let nper = per / ratio in
+      let nlaffterm = (-nper, dvarid)::laffterm in
+      let n_ock =  build_clock varopt_ock nlaffterm sh nper in
+
+      (* Constraint on the phase of n_ock *)
+      (* idvar_ock + ((-nper,dvar)::laffterm) + sh >= 0 *)
+      let nlaffterm_str = List.map (fun (c,v) -> (c, varname_from_phase_index v)) nlaffterm in
+      let lcoeffVar3 = match varopt_ock with
+        | None -> nlaffterm_str
+        | Some varid -> (1, varname_from_phase_index varid)::nlaffterm_str
+      in
+      let affconstr3 = mk_affconstr false lcoeffVar3 (-sh) in
+
+      (* idvar_ock + ((-nper,dvar)::laffterm) + sh <= nper *)
+      let nlaffterm_op = List.map (fun (c,v) -> (-c,v)) nlaffterm_str in
+      let lcoeffVar4 = match varopt_ock with
+        | None -> nlaffterm_op
+        | Some varid -> (-1, varname_from_phase_index varid)::nlaffterm_op
+      in
+      let affconstr4 = mk_affconstr false lcoeffVar4 (sh-nper) in
+
+
+      ((Ock n_ock), affconstr3::affconstr4::[])
+  end 
+
+let rec typing_bufferfbyq_osynch octe dvarid = match octe with
+  | Ocprod loct ->
+    let loct, lac = Misc.mapfold (fun lac_acc oct ->
+      let noct, nlac = typing_bufferfbyq_osynch oct dvarid in
+      noct, nlac@lac_acc
+    ) [] loct in
+    (Ocprod loct), lac
+  | Ock ock -> begin
+    let ock = ock_repr ock in
+    match ock with
+    | Covar { contents = Coindex _ } ->
+      failwith "Typing 1-synch bufferfby? - variable clock manipulation should not happen?"
+      (* Does this only happen when we have a when of a constant, or something like that? *)
+    | _ ->
+      (* The shift is parametrised by a new integer variable "d" (decision variable) *)
+      let dvarname = varname_from_phase_index dvarid in
+
+      (* TODO: how to associate dvarid to the operator *)
+      (* TODO: same issue than for fby? - this variable will only impact lattency computation and causality analysis *)
+      (* TODO: check the collection of the generated_index? *)
+
+      
+      (* Output clock of the bufferfby? + getting its informations *)
+      let (varopt, laffterm, ph) = Clocks.get_phase_ock ock in
+      let per = Clocks.get_period_ock ock in
+      let n_ock = fresh_osynch_period per in
+
+      let (varopt_nock, laffterm, sh) = Clocks.get_phase_ock n_ock in
+      let idvar_nock = match varopt_nock with
+        | None -> failwith "Internal error"
+        | Some idvar -> idvar
+      in
+      assert(laffterm=[]); assert(sh=0);
+      let varname_n_ock = varname_from_phase_index idvar_nock in
+
+
+      (* Constraint on the phase
+        => constraint buffer to be activated only when d=0
+        => constraint bufferfby to be activated if option + d=1 :/ *)
+
+      (* Constraint to be activated when d=1:
+          expr_{ock} + per*(1-d) >= ph_{n_ock} + 1
+          <=> expr_{ock} - per*d >= ph_{n_ock} - per + 1 *)
+      let laffconstr_ph = if (constraint_bufferfby) then begin
+
+        let lcoeffVar = (-1, varname_n_ock) :: [] in
+        let lcoeffVar = match varopt with
+          | None -> lcoeffVar
+          | Some idvar ->
+            (1, varname_from_phase_index idvar)::lcoeffVar
+        in
+        let lcoeffVar = List.fold_left (fun acc (c,v) -> (c, varname_from_phase_index v)::acc) lcoeffVar laffterm in
+        let lcoeffVar = ((-per), dvarname)::lcoeffVar in
+
+        let affconstr_ph1 = mk_affconstr false lcoeffVar (1-ph-per) in
+        affconstr_ph1::[]
+      end else [] in
+
+      (* Constraint to be activated when d=0:
+        ph_{n_ock} + d*per >= expr_{ock} *)
+      let lcoeffVar = (1, varname_n_ock) :: [] in
+      let lcoeffVar = match varopt with
+        | None -> lcoeffVar
+        | Some idvar ->
+          (-1, varname_from_phase_index idvar)::lcoeffVar
+      in
+      let lcoeffVar = List.fold_left (fun acc (c,v) -> (-c, varname_from_phase_index v)::acc) lcoeffVar laffterm in
+      let lcoeffVar = (per, dvarname)::lcoeffVar in
+      let affconstr_ph2 = mk_affconstr false lcoeffVar ph in
+      let laffconstr_ph = affconstr_ph2 :: laffconstr_ph in
+
+      ((Ock n_ock), laffconstr_ph)
+  end
+
+
+(* ==================================== *)
 let ock_of_name h x =
   try Env.find x h
   with Not_found ->
@@ -356,66 +532,127 @@ let rec typing_model_pat h = function
 let rec typing_osych h lcst pat e = match e.e_desc with
   | Econst _ -> 
     let ock = fresh_osynch_clock () in
-    (Ock ock, lcst)
+    (Ock ock, lcst, None)
   | Evar x ->
     let ock = ock_of_name h x in
-    (Ock ock, lcst)
+    (Ock ock, lcst, None)
   | Efby (e1, e2) ->
-    let ct1, lcst = typing_osych h lcst pat e1 in
-    let lcst = expect_osynch h lcst pat ct1 e2 in
-    (ct1, lcst)
+    let (ct1, lcst, odecvar) = typing_osych h lcst pat e1 in
+    assert(odecvar=None);
+    let (lcst, odecvar) = expect_osynch h lcst pat ct1 e2 in
+    (ct1, lcst, odecvar)
   | Epre (_,e2) ->
     typing_osych h lcst pat e2
   | Estruct l ->
     let ock = fresh_osynch_clock () in
     let lcst = List.fold_left (fun lcst (_, e) ->
-      expect_osynch h lcst pat (Ock ock) e
+      let (lcst, odecvar) = expect_osynch h lcst pat (Ock ock) e in
+      assert(odecvar=None);
+      lcst
     ) lcst l in
-    (Ock ock, lcst)
+    (Ock ock, lcst, None)
 
   (* Expressions specific to model *)
   | Ewhenmodel (e, (ph,ratio)) ->
-    let (octe, lcst) = typing_osych h lcst pat e in
+    let (octe, lcst, odecvar) = typing_osych h lcst pat e in
     let noct = typing_when_osynch octe ph ratio in
-    (noct, lcst)
+    (noct, lcst, odecvar)
 
   | Ecurrentmodel ((ph, ratio), _, e) ->
-    let (octe, lcst) = typing_osych h lcst pat e in
+    let (octe, lcst, odecvar) = typing_osych h lcst pat e in
     let noct = typing_current_osynch octe ph ratio in
-    (noct, lcst)
+    (noct, lcst, odecvar)
 
   | Edelay (d, e) ->
-    let (octe, lcst) = typing_osych h lcst pat e in
+    let (octe, lcst, odecvar) = typing_osych h lcst pat e in
     let noct = typing_delay_osynch octe d in
-    (noct, lcst)
+    (noct, lcst, odecvar)
 
   | Edelayfby (d, _, e) ->
-    let (octe, lcst) = typing_osych h lcst pat e in
+    let (octe, lcst, odecvar) = typing_osych h lcst pat e in
     let noct = typing_delayfby_osynch octe d in
-    (noct, lcst)
+    (noct, lcst, odecvar)
 
   | Ebuffer e ->
-    let (octe, lcst) = typing_osych h lcst pat e in
+    let (octe, lcst, odecvar) = typing_osych h lcst pat e in
     let (noct, laffconstr) = typing_buffer_osynch octe in
     let (al,bl) = lcst in
-    (noct, (laffconstr@al,bl))
+    (noct, (laffconstr@al,bl), odecvar)
 
   | Ebufferfby (_, e) ->
-    let (octe, lcst) = typing_osych h lcst pat e in
+    let (octe, lcst, odecvar) = typing_osych h lcst pat e in
     let (noct, laffconstr) = typing_bufferfby_osynch octe in
     let (al,bl) = lcst in
-    (noct, (laffconstr@al,bl))
+    (noct, (laffconstr@al,bl), odecvar)
 
   | Ebufferlat (lat, e) ->
-    let (octe, lcst) = typing_osych h lcst pat e in
+    let (octe, lcst, odecvar) = typing_osych h lcst pat e in
     let (noct, laffconstr) = typing_bufferlat_osynch octe lat in
     let (al,bl) = lcst in
-    (noct, (laffconstr@al,bl))
+    (noct, (laffconstr@al,bl), odecvar)
+
+  | Efbyq (seInit, e) ->  (* fby? does not have any impact on the clock itself *)
+    let (octe, lac, odecvar) = typing_osych h lcst pat e in
+    assert(odecvar=None);  (* No nested underspecified operators *)
+
+    (* Building the decision variable *)
+    let dvarid = Clocks.gen_index () in
+    let dvarname = varname_from_phase_index dvarid in
+    
+    (* Boundary constraint : 0<= dvarname <=1 *)
+    let bc_dec = mk_bound_constr dvarname 0 1 in
+    let (al,bl) = lcst in
+    (octe, (al,bc_dec::bl), Some dvarname)
+
+  | Ewhenq (e, (min,max), ratio) ->
+    let (octe, lcst, odecvar) = typing_osych h lcst pat e in
+    assert(odecvar=None);  (* No nested underspecified operators *)
+
+    (* Building the decision variable *)
+    let dvarid = Clocks.gen_index () in
+    let dvarname = varname_from_phase_index dvarid in
+
+    (* Constraints on the decision variable d : min<=d<=max *)
+    let bc_dec = mk_bound_constr dvarname min max in
+
+    let (noct, laffconstr) = typing_whenq_osynch octe min max ratio dvarid in
+    let (al,bl) = lcst in
+    (noct, (laffconstr@al, bc_dec::bl), Some dvarname)
+
+  | Ecurrentq (ratio, (min,max), seInit, e) ->
+    let (octe, lcst, odecvar) = typing_osych h lcst pat e in
+    assert(odecvar=None);  (* No nested underspecified operators *)
+
+    (* Building the decision variable *)
+    let dvarid = Clocks.gen_index () in
+    let dvarname = varname_from_phase_index dvarid in
+
+    (* Constraints on the decision variable d : min<=d<=max *)
+    let bc_dec = mk_bound_constr dvarname min max in
+
+    let (noct, laffconstr) = typing_currentq_osynch octe min max ratio dvarid in
+    let (al,bl) = lcst in
+    (noct, (laffconstr@al, bc_dec::bl), Some dvarname)
+
+  | Ebufferfbyq (seInit,e) ->
+    let (octe, lcst, odecvar) = typing_osych h lcst pat e in
+    assert(odecvar=None);  (* No nested underspecified operators *)
+
+    (* Building the decision variable *)
+    let dvarid = Clocks.gen_index () in
+    let dvarname = varname_from_phase_index dvarid in
+
+    (* Constraints on the decision variable: 0<=d<=1 *)
+    let bc_dec = mk_bound_constr dvarname 0 1 in
+
+    let (noct, laffconstr) = typing_bufferfbyq_osynch octe dvarid in
+    let (al,bl) = lcst in
+    (noct, (laffconstr@al, bc_dec::bl), Some dvarname)
 
   | Eapp({a_op = op}, args, _) ->
       let base_ock = fresh_osynch_clock () in
       let (oct, lcst) = typing_osynch_app h lcst base_ock pat op args in
-      (oct, lcst)
+      (oct, lcst, None)
 
   (* TODO: iterators needed ??? :/ *)
   | Eiterator (it, {a_op = op}, nl, pargs, args, _) ->
@@ -450,7 +687,7 @@ let rec typing_osych h lcst pat e = match e.e_desc with
           let (oct, lcst) = typing_osynch_app h lcst base_ock pat op (pargs@(insert_i args)) in
           (oct, lcst)
     in
-    (oct, lcst)
+    (oct, lcst, None)
   | Esplit _ | Elast _ | Ecurrent _ -> assert false
   | Emerge _ | Ewhen _ -> failwith "Construction should not appear in a model node"
 
@@ -460,12 +697,16 @@ and typing_osynch_app h lcst base pat op e_list = match op with
   | Earray_fill | Eselect | Eselect_dyn | Eselect_trunc | Eupdate
   | Eselect_slice | Econcat | Earray | Efield | Efield_update | Eifthenelse | Ereinit ->
     let lcst = List.fold_left (fun lcst e ->
-      expect_osynch h lcst pat (Ock base) e
+      let (lcst, odecvar) = expect_osynch h lcst pat (Ock base) e in
+      assert(odecvar=None); (* No nested underspecified operator *)
+      lcst
     ) lcst e_list in
     (Ock base, lcst)
   | Efun { qual = Module "Iostream"; name = "printf" } | Efun { qual = Module "Iostream"; name = "fprintf" } ->
     let lcst = List.fold_left (fun lcst e ->
-      expect_osynch h lcst pat (Ock base) e
+      let (lcst, odecvar) = expect_osynch h lcst pat (Ock base) e in
+      assert(odecvar=None); (* No nested underspecified operator *)
+      lcst
     ) lcst e_list in
     (Ocprod [], lcst)
   | (Efun f | Enode f) ->
@@ -487,20 +728,201 @@ and typing_osynch_app h lcst base pat op e_list = match op with
     let env_pat = build_env node.node_outputs pat_id_list [] in
     let env_args = build_env node.node_inputs e_list [] in 
     List.iter2 (fun _ e -> expect_osynch h lcst pat (Ock base) e) node.node_inputs e_list; *)
-    let lcst = List.fold_left (fun lcst e -> expect_osynch h lcst pat (Ock base) e) lcst e_list in
+    let lcst = List.fold_left (fun lcst e ->
+        let (lcst, odecvar) = expect_osynch h lcst pat (Ock base) e in
+        assert(odecvar=None); (* No nested underspecified operator *)
+        lcst
+      ) lcst e_list in
     Ocprod (List.map (fun _ -> (Ock base)) node.node_outputs), lcst
 
 and expect_osynch h lcst pat expected_oct e =
-  let (actual_oct, lcst) = typing_osych h lcst pat e in
+  let (actual_oct, lcst, odecvar) = typing_osych h lcst pat e in
   (try unify_onect actual_oct expected_oct
    with Unify ->
     error_message e.e_loc (Etypeclash (actual_oct, expected_oct))
   );
+  (lcst, odecvar)
+
+
+(* ----- *)
+(* ----- *)
+
+(* Causality constraint *)
+
+(* Note: only used on lhs of normalised equations with a underspecified operator on the rhs *)
+let rec get_first_var pat = match pat with
+  | Etuplepat pl ->
+    if (pl=[]) then failwith "typing_model_eq - internal error: equation with an underspecified operator has no lhs."
+    else get_first_var (List.hd pl)
+  | Evarpat vid -> vid
+
+(* Get the list of variable from the lhs *)
+let rec get_vars_lhs plhs = match plhs with
+  | Etuplepat pl ->
+    List.fold_left (fun lacc p ->
+      (get_vars_lhs p) @ lacc
+    ) [] pl
+  | Evarpat vid -> vid::[]
+
+(* Get the list of variable used in the rhs of a model equation *)
+let get_lvar_used eqm =
+  let exp_lvar_used funs lacc exp = match exp.e_desc with
+    | Evar vid | Elast vid -> exp, vid::lacc
+    | _ -> Hept_mapfold.exp funs lacc exp
+  in
+  let funs_lvar_used = { Hept_mapfold.defaults with exp = exp_lvar_used } in
+  let _, lvar = funs_lvar_used.eq_model funs_lvar_used [] eqm in
+  lvar
+
+(* Remove duplicated elements from a list *)
+let rec list_make_unique lres l = match l with
+  | [] -> lres
+  | h::t -> if (List.mem h lres) then
+      list_make_unique lres t
+    else
+      list_make_unique (h::lres) t
+
+(* module EqmMap = Map.Make(struct type t=eq_model let compare = Pervasives.compare end) *)
+
+(* Loop detection procedure - graph traversal *)
+(*let loop_detection lloops mVar2Eq leqm leqmStart =
+
+  (* We use Tarjan algorithm to get strongly connected components *)
+  (* Broad idea: graph coloring with the lowest label a backlink goes to... *)
+  (* I used the English wikipedia page to implement this algorithm *)
+  let rec strong_connect mVar2Eq mIndex index stvar mIsOnStack varid =
+    let mIndex = Idents.Env.add varid (index, index) mIndex in
+    let index = index + 1 in
+
+    (* Stack = path used by the depth first search algo used to traverse the graph *)
+    Stack.push varid stvar;
+    let mIsOnStack = Env.update varid (fun _ -> Some true) mIsOnStack in
+
+    (* For each successor of varid *)
+    let eqm_varid = Env.find varid mVar2Eq in
+    let lvar_successor = get_lvar_used eqm_varid in
+
+    let (mIndex, index, mIsOnStack) = List.fold_left (fun (mIndex, index, mIsOnStack) var_succ ->
+      (* If "var_succ" was not visited yet, then recursion!  (edge is on the traversal tree)  *)
+      if (not (Env.mem var_succ mIndex)) then
+        let (mIndex, index, mIsOnStack) =
+          strong_connect mVar2Eq mIndex index stvar mIsOnStack var_succ in
+
+        let (_, lowlink_varid) = Idents.Env.find varid mIndex in
+        let (_, lowlink_var_succ) = Idents.Env.find var_succ mIndex in 
+        let lowlink = Pervasives.min lowlink_varid lowlink_var_succ in
+
+        let mIndex = Env.update varid (fun _ -> Some (index, lowlink)) mIndex in
+        (mIndex, index, mIsOnStack)
+      else
+
+      (* If the successor "var_succ" is on the stack, we have a backedge (because depth-first search) *)
+      if (Env.find var_succ mIsOnStack) then
+        let (_, lowlink_varid) = Idents.Env.find varid mIndex in
+        let (index_var_succ, _) = Idents.Env.find var_succ mIndex in 
+        let lowlink = Pervasives.min lowlink_varid index_var_succ in
+
+        let mIndex = Env.update varid (fun _ -> Some (index, lowlink)) mIndex in
+        (mIndex, index, mIsOnStack)
+      else
+        (* "var_succ" is a cross-edge in the DFS tree, and can be ignored *)
+        (mIndex, index, mIsOnStack)
+    ) (mIndex, index, mIsOnStack) lvar_successor in
+
+    (* Root node: index = lowlink. We have as many SCC than root nodes *)
+
+    (* TODO: instead of following, can we just enumerate the backedges found and complete the cycle? *)
+
+
+    (* If v is a root node (ie, lowlink = index), pop the stack and generate a SCC *)
+    let (index_varid, lowlink_varid) = Idents.Env.find varid mIndex in
+    if (index_varid = lowlink_varid) then
+      let str_conn_comp = [] in
+
+      (* TODO *)
+
+
+      let w_id = Stack.pop stvar in
+      let mIsOnStack = Env.update w_id (fun _ -> Some false) mIsOnStack in
+
+      (* TODO: continue that while w!=v *)
+
+      (* TODO *)
+
+
+    else
+
+    (* TODO *)
+
+
+
+
+    (mIndex, index, mIsOnStack)
+  in
+
+  (* Stack and mapping to know if a variable is on the stack *)
+  let stvar = Stack.create () in
+  let mIsOnStack = Idents.Env.fold (fun varid _ macc ->
+    Env.add varid true macc
+  ) mVar2Eq Idents.Env.empty in
+  
+  (* Main loop *)
+  (* mIndex: varId -> (index, lowlink) *)
+  let (mIndex, _, _) = Idents.Env.fold (fun varid _ (macc, index, mIsOnStack) ->
+    if (Idents.Env.mem varid macc) then macc else
+    strong_connect mVar2Eq macc index stvar mIsOnStack varid
+  ) mVar2Eq (Idents.Env.empty, 0, mIsOnStack) in
+
+
+
+
+  (* Cycle acquisition: stay in a partition of "mIndex" *)
+
+
+
+  (* TODO: Tarjan algorithm + checking the strongly connected components containing a leqmStart *)
+*)
+
+
+
+
+(* Constraints for the causality management, if we have underspecified ops *)
+let add_causality_constraint lcst mdecvar leqm =
+  (* a) List all cycles in the dependence graph which contains a fbyq or a bufferfbyq equation *)
+  (* To do that, we start looking for cycle from variables above fbyq/bufferfbyq,
+    which are not yet reached by a broad-first search algorithm (broad to minimize the length of the cycle) *)
+
+  (* List of the starting point of the graph exploration - Nots: equations are normalized *)
+  (*let leqmStart = List.fold_left (fun lacc eqm -> match eqm.eqm_rhs.e_desc with
+    | Efbyq _ | Ebufferfbyq _ -> eqm::lacc
+    | _ -> lacc
+  ) [] leqm in
+
+  if (leqmStart=[]) then lcst else  (* No fbyq or bufferfbyq => No extra constraint *)
+
+  (* Build the set of the unexplored variables + associate them to their equation *)
+  let mVar2Eq = List.fold_left (fun macc eqm ->
+    let lvarlhs = get_vars_lhs eqm.eqm_lhs in
+    List.fold_left (fun macc varid -> Idents.Env.add varid eqm macc) macc lvarlhs
+  ) Idents.Env.empty leqm in
+
+  (* Start of the graph exploration algorithm *)
+  let (lloops : eq_model list list) = loop_detection [] mVar2Eq leqm leqmStart in *)
+
+  (* b) For each of this cycle, extract a constraint *)
+
+  (* TODO *)
+
+
+
+
+
   lcst
 
 
 (* ----- *)
 (* ----- *)
+
 (* Constraints from annotation management *)
 let add_constraint_from_annot lcst eqm_list lbann =
   (* Constraints from equations *)
@@ -939,7 +1361,7 @@ let rec typing_model_eq h lcst eqm =
   if (debug_clocking) then
     fprintf ffout "Entering model equation %a@\n" Hept_printer.print_eq_model eqm;
 
-  let (oct, lcst) = typing_osych h lcst eqm.eqm_lhs eqm.eqm_rhs in
+  let (oct, lcst, odecvar) = typing_osych h lcst eqm.eqm_lhs eqm.eqm_rhs in
   let pat_oct = typing_model_pat h eqm.eqm_lhs in
 
   let (lcst, lsubst) = (try
@@ -947,22 +1369,45 @@ let rec typing_model_eq h lcst eqm =
       fprintf ffout "unification between pat => %a and rhs => %a\n"
         print_onect pat_oct  print_onect oct;
 
-    let lsubst : (bool * int * int option * int * (int*int) list) list = unify_onect_constr oct pat_oct in
+    let (lsubst, lconstr_decvar_unif) :
+          ((bool * int * int option * int * (int*int) list) list)
+            * ( (int*int) list * int) list = unify_onect_constr oct pat_oct in
     let lsubst : (int * int option * int * (int*int) list) list = reorient_lsubst lsubst in
+    let lac_decvar = List.map (fun (laffterm_int, cst_term) ->
+      let lcoeffVar = List.map (fun (c,v) -> (c, varname_from_phase_index v)) laffterm_int in
+      mk_affconstr true lcoeffVar cst_term
+    ) lconstr_decvar_unif in
 
-    (lcst, lsubst)
+    let (lac,lbc) = lcst in
+    ((List.rev_append lac_decvar lac,lbc), lsubst)
   with Unify ->
     eprintf "Incoherent clock between right and left side of the equation:@\n\t%a\nlhs :: %a  | rhs :: %a.@\n"
      Hept_printer.print_eq_model eqm print_onect pat_oct  print_onect oct;
     error_message eqm.eqm_loc (Etypeclash (oct, pat_oct))
   ) in
-  (lcst,lsubst)
+
+
+  (* Using a ? operator on a equation which returns nothing is useless
+    => we assume this does not happen and use the first variable of the lhs
+       to associate the decision variable to the equation *)
+  let omatch_decvar = match odecvar with
+   | None -> None
+   | Some decvar ->
+      let firstvarlhs = get_first_var eqm.eqm_lhs in
+      Some (firstvarlhs, decvar)
+  in
+
+  (lcst, lsubst, omatch_decvar)
 
 and typing_model_eqs h lcst eq_list =
-  List.fold_left (fun (lcst_acc, lsubst_acc) eqm ->
-    let (lcst, lsubst) = typing_model_eq h lcst_acc eqm in
-    (lcst, lsubst @ lsubst_acc)
-  ) (lcst,[]) eq_list
+  List.fold_left (fun (lcst_acc, lsubst_acc, mdecvar) eqm ->
+    let (lcst, lsubst, omatch_decvar) = typing_model_eq h lcst_acc eqm in
+    let mdecvar = match omatch_decvar with
+      | None -> mdecvar
+      | Some (k,v) -> Env.add k v mdecvar
+    in
+    (lcst, lsubst @ lsubst_acc, mdecvar)
+  ) (lcst,[], Env.empty) eq_list
 
 (* Block management *)
 and append_model_env h lcst vdms =
@@ -994,7 +1439,8 @@ and typing_block_model h lcst {bm_local = l; bm_eqs = eq_list; bm_annot = lbann}
   if (debug_clocking) then
     fprintf ffout "Entering block_model - Environment is:\n%a@\n" print_henv h1;
 
-  let (lcst, lsubst) = typing_model_eqs h1 lcst eq_list in
+  (* mdecvar : [name of first lhs var -> decision variable name associated to the underspecified op on the right] *)
+  let (lcst, lsubst, mdecvar) = typing_model_eqs h1 lcst eq_list in
 
   if (debug_clocking) then (
     fprintf ffout "DEBUG-typing_model_eq - constraints =\n %a\n@?"
@@ -1004,6 +1450,11 @@ and typing_block_model h lcst {bm_local = l; bm_eqs = eq_list; bm_annot = lbann}
 
   (* Adding the constraints from the annotations *)
   let lcst = add_constraint_from_annot lcst eq_list lbann in
+
+  (* If there is decision variable, add constraints for causality *)
+  let lcst = if (Env.is_empty mdecvar) then lcst else
+    add_causality_constraint lcst mdecvar eq_list
+  in
 
   (* Manages subtitutions *)
   let msubst = List.fold_left (fun macc (phid1, optphid2, sh, laffterm) ->
@@ -1041,7 +1492,7 @@ and typing_block_model h lcst {bm_local = l; bm_eqs = eq_list; bm_annot = lbann}
   (* TODO DEBUG *)
   if (debug_clocking) then print_lwcet ffout lwcet;
 
-  (h1, lcst, msubst, lwcet)
+  (h1, lcst, msubst, lwcet, mdecvar)
 
 
 (* ----- *)
@@ -1102,11 +1553,62 @@ let rec subst_solution msol ock =
       Cone (val_op, per)
   )
 
-let eq_model_replace _ (hfull,msol) eqm =
+let eq_model_replace _ (hfull,msol,mdecvar) eqm =
   let ock_eq = subst_solution msol eqm.eqm_clk in
   let (ph_eq, per_eq) = get_ph_per_from_ock ock_eq in
 
   let rhs = eqm.eqm_rhs in
+
+  (* Determinisation pass *)
+  (* We recover the decision variable and use it to determinize the operators*)
+  let get_dec_var_sol mdecvar msol plhs =
+    let firstvarname = get_first_var eqm.eqm_lhs in
+    let (decvar:string) = try
+      Env.find firstvarname mdecvar
+      with Not_found -> failwith ("Internal error: equation defining " ^ (Idents.name firstvarname)
+            ^ " is not associated with a decision variable.")
+    in
+    let (soldecvar:int) = try
+        IntMap.find (get_phase_index_from_varname decvar) msol
+      with Not_found -> failwith ("Internal error: declaration variable " ^ decvar
+            ^ " is not included in the solution.")
+    in
+    soldecvar
+  in
+
+  let rhs = match rhs.e_desc with
+    | Efbyq (seInit, e) ->
+        let soldecvar = get_dec_var_sol mdecvar msol eqm.eqm_lhs in
+        (* soldecvar = 0 => no fby / soldecvar = 1 => fby *)
+        if (soldecvar=0) then e else (
+          assert(soldecvar=1);
+          { rhs with e_desc = Epre (Some seInit, e) }
+        )
+
+    | Ebufferfbyq (seInit, e) ->
+        let soldecvar = get_dec_var_sol mdecvar msol eqm.eqm_lhs in
+        (* soldecvar = 0 => buffer no fby / soldecvar = 1 => bufferfby *)
+        if (soldecvar=0) then
+          { rhs with e_desc = Ebuffer e }
+        else (
+          assert(soldecvar=1);
+          { rhs with e_desc = Ebufferfby (seInit, e) }
+        )
+
+    | Ewhenq (e, (min,max), ratio) -> (
+        let soldecvar = get_dec_var_sol mdecvar msol eqm.eqm_lhs in
+        assert(min<=soldecvar); assert(soldecvar<=max);  (* Double-checking*)
+        { rhs with e_desc = Ewhenmodel (e, (soldecvar, ratio)) }
+      )
+    | Ecurrentq (ratio, (min,max), seInit, e) -> (
+        let soldecvar = get_dec_var_sol mdecvar msol eqm.eqm_lhs in
+        assert(min<=soldecvar); assert(soldecvar<=max);  (* Double-checking*)
+        { rhs with e_desc = Ecurrentmodel ((soldecvar, ratio), seInit, e) }
+      )
+    | _ -> rhs
+  in
+
+  (* We assume normalization here *)
   let rhs = match rhs.e_desc with
     | Ebuffer e ->
       let varid = assert_Evar e in
@@ -1155,10 +1657,10 @@ let eq_model_replace _ (hfull,msol) eqm =
         e
     | _ -> rhs
   in
-  { eqm with eqm_clk = ock_eq; eqm_rhs = rhs }, (hfull, msol)
+  { eqm with eqm_clk = ock_eq; eqm_rhs = rhs }, (hfull, msol, mdecvar)
 
-let var_dec_model_replace _ (hfull,msol) vdm =
- { vdm with vm_clock = subst_solution msol vdm.vm_clock }, (hfull, msol)
+let var_dec_model_replace _ (hfull,msol,mdecvar) vdm =
+ { vdm with vm_clock = subst_solution msol vdm.vm_clock }, (hfull, msol, mdecvar)
 
 
 (* Main functions
@@ -1168,7 +1670,7 @@ let typing_model bquickres md =
 
   let (h0, lcst) = append_model_env Env.empty lcst md.m_input in
   let (h, lcst) = append_model_env h0 lcst md.m_output in
-  let (h, lcst, msubst, lwcet) = typing_block_model h lcst md.m_block in
+  let (h, lcst, msubst, lwcet, mdecvar) = typing_block_model h lcst md.m_block in
   (* Update clock info in variable descriptions *)
   let set_clock vdm = { vdm with vm_clock = Env.find vdm.vm_ident h } in
   let md = { md with m_input = List.map set_clock md.m_input;
@@ -1182,7 +1684,8 @@ let typing_model bquickres md =
   (* Solve the constraints *)
   (* Note: no boundary constraint missing for the created phase variable, because
       the system is normalised *)
-  let msol = Affine_constraint_clocking.solve_constraints_main bquickres lwcet lcst in
+  let b_no_underspec_ops = Idents.Env.is_empty mdecvar in
+  let msol = Affine_constraint_clocking.solve_constraints_main bquickres lwcet lcst b_no_underspec_ops in
 
   (* DEBUG
   print_msol ffout msol; *)
@@ -1206,7 +1709,7 @@ let typing_model bquickres md =
       eq_model = eq_model_replace;
       var_dec_model = var_dec_model_replace;
   } in
-  let md, _ = funs_replacement.model_dec funs_replacement (hfull, misol) md in
+  let md, _ = funs_replacement.model_dec funs_replacement (hfull, misol, mdecvar) md in
 
 
   (* No update of signature: model should be the top-level node *)

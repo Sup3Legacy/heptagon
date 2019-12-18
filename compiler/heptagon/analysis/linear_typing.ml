@@ -47,7 +47,6 @@ type error =
   | Ewrong_init of linearity_var * linearity
 
 exception TypingError of error
-exception StructureShouldHaveBeenRemoved
 
 let error kind = raise (TypingError(kind))
 
@@ -449,12 +448,14 @@ let rec typing_exp env e =
     | Ewhen (e1, _, _) ->
         let env = safe_expect env (not_linear_for_exp e1) e1 in
         lin_skeleton Ltop e.e_ty, env
-    | Ecurrent _ -> raise StructureShouldHaveBeenRemoved
+    | Ecurrent _ ->
+      failwith "Linear_typing internal error: current data structure should have been removed."
     | Estruct _ -> Ltop, env
     | Emerge _ | Esplit _ | Eapp _ | Eiterator _ -> assert false
     (* Linear typing should not happen on model nodes *)
     | Ewhenmodel _ | Ecurrentmodel _ | Edelay _ | Edelayfby _
-    | Ebuffer _ | Ebufferfby _ | Ebufferlat _ -> assert false
+    | Ebuffer _ | Ebufferfby _ | Ebufferlat _
+    | Efbyq _ | Ewhenq _ | Ecurrentq _ | Ebufferfbyq _ -> assert false
   in
     e.e_linearity <- l;
     l, env

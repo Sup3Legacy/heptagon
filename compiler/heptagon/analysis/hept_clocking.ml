@@ -53,8 +53,6 @@ type error_kind =
   | Eclockclash of Clocks.ck * Clocks.ck
   | Edefclock
 
-exception StructureShouldHaveBeenRemoved
-
 let error_message loc = function
   | Etypeclash (actual_ct, expected_ct) ->
       Format.eprintf "%aClock Clash: this expression has clock %a,@\n\
@@ -121,7 +119,8 @@ let rec typing h pat e =
         let ck = ck_of_name h x in
         List.iter (fun (c,e) -> expect h pat (Ck(Clocks.Con (ck,c,x))) e) c_e_list;
         Ck ck, ck
-    | Ecurrent _ -> raise StructureShouldHaveBeenRemoved
+    | Ecurrent _ ->
+      failwith "hept_clocking internal error: current structure should have been removed"
     | Estruct l ->
         let ck = fresh_clock () in
         List.iter (fun (_, e) -> expect h pat (Ck ck) e) l;
@@ -174,7 +173,8 @@ let rec typing h pat e =
     | Esplit _ | Elast _ -> assert false
     (* In model *)
     | Ewhenmodel _ | Ecurrentmodel _ | Edelay _ | Edelayfby _
-    | Ebuffer _ | Ebufferfby _ | Ebufferlat _ ->
+    | Ebuffer _ | Ebufferfby _ | Ebufferlat _
+    | Efbyq _ | Ewhenq _ | Ecurrentq _ | Ebufferfbyq _ ->
       failwith "Model operators inside a node is forbidden."
   in
   begin match e.e_ct_annot with

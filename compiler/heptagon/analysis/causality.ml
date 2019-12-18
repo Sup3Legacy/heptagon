@@ -35,8 +35,6 @@ open Heptagon
 open Linearity
 open Causal
 
-exception StructureShouldHaveBeenRemoved
-
 let cempty = Cempty
 let is_empty c = (c = cempty)
 
@@ -138,7 +136,8 @@ let rec typing e =
         let t = typing e in
         let tc = read x in
         cseq tc t
-    | Ecurrent _ -> raise StructureShouldHaveBeenRemoved
+    | Ecurrent _ ->
+      failwith "Causality internal issue: current structure should have been removed"
     | Emerge (x, c_e_list) ->
         let t = read x in
         let tl = List.map (fun (_,e) -> typing e) c_e_list in
@@ -147,15 +146,20 @@ let rec typing e =
         let t = typing c in
         let te = typing e in
           cseq t te
-    | Ewhenmodel(e, _) -> typing e
-    | Ecurrentmodel(_, seInit, e) ->
+    | Ewhenmodel(e, _)
+      | Ewhenq (e, _, _) -> typing e
+    | Ecurrentmodel(_, _, e)
+      | Ecurrentq (_, _, _, e) ->
         let t = pre (typing e) in
         t
     | Edelay (_, e)
       | Ebuffer e
       | Ebufferlat (_,e) -> typing e
-    | Edelayfby (_, seInit, e)
-      | Ebufferfby (seInit, e) ->
+    | Edelayfby (_, _, e)
+      | Ebufferfbyq (_, e)
+      | Efbyq (_, e)
+      | Ebufferfby (_, e) ->
+        (* For fbyq and bufferfbyq, causality will be fully checked in model_clocking *)
         let t = pre (typing e) in
         t
 

@@ -82,6 +82,10 @@ and desc =
   | Ebuffer of exp
   | Ebufferfby of static_exp * exp
   | Ebufferlat of int * exp
+  | Efbyq of static_exp * exp
+  | Ewhenq of exp * (int*int) * int                 (* (int*int) is the optional min/max instance to be sampled *)
+  | Ecurrentq of int * (int*int) * static_exp * exp (* (int*int) is the optional min/max instance to be sampled *)
+  | Ebufferfbyq of static_exp * exp
 
 
 

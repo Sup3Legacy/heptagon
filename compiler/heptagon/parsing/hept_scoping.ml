@@ -426,6 +426,7 @@ and translate_desc loc env = function
     let x = translate_exp env (mk_exp (Evar x) loc) in
     let e1 = translate_exp env e1 in
       Heptagon.Esplit(x, e1)
+
   | Ewhenmodel (e1, (ph,per)) ->
     let e1 = translate_exp env e1 in
     Heptagon.Ewhenmodel (e1, (ph,per))
@@ -440,6 +441,7 @@ and translate_desc loc env = function
     let seInit = translate_static_exp seInit in
     let e1 = translate_exp env e1 in
     Heptagon.Edelayfby (d, seInit, e1)
+
   | Ebuffer e1 ->
     let e1 = translate_exp env e1 in
     Heptagon.Ebuffer e1
@@ -450,6 +452,22 @@ and translate_desc loc env = function
   | Ebufferlat (l, e1) ->
     let e1 = translate_exp env e1 in
     Heptagon.Ebufferlat (l, e1)
+
+  | Efbyq (seInit, e1) ->
+    let seInit = translate_static_exp seInit in
+    let e1 = translate_exp env e1 in
+    Heptagon.Efbyq (seInit, e1)
+  | Ewhenq (e1, (min,max), ratio) ->
+    let e1 = translate_exp env e1 in
+    Heptagon.Ewhenq (e1, (min,max), ratio)
+  | Ecurrentq (ratio, (min,max), seInit, e1) ->
+    let seInit = translate_static_exp seInit in
+    let e1 = translate_exp env e1 in
+    Heptagon.Ecurrentq (ratio, (min,max), seInit, e1)
+  | Ebufferfbyq (seInit, e1) ->
+    let seInit = translate_static_exp seInit in
+    let e1 = translate_exp env e1 in
+    Heptagon.Ebufferfbyq (seInit, e1)
 
 
 and translate_op = function
