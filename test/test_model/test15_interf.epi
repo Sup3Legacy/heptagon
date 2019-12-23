@@ -1,0 +1,8 @@
+(* Compile that with "" ../../heptc test15_interf.epi "" *)
+
+ressource chips 5
+
+fun f1 (int) returns (int) wcet 10 use chips(1)
+fun f2 (int) returns (int) wcet 20 use chips(2)
+fun f3 (int) returns (int) wcet 30 use chips(2)
+fun f4 (int) returns (int) wcet 40 use chips(1)

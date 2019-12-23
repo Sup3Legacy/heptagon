@@ -34,7 +34,7 @@ open Containers
 open Clocks
 
 (* For debugging *)
-let debug = false  (* DEBUG *)
+let debug = true  (* DEBUG *)
 let ffout = Format.formatter_of_out_channel stdout
 
 let max_default_phase_for_solving = 7777 (* Should be distinctive enough *)
@@ -189,8 +189,10 @@ let get_phase_index_from_varname varname =
 let rec add_term (a,v) affterm = match affterm with
   | [] -> (a,v)::[]
   | (at,vt)::rt ->
-    if (vt=v) then (at+a,v)::rt else
-    (at,vt)::(add_term (a,v) rt)
+    if (vt=v) then (
+      if (at+a=0) then rt else (at+a,v)::rt
+    ) else
+      (at,vt)::(add_term (a,v) rt)
 
 (* Substitution inside a constraint *)
 let subst_constraint (var, optphid2, laffterm2, sh) constr =
@@ -236,6 +238,8 @@ let transfer_1term_ac_to_bc lbc lac =
     if ((List.length affconstr.lcoeffVar)>1) then (affconstr::lac_acc, lbc_acc) else
 
     if ((List.length affconstr.lcoeffVar)=0) then ( (* While we are at it... *)
+      if (affconstr.cst>0) then
+        failwith "Constraint: [0 >= strictly positive integer] is unsolvable";
       assert(0>=affconstr.cst);
       (lac_acc, lbc_acc)
     ) else (
@@ -900,6 +904,10 @@ let load_balancing binversion b_no_underspec_ops mperiods lwcet lac lbc =
       -> (\forall j) \sum_{T} delAct_{j mod per(T),T} * W_T \leq [varobj]
      * Objective function is "minimize [varobj]" *)
 
+  (* DEBUG *)
+  if (debug) then
+    fprintf ffout "Entering load balancing\n@?";
+
   (* 1) Binary variables - lbc should list all variable needed *)
   
   (* mmbinary: [varname : string] --> ( [phase_num : int] --> [binvarname : string]) *)
@@ -909,6 +917,10 @@ let load_balancing binversion b_no_underspec_ops mperiods lwcet lac lbc =
       binvar::acc
     ) mv acc
   ) mmbinary [] in
+
+  (* DEBUG *)
+  if (debug) then
+    fprintf ffout "... Load balancing - binary variable created\n@?";
 
   (* 2) Objective function *)
   let obj_func = (1, varobj)::[] in
@@ -940,6 +952,10 @@ let load_balancing binversion b_no_underspec_ops mperiods lwcet lac lbc =
     if (binversion) then ac_unicity :: acc else  (* Binary case: no ac_link *)
     ac_link :: ac_unicity :: acc
   ) [] lbc in
+
+  (* DEBUG *)
+  if (debug) then
+    fprintf ffout "... Load balancing - non-wcet/ressources constraints managed\n@?";
 
   (* c) (\forall j) \sum_{T} delAct_{j mod per(T),T} * W_T <= [varobj] *)
   (* d) (\forall Ressource) (\forall j) \sum_{T} delAct_{j mod per(T),T} * R_T <= R_max *)
@@ -1083,7 +1099,8 @@ let load_balancing binversion b_no_underspec_ops mperiods lwcet lac lbc =
         ) (minq, maxq) laffterm in
 
         let qvname = get_temp_wcet_contrib_name () in  (* Naming convention *)
-        let mqbinvar = fill_int_maps qvname minq maxq IntMap.empty in
+        assert(maxq>=minq);
+        let mqbinvar = fill_int_maps qvname maxq minq IntMap.empty in
 
         (* We fill the arrays - Wcet constraints *)
         IntMap.iter (fun shvar qbinvar ->
@@ -1216,6 +1233,11 @@ let load_balancing binversion b_no_underspec_ops mperiods lwcet lac lbc =
           )
       )
   in
+
+  (* DEBUG *)
+  if (debug) then
+    fprintf ffout "... Load balancing - done\n@?";
+
   (lac, lbc, lgeneral, linteger, lbinary, obj_func, mmbinary)
 
 
@@ -1414,7 +1436,7 @@ let solve_constraints_main bquickres
   ) else
 
   (* We do our own resolution - Note: only on limited options when ND *)
-  if (version_constr!=Default) then
+  if (version_constr!=Default || (not no_underspec_ops)) then
     failwith ("Internal constraint resolution algorithm is limited. "
         ^ "Please use the -genphconstr options and an external ILP solver.")
   else

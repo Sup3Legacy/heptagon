@@ -1,0 +1,33 @@
+Minimize
+	upBoundWeight
+Subject To
+	upBoundWeight >= 0
+	ph_18_phval_0 = 1
+	-ph_18 = 0
+	ph_17_phval_0 = 1
+	-ph_17 = 0
+	ph_14_phval_0 = 1
+	-ph_14 = 0
+	ph_12_phval_1 + ph_12_phval_0 = 1
+	ph_12_phval_1 - ph_12 = 0
+	-ph_18 + ph_14 >= 0
+Bounds
+	0 <= ph_18 < 1
+	0 <= ph_17 < 1
+	0 <= ph_14 < 1
+	0 <= ph_12 < 2
+General
+	upBoundWeight
+Integer
+	ph_18
+	ph_17
+	ph_14
+	ph_12
+Binary
+	ph_18_phval_0
+	ph_17_phval_0
+	ph_14_phval_0
+	ph_12_phval_1
+	ph_12_phval_0
+End
+

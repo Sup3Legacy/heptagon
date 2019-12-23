@@ -1,0 +1,16 @@
+Minimize
+	ph_18
+Subject To
+	-ph_18 + ph_14 >= 0
+Bounds
+	0 <= ph_18 < 1
+	0 <= ph_17 < 1
+	0 <= ph_14 < 1
+	0 <= ph_12 < 2
+Integer
+	ph_18
+	ph_17
+	ph_14
+	ph_12
+End
+

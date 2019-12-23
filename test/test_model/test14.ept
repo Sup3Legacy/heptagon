@@ -1,0 +1,79 @@
+
+(* Third test of underspecified operator - Assume minimal example *)
+(* We still assume that we know where the fby are (only current? and when? operators) *)
+
+(* ../../heptc -v -genphconstr constr_test14.txt test14.ept *)
+(* ../../heptc -v -solphconstr sol_test14.txt test14.ept *)
+
+(* Elementary functions (dummy) *)
+fun node_000001 (a : int; b : int) returns (c: int; d: int; e: int)
+let 
+	c = a;
+	d = b;
+	e = a+b;
+tel
+
+fun node_000002 (a : int; b : int) returns (c: int; d: int; e: int; f: int)
+let 
+	c = a;
+	d = b;
+	e = a+b;
+	f = a*b;
+tel
+
+fun node_000003 (a : int) returns (c: int)
+let 
+	c = 2*a;
+tel
+
+fun node_000004 (a : int; b : int) returns (c: int)
+let 
+	c = a+3*b;
+tel
+
+fun node_000005 (a : int) returns (c: int)
+let 
+	c = 3*a;
+tel
+
+fun node_000006 (a : int; b : int) returns (c: int)
+let 
+	c = 2*a + b;
+tel
+
+
+model main(data_9:int) returns (data_10 : int; data_11B : int)
+var
+	data_0 : int :: [..,1];   (* C1 *)
+	data_1 : int :: [..,1];   (* C1 *)
+	data_2 : int :: [..,1];   (* C1 *)
+	data_3 : int :: [..,2];   (* C2 *)
+	data_4 : int :: [..,2];   (* C2 *)
+	data_5 : int :: [..,2];   (* C2 *)
+	data_6 : int :: [..,2];   (* C2 *)
+	data_7 : int :: [..,12];  (* C4 *)
+	data_8 : int :: [..,12];  (* C4 *)
+	data_11 : int :: [..,4];  (* C3 *)
+let
+	(data_0, data_1, data_2) = buffer node_000001(
+			buffer data_9,
+			buffer (0 fby data_0)
+		);
+	(data_3, data_4, data_5, data_6) = buffer node_000002(
+			buffer (0 fby data_4),
+			buffer ((buffer data_2) when? 2)
+		);
+	data_7 = buffer node_000003(
+			(buffer (0 fby data_5)) when? 6
+		);
+	data_10 = buffer node_000004(
+			buffer (current?(2, 0, buffer data_3)),
+			buffer data_1
+		);
+	data_8 = buffer node_000005(buffer data_7);
+	data_11 = buffer node_000006(
+			buffer current?(3, 0, buffer data_8),
+			buffer (data_6 when? 2)
+		);
+	data_11B = buffer current?(4, 0, buffer data_11);
+tel

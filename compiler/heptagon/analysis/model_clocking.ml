@@ -72,6 +72,7 @@ let print_lsubst ff (lsubst : (int * int option * int * (int*int) list) list) =
   in
   fprintf ff "%a\n@?" (Pp_tools.print_list print_subst "[" "; " "]") lsubst
 
+(* Print out the substitution mapping between phase variables *)
 let print_msubst ff msubst =
   StringMap.iter (fun id1 (oid2, sh, laffterm) -> match oid2 with
     | None -> fprintf ff "\t(%s => None, %a, %i)\n"
@@ -79,6 +80,13 @@ let print_msubst ff msubst =
     | Some id2 -> fprintf ff "\t(%s => %s, %a, %i)\n"
               id1 id2 (Affine_constraint_clocking.print_affterm ~bfirst:true) laffterm sh
   ) msubst
+
+(* Print out the decision variables *)
+let print_mdecvar ff mdecvar =
+  fprintf ff "mdecvar=\n@?";
+  Env.iter (fun varid1 varph_name -> 
+    fprintf ff "\t(%s => %s)\n@?" (Idents.name varid1) varph_name
+  ) mdecvar
 
 
 type error_kind =
@@ -423,6 +431,7 @@ let rec typing_currentq_osynch octe min max ratio dvarid = match octe with
       let n_ock =  build_clock varopt_ock nlaffterm sh nper in
 
       (* Constraint on the phase of n_ock *)
+
       (* idvar_ock + ((-nper,dvar)::laffterm) + sh >= 0 *)
       let nlaffterm_str = List.map (fun (c,v) -> (c, varname_from_phase_index v)) nlaffterm in
       let lcoeffVar3 = match varopt_ock with
@@ -431,14 +440,18 @@ let rec typing_currentq_osynch octe min max ratio dvarid = match octe with
       in
       let affconstr3 = mk_affconstr false lcoeffVar3 (-sh) in
 
-      (* idvar_ock + ((-nper,dvar)::laffterm) + sh <= nper *)
+      (* idvar_ock + ((-nper,dvar)::laffterm) + sh < nper *)
       let nlaffterm_op = List.map (fun (c,v) -> (-c,v)) nlaffterm_str in
       let lcoeffVar4 = match varopt_ock with
         | None -> nlaffterm_op
         | Some varid -> (-1, varname_from_phase_index varid)::nlaffterm_op
       in
-      let affconstr4 = mk_affconstr false lcoeffVar4 (sh-nper) in
+      let affconstr4 = mk_affconstr false lcoeffVar4 (sh-nper+1) in
 
+      (* DEBUG
+      fprintf ffout "PING\n@?";
+      fprintf ffout "affconstr3 = %a\n@?" print_aff_constr affconstr3;
+      fprintf ffout "affconstr4 = %a\n@?" print_aff_constr affconstr4; *)
 
       ((Ock n_ock), affconstr3::affconstr4::[])
   end 
@@ -600,7 +613,7 @@ let rec typing_osych h lcst pat e = match e.e_desc with
     let dvarname = varname_from_phase_index dvarid in
     
     (* Boundary constraint : 0<= dvarname <=1 *)
-    let bc_dec = mk_bound_constr dvarname 0 1 in
+    let bc_dec = mk_bound_constr dvarname 0 2 in
     let (al,bl) = lcst in
     (octe, (al,bc_dec::bl), Some dvarname)
 
@@ -613,7 +626,7 @@ let rec typing_osych h lcst pat e = match e.e_desc with
     let dvarname = varname_from_phase_index dvarid in
 
     (* Constraints on the decision variable d : min<=d<=max *)
-    let bc_dec = mk_bound_constr dvarname min max in
+    let bc_dec = mk_bound_constr dvarname min (max+1) in
 
     let (noct, laffconstr) = typing_whenq_osynch octe min max ratio dvarid in
     let (al,bl) = lcst in
@@ -628,7 +641,7 @@ let rec typing_osych h lcst pat e = match e.e_desc with
     let dvarname = varname_from_phase_index dvarid in
 
     (* Constraints on the decision variable d : min<=d<=max *)
-    let bc_dec = mk_bound_constr dvarname min max in
+    let bc_dec = mk_bound_constr dvarname min (max+1) in
 
     let (noct, laffconstr) = typing_currentq_osynch octe min max ratio dvarid in
     let (al,bl) = lcst in
@@ -643,7 +656,7 @@ let rec typing_osych h lcst pat e = match e.e_desc with
     let dvarname = varname_from_phase_index dvarid in
 
     (* Constraints on the decision variable: 0<=d<=1 *)
-    let bc_dec = mk_bound_constr dvarname 0 1 in
+    let bc_dec = mk_bound_constr dvarname 0 2 in
 
     let (noct, laffconstr) = typing_bufferfbyq_osynch octe dvarid in
     let (al,bl) = lcst in
@@ -1341,7 +1354,7 @@ let print_lwcet ff (lwcet: (string option * ((int * string) list) * int * int * 
   in
   let print_ress ff (n,v) = fprintf ff "(%s, %i)" n v in
   let print_elem_lwcet ff (ovarph, laffterm, sh, per, owcet, lress) =
-    fprintf ff "\t(%a + %a + %i, per = %i => wcet = %a | ress = %a);\n"
+    fprintf ff "\t(%a + %a + %i, per = %i => wcet = %a | ress = %a);"
       print_opt_string ovarph
       (Affine_constraint_clocking.print_affterm ~bfirst:true) laffterm
       sh per
@@ -1365,6 +1378,7 @@ let rec typing_model_eq h lcst eqm =
   let pat_oct = typing_model_pat h eqm.eqm_lhs in
 
   let (lcst, lsubst) = (try
+    (* For debugging *)
     if (debug_clocking) then 
       fprintf ffout "unification between pat => %a and rhs => %a\n"
         print_onect pat_oct  print_onect oct;
@@ -1396,8 +1410,8 @@ let rec typing_model_eq h lcst eqm =
       let firstvarlhs = get_first_var eqm.eqm_lhs in
       Some (firstvarlhs, decvar)
   in
-
   (lcst, lsubst, omatch_decvar)
+
 
 and typing_model_eqs h lcst eq_list =
   List.fold_left (fun (lcst_acc, lsubst_acc, mdecvar) eqm ->
@@ -1414,17 +1428,46 @@ and append_model_env h lcst vdms =
   let (h, lcst) = List.fold_left (fun (h,lcst) { vm_ident = n; vm_clock = ock } ->
     (* Create a new boundary condition from ock, if phase variable *)
     let (varopt, laffterm,  ph) = Clocks.get_phase_ock ock in
-    assert(laffterm=[]);
-    let nlaffcst = match varopt with
-      | None -> lcst   (* The check that the phase is valid was done during parsing*)
-      | Some varid ->
-        let varname = varname_from_phase_index varid in
-        let per = get_period_ock ock in
+    
+    let nlaffcst = if (laffterm=[]) then (
+      (* First pass should always go there *)
 
-        let bcond = mk_bound_constr varname (-ph) (per-ph) in
-        let (laffcst, lbndcst) = lcst in
-        (laffcst, bcond::lbndcst)
-    in
+      (* We add the boundary constraint on the variable *)
+      match varopt with
+        | None -> lcst   (* The check that the phase is valid was done during parsing *)
+        | Some varid ->
+          let varname = varname_from_phase_index varid in
+          let per = get_period_ock ock in
+
+          let bcond = mk_bound_constr varname (-ph) (per-ph) in
+          let (laffcst, lbndcst) = lcst in
+          (laffcst, bcond::lbndcst)
+    ) else (
+      (* 0 <= phase_var *)
+      let laffterm_ac1 = match varopt with
+        | None -> []
+        | Some varid -> (1, varname_from_phase_index varid)::[]
+      in
+      let laffterm_ac1 = List.fold_left (fun lacc (c,v) ->
+        (c, varname_from_phase_index v)::lacc
+      ) laffterm_ac1 laffterm in
+      let ac_1 = mk_affconstr false laffterm_ac1 0 in
+
+      (* phase_var < per *)
+      let per = get_period_ock ock in
+      let laffterm_ac2 = match varopt with
+        | None -> []
+        | Some varid -> (-1, varname_from_phase_index varid)::[]
+      in
+      let laffterm_ac2 = List.fold_left (fun lacc (c,v) ->
+        (-c, varname_from_phase_index v)::lacc
+      ) laffterm_ac2 laffterm in
+      let ac_2 = mk_affconstr false laffterm_ac2 (1-per) in
+
+
+      let (laffcst, lbndcst) = lcst in
+      (ac_1::ac_2::laffcst, lbndcst)
+    ) in
 
     (* Update h *)
     let nh = Env.add n ock h in
@@ -1677,8 +1720,11 @@ let typing_model bquickres md =
                      m_output = List.map set_clock md.m_output }
   in
 
-  if debug_clocking then
+  if debug_clocking then (
     print_constraint_environment ffout lcst;
+    if (not (Env.is_empty mdecvar)) then
+      print_mdecvar ffout mdecvar
+  );
 
   
   (* Solve the constraints *)

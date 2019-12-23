@@ -1,0 +1,31 @@
+Minimize
+	ph_36
+Subject To
+	-ph_6 + ph_28 + ph_18 >= 0
+	-ph_21 + ph_6 >= 0
+	-ph_5 + 2 ph_31 + ph_21 >= 0
+	-2 ph_34 + ph_5 >= 1
+	-ph_28 - ph_18 >= -2
+	ph_28 + ph_18 >= 0
+	-2 ph_31 - ph_21 >= -6
+	2 ph_31 + ph_21 >= 0
+Bounds
+	0 <= ph_36 < 2
+	0 <= ph_34 < 3
+	0 <= ph_31 < 3
+	0 <= ph_28 < 2
+	0 <= ph_6 < 2
+	0 <= ph_5 < 6
+	0 <= ph_21 < 2
+	0 <= ph_18 < 1
+Integer
+	ph_36
+	ph_34
+	ph_31
+	ph_28
+	ph_6
+	ph_5
+	ph_21
+	ph_18
+End
+

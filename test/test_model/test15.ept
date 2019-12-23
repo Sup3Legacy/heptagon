@@ -1,0 +1,19 @@
+
+(* Third test of unspecified operators - exemple from EMSOFT article - similar to test13.ept *)
+
+(* ../../heptc -v -genphconstr constr_lb_test15.txt -phcost_loadbal test15.ept *)
+(* ../../heptc -v -solphconstr sol_lb_test15.txt -phcost_loadbal test15.ept *)
+
+open Test15_interf
+
+model main(a:int) returns (e:int)
+var
+	b : int :: [..,2];
+	c : int :: [..,6];
+	d : int :: [..,2];
+let
+	b = buffer ( f1(a when? 2) );
+	c = buffer ( f2(b when? 3) );
+	d = buffer current?(3, 0, (f3 (buffer c)) );
+	e = buffer current?(2, 0, (f4 (buffer d)) );
+tel

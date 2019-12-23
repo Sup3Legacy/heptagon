@@ -1,0 +1,56 @@
+
+(* Second test of unspecified operators - exemple from EMSOFT article - similar to test5.ept *)
+
+(* ../../heptc -v -genphconstr constr_test13.txt test13.ept *)
+(* ../../heptc -v -solphconstr sol_test13.txt test13.ept *)
+
+model main(a:int) returns (e:int)
+var
+	b : int :: [1,2];
+	c : int :: [..,6];
+	d : int :: [..,2];
+let
+	b = buffer (a when? 2);
+	c = buffer (b when? 3);
+	d = buffer current?(3, 0, (buffer c));
+	e = buffer current?(2, 0, (buffer d));
+tel
+
+
+
+
+(* Normalized program and corresponding phase/variable declaration
+model main(a : int :: [0,1]) returns (e : int :: [0,1])
+var v_9 : int :: [(~>'p17),1];
+   v_8 : int :: [(~>'p18),1];
+   v_7 : int :: [(~>'p19),2];
+   v_6 : int :: [(~>'p20),2];
+   v_5 : int :: [(~>'p21),2];
+   v_4 : int :: [(~>'p22),6];
+   v_3 : int :: [(~>'p23),6];
+   v_2 : int :: [(~>'p24),6];
+   v_1 : int :: [(~>'p25),2];
+   v : int :: [(~>'p26),2];
+   b : int :: [1,2];
+   c : int :: [(~>'p5),6];
+   d : int :: [(~>'p6),2];
+let
+   e = v_9;
+   v_9 = buffer v_8;
+   v_8 = current?(0,1)(2, 0, v_7);              | mdecvar: (v_8 => ph_28)
+   v_7 = buffer d;
+   
+   d = v_6;
+   v_6 = buffer v_5;
+   v_5 = current?(0,2)(3, 0, v_4);              | mdecvar: (v_5 => ph_31)
+   v_4 = buffer c;
+
+   c = v_3;
+   v_3 = buffer v_2;
+   v_2 = (b when?(0,2) 3);                      | mdecvar: (v_2 => ph_34)
+
+   b = v_1;
+   v_1 = buffer v;
+   v = (a when?(0,1) 2)                         | mdecvar: (v => ph_36)
+tel
+*)

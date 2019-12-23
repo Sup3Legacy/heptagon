@@ -1,0 +1,10 @@
+upBoundWeight -> 0
+ph_18 -> 0
+ph_17 -> 0
+ph_14 -> 0
+ph_12 -> 0
+ph_18_phval_0 -> 1
+ph_17_phval_0 -> 1
+ph_14_phval_0 -> 1
+ph_12_phval_1 -> 0
+ph_12_phval_0 -> 1
