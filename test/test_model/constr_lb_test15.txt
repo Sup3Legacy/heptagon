@@ -1,10 +1,19 @@
 Minimize
 	upBoundWeight
 Subject To
-	-ph_23_phval_0 - ph_37_phval_0 + tmp_wcontr_3_phval_0 >= -1
+	-ph_49_phval_1 + tmp_wcontr_1_phval_1 >= 0
+	-ph_49_phval_0 + tmp_wcontr_1_phval_0 >= 0
+	tmp_wcontr_1_phval_1 + tmp_wcontr_1_phval_0 = 1
+	-ph_27_phval_1 - ph_41_phval_2 + tmp_wcontr_2_phval_5 >= -1
+	-ph_27_phval_0 - ph_41_phval_2 + tmp_wcontr_2_phval_4 >= -1
+	-ph_27_phval_1 - ph_41_phval_1 + tmp_wcontr_2_phval_3 >= -1
+	-ph_27_phval_0 - ph_41_phval_1 + tmp_wcontr_2_phval_2 >= -1
+	-ph_27_phval_1 - ph_41_phval_0 + tmp_wcontr_2_phval_1 >= -1
+	-ph_27_phval_0 - ph_41_phval_0 + tmp_wcontr_2_phval_0 >= -1
+	tmp_wcontr_2_phval_5 + tmp_wcontr_2_phval_4 + tmp_wcontr_2_phval_3 + tmp_wcontr_2_phval_2 + tmp_wcontr_2_phval_1 + tmp_wcontr_2_phval_0 = 1
 	-ph_23_phval_0 - ph_37_phval_1 + tmp_wcontr_3_phval_1 >= -1
-	tmp_wcontr_3_phval_2 = 0
-	tmp_wcontr_3_phval_2 + tmp_wcontr_3_phval_1 + tmp_wcontr_3_phval_0 = 1
+	-ph_23_phval_0 - ph_37_phval_0 + tmp_wcontr_3_phval_0 >= -1
+	tmp_wcontr_3_phval_1 + tmp_wcontr_3_phval_0 = 1
 	-tmp_wcontr_3_phval_0 - 2 tmp_wcontr_2_phval_0 - 2 ph_31_phval_0 - tmp_wcontr_1_phval_0 >= -5
 	-tmp_wcontr_3_phval_1 - 2 tmp_wcontr_2_phval_1 - 2 ph_31_phval_1 - tmp_wcontr_1_phval_1 >= -5
 	-tmp_wcontr_3_phval_0 - 2 tmp_wcontr_2_phval_2 - 2 ph_31_phval_2 - tmp_wcontr_1_phval_0 >= -5
@@ -35,23 +44,22 @@ Subject To
 	ph_27_phval_1 - ph_27 = 0
 	ph_23_phval_0 = 1
 	-ph_23 = 0
-	
 	-ph_7 + ph_37 + ph_23 >= 0
 	-ph_27 + ph_7 >= 0
 	-ph_6 + 2 ph_41 + ph_27 >= 0
 	-ph_31 + ph_6 >= 0
 	-ph_49 - 2 ph_46 + ph_31 >= 0
-	-ph_37 - ph_23 >= -2
+	-ph_37 - ph_23 >= -1
 	ph_37 + ph_23 >= 0
-	-ph_37 - ph_23 >= -2
+	-ph_37 - ph_23 >= -1
 	ph_37 + ph_23 >= 0
-	-2 ph_41 - ph_27 >= -6
+	-2 ph_41 - ph_27 >= -5
 	2 ph_41 + ph_27 >= 0
-	-2 ph_41 - ph_27 >= -6
+	-2 ph_41 - ph_27 >= -5
 	2 ph_41 + ph_27 >= 0
-	2 ph_46 - ph_31 >= -2
+	2 ph_46 - ph_31 >= -1
 	-2 ph_46 + ph_31 >= 0
-	2 ph_46 - ph_31 >= -2
+	2 ph_46 - ph_31 >= -1
 	-2 ph_46 + ph_31 >= 0
 Bounds
 	0 <= ph_49 < 2
@@ -76,11 +84,8 @@ Integer
 	ph_27
 	ph_23
 Binary
-	tmp_wcontr_3_phval_2
 	tmp_wcontr_3_phval_1
 	tmp_wcontr_3_phval_0
-	tmp_wcontr_2_phval_7
-	tmp_wcontr_2_phval_6
 	tmp_wcontr_2_phval_5
 	tmp_wcontr_2_phval_4
 	tmp_wcontr_2_phval_3

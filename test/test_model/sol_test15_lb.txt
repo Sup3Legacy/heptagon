@@ -1,0 +1,59 @@
+upBoundWeight -> 80
+
+tmp_wcontr_3_phval_1 -> 1
+tmp_wcontr_3_phval_0 -> 0
+
+tmp_wcontr_2_phval_5 -> 1
+tmp_wcontr_2_phval_4 -> 0
+tmp_wcontr_2_phval_3 -> 0
+tmp_wcontr_2_phval_2 -> 0
+tmp_wcontr_2_phval_1 -> 0
+tmp_wcontr_2_phval_0 -> 0
+
+tmp_wcontr_1_phval_1 -> 1
+tmp_wcontr_1_phval_0 -> 0
+
+ph_7 -> 1
+ph_7_phval_1 -> 1
+ph_7_phval_0 -> 0
+
+ph_6 -> 3
+ph_6_phval_5 -> 0
+ph_6_phval_4 -> 0
+ph_6_phval_3 -> 1
+ph_6_phval_2 -> 0
+ph_6_phval_1 -> 0
+ph_6_phval_0 -> 0
+
+ph_49 -> 1
+ph_49_phval_1 -> 1
+ph_49_phval_0 -> 0
+
+ph_46 -> 1
+ph_46_phval_2 -> 0
+ph_46_phval_1 -> 1
+ph_46_phval_0 -> 0
+
+ph_41 -> 2
+ph_41_phval_2 -> 1
+ph_41_phval_1 -> 0
+ph_41_phval_0 -> 0
+
+ph_37 -> 1
+ph_37_phval_1 -> 1
+ph_37_phval_0 -> 0
+
+ph_31 -> 3
+ph_31_phval_5 -> 0
+ph_31_phval_4 -> 0
+ph_31_phval_3 -> 1
+ph_31_phval_2 -> 0
+ph_31_phval_1 -> 0
+ph_31_phval_0 -> 0
+
+ph_27 -> 1
+ph_27_phval_1 -> 1
+ph_27_phval_0 -> 0
+
+ph_23 -> 0
+ph_23_phval_0 -> 1

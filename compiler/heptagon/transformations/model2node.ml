@@ -461,6 +461,7 @@ let build_period_graph md =
 (* Localisation of a ock into a succession of "on" which fits the graph of periods *)
 let rec localising_ock lgr ock =
   let (ph, per) = Clocks.get_ph_per_from_ock ock in
+  assert(ph<per);
 
   (* DEBUG
   fprintf ffout "localising_ock :: ph = %i | per = %i\n@?" ph per; *)

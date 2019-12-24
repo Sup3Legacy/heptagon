@@ -2,7 +2,7 @@
 (* Third test of unspecified operators - exemple from EMSOFT article - similar to test13.ept *)
 
 (* ../../heptc -v -genphconstr constr_lb_test15.txt -phcost_loadbal test15.ept *)
-(* ../../heptc -v -solphconstr sol_lb_test15.txt -phcost_loadbal test15.ept *)
+(* ../../heptc -v -solphconstr sol_test15_lb.txt -phcost_loadbal test15.ept *)
 
 open Test15_interf
 

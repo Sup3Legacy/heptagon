@@ -50,7 +50,7 @@ open Format
 open Affine_constraint_clocking
 
 
-let debug_clocking = true (* TODO DEBUG *)
+let debug_clocking = false (* DEBUG *)
 let ffout = formatter_of_out_channel stdout
 
 let constraint_bufferfby = not (!Compiler_options.no_constraint_bufferfby)
@@ -1273,13 +1273,13 @@ let update_lcst msubst (lcst,lbcst) =
         let lcoeffVar1 = List.fold_left (fun acc (c,v) -> (c, v)::acc) lcoeffVar1 laffterm2 in
         let ac1 = mk_affconstr false lcoeffVar1 (bconst.lbound-sh) in
 
-        (* Second constraint: - optvarph2 - laffterm2 >= sh-u *)
+        (* Second constraint: - optvarph2 - laffterm2 >= sh-u+1 *)
         let lcoeffVar2 = match optvarph2 with
           | None -> []
           | Some varph2 -> ((-1),varph2)::[]
         in
         let lcoeffVar2 = List.fold_left (fun acc (c,v) -> (-c, v)::acc) lcoeffVar2 laffterm2 in
-        let ac2 = mk_affconstr false lcoeffVar2 (sh-bconst.ubound) in
+        let ac2 = mk_affconstr false lcoeffVar2 (sh-bconst.ubound+1) in
 
         (ac1::ac2::acc_lac, acc_lbc)
       )
@@ -1343,7 +1343,7 @@ let update_wcet msubst lwcet =
   ) lwcet
 
 (* Pretty-printer for debugging *)
-let print_lwcet ff (lwcet: (string option * ((int * string) list) * int * int * (int option) * (string * int) list) list) =
+let print_elem_lwcet ff (ovarph, laffterm, sh, per, owcet, lress) =
   let print_opt_string ff ovarph = match ovarph with
     | None -> fprintf ff "None"
     | Some varph -> fprintf ff "%s" varph
@@ -1353,14 +1353,14 @@ let print_lwcet ff (lwcet: (string option * ((int * string) list) * int * int * 
     | Some w -> fprintf ff "%i" w
   in
   let print_ress ff (n,v) = fprintf ff "(%s, %i)" n v in
-  let print_elem_lwcet ff (ovarph, laffterm, sh, per, owcet, lress) =
-    fprintf ff "\t(%a + %a + %i, per = %i => wcet = %a | ress = %a);"
-      print_opt_string ovarph
-      (Affine_constraint_clocking.print_affterm ~bfirst:true) laffterm
-      sh per
-      print_opt_int owcet
-      (Pp_tools.print_list print_ress "(" "" ")") lress
-  in
+  fprintf ff "\t(%a + %a + %i, per = %i => wcet = %a | ress = %a);"
+    print_opt_string ovarph
+    (Affine_constraint_clocking.print_affterm ~bfirst:true) laffterm
+    sh per
+    print_opt_int owcet
+    (Pp_tools.print_list print_ress "(" "" ")") lress
+
+let print_lwcet ff (lwcet: (string option * ((int * string) list) * int * int * (int option) * (string * int) list) list) =  
   fprintf ff "lwcet = %a\n@?"
     (Pp_tools.print_list print_elem_lwcet "[" "" "]") lwcet
 
@@ -1521,6 +1521,9 @@ and typing_block_model h lcst {bm_local = l; bm_eqs = eq_list; bm_annot = lbann}
   if (debug_clocking) then (
     fprintf ffout "DEBUG-typing_model_eq - constraints =\n %a\n@?"
       print_constraint_environment lcst;
+
+    fprintf ffout "DEBUG-typing_model_eq - msubst =\n %a\n@?"
+      print_msubst msubst;
   );
 
   (* Build the wcet mapping - useful for the load balancing cost function *)
@@ -1582,7 +1585,7 @@ let rec subst_solution msol ock =
       in
       (c * val_v + ph_val_noph)
   in
-  match ock with
+  let ock_subst = match ock with
   | Cone _ -> ock
   | Cshift (sh, ock1) ->
     let ock1 = subst_solution msol ock1 in
@@ -1594,7 +1597,16 @@ let rec subst_solution msol ock =
     | Coper ({ contents = op }, per) ->
       let val_op = aux_phase_subst_solution msol op in
       Cone (val_op, per)
-  )
+    )
+  in
+  (* Double check that the clock is correct *)
+  let (ph,per) = get_ph_per_from_ock ock_subst in
+  (* DEBUG
+    fprintf ffout "ock = %a\n@?" print_oneck ock; *)
+  assert(0<=ph);
+  assert(ph<per);
+
+  ock_subst
 
 let eq_model_replace _ (hfull,msol,mdecvar) eqm =
   let ock_eq = subst_solution msol eqm.eqm_clk in

@@ -34,7 +34,7 @@ open Containers
 open Clocks
 
 (* For debugging *)
-let debug = true  (* DEBUG *)
+let debug = false  (* DEBUG *)
 let ffout = Format.formatter_of_out_channel stdout
 
 let max_default_phase_for_solving = 7777 (* Should be distinctive enough *)
@@ -733,10 +733,10 @@ let get_phase_distribution mmbinary opt_varphase laffterm sh =
   in
 
   (* Adding the contribution of the laffterm one by one *)
-  let shift_contrib val_v binvar_name_v m_old_distr =
+  let shift_contrib c val_v binvar_name_v m_old_distr =
     IntMap.fold (fun val_distr lldistr macc ->
       let nlldistr = List.map (fun ldistr -> binvar_name_v::ldistr) lldistr in
-      IntMap.add (val_distr + val_v) nlldistr macc
+      IntMap.add (val_distr + c*val_v) nlldistr macc
     ) m_old_distr IntMap.empty
   in
   (* Combine the distrib by adding their terms together *)
@@ -761,7 +761,7 @@ let get_phase_distribution mmbinary opt_varphase laffterm sh =
 
       (* We update nmacc by taking macc (the old distribution), shifted by the contrib of this value of v,
         Then, adding it to nmacc *)
-      let mshifted_contrib = shift_contrib val_v binvar_name_v macc in
+      let mshifted_contrib = shift_contrib c val_v binvar_name_v macc in
       let nmacc = combine_distrib nmacc mshifted_contrib in
       nmacc
     ) mbinvar_v IntMap.empty in
@@ -769,6 +769,20 @@ let get_phase_distribution mmbinary opt_varphase laffterm sh =
     nmacc
   ) m_constr_contrib_phase laffterm in
   m_constr_contrib_phase
+
+(* Pretty printer for the phase distribution (produced by "get_phase_distribution") *)
+let print_phase_distrib ff m_contrib =
+  let print_contrib ff lcontrib =
+    fprintf ff "(";
+    List.iter (fun s -> fprintf ff "%s * " s) lcontrib;
+    fprintf ff ")"
+  in
+  IntMap.iter (fun k vdistr ->
+    fprintf ff "%i -> [ " k;
+    List.iter (fun lcontrib -> fprintf ff "%a + " print_contrib lcontrib) vdistr;
+    fprintf ff "]\n@?"
+  ) m_contrib
+
 
 
 (* For binary load balancing - transform the dependence constraints *)
@@ -906,7 +920,7 @@ let load_balancing binversion b_no_underspec_ops mperiods lwcet lac lbc =
 
   (* DEBUG *)
   if (debug) then
-    fprintf ffout "Entering load balancing\n@?";
+    fprintf ffout "Entering Load balancing constraints generation/adaptation\n@?";
 
   (* 1) Binary variables - lbc should list all variable needed *)
   
@@ -1046,133 +1060,153 @@ let load_balancing binversion b_no_underspec_ops mperiods lwcet lac lbc =
         ) lress;
 
         (mqbinvar_acc, lac_qtemp_acc)
-      ) else (
-        (* laffterm is not empty => no constant term (arr_XXX_const are untouched) *)
-        
-        (* Because the contribution to a given phase introduce products between binary decision variable
-          and binary phase variable, we need to trick! :D *)
-        (* Example: WCET/ressource contribution at phase "p+2d+1"
-          (i.e.: opt_varphase = Some p / laffterm = [(2,d)] / ph = 1 / per = 4)
-            => With pi the binary variable associated to p, di the binary variable associated to d
+    ) else (
+      (* laffterm is not empty => no constant term (arr_XXX_const are untouched) *)
+      
+      (* Because the contribution to a given phase introduce products between binary decision variable
+        and binary phase variable, we need to trick! :D *)
+      (* Example: WCET/ressource contribution at phase "p+2d+1"
+        (i.e.: opt_varphase = Some p / laffterm = [(2,d)] / ph = 1 / per = 4)
+          => With pi the binary variable associated to p, di the binary variable associated to d
 
-            Classical way (if no trick is used): the contribution to the 4 phases are:
-              phase 0 => 0
-              phase 1 => wcet * (p0.d0)
-              phase 2 => wcet * (p1.d0)
-              phase 3 => wcet * (p2.d0 + p0.d1)
-            ... which is clearly an issue, because the pi and di are both binary variable.
+          Classical way (if no trick is used): the contribution to the 4 phases are:
+            phase 0 => 0
+            phase 1 => wcet * (p0.d0)
+            phase 2 => wcet * (p1.d0)
+            phase 3 => wcet * (p2.d0 + p0.d1)
+          ... which is clearly an issue, because the pi and di are both binary variable.
 
-            Trick: We introduce "q = p+2d+1" and consider its binary variables qi
-                (defined on all the possible values "i" of q, and not only the one below per !!!)
-              => we can directly use the "qi*wcet" in the wcet/ressource constraint
-              => However, we need to add the following constraints:
-                => qi are binary variables
-                => Unicity of the qi (\sum_i qi = 1)
-                => Link between the qi, the pi and the di
-            Remark: no need to actually introduce q. The qi are the only ones needed.
+          Trick: We introduce "q = p+2d+1" and consider its binary variables qi
+              (defined on all the possible values "i" of q, and not only the one below per !!!)
+            => we can directly use the "qi*wcet" in the wcet/ressource constraint
+            => However, we need to add the following constraints:
+              => qi are binary variables
+              => Unicity of the qi (\sum_i qi = 1)
+              => Link between the qi, the pi and the di
+          Remark: no need to actually introduce q. The qi are the only ones needed.
 
-            Link between the qi, pi and di (qi defined for 1=min_value <= i <= max_value=6):
-              q1 = p0.d0  |  q2 = p1.d0  |  q3 = p2.d0 + p0.d1
-              q4 = p3.d0 + p1.d1  |  q5 = p2.d1  |  q6 = p3.d1
-            
-            => Associated linear constraints to replace these equalities (using the fact everyone is binary):
-              p0+d0-1 <= q1
-              p1+d0-1 <= q2
-              p2+d0-1 <= q3    p0+d1-1 <= q3
-              p3+d0-1 <= q4    p1+d1-1 <= q4
-              p2+d1-1 <= q5
-              p3+d1-1 <= q6
+          Link between the qi, pi and di (qi defined for 1=min_value <= i <= max_value=6):
+            q1 = p0.d0  |  q2 = p1.d0  |  q3 = p2.d0 + p0.d1
+            q4 = p3.d0 + p1.d1  |  q5 = p2.d1  |  q6 = p3.d1
+          
+          => Associated linear constraints to replace these equalities (using the fact everyone is binary):
+            p0+d0-1 <= q1
+            p1+d0-1 <= q2
+            p2+d0-1 <= q3    p0+d1-1 <= q3
+            p3+d0-1 <= q4    p1+d1-1 <= q4
+            p2+d1-1 <= q5
+            p3+d1-1 <= q6
 
-              (note: we need all of these constraint so that it is valid)
-        *)
+            (note: we need all of these constraint so that it is valid)
+      *)
 
-        (* qbinvar : ( [phase_num : int] --> [binvarname : string]) where minq <= phase_num <= maxq *)
-        let (minq, maxq) = match opt_varphase with
-          | None -> (sh, sh)
-          | Some varphase ->
-            let bc_varphase = List.find (fun bc -> bc.varName=varphase) lbc in
-            (sh + bc_varphase.lbound, sh + bc_varphase.ubound)
+      (* qbinvar : ( [phase_num : int] --> [binvarname : string]) where minq <= phase_num <= maxq *)
+      let (minq, maxq) = match opt_varphase with
+        | None -> (sh, sh)
+        | Some varphase ->
+          let bc_varphase = List.find (fun bc -> bc.varName=varphase) lbc in
+          (sh + bc_varphase.lbound, sh + (bc_varphase.ubound-1))
+      in
+      let (minq, maxq) = List.fold_left (fun (accmin,acccmax) (c,v) ->
+        let bc_v = List.find (fun bc -> bc.varName=v) lbc in
+        (accmin + c * bc_v.lbound, acccmax + c * (bc_v.ubound-1))
+      ) (minq, maxq) laffterm in
+
+      let qvname = get_temp_wcet_contrib_name () in  (* Naming convention *)
+      assert(maxq>=minq);
+      let mqbinvar = fill_int_maps qvname (maxq+1) minq IntMap.empty in
+
+      (* DEBUG *)
+      if (debug) then (
+        let print_opt_string ff ovarph = match ovarph with
+          | None -> fprintf ff "None"
+          | Some varph -> fprintf ff "%s" varph
         in
-        let (minq, maxq) = List.fold_left (fun (accmin,acccmax) (c,v) ->
-          let bc_v = List.find (fun bc -> bc.varName=v) lbc in
-          (accmin + c * bc_v.lbound, acccmax + c * bc_v.ubound)
-        ) (minq, maxq) laffterm in
+        fprintf ffout "DEBUG - laffterm non-null - introducing qvname = %s (for phase (%a %a + %i), per = %i)\n@?"
+          qvname  print_opt_string opt_varphase (print_affterm ~bfirst:false) laffterm sh per;
+        fprintf ffout "\t\tminq = %i | maxq = %i\n@?" minq maxq
+      );
 
-        let qvname = get_temp_wcet_contrib_name () in  (* Naming convention *)
-        assert(maxq>=minq);
-        let mqbinvar = fill_int_maps qvname maxq minq IntMap.empty in
+      (* We fill the arrays - Wcet constraints *)
+      IntMap.iter (fun shvar qbinvar ->
+        (* By construction, we should not have an overflow there *)
+        assert(0<=shvar);
+        if (shvar>=per) then () else (* Ignore the binary variable of q above the period *)
+        (* The terms are on the left side of the >=, so it's a "-" *)
+        for k = 0 to (ninstance-1) do
+          arr_wcet_lcoeff.(k*per + shvar) <- ((-wcet), qbinvar) :: arr_wcet_lcoeff.(k*per + shvar)
+        done
+      ) mqbinvar;
 
-        (* We fill the arrays - Wcet constraints *)
+      (* Ressource constraints *)
+      List.iter (fun (rname, rval) ->
+        let (arr_ress_lcoeff, _) = StringMap.find rname m_arr_ress in
         IntMap.iter (fun shvar qbinvar ->
           (* By construction, we should not have an overflow there *)
           assert(0<=shvar);
           if (shvar>=per) then () else (* Ignore the binary variable of q above the period *)
+
           (* The terms are on the left side of the >=, so it's a "-" *)
           for k = 0 to (ninstance-1) do
-            arr_wcet_lcoeff.(k*per + shvar) <- ((-wcet), qbinvar) :: arr_wcet_lcoeff.(k*per + shvar)
+            arr_ress_lcoeff.(k*per + shvar) <- ((-rval), qbinvar) :: arr_ress_lcoeff.(k*per + shvar)
           done
-        ) mqbinvar;
+        ) mqbinvar
+      ) lress;
 
-        (* Ressource constraints *)
-        List.iter (fun (rname, rval) ->
-          let (arr_ress_lcoeff, _) = StringMap.find rname m_arr_ress in
-          IntMap.iter (fun shvar qbinvar ->
-            (* By construction, we should not have an overflow there *)
-            assert(0<=shvar);
-            if (shvar>=per) then () else (* Ignore the binary variable of q above the period *)
+      (* We now build the constraints about the binary variable qi *)
+      (* First constraint: \sum_i q_i = 1 *)
+      let lcoeff_unicity = IntMap.fold (fun _ varbin acc ->
+        (1, varbin)::acc
+      ) mqbinvar [] in
+      let ac_unicity = mk_affconstr true lcoeff_unicity 1 in
 
-            (* The terms are on the left side of the >=, so it's a "-" *)
-            for k = 0 to (ninstance-1) do
-              arr_ress_lcoeff.(k*per + shvar) <- ((-rval), qbinvar) :: arr_ress_lcoeff.(k*per + shvar)
-            done
-          ) mqbinvar
-        ) lress;
+      (* DEBUG
+      if (debug) then
+        fprintf ffout "DEBUG - laffterm non-null: ac_unicity = %a\n@?" print_aff_constr ac_unicity; *)
 
-        (* We now build the constraints about the binary variable qi *)
-        (* First constraint: \sum_i q_i = 1 *)
-        let lcoeff_unicity = IntMap.fold (fun _ varbin acc ->
-          (1, varbin)::acc
-        ) mqbinvar [] in
-        let ac_unicity = mk_affconstr true lcoeff_unicity 1 in
+      (* Second set of constraint: linking the qi with the pi and the (di)s *)
+      let m_constr_contrib_phase = get_phase_distribution mmbinary opt_varphase laffterm sh in
 
-        (* Second set of constraint: linking the qi with the pi and the (di)s *)
-        let m_constr_contrib_phase = get_phase_distribution mmbinary opt_varphase laffterm sh in
+      (* DEBUG TODO *)
+      if (debug) then
+        fprintf ffout "DEBUG - laffterm non-null: m_constr_contrib_phase = %a\n@?"
+          print_phase_distrib m_constr_contrib_phase;
 
-        (* We use m_constr_contrib_phase to build the constraints on the mqbinvar *)
-        let lqvar_constr = IntMap.fold (fun kval lldistr lacc ->
-          assert(kval>=minq);
-          assert(kval<=maxq);
+      (* We use m_constr_contrib_phase to build the constraints on the mqbinvar *)
+      let lqvar_constr = IntMap.fold (fun kval lldistr lacc ->
+        assert(kval>=minq);
+        assert(kval<=maxq);
 
-          (* For each list in lldistr, do a constraint *)
-          let nlconstr = List.map (fun ldistr ->
-            (* Constraint: (\sum ldistr) - (size(ldistr)-1) <= q_{kval} *)
-            let lcoeff_qvar = (1, IntMap.find kval mqbinvar)::[] in
-            let lcoeff_qvar = List.fold_left (fun acc elemdistr ->
-              (-1, elemdistr)::acc
-            ) lcoeff_qvar ldistr in
+        (* For each list in lldistr, do a constraint *)
+        let nlconstr = List.map (fun ldistr ->
+          (* Constraint: (\sum ldistr) - (size(ldistr)-1) <= q_{kval} *)
+          let lcoeff_qvar = (1, IntMap.find kval mqbinvar)::[] in
+          let lcoeff_qvar = List.fold_left (fun acc elemdistr ->
+            (-1, elemdistr)::acc
+          ) lcoeff_qvar ldistr in
 
-            let ac_qvar = mk_affconstr false lcoeff_qvar (1-(List.length ldistr)) in
-            ac_qvar
-          ) lldistr in
-          List.rev_append nlconstr lacc
-        ) m_constr_contrib_phase [] in
+          let ac_qvar = mk_affconstr false lcoeff_qvar (1-(List.length ldistr)) in
+          ac_qvar
+        ) lldistr in
+        List.rev_append nlconstr lacc
+      ) m_constr_contrib_phase [] in
 
-        (* We complete lqvar_constr with the qi which does not have anything associated in its distribution *)
-        let lqvar_constr = IntMap.fold (fun valph qbinvar lacc ->
-          if (IntMap.mem valph m_constr_contrib_phase) then lacc else
-          
-          (* We add the constraint "qi=0" *)
-          let ac_qvar = mk_affconstr true ((1,qbinvar)::[]) 0 in
-          ac_qvar::lacc
-        ) mqbinvar lqvar_constr in
+      (* We complete lqvar_constr with the qi which does not have anything associated in its distribution *)
+      let lqvar_constr = IntMap.fold (fun valph qbinvar lacc ->
+        if (IntMap.mem valph m_constr_contrib_phase) then lacc else
+        
+        (* We add the constraint "qi=0" *)
+        let ac_qvar = mk_affconstr true ((1,qbinvar)::[]) 0 in
+        ac_qvar::lacc
+      ) mqbinvar lqvar_constr in
 
 
-        (* Save the new constraints and binary variable in a data structure*)
-        let n_lac_qtemp_acc = ac_unicity::lqvar_constr in
-        let n_mqbinvar_acc = StringMap.add qvname mqbinvar mqbinvar_acc in
+      (* Save the new constraints and binary variable in a data structure*)
+      let n_lac_qtemp_acc = ac_unicity::(List.rev_append lqvar_constr lac_qtemp_acc) in
+      let n_mqbinvar_acc = StringMap.add qvname mqbinvar mqbinvar_acc in
 
-        (n_mqbinvar_acc, n_lac_qtemp_acc)
-      )
+      (n_mqbinvar_acc, n_lac_qtemp_acc)
+    )
   ) (StringMap.empty, []) lwcet in
 
 
