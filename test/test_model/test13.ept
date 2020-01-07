@@ -4,6 +4,11 @@
 (* ../../heptc -v -genphconstr constr_test13.txt test13.ept *)
 (* ../../heptc -v -solphconstr sol_test13.txt test13.ept *)
 
+(* ../../heptc -v -genphconstr constr_test13_lb.txt -phcost_loadbal test13.ept *)
+
+(* ../../heptc -v -genphconstr constr_test13_bin.txt -phcost_loadbal_bin test13.ept *)
+(* ../../heptc -v -solphconstr sol_test13_lb_bin.txt -phcost_loadbal_bin test13.ept *)
+
 model main(a:int) returns (e:int)
 var
 	b : int :: [1,2];

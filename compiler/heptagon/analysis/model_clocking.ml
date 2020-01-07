@@ -53,9 +53,6 @@ open Affine_constraint_clocking
 let debug_clocking = false (* DEBUG *)
 let ffout = formatter_of_out_channel stdout
 
-let constraint_bufferfby = not (!Compiler_options.no_constraint_bufferfby)
-
-
 let print_henv ff h =
   Env.iter (fun k v ->
     fprintf ff "\t%a => %a\n@?"  print_ident k  print_oneck v
@@ -265,6 +262,7 @@ let rec typing_bufferfby_osynch oct = match oct with
       let per = Clocks.get_period_ock ock in
       let n_ock = fresh_osynch_period per in
 
+      let constraint_bufferfby = not (!Compiler_options.no_constraint_bufferfby) in
       let laffconstr = if (constraint_bufferfby) then begin
         let (varopt_nock, laffterm, sh) = Clocks.get_phase_ock n_ock in
         let idvar_nock = match varopt_nock with
@@ -472,11 +470,6 @@ let rec typing_bufferfbyq_osynch octe dvarid = match octe with
     | _ ->
       (* The shift is parametrised by a new integer variable "d" (decision variable) *)
       let dvarname = varname_from_phase_index dvarid in
-
-      (* TODO: how to associate dvarid to the operator *)
-      (* TODO: same issue than for fby? - this variable will only impact lattency computation and causality analysis *)
-      (* TODO: check the collection of the generated_index? *)
-
       
       (* Output clock of the bufferfby? + getting its informations *)
       let (varopt, laffterm, ph) = Clocks.get_phase_ock ock in
@@ -491,7 +484,6 @@ let rec typing_bufferfbyq_osynch octe dvarid = match octe with
       assert(laffterm=[]); assert(sh=0);
       let varname_n_ock = varname_from_phase_index idvar_nock in
 
-
       (* Constraint on the phase
         => constraint buffer to be activated only when d=0
         => constraint bufferfby to be activated if option + d=1 :/ *)
@@ -499,6 +491,7 @@ let rec typing_bufferfbyq_osynch octe dvarid = match octe with
       (* Constraint to be activated when d=1:
           expr_{ock} + per*(1-d) >= ph_{n_ock} + 1
           <=> expr_{ock} - per*d >= ph_{n_ock} - per + 1 *)
+      let constraint_bufferfby = not (!Compiler_options.no_constraint_bufferfby) in
       let laffconstr_ph = if (constraint_bufferfby) then begin
 
         let lcoeffVar = (-1, varname_n_ock) :: [] in
@@ -513,6 +506,12 @@ let rec typing_bufferfbyq_osynch octe dvarid = match octe with
         let affconstr_ph1 = mk_affconstr false lcoeffVar (1-ph-per) in
         affconstr_ph1::[]
       end else [] in
+
+      (* DEBUG
+      fprintf ffout "bufferfbyq - constraint_bufferfby = %b\n@?" constraint_bufferfby;
+      fprintf ffout "bufferfbyq - laffconstr_ph (temp) = %a\n@?"
+        print_list_aff_constr laffconstr_ph; *)
+
 
       (* Constraint to be activated when d=0:
         ph_{n_ock} + d*per >= expr_{ock} *)
@@ -777,11 +776,12 @@ let rec get_vars_lhs plhs = match plhs with
     ) [] pl
   | Evarpat vid -> vid::[]
 
-(* Get the list of variable used in the rhs of a model equation *)
+(* Get the list of *present* variable used in the rhs of a model equation *)
 let get_lvar_used eqm =
   let exp_lvar_used funs lacc exp = match exp.e_desc with
-    | Evar vid | Elast vid -> exp, vid::lacc
-    | _ -> Hept_mapfold.exp funs lacc exp
+    | Evar vid | Elast vid -> exp, vid::lacc        (* Variable use detected ! *)
+    | Epre _ | Efby _ | Edelayfby _ | Ebufferfby _ ->  exp, lacc  (* Stop recursion if we go into the past *)
+    | _ -> Hept_mapfold.exp funs lacc exp           (* Other cases: just do a recursion *)
   in
   let funs_lvar_used = { Hept_mapfold.defaults with exp = exp_lvar_used } in
   let _, lvar = funs_lvar_used.eq_model funs_lvar_used [] eqm in
@@ -795,118 +795,258 @@ let rec list_make_unique lres l = match l with
     else
       list_make_unique (h::lres) t
 
-(* module EqmMap = Map.Make(struct type t=eq_model let compare = Pervasives.compare end) *)
+(* Pretty-printer of list of strongly connected component, for debugging and error management *)
+let print_lscc ff lscc =
+  let print_scc ff scc =
+    fprintf ff "[";
+    List.iter (fun varid ->
+      fprintf ff "%a, " print_ident varid
+    ) scc;
+    fprintf ff "]"
+  in
+  fprintf ff "[[[\n@?";
+  List.iter (fun scc ->
+    fprintf ff "\t%a\n@?" print_scc scc
+  ) lscc;
+  fprintf ff "]]]\n@?"
 
-(* Loop detection procedure - graph traversal *)
-(*let loop_detection lloops mVar2Eq leqm leqmStart =
+let print_loop ff loop =
+  fprintf ff "[";
+  List.iter (fun eqm ->
+    fprintf ff "%a, " Hept_printer.print_pat_init (eqm.eqm_lhs, Lno_init)
+  ) loop;
+  fprintf ff "]"
 
-  (* We use Tarjan algorithm to get strongly connected components *)
+let print_l_loops ff l_loops = 
+  fprintf ff "[[[\n@?";
+  List.iter (fun loop ->
+    fprintf ff "\t%a\n@?" print_loop loop
+  ) l_loops;
+  fprintf ff "]]]\n@?"
+
+(* Pretty-printer of the main internal data structure of the scc algo, for debugging *)
+let print_mIndex ff mIndex =
+  Idents.Env.iter (fun k (ind, lowlink) ->
+    fprintf ff "\t %a  --> (%i, %i)\n@?" print_ident k  ind lowlink
+  ) mIndex
+
+(* Strongly connected component extraction - Tarjan algorithm *)
+let strongly_connected_components mVar2Eq leqm leqmStart =
+
+  (* Last part of the Tarjan algorithm - building the strongly connected component *)
+  let rec pop_connected_component mIndex stvar index_root lstr_conn_comp mIsOnStack =
+    (* We pop the first element of the stack *)
+    let (w_id, stvar) = match stvar with
+      | [] -> failwith "Internal strongly_connected_components error: Empty stack"
+      | a::b -> (a,b)
+    in
+    let mIsOnStack = Env.update w_id (fun _ -> Some false) mIsOnStack in
+    let (index_w, _) = Idents.Env.find w_id mIndex in
+
+    let lstr_conn_comp = w_id::lstr_conn_comp in
+
+    (* Should we continue? *)
+    if (index_w!=index_root) then
+      pop_connected_component mIndex stvar index_root lstr_conn_comp mIsOnStack
+    else
+     (lstr_conn_comp, stvar, mIsOnStack)
+  in
+
+
+  (* We use Tarjan algorithm to get strongly connected components (fby = no edge) *)
   (* Broad idea: graph coloring with the lowest label a backlink goes to... *)
-  (* I used the English wikipedia page to implement this algorithm *)
-  let rec strong_connect mVar2Eq mIndex index stvar mIsOnStack varid =
+  (* I used the English wikipedia page of Tarjan algorithm to implement it *)
+  (* https://en.wikipedia.org/wiki/Tarjan%27s_strongly_connected_components_algorithm *)
+  let rec strong_connect mVar2Eq lconncomp mIndex index stvar mIsOnStack varid =
+
+    (* mIndex : varid ---> (index, lowlink) *)
     let mIndex = Idents.Env.add varid (index, index) mIndex in
     let index = index + 1 in
 
     (* Stack = path used by the depth first search algo used to traverse the graph *)
-    Stack.push varid stvar;
+    let stvar = varid::stvar in  (* Push *)
     let mIsOnStack = Env.update varid (fun _ -> Some true) mIsOnStack in
 
-    (* For each successor of varid *)
-    let eqm_varid = Env.find varid mVar2Eq in
-    let lvar_successor = get_lvar_used eqm_varid in
+    (* DEBUG
+    fprintf ffout "strong_connect - varid = %a\n@?" print_ident varid;
+    fprintf ffout "lconncomp = %a\n@?" print_lscc lconncomp; *)
 
-    let (mIndex, index, mIsOnStack) = List.fold_left (fun (mIndex, index, mIsOnStack) var_succ ->
+    (* For each successor of varid *)
+    let lvar_successor = try
+      let eqm_varid = Env.find varid mVar2Eq in
+      let lvar_successor = get_lvar_used eqm_varid in
+      lvar_successor
+    with Not_found -> [] (* We have an input => no successor *)
+    in
+
+    let (stvar, lconncomp, mIndex, index, mIsOnStack) = List.fold_left
+      (fun (stvar, lconncomp, mIndex, index, mIsOnStack) var_succ ->
       (* If "var_succ" was not visited yet, then recursion!  (edge is on the traversal tree)  *)
       if (not (Env.mem var_succ mIndex)) then
-        let (mIndex, index, mIsOnStack) =
-          strong_connect mVar2Eq mIndex index stvar mIsOnStack var_succ in
+        let (stvar, lconncomp, mIndex, index, mIsOnStack) =
+          strong_connect mVar2Eq lconncomp mIndex index stvar mIsOnStack var_succ in
 
         let (_, lowlink_varid) = Idents.Env.find varid mIndex in
         let (_, lowlink_var_succ) = Idents.Env.find var_succ mIndex in 
         let lowlink = Pervasives.min lowlink_varid lowlink_var_succ in
 
-        let mIndex = Env.update varid (fun _ -> Some (index, lowlink)) mIndex in
-        (mIndex, index, mIsOnStack)
+        let mIndex = Env.update varid (fun ocurmap -> match ocurmap with
+          | None -> failwith ("Mapping of " ^ (Idents.name varid) ^ "not found in mIndex")
+          | Some (ind_curmap, _) -> Some (ind_curmap, lowlink)
+        ) mIndex in
+        (stvar, lconncomp, mIndex, index, mIsOnStack)
       else
 
       (* If the successor "var_succ" is on the stack, we have a backedge (because depth-first search) *)
       if (Env.find var_succ mIsOnStack) then
         let (_, lowlink_varid) = Idents.Env.find varid mIndex in
-        let (index_var_succ, _) = Idents.Env.find var_succ mIndex in 
+        let (index_var_succ, _) = Idents.Env.find var_succ mIndex in
         let lowlink = Pervasives.min lowlink_varid index_var_succ in
 
-        let mIndex = Env.update varid (fun _ -> Some (index, lowlink)) mIndex in
-        (mIndex, index, mIsOnStack)
+        let mIndex = Env.update varid (fun ocurmap -> match ocurmap with
+          | None -> failwith ("Mapping of " ^ (Idents.name varid) ^ "not found in mIndex")
+          | Some (ind_curmap, _) -> Some (ind_curmap, lowlink)
+        ) mIndex in
+        (stvar, lconncomp, mIndex, index, mIsOnStack)
       else
         (* "var_succ" is a cross-edge in the DFS tree, and can be ignored *)
-        (mIndex, index, mIsOnStack)
-    ) (mIndex, index, mIsOnStack) lvar_successor in
+        (stvar, lconncomp, mIndex, index, mIsOnStack)
+    ) (stvar, lconncomp, mIndex, index, mIsOnStack) lvar_successor in
 
-    (* Root node: index = lowlink. We have as many SCC than root nodes *)
+    (* DEBUG
+    fprintf ffout "strong_connect - after-propagation - varid = %a\n@?" print_ident varid; *)
+    (* DEBUG
+    fprintf ffout "strong_connect - after-propagation - mIndex = %a\n@?" print_mIndex mIndex;
+    fprintf ffout "strong_connect - after-propagation - stvar = %a\n@?"
+      (Pp_tools.print_list print_ident "[" ", " " ]") stvar; *)
 
-    (* TODO: instead of following, can we just enumerate the backedges found and complete the cycle? *)
-
+    (* Root node: "index = lowlink". We have as many SCC than root nodes *)
 
     (* If v is a root node (ie, lowlink = index), pop the stack and generate a SCC *)
     let (index_varid, lowlink_varid) = Idents.Env.find varid mIndex in
-    if (index_varid = lowlink_varid) then
-      let str_conn_comp = [] in
-
-      (* TODO *)
-
-
-      let w_id = Stack.pop stvar in
-      let mIsOnStack = Env.update w_id (fun _ -> Some false) mIsOnStack in
-
-      (* TODO: continue that while w!=v *)
-
-      (* TODO *)
-
-
-    else
-
-    (* TODO *)
-
-
-
-
-    (mIndex, index, mIsOnStack)
+    
+    let (lconncomp, stvar, mIsOnStack) =
+      if (index_varid = lowlink_varid) then
+        (* We have finished to explore a SCC => build it *)
+        let (nstr_conn_comp, stvar, mIsOnStack) = pop_connected_component mIndex stvar index_varid [] mIsOnStack in
+        (nstr_conn_comp::lconncomp, stvar, mIsOnStack)
+      else
+        (lconncomp, stvar, mIsOnStack)
+    in
+    (stvar, lconncomp, mIndex, index, mIsOnStack)
   in
 
   (* Stack and mapping to know if a variable is on the stack *)
-  let stvar = Stack.create () in
+  let stvar = [] in
   let mIsOnStack = Idents.Env.fold (fun varid _ macc ->
     Env.add varid true macc
   ) mVar2Eq Idents.Env.empty in
   
   (* Main loop *)
   (* mIndex: varId -> (index, lowlink) *)
-  let (mIndex, _, _) = Idents.Env.fold (fun varid _ (macc, index, mIsOnStack) ->
-    if (Idents.Env.mem varid macc) then macc else
-    strong_connect mVar2Eq macc index stvar mIsOnStack varid
-  ) mVar2Eq (Idents.Env.empty, 0, mIsOnStack) in
+  let (_, lconncomp, _, _, _) = Idents.Env.fold (fun varid _ (stvar, lconncomp, macc, index, mIsOnStack) ->
+    if (Idents.Env.mem varid macc) then (stvar, lconncomp, macc, index, mIsOnStack) else
+    strong_connect mVar2Eq lconncomp macc index stvar mIsOnStack varid
+  ) mVar2Eq ([], [], Idents.Env.empty, 0, mIsOnStack) in
 
+  (* Return the list of strongly connected components *)
+  lconncomp
 
+(* Constraint extraction from a strongly connected component *)
+let extract_constraint_from_scc mdecvar mVar2Eq (scc:var_ident list) =
+  assert((List.length scc)>0);
 
+  let rec back_loop_detection checkedpath succ lpath_tocheck = match lpath_tocheck with
+    | [] -> None
+    | (v, eqm)::rest ->
+      if (v=succ) then Some (eqm::checkedpath) else
+      back_loop_detection (eqm::checkedpath) succ rest
+  in
 
-  (* Cycle acquisition: stay in a partition of "mIndex" *)
+  (* Algorithm:
+    - Consider a random node and start a deep first search graph exploration in the scc from it
+        (ignoring the fby edges, as usual for the causality analysis)
+    - If we go back to a node on the stack of explored node, then we have detected a cycle.
+      => All cycle can be obtained like that (even the one not including root_node) because it is a scc *)
+  (* Note. lcurrent_path is in the opposite order ( :: in the list  <=>  <- in the graph ) *)
+  let rec loop_obtention mVar2Eq (scc:var_ident list) (l_loops_res: eq_model list list)
+    (lcurrent_path: (var_ident * eq_model) list) (current_node:var_ident) =
 
+    (* DEBUG
+    fprintf ffout "DEBUG loop_obtention - current_node = %a\n@?" print_ident current_node; *)
 
+    (* We check the next edge in the graph *)
+    let (next_edge: eq_model) = Idents.Env.find current_node mVar2Eq in
+    let lsuccessors = get_lvar_used next_edge in
+    
+    (* Remove the nodes not in the scc *)
+    let lsuccessors = List.filter (fun v -> List.mem v scc) lsuccessors in
 
-  (* TODO: Tarjan algorithm + checking the strongly connected components containing a leqmStart *)
-*)
+    let l_loops = List.fold_left (fun l_loop_acc succ -> 
+      (* Loop detection - is "succ" in lcurrent_path + current_node? *)
+      if (succ=current_node) then
+        [ next_edge ] :: l_loop_acc
+      else
+      let (oloop : (eq_model list) option) = back_loop_detection [] succ lcurrent_path in
 
+      match oloop with
+      | Some nloop ->
+        (nloop @ [next_edge]) :: l_loop_acc
+      | None ->
+        (* Recursion - deep first search *)
+        let nlcurrent_path = (current_node, next_edge) :: lcurrent_path in
+        loop_obtention mVar2Eq scc l_loop_acc nlcurrent_path succ
+    ) l_loops_res lsuccessors in
+    l_loops
+  in
 
+  let (l_loops: eq_model list list) = loop_obtention mVar2Eq scc [] [] (List.hd scc) in
 
+  (* DEBUG
+  fprintf ffout "l_loops = %a\n@?" print_l_loops l_loops; *)
+
+  (* Constraint generation: because we consider 1-synchronous clock,
+      if we have a dependence loop without having a fby somewhere in the middle,
+      the data used must be the same that we are trying to obtain, thus fail.
+    => It is enough to just check the fby? and bufferfby? and generate a constraint
+      that at least one of their decision variable is 1 (\sum dec_var >= 1) *)
+  let (lldecvar:string list list) = List.map (fun loop ->
+    let ldecvar = List.fold_left (fun ldecvar_acc eqm ->
+      match eqm.eqm_rhs.e_desc with
+      | Efbyq _ | Ebufferfbyq _ ->
+        let ndecvar = Idents.Env.find (get_first_var eqm.eqm_lhs) mdecvar in
+        ndecvar::ldecvar_acc
+      | _ -> ldecvar_acc
+    ) [] loop in
+    if (ldecvar=[]) then (
+      (* True causality-violating cycle detected !!! *)
+      fprintf ffout "Causality violating cycle = %a\n@?" print_loop loop;
+      failwith "Program is not causal, causality violating cycle outputed."
+    ) else
+      ldecvar
+
+  ) l_loops in
+
+  (* Constraint redundancy: using the decision variables, we remove the redundancies *)
+  (* Done by sorting elements, then checking for equality *)
+  let lldecvar = List.map (fun ldecvar -> List.sort Pervasives.compare ldecvar) lldecvar in
+  let lldecvar = list_make_unique [] lldecvar in
+
+  (* Building the constraints *)
+  let lac_caus = List.map (fun ldecvar ->
+    let lcoeffVar = List.map (fun v -> (1,v)) ldecvar in
+    mk_affconstr false lcoeffVar 1
+  ) lldecvar in
+  lac_caus
 
 (* Constraints for the causality management, if we have underspecified ops *)
 let add_causality_constraint lcst mdecvar leqm =
   (* a) List all cycles in the dependence graph which contains a fbyq or a bufferfbyq equation *)
-  (* To do that, we start looking for cycle from variables above fbyq/bufferfbyq,
+  (* To do that, we start looking for cycle (with no fby) from variables above fbyq/bufferfbyq,
     which are not yet reached by a broad-first search algorithm (broad to minimize the length of the cycle) *)
 
   (* List of the starting point of the graph exploration - Nots: equations are normalized *)
-  (*let leqmStart = List.fold_left (fun lacc eqm -> match eqm.eqm_rhs.e_desc with
+  let leqmStart = List.fold_left (fun lacc eqm -> match eqm.eqm_rhs.e_desc with
     | Efbyq _ | Ebufferfbyq _ -> eqm::lacc
     | _ -> lacc
   ) [] leqm in
@@ -920,18 +1060,42 @@ let add_causality_constraint lcst mdecvar leqm =
   ) Idents.Env.empty leqm in
 
   (* Start of the graph exploration algorithm *)
-  let (lloops : eq_model list list) = loop_detection [] mVar2Eq leqm leqmStart in *)
+  let (lscc : var_ident list list) = strongly_connected_components mVar2Eq leqm leqmStart in
 
-  (* b) For each of this cycle, extract a constraint *)
+  (* DEBUG *)
+  if (debug_clocking) then
+    fprintf ffout "... causality constraintes: ssc found.\n@?";
+  (* DEBUG
+  fprintf ffout "lscc = %a\n@?" print_lscc lscc; *)
 
-  (* TODO *)
+  (* Verification that lscc is a partition - TODO later?
+  check_lscc leqm lscc; *)
 
+  (* We filter the inputs, which forms scc of size 1 with no corresponding equation in mVar2Eq *)
+  let lscc = List.fold_left (fun lacc scc -> 
+    if ((List.length scc) =1) then (
+      let varid = List.hd scc in
+      if (Idents.Env.mem varid mVar2Eq) then
+        scc::lacc
+      else
+        lacc
+    ) else scc::lacc
+  ) [] lscc in
 
+  (* For all cycles in a strongly connected component, extract a constraints *)
+  let lac_causality = List.fold_left (fun lac_acc scc ->
+    let nlac = extract_constraint_from_scc mdecvar mVar2Eq scc in
+    List.rev_append nlac lac_acc
+  ) [] lscc in
 
+  if (debug_clocking) then (
+    fprintf ffout "... causality constraintes: built.\n@?";
+    fprintf ffout "lac_causality = %a\n@?" print_list_aff_constr lac_causality
+  );
 
-
-  lcst
-
+  (* Merge the new constraints with the old ones *)
+  let (lac, lbc) = lcst in
+  (List.rev_append lac_causality lac, lbc)
 
 (* ----- *)
 (* ----- *)
@@ -1360,7 +1524,7 @@ let print_elem_lwcet ff (ovarph, laffterm, sh, per, owcet, lress) =
     print_opt_int owcet
     (Pp_tools.print_list print_ress "(" "" ")") lress
 
-let print_lwcet ff (lwcet: (string option * ((int * string) list) * int * int * (int option) * (string * int) list) list) =  
+let print_lwcet ff (lwcet: (string option * ((int * string) list) * int * int * (int option) * (string * int) list) list) =
   fprintf ff "lwcet = %a\n@?"
     (Pp_tools.print_list print_elem_lwcet "[" "" "]") lwcet
 
@@ -1411,7 +1575,6 @@ let rec typing_model_eq h lcst eqm =
       Some (firstvarlhs, decvar)
   in
   (lcst, lsubst, omatch_decvar)
-
 
 and typing_model_eqs h lcst eq_list =
   List.fold_left (fun (lcst_acc, lsubst_acc, mdecvar) eqm ->
@@ -1492,12 +1655,24 @@ and typing_block_model h lcst {bm_local = l; bm_eqs = eq_list; bm_annot = lbann}
   );
 
   (* Adding the constraints from the annotations *)
-  let lcst = add_constraint_from_annot lcst eq_list lbann in
+  let (lcst: (affconstr list) * (boundconstr list)) = add_constraint_from_annot lcst eq_list lbann in
+
+
+  (* DEBUG *)
+  if (debug_clocking) then (
+    fprintf ffout "DEBUG-typing_model_eq - annotation constraints added\n@?"
+  );
 
   (* If there is decision variable, add constraints for causality *)
   let lcst = if (Env.is_empty mdecvar) then lcst else
     add_causality_constraint lcst mdecvar eq_list
   in
+
+  (* DEBUG *)
+  if (debug_clocking) then (
+    fprintf ffout "DEBUG-typing_model_eq - causality constraints added\n@?"
+  );
+
 
   (* Manages subtitutions *)
   let msubst = List.fold_left (fun macc (phid1, optphid2, sh, laffterm) ->
@@ -1726,6 +1901,9 @@ let typing_model bquickres md =
   let (h0, lcst) = append_model_env Env.empty lcst md.m_input in
   let (h, lcst) = append_model_env h0 lcst md.m_output in
   let (h, lcst, msubst, lwcet, mdecvar) = typing_block_model h lcst md.m_block in
+
+  (* mdecvar: [First var of a "?" equation ==> corresponding decision variable] *)
+
   (* Update clock info in variable descriptions *)
   let set_clock vdm = { vdm with vm_clock = Env.find vdm.vm_ident h } in
   let md = { md with m_input = List.map set_clock md.m_input;

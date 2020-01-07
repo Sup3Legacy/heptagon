@@ -1,0 +1,68 @@
+Minimize
+	upBoundWeight
+Subject To
+	upBoundWeight >= 0
+	ph_36_phval_1 + ph_36_phval_0 = 1
+	ph_36_phval_1 - ph_36 = 0
+	ph_34_phval_2 + ph_34_phval_1 + ph_34_phval_0 = 1
+	2 ph_34_phval_2 + ph_34_phval_1 - ph_34 = 0
+	ph_31_phval_2 + ph_31_phval_1 + ph_31_phval_0 = 1
+	2 ph_31_phval_2 + ph_31_phval_1 - ph_31 = 0
+	ph_28_phval_1 + ph_28_phval_0 = 1
+	ph_28_phval_1 - ph_28 = 0
+	ph_6_phval_1 + ph_6_phval_0 = 1
+	ph_6_phval_1 - ph_6 = 0
+	ph_5_phval_5 + ph_5_phval_4 + ph_5_phval_3 + ph_5_phval_2 + ph_5_phval_1 + ph_5_phval_0 = 1
+	5 ph_5_phval_5 + 4 ph_5_phval_4 + 3 ph_5_phval_3 + 2 ph_5_phval_2 + ph_5_phval_1 - ph_5 = 0
+	ph_21_phval_1 + ph_21_phval_0 = 1
+	ph_21_phval_1 - ph_21 = 0
+	ph_18_phval_0 = 1
+	-ph_18 = 0
+	-2 ph_34 + ph_5 >= 1
+	-ph_5 + 2 ph_31 + ph_21 >= 0
+	-ph_21 + ph_6 >= 0
+	-ph_6 + ph_28 + ph_18 >= 0
+Bounds
+	0 <= ph_36 < 2
+	0 <= ph_34 < 3
+	0 <= ph_31 < 3
+	0 <= ph_28 < 2
+	0 <= ph_6 < 2
+	0 <= ph_5 < 6
+	0 <= ph_21 < 2
+	0 <= ph_18 < 1
+General
+	upBoundWeight
+Integer
+	ph_6
+	ph_5
+	ph_36
+	ph_34
+	ph_31
+	ph_28
+	ph_21
+	ph_18
+Binary
+	ph_6_phval_1
+	ph_6_phval_0
+	ph_5_phval_5
+	ph_5_phval_4
+	ph_5_phval_3
+	ph_5_phval_2
+	ph_5_phval_1
+	ph_5_phval_0
+	ph_36_phval_1
+	ph_36_phval_0
+	ph_34_phval_2
+	ph_34_phval_1
+	ph_34_phval_0
+	ph_31_phval_2
+	ph_31_phval_1
+	ph_31_phval_0
+	ph_28_phval_1
+	ph_28_phval_0
+	ph_21_phval_1
+	ph_21_phval_0
+	ph_18_phval_0
+End
+

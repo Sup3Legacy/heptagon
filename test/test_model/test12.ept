@@ -7,6 +7,9 @@
 (* ../../heptc -v -genphconstr constr_test12.txt -phcost_loadbal test12.ept *)
 (* ../../heptc -v -solphconstr sol_test12_lb.txt -phcost_loadbal test12.ept *)
 
+(* ../../heptc -v -genphconstr constr_test12_bin.txt -phcost_loadbal_bin test12.ept *)
+(* ../../heptc -v -solphconstr sol_test12_lb_bin.txt -phcost_loadbal_bin test12.ept *)
+
 model main(a:int; b:int) returns (c:int)
 var
 	d : int :: [..,2];

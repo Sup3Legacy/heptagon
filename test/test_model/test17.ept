@@ -1,11 +1,11 @@
 
-(* Third test of underspecified operator - Assume minimal example *)
-(* We still assume that we know where the fby are (only current? and when? operators) *)
+(* Fifth test of unspecified operators - testing causality loops with fby? and bufferfby? *)
+(* This program contains exactly the information corresponding to a graph of dependence
+	between tasks, with no information whatsoever about the data sampled *)
 
-(* ../../heptc -v -genphconstr constr_test14.txt test14.ept *)
-(* ../../heptc -v -solphconstr sol_test14.txt test14.ept *)
 
-(* ../../heptc -v -genphconstr constr_test14_bin.txt -phcost_loadbal_bin test14.ept *)
+(* ../../heptc -v -noconstrbuffby -genphconstr constr_test17.txt test17.ept *)
+(* ../../heptc -v -noconstrbuffby -solphconstr sol_test17.txt test17.ept *)
 
 
 (* Elementary functions (dummy) *)
@@ -58,25 +58,26 @@ var
 	data_8 : int :: [..,12];  (* C4 *)
 	data_11 : int :: [..,4];  (* C3 *)
 let
-	(data_0, data_1, data_2) = buffer node_000001(
-			buffer data_9,
-			buffer (0 fby data_0)
+	(data_0, data_1, data_2) = node_000001(
+			(0 bufferfby? data_9),
+			(0 bufferfby? data_0)
 		);
-	(data_3, data_4, data_5, data_6) = buffer node_000002(
-			buffer (0 fby data_4),
-			buffer ((buffer data_2) when? 2)
+	(data_3, data_4, data_5, data_6) = node_000002(
+			(0 bufferfby? data_4),
+			(0 bufferfby? ((buffer data_2) when? 2))
 		);
-	data_7 = buffer node_000003(
-			(buffer (0 fby data_5)) when? 6
+	data_7 = node_000003(
+			(0 bufferfby? ((buffer data_5) when? 6))
 		);
-	data_10 = buffer node_000004(
-			buffer (current?(2, 0, buffer data_3)),
-			buffer data_1
+	data_10 = node_000004(
+			buffer (current?(2, 0, (0 bufferfby? data_3))),
+			(0 bufferfby? data_1)
 		);
-	data_8 = buffer node_000005(buffer data_7);
+	data_8 = node_000005(0 bufferfby? data_7);
 	data_11 = buffer node_000006(
 			buffer current?(3, 0, buffer data_8),
 			buffer (data_6 when? 2)
 		);
-	data_11B = buffer current?(4, 0, buffer data_11);
+	data_11B = current?(4, 0, (0 bufferfby? data_11));
 tel
+

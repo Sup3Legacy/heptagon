@@ -1,0 +1,12 @@
+Minimize
+	ph_12
+Subject To
+	ph_10 + ph_12 >= 1
+Bounds
+	0 <= ph_12 < 2
+	0 <= ph_10 < 2
+Integer
+	ph_12
+	ph_10
+End
+

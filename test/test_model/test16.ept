@@ -1,0 +1,16 @@
+
+(* Fourth test of unspecified operators - testing causality loops with fby? and bufferfby? *)
+
+(* ../../heptc -v -noconstrbuffby -genphconstr constr_test16.txt test16.ept *)
+(* Remark : we disable the constraint of "bufferfby" (used to reduce memory),
+		because it forces the bufferfby? to be a buffer, when the period is 1 *)
+(* ../../heptc -v -noconstrbuffby -solphconstr sol_test16.txt test16.ept *)
+
+
+model main(a:int) returns (c:int)
+var
+	b : int :: [..,1];
+let
+	b = 0 fby? (c + a);
+	c = 0 bufferfby? b;
+tel

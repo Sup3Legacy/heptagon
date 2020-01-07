@@ -638,7 +638,6 @@ let build_initial_solution grConstr =
 
   grConstr
 
-
 (* --- *)
 
 (* Main solving function *)
@@ -677,7 +676,11 @@ let solve_constraint_on_our_own lac lbc =
 (* Name of the variable in the constraint to minimize *)
 let varobj = "upBoundWeight"
 
-let get_binary_varname varname k = varname ^ "_phval_" ^ (string_of_int k)
+let get_binary_varname varname k =
+  if (k>=0) then
+    varname ^ "_phval_" ^ (string_of_int k)
+  else
+    varname ^ "_phval_m" ^ (string_of_int (-k))
 
 let rec gcd a b =
   assert(a>0);
@@ -711,6 +714,27 @@ let get_mmbinary lbc =
     StringMap.add bc.varName mvarbin mmacc
   ) StringMap.empty lbc in
   mmbinary
+
+
+(* Find the min/max values of expression [opt_varphase + laffterm + sh] *)
+let get_min_max_affterm lbc opt_varphase laffterm sh =
+  let (minq, maxq) = match opt_varphase with
+    | None -> (sh, sh)
+    | Some varphase ->
+      let bc_varphase = List.find (fun bc -> bc.varName=varphase) lbc in
+      (sh + bc_varphase.lbound, sh + (bc_varphase.ubound-1))
+  in
+  let (minq, maxq) = List.fold_left (fun (accmin,acccmax) (c,v) ->
+    let bc_v = List.find (fun bc -> bc.varName=v) lbc in
+    if (c>0) then
+      (accmin + c * bc_v.lbound, acccmax + c * (bc_v.ubound-1))
+    else (
+      assert(c<0);
+      (accmin + c * (bc_v.ubound-1), acccmax + c * bc_v.lbound)
+    )
+  ) (minq, maxq) laffterm in
+  assert(maxq>=minq);
+  (minq, maxq)
 
 (* Compute the phase distribution of a phase expression [opt_varphase + laffterm + sh] *)
 let get_phase_distribution mmbinary opt_varphase laffterm sh =
@@ -784,6 +808,16 @@ let print_phase_distrib ff m_contrib =
   ) m_contrib
 
 
+(* For load balancing and ac_to_binary_conversion
+   Naming convention for when a contribution phase depend on an underspecified operator *)
+let count_temp_wcet_contrib = ref 0
+let get_temp_wcet_contrib_name _ =
+  count_temp_wcet_contrib := !count_temp_wcet_contrib + 1;
+  "tmp_wcontr_" ^ (string_of_int !count_temp_wcet_contrib)
+
+
+(* ==================================================== *)
+
 
 (* For binary load balancing - transform the dependence constraints *)
 let convert_ac_to_binary_simplecase mperiods mmbinary ac_int =
@@ -854,23 +888,196 @@ let convert_ac_to_binary_simplecase mperiods mmbinary ac_int =
   let lac_bool = convert_bool (perT, mbinvarT, mbinvarS) (posvar, negvar, cst) [] perS in
   lac_bool
 
-let convert_ac_to_binary_fullcase mperiods mmbinary ac_int =
+let debug_ac_bin_fc = false (* DEBUG for the convert_ac_to_binary_fullcase function *)
+
+let convert_ac_to_binary_fullcase mperiods lbc mmbinary ac_int =
   (* Constraint ac_int might have additional terms coming from the decision variables *)
-    
+  (* Note: we cannot guarranty that there must be a term with a +/-1 as coefficient in ac_int *)
+
+  (* Heuristic (probably not optimal): we find the term with the most variability and put it on the right *)
+  (* It should minimize the amount of combinations... :/ *)
+  assert(not (ac_int.isEq));
+  let lcoeffVar = ac_int.lcoeffVar in
+  let cst = ac_int.cst in
+
+  (* Heuristic of selection *)
+  let select_1_or_highest_coeff mperiods lcoeffVar =
+    (* We check if there is a term with a 1 coeff somewhere *)
+    let o_1coeff_term = List.fold_left (fun oacc (c,v) ->
+      if (c=1) then (
+        if (oacc=None) then (Some (c,v)) else oacc
+      ) else oacc
+    ) None lcoeffVar in 
+    match o_1coeff_term with
+    | Some term -> term
+    | None ->
+
+    (* Else, we select the term with the highest period (HEURISTIC) *)
+    let (_, o_hicoeff_term) = List.fold_left (fun (cand_acc, oterm_acc) (c,v) ->
+      let per_v = try StringMap.find v mperiods
+        with Not_found -> failwith ("convert_ac_to_binary: period for " ^ v ^ " was not found.")
+      in
+      let candidate = abs (c * per_v) in
+      if (candidate > cand_acc) then
+        (candidate, (Some (c,v)))
+      else
+        (cand_acc, oterm_acc)
+    ) (0, None) lcoeffVar in
+    match o_hicoeff_term with
+    | None -> failwith "Internal compilation error: should have selected at least a term"
+    | Some term -> term
+  in
+
+  (* DEBUG *)
+  if (debug_ac_bin_fc) then
+    fprintf ffout "\nDEBUG ac_to_binary - Starting - ac_int = %a\n@?" print_aff_constr ac_int;
+
+  let right_term : (int * string) = select_1_or_highest_coeff mperiods lcoeffVar in
+  let lcoeffVar_left = List.filter (fun term -> not (right_term=term)) lcoeffVar in
+  let lcoeffVar_left = List.map (fun (c,v) -> (-c,v)) lcoeffVar_left in
+  assert( (List.length lcoeffVar) = 1 + (List.length lcoeffVar_left));
+
+  (* Comparaison: lcoeffVar_left + cst <= right_term *)
+  (* We use get_phase_distrib to get all combination going into a given phase *)
+  let mdistrib_left = get_phase_distribution mmbinary None lcoeffVar_left cst in
+  let mdistrib_right = get_phase_distribution mmbinary None (right_term::[]) 0 in
+
+  (* Note: mdistrib_right has only one term with one variable *)
 
 
-  (* TODO - try to find a var with +/- 1 as coeff ? => Helps? *)
-  
-
-  (* By default, but make it fails... *)
-  convert_ac_to_binary_simplecase mperiods mmbinary ac_int
-
-
+  (* DEBUG *)
+  if (debug_ac_bin_fc) then (
+    fprintf ffout "DEBUG ac_to_binary - m_distrib_left = %a\n@?" print_phase_distrib mdistrib_left;
+    fprintf ffout "DEBUG ac_to_binary - mdistrib_right = %a\n@?" print_phase_distrib mdistrib_right
+  );
 
 
+  (* We (maybe) create new temporary variables for the left side *)
+  let b_create_var_left_side = if ((List.length lcoeffVar_left) > 1) then true else (
+      assert((List.length lcoeffVar_left) = 1);
+      let (c,v) = List.hd lcoeffVar_left in
+      (c!=1)
+    ) in
+  let (qvname, mbinvar_temp_left) = if (b_create_var_left_side) then
+      (* Create a new temporary variable for lcoeffVar_left, in all cases *)
+      let (minq, maxq) = get_min_max_affterm lbc None lcoeffVar_left cst in
+      (* DEBUG
+      fprintf ffout "DEBUG ac_to_binary - minq = %i | maxq = %i\n@?" minq maxq; *)
+      let qvname = get_temp_wcet_contrib_name () in
+      let mqbinvar = fill_int_maps qvname (maxq+1) minq IntMap.empty in
+      (qvname, mqbinvar)
+    else (
+      (* We just recover the binary variables of the unique left term with a 1 coefficient *)
+      assert((List.length lcoeffVar_left) = 1);
+      let (c,v) = List.hd lcoeffVar_left in
+      let mbinvar_v = StringMap.find v mmbinary in
+      ("UNUSED_VAR_NAME", mbinvar_v)    (* If this appear in the resulting program, there is an issue*)
+  ) in
 
-let convert_ac_to_binary b_no_underspec_ops mperiods mmbinary lac =
-  List.fold_left (fun lacc ac_int ->
+
+  (* DEBUG *)
+  if (debug_ac_bin_fc) then (
+    fprintf ffout "DEBUG ac_to_binary - temp var left side created\n@?";
+    fprintf ffout "DEBUG ac_to_binary - b_create_var_left_side = %b\n@?" b_create_var_left_side;
+    fprintf ffout "DEBUG ac_to_binary - mbinvar_temp_left = [@?";
+    IntMap.iter (fun k v ->
+      fprintf ffout "\n\t%i -> %s@?" k v
+    ) mbinvar_temp_left;
+    fprintf ffout " ]\n@?"
+  );
+
+  (* Unicity constraint if b_create_var_left_side *)
+  let lac_unicity = if (b_create_var_left_side) then
+    let lcoeff_unicity = IntMap.fold (fun _ varbin acc ->
+      (1, varbin)::acc
+    ) mbinvar_temp_left [] in
+    let ac_unicity = mk_affconstr true lcoeff_unicity 1 in
+    ac_unicity::[]
+  else
+    []
+  in
+
+
+  (* Building the constraints between the left and the right side *)
+  (* (\forall phase) [mbinvar_temp_left]_{phase} <= \sum_{phase'>=phase} [mdistrib_right]_{phase'} *)
+  let m_binvar_right = IntMap.map (fun lldistr -> 
+    assert((List.length lldistr)=1);
+    let ldistr = List.hd lldistr in
+    assert((List.length ldistr)=1);
+    List.hd ldistr
+  ) mdistrib_right in
+
+  (* let temp_constr_info = IntMap.merge (fun k oa ollb -> match (oa, ollb) with
+    | (None, None) -> None
+    | (Some a, None) -> Some (a::[],[])
+    | (None, Some llb) ->
+      assert((List.length llb)=1);
+      let lb = List.hd llb in
+      assert((List.length lb)=1);
+      Some ([],(List.hd lb)::[])
+    | (Some a, Some llb) -> 
+      assert((List.length llb)=1);
+      let lb = List.hd llb in
+      assert((List.length lb)=1);
+      Some (a::[],(List.hd lb)::[])
+  ) mbinvar_temp_left mdistrib_right in *)
+  let lac_bin = IntMap.fold (fun phval binvar_left lacc ->
+
+    let lcoeffVar = ((-1), binvar_left)::[] in 
+    let lcoeffVar = IntMap.fold (fun k binvar_r lacc ->
+      if (k>=phval) then
+        (1, binvar_r)::lacc
+      else
+        lacc
+    ) m_binvar_right lcoeffVar in
+
+    let nac_phasek = mk_affconstr false lcoeffVar 0 in
+    nac_phasek::lacc
+  ) mbinvar_temp_left [] in
+
+
+  (* DEBUG *)
+  if (debug_ac_bin_fc) then (
+    fprintf ffout "DEBUG ac_to_binary - lac_bin built\n@?";
+    fprintf ffout "lac_bin = %a\n@?" print_list_aff_constr lac_bin
+  );
+
+
+  (* Building the constraints on the new temporary variable from the left side *)
+  let lac_temp = if (b_create_var_left_side) then
+    IntMap.fold (fun k lldistr_left lacc ->
+      let temp_binvar_phasek = IntMap.find k mbinvar_temp_left in
+      List.fold_left (fun lacc ldistr ->
+        (* Constraint: (\sum ldistr) - (size(ldistr)-1) <= q_{kval} *)
+        let lcoeff_ac_temp = (1, temp_binvar_phasek)::[] in
+        let lcoeff_ac_temp = List.fold_left (fun acc elemdistr ->
+          (-1, elemdistr)::acc
+        ) lcoeff_ac_temp ldistr in
+
+        let ac_temp = mk_affconstr false lcoeff_ac_temp (1-(List.length ldistr)) in
+        ac_temp::lacc
+      ) lacc lldistr_left
+    ) mdistrib_left []
+  else [] in
+
+
+  (* DEBUG *)
+  if (debug_ac_bin_fc) then (
+    fprintf ffout "lac_temp = %a\n@?" print_list_aff_constr lac_temp;
+    fprintf ffout "DEBUG ac_to_binary - Additional bin constraints built. Ending\n@?"
+  );
+
+  (* Returns built objects *)
+  let mbuilt_binvar = if (b_create_var_left_side) then Some (qvname, mbinvar_temp_left) else None in
+  let lac_res = List.rev_append lac_bin (List.rev_append lac_unicity lac_temp) in
+  (lac_res, mbuilt_binvar)
+
+let convert_ac_to_binary b_no_underspec_ops mperiods lbc mmbinary lac =
+  (* DEBUG *)
+  if (debug) then
+    fprintf ffout "... Load balancing - convert_ac_to_binary started\n@?";
+
+  List.fold_left (fun (lac_acc, mmbinary_acc) ac_int ->
 
     (* Very quick check*)
     let bcasesimple = b_no_underspec_ops in
@@ -889,26 +1096,26 @@ let convert_ac_to_binary b_no_underspec_ops mperiods mmbinary lac =
     end in
 
     (* Convertion enabled ! *)
-    let lac_bin = if bcasesimple then
-      convert_ac_to_binary_simplecase mperiods mmbinary ac_int
+    let (lac_bin, onbinvar) = if bcasesimple then
+      let lac_bin = convert_ac_to_binary_simplecase mperiods mmbinary_acc ac_int in
+      (lac_bin, None)
     else 
-      convert_ac_to_binary_fullcase mperiods mmbinary ac_int
+      let (lac_bin, oint_name_mnbinvar) = convert_ac_to_binary_fullcase mperiods lbc mmbinary_acc ac_int in
+      (lac_bin, oint_name_mnbinvar)
     in
-    lac_bin @ lacc
-  ) [] lac
 
-
-  
-
-(* For load balancing - naming convention for when a contribution phase depend on an underspecified operator *)
-let count_temp_wcet_contrib = ref 0
-let get_temp_wcet_contrib_name _ =
-  count_temp_wcet_contrib := !count_temp_wcet_contrib + 1;
-  "tmp_wcontr_" ^ (string_of_int !count_temp_wcet_contrib)
+    (* Merge the newly built object with the accumulators *)
+    let mmbinary_res = match onbinvar with
+      | None -> mmbinary_acc
+      | Some (int_name, mbinvar) -> StringMap.add int_name mbinvar mmbinary_acc
+    in
+    (List.rev_append lac_bin lac_acc), mmbinary_res
+  ) ([], mmbinary) lac
 
 
 (* Load_balancing cost function *)
 (* Most of this function is used for the boolean version (busedforbool remove unneeded constraints) *)
+(*      binversion => Do we generate the binary version of the constraints? *)
 let load_balancing binversion b_no_underspec_ops mperiods lwcet lac lbc =
   (* * Binary variable to create:
        For each phase variable T, create (u-l) variable delAct_{i,T}, as described in "lbc"
@@ -1101,19 +1308,9 @@ let load_balancing binversion b_no_underspec_ops mperiods lwcet lac lbc =
       *)
 
       (* qbinvar : ( [phase_num : int] --> [binvarname : string]) where minq <= phase_num <= maxq *)
-      let (minq, maxq) = match opt_varphase with
-        | None -> (sh, sh)
-        | Some varphase ->
-          let bc_varphase = List.find (fun bc -> bc.varName=varphase) lbc in
-          (sh + bc_varphase.lbound, sh + (bc_varphase.ubound-1))
-      in
-      let (minq, maxq) = List.fold_left (fun (accmin,acccmax) (c,v) ->
-        let bc_v = List.find (fun bc -> bc.varName=v) lbc in
-        (accmin + c * bc_v.lbound, acccmax + c * (bc_v.ubound-1))
-      ) (minq, maxq) laffterm in
+      let (minq, maxq) = get_min_max_affterm lbc opt_varphase laffterm sh in
 
       let qvname = get_temp_wcet_contrib_name () in  (* Naming convention *)
-      assert(maxq>=minq);
       let mqbinvar = fill_int_maps qvname (maxq+1) minq IntMap.empty in
 
       (* DEBUG *)
@@ -1176,11 +1373,12 @@ let load_balancing binversion b_no_underspec_ops mperiods lwcet lac lbc =
       let lqvar_constr = IntMap.fold (fun kval lldistr lacc ->
         assert(kval>=minq);
         assert(kval<=maxq);
+        let qbinvar_k = IntMap.find kval mqbinvar in
 
         (* For each list in lldistr, do a constraint *)
         let nlconstr = List.map (fun ldistr ->
           (* Constraint: (\sum ldistr) - (size(ldistr)-1) <= q_{kval} *)
-          let lcoeff_qvar = (1, IntMap.find kval mqbinvar)::[] in
+          let lcoeff_qvar = (1, qbinvar_k)::[] in
           let lcoeff_qvar = List.fold_left (fun acc elemdistr ->
             (-1, elemdistr)::acc
           ) lcoeff_qvar ldistr in
@@ -1250,9 +1448,9 @@ let load_balancing binversion b_no_underspec_ops mperiods lwcet lac lbc =
   ) [] lac_ress in
 
   (* Boolean version: convertion of the original ac *)
-  let lac = if (binversion) then
-    convert_ac_to_binary b_no_underspec_ops mperiods mmbinary lac
-  else lac in
+  let (lac, mmbinary) = if (binversion) then
+    convert_ac_to_binary b_no_underspec_ops mperiods lbc mmbinary lac
+  else (lac, mmbinary) in
   let lbc = if (binversion) then [] else lbc in
 
 
@@ -1386,6 +1584,19 @@ let preprocess_constraints lcst =
 
   (* We transfer the 1-term affine constraints to the boundary constraints *)
   let (lac, lbc) = transfer_1term_ac_to_bc lbc lac in
+
+  (* We remove the affine constraints already satified by the boundary constraints *)
+  let lac = List.fold_left (fun lac_acc ac -> 
+    if (ac.isEq) then ac::lac_acc else  (* Equality constraint => we do not touch it *)
+    let (kmin,_) = get_min_max_affterm lbc None ac.lcoeffVar (-ac.cst) in
+    if (kmin>=0) then (
+      (* DEBUG
+      fprintf ffout "\t~> Removed constraint: %a\n@?" print_aff_constr ac; *)
+      lac_acc  (* Constraint is already trivialy satisfied by the boundaries condition *)
+    ) else
+      ac::lac_acc
+  ) [] lac in
+
 
   (* DEBUG *)
   if (debug) then (

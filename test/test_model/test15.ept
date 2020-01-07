@@ -4,6 +4,8 @@
 (* ../../heptc -v -genphconstr constr_lb_test15.txt -phcost_loadbal test15.ept *)
 (* ../../heptc -v -solphconstr sol_test15_lb.txt -phcost_loadbal test15.ept *)
 
+(* ../../heptc -v -genphconstr constr_test15_bin.txt -phcost_loadbal_bin test15.ept *)
+
 open Test15_interf
 
 model main(a:int) returns (e:int)
