@@ -688,6 +688,130 @@ let eq_model _funs context eqm =
   eqm, context
 
 
+(* ------- *)
+
+(* === Management of latency chains === *)
+
+(* Get the list of variable from the lhs *)
+let rec get_vars_lhs plhs = match plhs with
+  | Etuplepat pl -> List.fold_left (fun lacc p ->
+      (get_vars_lhs p) @ lacc
+    ) [] pl
+  | Evarpat vid -> vid::[]
+
+(* Get the list of *present* variable used in the rhs of a model equation *)
+let get_lvar_used eqm =
+  let exp_lvar_used funs lacc exp = match exp.e_desc with
+    | Evar vid | Elast vid -> exp, vid::lacc        (* Variable use detected ! *)
+    | _ -> Hept_mapfold.exp funs lacc exp           (* Other cases: just do a recursion *)
+  in
+  let funs_lvar_used = { Hept_mapfold.defaults with exp = exp_lvar_used } in
+  let _, lvar = funs_lvar_used.eq_model funs_lvar_used [] eqm in
+  lvar
+
+(* Add the new intermediate variables introduced by the normalization in the chains *)
+let convert_latency_chain vm_acc eqm_acc latency lchain =
+  assert((List.length lchain)>= 2);
+
+  (* l_chain_repeated : (l_chain[1], l_chain[0]), (l_chain[2], l_chain[1]), ... , (l_chain[n], l_chain[n-1]) *)
+  let (_,lchain_repeated) = List.fold_left (fun (last_elem, lacc) elem ->
+    (elem, (elem, last_elem)::lacc)
+  ) (List.hd lchain, []) (List.tl lchain) in
+
+  (* Getting the dependence graph from eqm_list *)
+  (* mVar2VarUsed: var_id -> var_id used by equations *)
+  let mVar2VarUsed = List.fold_left (fun macc eqm ->
+    let lvarlhs = get_vars_lhs eqm.eqm_lhs in
+    List.fold_left (fun macc varid ->
+      let lvarUsed = get_lvar_used eqm in
+      Idents.Env.add varid lvarUsed macc
+    ) macc lvarlhs
+  ) Idents.Env.empty eqm_acc in
+
+  (* Set of nodes added by the transformation *)
+  let sAdded_by_norm = List.fold_left (fun sacc vm ->
+    Idents.IdentSet.add vm.vm_ident sacc
+  ) Idents.IdentSet.empty vm_acc in
+
+  let rec explore_graph mVar2VarUsed sAdded_by_norm vid_end isFirst vid_current =
+    (* DEBUG
+    Format.fprintf (Format.formatter_of_out_channel stdout) "vid_current = %a\n@?"
+      print_ident vid_current; *)
+
+    (* Termination condition: path found *)
+    if (vid_current=vid_end) then Some [vid_end] else
+
+    (* If we are going outside of the area of the old equation *)
+    if ((not isFirst) && (not (Idents.IdentSet.mem vid_current sAdded_by_norm))) then None else
+
+    (* We explore further *)
+    let lsucc = try
+        Idents.Env.find vid_current mVar2VarUsed
+      with Not_found -> []  (* We have an input -> No successor *)
+    in
+
+    (* Recursion *)
+    let opath = List.fold_left (fun oacc vid_succ ->
+      let onpath = explore_graph mVar2VarUsed sAdded_by_norm vid_end false vid_succ in
+      match (oacc, onpath) with
+      | (None, None) -> None
+      | (None, Some npath) -> Some (vid_current::npath)
+      | (_, None) -> oacc
+      | (Some _, Some _) -> failwith ("Error -latency chain: double occurence of " ^
+            (Idents.name vid_end) ^ " in its chain of equation (accessible from " ^
+            (Idents.name vid_current) ^ " )")
+    ) None lsucc in
+    opath
+  in
+
+  let (nlchain_repeated : var_ident list list) = List.map (fun (vid_start, vid_end) ->
+    (* Idea: we explore the dependence tree starting from vid_start, until we encounter vid_end
+      Note: if we have a node not from sAdded_by_norm, then stop the exploration
+        => Because vid_end should occurs exactly ONCE in the original equation, it is a tree
+    *)
+    let ofound_path = explore_graph mVar2VarUsed sAdded_by_norm vid_end true vid_start in
+    match ofound_path with
+    | None -> failwith ("Internal error - latency chain: path from " ^ (Idents.name vid_start) ^ " to "
+                        ^ (Idents.name vid_end) ^ " not found after normalization.")
+    | Some path -> path
+  ) lchain_repeated in
+
+  (* DEBUG
+  let print_nlchain_repeated ff llchain =
+    Format.fprintf ff "[[[";
+    List.iter (fun lchain ->
+      Format.fprintf ff "[";
+      List.iter (fun elem ->
+        Format.fprintf ff "%a, " print_ident elem
+      ) lchain;
+      Format.fprintf ff "];\n@?"
+    ) llchain;
+    Format.fprintf ff "]]]"
+  in
+  Format.fprintf (Format.formatter_of_out_channel stdout) "nlchain_repeated = %a\n@?"
+    print_nlchain_repeated nlchain_repeated; *)
+
+
+  (* We reform the chain of dependence, in the right direction *)
+  (* Exemple of nlchain_repeated: (d->x->c) (c->w->b) (b->v->a)  *)
+  let (nlchain,_) = List.fold_left (fun (lacc, isfirst) lpath ->
+    (* lpath needs to be inverted *)
+    let nlacc = if (isfirst) then (
+      assert(lacc=[]);
+      List.rev lpath
+    ) else
+      let lpath_minus_start = List.tl lpath in
+      List.rev_append lpath_minus_start lacc
+    in
+    (nlacc, false)
+  ) ([], true) nlchain_repeated in
+
+  let annm_desc = Ann_latchain (latency, nlchain) in
+  Hept_utils.mk_annot_model annm_desc
+
+
+(* ------- *)
+
 let block funs context b =
   is_block_model := false;
   let _, (v_acc, eq_acc) = Hept_mapfold.block funs context b in
@@ -758,7 +882,7 @@ let block_model funs context bm =
   (* We convert the equations "eq" back to "eqm" *)
   (* By construction, the only variable in v_acc have fresh clocks *)
   (*  ===> We can translate "v_acc" to model variable declaration *)
-  let llocs = vm_acc@bm.bm_local in 
+  let llocs = List.rev_append vm_acc bm.bm_local in 
   let eqm_acc = List.map (fun eq ->
     match eq.eq_desc with
     | Eeq (p, e) ->
@@ -778,8 +902,20 @@ let block_model funs context bm =
     | _ -> failwith "Internal normalize error : Translated eqm equation should be in Eeq form"
   ) eq_acc in
 
+  (* DEBUG
+  Format.fprintf (Format.formatter_of_out_channel stdout) "eqm_acc = %a\n@?"
+    Hept_printer.print_eq_model_list eqm_acc; *)
 
-  { bm with bm_local = llocs; bm_eqs = eqm_acc }, ([], [])
+  (* Step 3 - updating the latency chain constraints *)
+  (*  Normalization step might have introduce new local var in the middle of an old equation
+    => We add these variables to the chain of latency *)
+  let n_bm_annot = List.map (fun blannot -> match blannot.annm_desc with
+    | Ann_latchain (latency, lchain) -> (* We need to add the inserted variable inside lchain *)
+      convert_latency_chain vm_acc eqm_acc latency lchain
+    | _ -> blannot
+  ) bm.bm_annot in
+
+  { bm with bm_local = llocs; bm_eqs = eqm_acc; bm_annot = n_bm_annot }, ([], [])
 
 
 

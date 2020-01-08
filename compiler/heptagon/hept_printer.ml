@@ -341,6 +341,9 @@ and print_annot_model ff annm = match annm.annm_desc with
     fprintf ff "range(%i, %i, %s, %s)" l u l1 l2
   | Ann_before (l1, l2) ->
     fprintf ff "before(%s, %s)" l1 l2
+  | Ann_latchain (k, l_vid) ->
+    fprintf ff "lattency(%i, %a)" k
+      (Pp_tools.print_list_r print_ident "["" -> ""]") l_vid
 
 
 and print_state_handler_list ff tag_act_list =

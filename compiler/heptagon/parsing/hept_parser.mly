@@ -82,7 +82,7 @@ open Hept_parsetree
 %token MAP MAPI FOLD FOLDI MAPFOLD
 %token AT INIT SPLIT REINIT
 %token THREE_DOTS
-%token MINPHASE MAXPHASE LABEL LATENCY RANGE BEFORE
+%token MINPHASE MAXPHASE LABEL LATENCY LATENCY_CHAIN RANGE BEFORE
 %token WCET USE RESSOURCE
 %token <string> PREFIX
 %token <string> INFIX0
@@ -347,6 +347,12 @@ node_params:
   | DOUBLE_LESS p=nonmt_params c=constraints DOUBLE_GREATER { p,c }
 ;
 
+lvarlatchain:
+  | IDENT                           { $1::[] }
+  | IDENT ARROW lvarlatchain  { $1::$3 }
+;
+
+
 modelannot:
   | LATENCY LPAREN u=INT COMMA lab1=IDENT COMMA lab2=IDENT RPAREN
     { mk_annot_model (Ann_range (0, u, lab1, lab2)) (Loc($startpos,$endpos)) }
@@ -354,6 +360,8 @@ modelannot:
     { mk_annot_model (Ann_range (l, u, lab1, lab2)) (Loc($startpos,$endpos)) }
   | BEFORE LPAREN lab1=IDENT COMMA lab2=IDENT RPAREN
     { mk_annot_model (Ann_before (lab1, lab2)) (Loc($startpos,$endpos)) }
+  | LATENCY_CHAIN lat=INT LPAREN lvn=lvarlatchain RPAREN
+    { mk_annot_model (Ann_latchain (lat, lvn)) (Loc($startpos,$endpos)) }
 ;
 
 

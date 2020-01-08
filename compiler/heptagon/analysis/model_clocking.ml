@@ -1100,8 +1100,146 @@ let add_causality_constraint lcst mdecvar leqm =
 (* ----- *)
 (* ----- *)
 
+(* Constraint for latency chains *)
+let add_latency_chain_constraint mdecvar mVar2Eq mvar_ock lat lvid_chain lcst_acc =
+  (* let rec remove_last_elem l = match l with
+    | [] -> failwith "internal error: remove_last_elem applied to an empty list"
+    | h::[] -> []
+    | h::t -> h::(remove_last_elem t)
+  in *)
+  let lvid_chain_nofirst = List.tl lvid_chain in
+
+  (* We sum the latency over the chain - assume a normalized program *)
+  let diff_ocks ock ock_e1 =
+    let (ophid, laffterm, sh, _, per) = extract_ock_info ock in
+    let (ophid1, laffterm1, sh1, _, per1) = extract_ock_info ock_e1 in
+
+    assert(per=per1);
+    let shdiff = sh - sh1 in
+    
+    let laffterm1_minus = List.map (fun (c,v) -> (-c,v)) laffterm1 in
+    let lafftermdiff = List.fold_left (fun lacc term ->
+      add_term term lacc
+    ) laffterm laffterm1_minus in
+    let lafftermdiff = match ophid with
+      | None -> lafftermdiff
+      | Some phid -> add_term (1,  phid) lafftermdiff
+    in
+    let lafftermdiff = match ophid1 with
+      | None -> lafftermdiff
+      | Some phid -> add_term (-1, phid) lafftermdiff
+    in
+    let lafftermdiff = List.map (fun (c,v) ->
+      (c, varname_from_phase_index v)
+    ) lafftermdiff in
+    (lafftermdiff, shdiff)
+  in
+
+  let (lcoeff_lat, cst_lat) = List.fold_left (fun (lcoeff_acc, cst_acc) vid ->
+    let eqm = Env.find vid mVar2Eq in
+    let ock = eqm.eqm_clk in
+
+    (* Terms potentially introduced *)
+    let onterm = match eqm.eqm_rhs.e_desc with
+      | Econst _ ->
+        failwith "Internal error - constant equation should not happen in latency chain"
+      | Elast _ ->
+        failwith "Model_clocking::add_latency_chain_constraint : unsure on how to manage last"
+      | Ewhen _ | Emerge _ | Ecurrent _ ->
+        failwith "Ewhen/Ecurrent/Emerge shoud not appear in a block_model"
+      
+      | Evar _ | Estruct _ | Esplit _ | Eapp _ | Eiterator _ -> None
+      
+      (* Period-changing operators are instantaneous *)
+      | Ewhenmodel _ | Ecurrentmodel _ | Ewhenq _ | Ecurrentq _ -> None
+
+      | Epre _ | Efby _ -> (* We add the period *)
+        let per = get_period_ock ock in
+        Some ([], per)
+      
+      | Edelay (d,_) | Edelayfby (d, _, _) ->
+        Some ([], d)
+      
+      | Ebuffer e1 | Ebufferfby (_, e1) | Ebufferlat (_, e1) ->
+        (* Normalization => e1 must be a var or a constant / no sense of having a constant *)
+        let vid_e1 = assert_Evar e1 in
+        let ock_e1 = try Env.find vid_e1 mvar_ock
+          with Not_found -> failwith ("Variable " ^ (Idents.name vid_e1) ^ " not found in mvar_ock.")
+        in
+
+        (* DEBUG
+        fprintf ffout "\neqm = %a | vid_e1 = %a\n@?" Hept_printer.print_eq_model eqm  print_ident vid_e1;
+        fprintf ffout "ock = %a | ock_e1 = %a\n@?" print_oneck ock  print_oneck ock_e1; *)
+
+        (* Lattency introduced : "ock - ock_e1" *)
+        let (lafftermdiff, shdiff) = diff_ocks ock ock_e1 in
+        Some (lafftermdiff, shdiff)
+
+      | Efbyq _ ->
+       (* Remark: mdecvar : [name of first lhs var
+          -> decision variable name associated to the underspecified op on the right] *)
+        let vidlhs = get_first_var eqm.eqm_lhs in
+        let decvar = Env.find vidlhs mdecvar in
+        let per = get_period_ock ock in
+
+        let laffterm = (per, decvar)::[] in
+        Some (laffterm, 0)
+      | Ebufferfbyq (_, e1) ->
+        let vid_e1 = assert_Evar e1 in
+        let ock_e1 = try Env.find vid_e1 mvar_ock
+          with Not_found -> failwith ("Variable " ^ (Idents.name vid_e1) ^ " not found in mvar_ock.")
+        in
+        (* Lattency introduced : "ock - ock_e1" *)
+        let (lafftermdiff, shdiff) = diff_ocks ock ock_e1 in
+
+        (* Adding the potential "+per" the decision variable might have introduced *)
+        let vidlhs = get_first_var eqm.eqm_lhs in
+        let decvar = Env.find vidlhs mdecvar in
+        let per = get_period_ock ock in
+        let lafftermdiff = add_term (per, decvar) lafftermdiff in
+
+        Some (lafftermdiff, shdiff)
+    in
+
+
+    (* DEBUG
+    (match onterm with
+      | None -> fprintf ffout "vid = %a ==> onterm = None\n@?" print_ident vid
+      | Some (term, cst) -> fprintf ffout "vid = %a ==> onterm = Some (%a, %i)\n@?"
+        print_ident vid  (print_affterm ~bfirst:true) term  cst
+    );*)
+
+    (* Add the new contributions to the old ones *)
+    let (lcoeff_acc, cst_acc) = match onterm with
+      | None -> (lcoeff_acc, cst_acc)
+      | Some (laffterm, cst) ->
+        let cst_acc = cst + cst_acc in
+        let lcoeff_acc = List.fold_left (fun lacc term ->
+          add_term term lacc
+        ) lcoeff_acc laffterm in
+        (lcoeff_acc, cst_acc)
+    in
+    (lcoeff_acc, cst_acc)
+  ) ([],0) lvid_chain_nofirst in
+
+
+  (*  lcoeff_lat + cst_lat <= lat  ===> -lcoeff_lat >= cst_lat-lat *)
+  let lcoeff_lat_minus = List.map (fun (c,v) -> (-c, v)) lcoeff_lat in
+  let ac_latency = mk_affconstr false lcoeff_lat_minus (cst_lat-lat) in
+
+  (* DEBUG
+  fprintf ffout "ac_latency = %a\n@?" print_aff_constr ac_latency; *)
+
+  (* Note: substitutions are performed after that part *)
+
+  (* Wrapping things up *)
+  let (lac_acc, lbc_acc) = lcst_acc in
+  let nlcst_acc = (ac_latency::lac_acc, lbc_acc) in
+  nlcst_acc
+
+
 (* Constraints from annotation management *)
-let add_constraint_from_annot lcst eqm_list lbann =
+let add_constraint_from_annot mdecvar mvar_ock lcst eqm_list lbann =
   (* Constraints from equations *)
   (* mlabel : label -> ock / associate a label with the ock info *)
   let (lcst, mlabel) = List.fold_left (fun (lcst_acc, mlabel) eqm ->
@@ -1152,6 +1290,11 @@ let add_constraint_from_annot lcst eqm_list lbann =
         (lcst, StringMap.add ln eqm.eqm_clk mlabel)
     ) (lcst_acc, mlabel) eqm.eqm_annot
   ) (lcst, StringMap.empty) eqm_list in
+
+  let mVar2Eq = List.fold_left (fun macc eqm ->
+    let lvarlhs = get_vars_lhs eqm.eqm_lhs in
+    List.fold_left (fun macc varid -> Idents.Env.add varid eqm macc) macc lvarlhs
+  ) Idents.Env.empty eqm_list in
 
   (* Constraint from block *)
   let lcst = List.fold_left (fun lcst_acc bmann -> match bmann.annm_desc with
@@ -1327,6 +1470,9 @@ let add_constraint_from_annot lcst eqm_list lbann =
           (ac::lac, lbc)
       )
     end
+
+    | Ann_latchain (lat, lvid_chain) ->
+      add_latency_chain_constraint mdecvar mVar2Eq mvar_ock lat lvid_chain lcst_acc
   ) lcst lbann in
 
   lcst
@@ -1655,7 +1801,7 @@ and typing_block_model h lcst {bm_local = l; bm_eqs = eq_list; bm_annot = lbann}
   );
 
   (* Adding the constraints from the annotations *)
-  let (lcst: (affconstr list) * (boundconstr list)) = add_constraint_from_annot lcst eq_list lbann in
+  let (lcst: (affconstr list) * (boundconstr list)) = add_constraint_from_annot mdecvar h1 lcst eq_list lbann in
 
 
   (* DEBUG *)

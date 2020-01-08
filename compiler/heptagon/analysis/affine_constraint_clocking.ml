@@ -141,8 +141,10 @@ let print_out_cplex_constraint ff obj_func lac lbc lgeneral linteger lbinary =
   print_affterm_multilines ~bfirst:true num_elem_max_per_line ff obj_func;
   fprintf ff "Subject To\n@?";
   print_list_aff_constr ff lac;
-  fprintf ff "Bounds\n@?";
-  print_list_bound_constr ff lbc;
+  if (lbc!=[]) then begin
+    fprintf ff "Bounds\n@?";
+    print_list_bound_constr ff lbc
+  end;
   if (lgeneral!=[]) then begin
     fprintf ff "General\n@?";
     print_list_varname ff lgeneral;

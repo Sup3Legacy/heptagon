@@ -260,6 +260,9 @@ and print_annot_model ff annm = match annm.annm_desc with
     fprintf ff "range(%i, %i, %s, %s)" l u l1 l2
   | Ann_before (l1, l2) ->
     fprintf ff "before(%s, %s)" l1 l2
+  | Ann_latchain (lat, lv) ->
+    fprintf ff "lattency(%i, %a)" lat
+      (Pp_tools.print_list_r print_var_name "["" -> ""]") lv
 
 and print_block_model ff bm =
   fprintf ff "%a@\n%a\n%a" (print_list print_var_dec_model "(" "," ")") bm.bm_local

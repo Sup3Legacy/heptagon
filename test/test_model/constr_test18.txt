@@ -1,0 +1,35 @@
+Minimize
+	ph_49
+Subject To
+	-2 ph_46 + ph_31 >= 0
+	2 ph_46 - ph_31 >= -1
+	-2 ph_46 + ph_31 >= 0
+	2 ph_46 - ph_31 >= -1
+	-ph_6 + 2 ph_46 + ph_49 >= -3
+	-ph_49 - 2 ph_46 + ph_31 >= 0
+	-ph_31 + ph_6 >= 0
+	-ph_6 + 2 ph_41 + ph_27 >= 0
+	-ph_27 + ph_7 >= 0
+	-ph_7 + ph_37 + ph_23 >= 0
+Bounds
+	0 <= ph_49 < 2
+	0 <= ph_46 < 3
+	0 <= ph_41 < 3
+	0 <= ph_37 < 2
+	0 <= ph_7 < 2
+	0 <= ph_6 < 6
+	0 <= ph_23 < 1
+	0 <= ph_27 < 2
+	0 <= ph_31 < 6
+Integer
+	ph_49
+	ph_46
+	ph_41
+	ph_37
+	ph_7
+	ph_6
+	ph_23
+	ph_27
+	ph_31
+End
+

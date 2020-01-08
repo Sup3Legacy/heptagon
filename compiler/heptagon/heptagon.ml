@@ -168,6 +168,7 @@ and annot_model_desc =
   | Ann_range of int * int * label_name * label_name
   (* Precedence constraint on the phase *)
   | Ann_before of label_name * label_name
+  | Ann_latchain of int * (var_ident list)
 
 
 and block_model = {

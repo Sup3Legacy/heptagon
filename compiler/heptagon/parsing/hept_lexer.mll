@@ -118,6 +118,7 @@ List.iter (fun (str,tok) -> Hashtbl.add keyword_table str tok) [
  "max_phase", MAXPHASE;
  "label", LABEL;
  "latency", LATENCY;
+ "latency_chain", LATENCY_CHAIN;
  "range", RANGE;
  "before", BEFORE;
  "wcet", WCET;

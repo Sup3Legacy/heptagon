@@ -546,10 +546,13 @@ and translate_block env tenv b =
     Heptagon.b_stateful = false;
     Heptagon.b_loc = b.b_loc; }, env
 
-and translate_bm_annot bmann =
+and translate_bm_annot env bmann =
   let desc = match bmann.annm_desc with
     | Ann_range (l, u, lab1, lab2) -> Heptagon.Ann_range (l, u, lab1, lab2)
     | Ann_before (lab1, lab2) -> Heptagon.Ann_before (lab1, lab2)
+    | Ann_latchain (lat, lvn) ->
+      let lvid = List.map (fun vn -> Rename.var bmann.annm_loc env vn) lvn in
+      Heptagon.Ann_latchain (lat, lvid)
   in
   { Heptagon.annm_desc = desc;
     Heptagon.annm_loc = bmann.annm_loc; }
@@ -558,7 +561,7 @@ and translate_block_model env bm =
   let env = Rename.append_vdm env bm.bm_local in
   { Heptagon.bm_local = translate_vd_model_list false env bm.bm_local;
     Heptagon.bm_eqs = List.map (translate_eq_model env) bm.bm_eqs;
-    Heptagon.bm_annot = List.map translate_bm_annot bm.bm_annot;
+    Heptagon.bm_annot = List.map (translate_bm_annot env) bm.bm_annot;
     Heptagon.bm_loc = bm.bm_loc }, env
 
 and translate_state_handler env tenv sh =

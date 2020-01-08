@@ -3,9 +3,7 @@
 (* This program contains exactly the information corresponding to a graph of dependence
 	between tasks, with no information whatsoever about the data sampled *)
 
-
 (* ../../heptc -v -noconstrbuffby -genphconstr constr_test17.txt test17.ept *)
-(* ../../heptc -v -noconstrbuffby -solphconstr sol_test17.txt test17.ept *)
 
 
 (* Elementary functions (dummy) *)

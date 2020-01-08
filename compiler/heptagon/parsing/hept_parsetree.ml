@@ -202,6 +202,7 @@ and annot_model_desc =
   | Ann_range of int * int * label_name * label_name
   (* Precedence constraint on the phase *)
   | Ann_before of label_name * label_name
+  | Ann_latchain of int * (var_name list)
 
 and block_model = {
   bm_local    : var_dec_model list;
