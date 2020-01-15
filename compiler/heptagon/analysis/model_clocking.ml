@@ -1849,18 +1849,48 @@ and typing_block_model h lcst {bm_local = l; bm_eqs = eq_list; bm_annot = lbann}
   );
 
 
-  (* Manages subtitutions *)
-  let msubst = List.fold_left (fun macc (phid1, optphid2, sh, laffterm) ->
+  (* Manages subtitutions and extract constraints if a variable is substituted several times *)
+  let (msubst, lac_subst) = List.fold_left (fun (macc,lac_acc) (phid1, optphid2, sh, laffterm) ->
     let varph1 = varname_from_phase_index phid1 in
-    let optvarph2 = match optphid2 with
-      | None -> None
-      | Some phid2 -> Some (varname_from_phase_index phid2)
-    in
-    let laffterm = List.map (fun (c,vid) ->
-      (c,varname_from_phase_index vid)
-    ) laffterm in
-    StringMap.add varph1 (optvarph2, sh, laffterm) macc
-  ) StringMap.empty lsubst in
+    
+    (* If there were already a substitution assign to varph1, we have a new ac *)
+    if (StringMap.mem varph1 macc) then (
+      let (optvarph_acc, sh_acc, laffterm_acc) = StringMap.find varph1 macc in
+
+      (* optphid2 + sh + laffterm <=> phid1 <=> optvarph_acc + sh_acc + laffterm_acc *)
+      (* Constraint: optvarph_acc + laffterm_acc - optphid2 - laffterm = sh - sh_acc *)
+      let lcoeffVar_subst : (int * string) list = match optvarph_acc with
+        | None -> []
+        | Some varph -> (1,varph)::[]
+      in
+      let lcoeffVar_subst = match optphid2 with
+        | None -> []
+        | Some phid2 -> add_term (-1, varname_from_phase_index phid2) lcoeffVar_subst
+      in
+      let lcoeffVar_subst = List.fold_left (fun lcv_acc (c,v) -> 
+        add_term (c, v) lcv_acc
+      ) lcoeffVar_subst laffterm_acc in
+      let lcoeffVar_subst = List.fold_left (fun lcv_acc (c,vid) -> 
+        add_term (-c, varname_from_phase_index vid) lcv_acc
+      ) lcoeffVar_subst laffterm in
+      let ac_subst = mk_affconstr true lcoeffVar_subst (sh - sh_acc) in
+
+      (macc, ac_subst::lac_acc)
+    ) else (
+      let optvarph2 = match optphid2 with
+        | None -> None
+        | Some phid2 -> Some (varname_from_phase_index phid2)
+      in
+      let laffterm = List.map (fun (c,vid) ->
+        (c,varname_from_phase_index vid)
+      ) laffterm in
+      let nmacc = StringMap.add varph1 (optvarph2, sh, laffterm) macc in
+      (nmacc, lac_acc)
+    )
+  ) (StringMap.empty, []) lsubst in
+  let (lac, lbc) = lcst in
+  let lcst = (List.rev_append lac_subst lac, lbc) in
+
   
   (* Closure on the substitutions of msubst *)
   let msubst = closure_subst msubst in

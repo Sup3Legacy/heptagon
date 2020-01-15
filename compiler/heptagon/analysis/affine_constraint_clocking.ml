@@ -34,7 +34,7 @@ open Containers
 open Clocks
 
 (* For debugging *)
-let debug = false  (* DEBUG *)
+let debug = true  (* DEBUG *)
 let ffout = Format.formatter_of_out_channel stdout
 
 let max_default_phase_for_solving = 7777 (* Should be distinctive enough *)
@@ -242,7 +242,6 @@ let transfer_1term_ac_to_bc lbc lac =
     if ((List.length affconstr.lcoeffVar)=0) then ( (* While we are at it... *)
       if (affconstr.cst>0) then
         failwith "Constraint: [0 >= strictly positive integer] is unsolvable";
-      assert(0>=affconstr.cst);
       (lac_acc, lbc_acc)
     ) else (
       assert((List.length affconstr.lcoeffVar)=1);
@@ -261,6 +260,40 @@ let transfer_1term_ac_to_bc lbc lac =
         else
           failwith "Coefficient in front of variable is 0."
       in
+      (lac_acc, lbc_acc)
+    )
+  ) ([],lbc) lac in
+  (lac, lbc)
+
+(* Get rid of equalities with only one term *)
+let manage_equalities lbc lac =
+  let (lac,lbc) = List.fold_left (fun (lac_acc, lbc_acc) affconstr ->
+    if (affconstr.isEq=false) then (affconstr::lac_acc, lbc_acc) else
+
+    (* We have an equality *)
+    (* If there is only one argument *)
+    if ((List.length affconstr.lcoeffVar)>1) then (affconstr::lac_acc, lbc_acc) else
+
+
+    if ((List.length affconstr.lcoeffVar)=0) then ( (* While we are at it... *)
+      if (affconstr.cst!=0) then
+        failwith "Constraint: [0 = non-zero constant] is unsolvable";
+      (lac_acc, lbc_acc)
+    ) else (
+      assert((List.length affconstr.lcoeffVar)=1);
+      let (c,v) = List.hd affconstr.lcoeffVar in
+
+      (* We update the boundary condition *)
+      if ((affconstr.cst mod c) != 0) then (
+        fprintf ffout "Constraint : %a\n@?" print_aff_constr affconstr;
+        failwith "Constraint: [c.v = cst] where c does not divide cst: v cannot be rational"
+      ) else
+      let value_v = affconstr.cst / c in
+
+      (* We update the boundary constraint to be value_v <= v < value_v+1 *)
+      let lbc_acc = update_bound_constraints true v value_v lbc_acc in
+      let lbc_acc = update_bound_constraints false v value_v lbc_acc in
+
       (lac_acc, lbc_acc)
     )
   ) ([],lbc) lac in
@@ -761,7 +794,7 @@ let get_phase_distribution mmbinary opt_varphase laffterm sh =
   (* Adding the contribution of the laffterm one by one *)
   let shift_contrib c val_v binvar_name_v m_old_distr =
     IntMap.fold (fun val_distr lldistr macc ->
-      let nlldistr = List.map (fun ldistr -> binvar_name_v::ldistr) lldistr in
+      let nlldistr = List.rev_map (fun ldistr -> binvar_name_v::ldistr) lldistr in
       IntMap.add (val_distr + c*val_v) nlldistr macc
     ) m_old_distr IntMap.empty
   in
@@ -890,7 +923,7 @@ let convert_ac_to_binary_simplecase mperiods mmbinary ac_int =
   let lac_bool = convert_bool (perT, mbinvarT, mbinvarS) (posvar, negvar, cst) [] perS in
   lac_bool
 
-let debug_ac_bin_fc = false (* DEBUG for the convert_ac_to_binary_fullcase function *)
+let debug_ac_bin_fc = true (* DEBUG for the convert_ac_to_binary_fullcase function *)
 
 let convert_ac_to_binary_fullcase mperiods lbc mmbinary ac_int =
   (* Constraint ac_int might have additional terms coming from the decision variables *)
@@ -898,7 +931,6 @@ let convert_ac_to_binary_fullcase mperiods lbc mmbinary ac_int =
 
   (* Heuristic (probably not optimal): we find the term with the most variability and put it on the right *)
   (* It should minimize the amount of combinations... :/ *)
-  assert(not (ac_int.isEq));
   let lcoeffVar = ac_int.lcoeffVar in
   let cst = ac_int.cst in
 
@@ -1001,7 +1033,6 @@ let convert_ac_to_binary_fullcase mperiods lbc mmbinary ac_int =
 
 
   (* Building the constraints between the left and the right side *)
-  (* (\forall phase) [mbinvar_temp_left]_{phase} <= \sum_{phase'>=phase} [mdistrib_right]_{phase'} *)
   let m_binvar_right = IntMap.map (fun lldistr -> 
     assert((List.length lldistr)=1);
     let ldistr = List.hd lldistr in
@@ -1009,33 +1040,29 @@ let convert_ac_to_binary_fullcase mperiods lbc mmbinary ac_int =
     List.hd ldistr
   ) mdistrib_right in
 
-  (* let temp_constr_info = IntMap.merge (fun k oa ollb -> match (oa, ollb) with
-    | (None, None) -> None
-    | (Some a, None) -> Some (a::[],[])
-    | (None, Some llb) ->
-      assert((List.length llb)=1);
-      let lb = List.hd llb in
-      assert((List.length lb)=1);
-      Some ([],(List.hd lb)::[])
-    | (Some a, Some llb) -> 
-      assert((List.length llb)=1);
-      let lb = List.hd llb in
-      assert((List.length lb)=1);
-      Some (a::[],(List.hd lb)::[])
-  ) mbinvar_temp_left mdistrib_right in *)
-  let lac_bin = IntMap.fold (fun phval binvar_left lacc ->
+  let lac_bin = if (not (ac_int.isEq)) then
+    (* (\forall phase) [mbinvar_temp_left]_{phase} <= \sum_{phase'>=phase} [mdistrib_right]_{phase'} *)
+    IntMap.fold (fun phval binvar_left lacc ->
+      let lcoeffVar = ((-1), binvar_left)::[] in 
+      let lcoeffVar = IntMap.fold (fun k binvar_r lacc ->
+        if (k>=phval) then
+          (1, binvar_r)::lacc
+        else
+          lacc
+      ) m_binvar_right lcoeffVar in
 
-    let lcoeffVar = ((-1), binvar_left)::[] in 
-    let lcoeffVar = IntMap.fold (fun k binvar_r lacc ->
-      if (k>=phval) then
-        (1, binvar_r)::lacc
-      else
-        lacc
-    ) m_binvar_right lcoeffVar in
-
-    let nac_phasek = mk_affconstr false lcoeffVar 0 in
-    nac_phasek::lacc
-  ) mbinvar_temp_left [] in
+      let nac_phasek = mk_affconstr false lcoeffVar 0 in
+      nac_phasek::lacc
+    ) mbinvar_temp_left []
+  else
+    (* (\forall phase) [mbinvar_temp_left]_{phase} <= [mdistrib_right]_{phase} *)
+    IntMap.fold (fun phval binvar_left lacc ->
+      let binvar_r = IntMap.find phval m_binvar_right in
+      let lcoeffVar = (1, binvar_r)::((-1), binvar_left)::[] in 
+      let nac_phasek = mk_affconstr false lcoeffVar 0 in
+      nac_phasek::lacc
+    ) mbinvar_temp_left []
+  in
 
 
   (* DEBUG *)
@@ -1599,6 +1626,7 @@ let preprocess_constraints lcst =
       ac::lac_acc
   ) [] lac in
 
+  let (lac, lbc) = manage_equalities lbc lac in
 
   (* DEBUG *)
   if (debug) then (
