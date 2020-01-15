@@ -68,7 +68,9 @@ let print_gr_per ff gr =
 
 
 (* Build an expression from a type *)
-let rec build_dummy_stexp t = match t with
+let rec build_dummy_stexp t =
+  let t = Modules.unalias_type t in
+  match t with
   | Tid qname ->
     let name = qname.Names.name in
     let se_desc = match name with
@@ -77,7 +79,8 @@ let rec build_dummy_stexp t = match t with
       | "float" -> Sfloat 0.0
       | "string" -> Sstring ""
       | "bool" -> Sbool false
-      | _ -> failwith ("model2node - unrecognized type " ^ name)
+      | _ ->
+        failwith ("model2node - unrecognized type " ^ name)
     in
     mk_static_exp t se_desc
   | Tarray (ty, sexpr) ->

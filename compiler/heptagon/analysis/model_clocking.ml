@@ -544,67 +544,69 @@ let rec typing_model_pat h = function
 let rec typing_osych h lcst pat e = match e.e_desc with
   | Econst _ -> 
     let ock = fresh_osynch_clock () in
-    (Ock ock, lcst, None)
+    (Ock ock, lcst, [], None)
   | Evar x ->
     let ock = ock_of_name h x in
-    (Ock ock, lcst, None)
+    (Ock ock, lcst, [], None)
   | Efby (e1, e2) ->
-    let (ct1, lcst, odecvar) = typing_osych h lcst pat e1 in
+    let (ct1, lcst, lsubst_e1, odecvar) = typing_osych h lcst pat e1 in
     assert(odecvar=None);
-    let (lcst, odecvar) = expect_osynch h lcst pat ct1 e2 in
-    (ct1, lcst, odecvar)
+    let (lcst, lsubst_fby, odecvar) = expect_osynch h lcst pat ct1 e2 in
+    let lsubst = List.rev_append lsubst_fby lsubst_e1 in
+    (ct1, lcst, lsubst, odecvar)
   | Epre (_,e2) ->
     typing_osych h lcst pat e2
   | Estruct l ->
     let ock = fresh_osynch_clock () in
-    let lcst = List.fold_left (fun lcst (_, e) ->
-      let (lcst, odecvar) = expect_osynch h lcst pat (Ock ock) e in
+    let (lcst, lsubst) = List.fold_left (fun (lcst, lsubst_acc) (_, e) ->
+      let (lcst, lsubst_e, odecvar) = expect_osynch h lcst pat (Ock ock) e in
       assert(odecvar=None);
-      lcst
-    ) lcst l in
-    (Ock ock, lcst, None)
+      let lsubst_acc = List.rev_append lsubst_e lsubst_acc in
+      (lcst, lsubst_acc)
+    ) (lcst,[]) l in
+    (Ock ock, lcst, lsubst, None)
 
   (* Expressions specific to model *)
   | Ewhenmodel (e, (ph,ratio)) ->
-    let (octe, lcst, odecvar) = typing_osych h lcst pat e in
+    let (octe, lcst, lsubst, odecvar) = typing_osych h lcst pat e in
     let noct = typing_when_osynch octe ph ratio in
-    (noct, lcst, odecvar)
+    (noct, lcst, lsubst, odecvar)
 
   | Ecurrentmodel ((ph, ratio), _, e) ->
-    let (octe, lcst, odecvar) = typing_osych h lcst pat e in
+    let (octe, lcst, lsubst, odecvar) = typing_osych h lcst pat e in
     let noct = typing_current_osynch octe ph ratio in
-    (noct, lcst, odecvar)
+    (noct, lcst, lsubst, odecvar)
 
   | Edelay (d, e) ->
-    let (octe, lcst, odecvar) = typing_osych h lcst pat e in
+    let (octe, lcst, lsubst, odecvar) = typing_osych h lcst pat e in
     let noct = typing_delay_osynch octe d in
-    (noct, lcst, odecvar)
+    (noct, lcst, lsubst, odecvar)
 
   | Edelayfby (d, _, e) ->
-    let (octe, lcst, odecvar) = typing_osych h lcst pat e in
+    let (octe, lcst, lsubst, odecvar) = typing_osych h lcst pat e in
     let noct = typing_delayfby_osynch octe d in
-    (noct, lcst, odecvar)
+    (noct, lcst, lsubst, odecvar)
 
   | Ebuffer e ->
-    let (octe, lcst, odecvar) = typing_osych h lcst pat e in
+    let (octe, lcst, lsubst, odecvar) = typing_osych h lcst pat e in
     let (noct, laffconstr) = typing_buffer_osynch octe in
     let (al,bl) = lcst in
-    (noct, (laffconstr@al,bl), odecvar)
+    (noct, (laffconstr@al,bl), lsubst, odecvar)
 
   | Ebufferfby (_, e) ->
-    let (octe, lcst, odecvar) = typing_osych h lcst pat e in
+    let (octe, lcst, lsubst, odecvar) = typing_osych h lcst pat e in
     let (noct, laffconstr) = typing_bufferfby_osynch octe in
     let (al,bl) = lcst in
-    (noct, (laffconstr@al,bl), odecvar)
+    (noct, (laffconstr@al,bl), lsubst, odecvar)
 
   | Ebufferlat (lat, e) ->
-    let (octe, lcst, odecvar) = typing_osych h lcst pat e in
+    let (octe, lcst, lsubst, odecvar) = typing_osych h lcst pat e in
     let (noct, laffconstr) = typing_bufferlat_osynch octe lat in
     let (al,bl) = lcst in
-    (noct, (laffconstr@al,bl), odecvar)
+    (noct, (laffconstr@al,bl), lsubst, odecvar)
 
   | Efbyq (seInit, e) ->  (* fby? does not have any impact on the clock itself *)
-    let (octe, lac, odecvar) = typing_osych h lcst pat e in
+    let (octe, lac, lsubst, odecvar) = typing_osych h lcst pat e in
     assert(odecvar=None);  (* No nested underspecified operators *)
 
     (* Building the decision variable *)
@@ -614,10 +616,10 @@ let rec typing_osych h lcst pat e = match e.e_desc with
     (* Boundary constraint : 0<= dvarname <=1 *)
     let bc_dec = mk_bound_constr dvarname 0 2 in
     let (al,bl) = lcst in
-    (octe, (al,bc_dec::bl), Some dvarname)
+    (octe, (al,bc_dec::bl), lsubst, Some dvarname)
 
   | Ewhenq (e, (min,max), ratio) ->
-    let (octe, lcst, odecvar) = typing_osych h lcst pat e in
+    let (octe, lcst, lsubst, odecvar) = typing_osych h lcst pat e in
     assert(odecvar=None);  (* No nested underspecified operators *)
 
     (* Building the decision variable *)
@@ -629,10 +631,10 @@ let rec typing_osych h lcst pat e = match e.e_desc with
 
     let (noct, laffconstr) = typing_whenq_osynch octe min max ratio dvarid in
     let (al,bl) = lcst in
-    (noct, (laffconstr@al, bc_dec::bl), Some dvarname)
+    (noct, (laffconstr@al, bc_dec::bl), lsubst, Some dvarname)
 
   | Ecurrentq (ratio, (min,max), seInit, e) ->
-    let (octe, lcst, odecvar) = typing_osych h lcst pat e in
+    let (octe, lcst, lsubst, odecvar) = typing_osych h lcst pat e in
     assert(odecvar=None);  (* No nested underspecified operators *)
 
     (* Building the decision variable *)
@@ -644,10 +646,10 @@ let rec typing_osych h lcst pat e = match e.e_desc with
 
     let (noct, laffconstr) = typing_currentq_osynch octe min max ratio dvarid in
     let (al,bl) = lcst in
-    (noct, (laffconstr@al, bc_dec::bl), Some dvarname)
+    (noct, (laffconstr@al, bc_dec::bl), lsubst, Some dvarname)
 
   | Ebufferfbyq (seInit,e) ->
-    let (octe, lcst, odecvar) = typing_osych h lcst pat e in
+    let (octe, lcst, lsubst, odecvar) = typing_osych h lcst pat e in
     assert(odecvar=None);  (* No nested underspecified operators *)
 
     (* Building the decision variable *)
@@ -659,17 +661,17 @@ let rec typing_osych h lcst pat e = match e.e_desc with
 
     let (noct, laffconstr) = typing_bufferfbyq_osynch octe dvarid in
     let (al,bl) = lcst in
-    (noct, (laffconstr@al, bc_dec::bl), Some dvarname)
+    (noct, (laffconstr@al, bc_dec::bl), lsubst, Some dvarname)
 
   | Eapp({a_op = op}, args, _) ->
       let base_ock = fresh_osynch_clock () in
-      let (oct, lcst) = typing_osynch_app h lcst base_ock pat op args in
-      (oct, lcst, None)
+      let (oct, lcst, lsubst) = typing_osynch_app h lcst base_ock pat op args in
+      (oct, lcst, lsubst, None)
 
   (* TODO: iterators needed ??? :/ *)
   | Eiterator (it, {a_op = op}, nl, pargs, args, _) ->
     let base_ock = fresh_osynch_clock () in
-    let (oct, lcst) = match it with
+    let (oct, lcst, lsubst) = match it with
       | Imap -> (* exactly as if clocking the node *)
           typing_osynch_app h lcst base_ock pat op (pargs@args)
       | Imapi -> (* clocking the node with the extra i input on [ck_r] *)
@@ -682,8 +684,8 @@ let rec typing_osych h lcst pat e = match e.e_desc with
           typing_osynch_app h lcst base_ock pat op (pargs@args@il)
       | Ifold | Imapfold ->
           (* clocking node with equality constaint on last input and last output *)
-          let (oct, lcst) = typing_osynch_app h lcst base_ock pat op (pargs@args) in
-          (oct, lcst)
+          let (oct, lcst, lsubst) = typing_osynch_app h lcst base_ock pat op (pargs@args) in
+          (oct, lcst, lsubst)
       | Ifoldi -> (* clocking the node with the extra i and last in/out constraints *)
           let il (* stubs i as 0 *) =
             List.map (fun _ -> mk_exp
@@ -696,10 +698,10 @@ let rec typing_osych h lcst pat e = match e.e_desc with
             | [l] -> il @ [l]
             | h::l -> h::(insert_i l)
           in
-          let (oct, lcst) = typing_osynch_app h lcst base_ock pat op (pargs@(insert_i args)) in
-          (oct, lcst)
+          let (oct, lcst, lsubst) = typing_osynch_app h lcst base_ock pat op (pargs@(insert_i args)) in
+          (oct, lcst, lsubst)
     in
-    (oct, lcst, None)
+    (oct, lcst, lsubst, None)
   | Esplit _ | Elast _ | Ecurrent _ -> assert false
   | Emerge _ | Ewhen _ -> failwith "Construction should not appear in a model node"
 
@@ -708,19 +710,21 @@ and typing_osynch_app h lcst base pat op e_list = match op with
   | Earrow
   | Earray_fill | Eselect | Eselect_dyn | Eselect_trunc | Eupdate
   | Eselect_slice | Econcat | Earray | Efield | Efield_update | Eifthenelse | Ereinit ->
-    let lcst = List.fold_left (fun lcst e ->
-      let (lcst, odecvar) = expect_osynch h lcst pat (Ock base) e in
+    let (lcst, lsubst) = List.fold_left (fun (lcst, lsubst_acc) e ->
+      let (lcst, lsubst_e, odecvar) = expect_osynch h lcst pat (Ock base) e in
       assert(odecvar=None); (* No nested underspecified operator *)
-      lcst
-    ) lcst e_list in
-    (Ock base, lcst)
+      let lsubst_acc = List.rev_append lsubst_e lsubst_acc in
+      (lcst, lsubst_acc)
+    ) (lcst, []) e_list in
+    (Ock base, lcst, lsubst)
   | Efun { qual = Module "Iostream"; name = "printf" } | Efun { qual = Module "Iostream"; name = "fprintf" } ->
-    let lcst = List.fold_left (fun lcst e ->
-      let (lcst, odecvar) = expect_osynch h lcst pat (Ock base) e in
+    let (lcst, lsubst) = List.fold_left (fun (lcst, lsubst_acc) e ->
+      let (lcst, lsubst_e, odecvar) = expect_osynch h lcst pat (Ock base) e in
       assert(odecvar=None); (* No nested underspecified operator *)
-      lcst
-    ) lcst e_list in
-    (Ocprod [], lcst)
+      let lsubst_acc = List.rev_append lsubst_e lsubst_acc in
+      (lcst, lsubst_acc)
+    ) (lcst, []) e_list in
+    (Ocprod [], lcst, lsubst)
   | (Efun f | Enode f) ->
     (* Big one - function call *)
     (* REMARK - We forbid clock change inside a function called by a model node
@@ -740,20 +744,37 @@ and typing_osynch_app h lcst base pat op e_list = match op with
     let env_pat = build_env node.node_outputs pat_id_list [] in
     let env_args = build_env node.node_inputs e_list [] in 
     List.iter2 (fun _ e -> expect_osynch h lcst pat (Ock base) e) node.node_inputs e_list; *)
-    let lcst = List.fold_left (fun lcst e ->
-        let (lcst, odecvar) = expect_osynch h lcst pat (Ock base) e in
-        assert(odecvar=None); (* No nested underspecified operator *)
-        lcst
-      ) lcst e_list in
-    Ocprod (List.map (fun _ -> (Ock base)) node.node_outputs), lcst
+    let (lcst, lsubst) = List.fold_left (fun (lcst, lsubst_acc) e ->
+      let (lcst, lsubst_arg, odecvar) = expect_osynch h lcst pat (Ock base) e in
+      assert(odecvar=None); (* No nested underspecified operator *)
+      let lsubst_acc = List.rev_append lsubst_arg lsubst_acc in
+      (lcst, lsubst_acc)
+    ) (lcst, []) e_list in
+    (Ocprod (List.map (fun _ -> (Ock base)) node.node_outputs), lcst, lsubst)
 
 and expect_osynch h lcst pat expected_oct e =
-  let (actual_oct, lcst, odecvar) = typing_osych h lcst pat e in
-  (try unify_onect actual_oct expected_oct
-   with Unify ->
+  let (actual_oct, lcst, lsubst_e, odecvar) = typing_osych h lcst pat e in
+
+  (* Unification might implies a substitution and a constraint on a decision variable *)
+  let (lsubst_unif, lconstr_decvar_unif) :
+      ((bool * int * int option * int * (int*int) list) list)
+        * ( (int*int) list * int) list = (try
+    unify_onect_constr actual_oct expected_oct
+  with Unify ->
     error_message e.e_loc (Etypeclash (actual_oct, expected_oct))
-  );
-  (lcst, odecvar)
+  ) in
+
+  (* We build the constraint on the decision variable *)
+  let lac_decvar = List.map (fun (laffterm_int, cst_term) ->
+    let lcoeffVar = List.map (fun (c,v) -> (c, varname_from_phase_index v)) laffterm_int in
+    mk_affconstr true lcoeffVar cst_term
+  ) lconstr_decvar_unif in
+
+  (* Return all of that *)
+  let (lac, lbc) = lcst in
+  let lncst = (lac_decvar @ lac, lbc) in
+  let lsubst = List.rev_append lsubst_e lsubst_unif in
+  (lncst, lsubst, odecvar)
 
 
 (* ----- *)
@@ -1684,31 +1705,39 @@ let rec typing_model_eq h lcst eqm =
   if (debug_clocking) then
     fprintf ffout "Entering model equation %a@\n" Hept_printer.print_eq_model eqm;
 
-  let (oct, lcst, odecvar) = typing_osych h lcst eqm.eqm_lhs eqm.eqm_rhs in
+  let (oct, lcst, lsubst_rhs, odecvar) = typing_osych h lcst eqm.eqm_lhs eqm.eqm_rhs in
   let pat_oct = typing_model_pat h eqm.eqm_lhs in
 
-  let (lcst, lsubst) = (try
+  let (lcst, lsubst_eq) = (try
     (* For debugging *)
     if (debug_clocking) then 
       fprintf ffout "unification between pat => %a and rhs => %a\n"
         print_onect pat_oct  print_onect oct;
 
-    let (lsubst, lconstr_decvar_unif) :
+    let (lsubst_eq, lconstr_decvar_unif) :
           ((bool * int * int option * int * (int*int) list) list)
             * ( (int*int) list * int) list = unify_onect_constr oct pat_oct in
-    let lsubst : (int * int option * int * (int*int) list) list = reorient_lsubst lsubst in
+    
     let lac_decvar = List.map (fun (laffterm_int, cst_term) ->
       let lcoeffVar = List.map (fun (c,v) -> (c, varname_from_phase_index v)) laffterm_int in
       mk_affconstr true lcoeffVar cst_term
     ) lconstr_decvar_unif in
 
     let (lac,lbc) = lcst in
-    ((List.rev_append lac_decvar lac,lbc), lsubst)
+    ((List.rev_append lac_decvar lac,lbc), lsubst_eq)
   with Unify ->
     eprintf "Incoherent clock between right and left side of the equation:@\n\t%a\nlhs :: %a  | rhs :: %a.@\n"
      Hept_printer.print_eq_model eqm print_onect pat_oct  print_onect oct;
     error_message eqm.eqm_loc (Etypeclash (oct, pat_oct))
   ) in
+
+
+  let lsubst = List.rev_append lsubst_rhs lsubst_eq in
+  let lsubst : (int * int option * int * (int*int) list) list = reorient_lsubst lsubst in
+
+  (* For debugging *)
+  if (debug_clocking) then 
+    fprintf ffout "\tlsubst = %a\n@?" print_lsubst lsubst;
 
 
   (* Using a ? operator on a equation which returns nothing is useless
