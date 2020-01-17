@@ -39,6 +39,7 @@ let unroll id start stop body =
       | Cfun_call (s, e_l) -> Cfun_call (s, List.map exp e_l)
       | Caddrof e -> Caddrof (exp e)
       | Cstructlit (s, e_l) -> Cstructlit (s, List.map exp e_l)
+      | Cstructlitraw (s, e_l) -> Cstructlitraw (s, List.map exp e_l)
       | Carraylit e_l -> Carraylit (List.map exp e_l)
       | Cconst c -> Cconst c
       | Cvar s -> if s = id then Cconst (Ccint i) else Cvar s

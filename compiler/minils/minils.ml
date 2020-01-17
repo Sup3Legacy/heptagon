@@ -96,10 +96,6 @@ and edesc =
                  * extvalue list * extvalue list * var_ident option
                        (** [map f <<n>> <(extvalue)> (extvalue) reset ident] *)
 
-and cl_option = {
-  copt_gl_worksize  : int;
-  copt_loc_worksize : int }
-
 and app = { a_op: op;
             a_params: static_exp list;
             a_ty_subst : (type_name * ty) list;
@@ -108,6 +104,12 @@ and app = { a_op: op;
             a_id: ident option;
             a_inlined: bool;
             a_cloption: cl_option option }
+
+and cl_option = {
+  copt_gl_worksize  : int;
+  copt_loc_worksize : int }
+
+
     (** Unsafe applications could have side effects
         and be delicate about optimizations, !be careful! *)
 
@@ -126,6 +128,7 @@ and op =
   | Eupdate                       (** [[ arg1 with arg3..arg_n = arg2 ]] *)
   | Econcat                       (** [arg1\@\@arg2] *)
 
+
 type pat =
   | Etuplepat of pat list
   | Evarpat of var_ident
@@ -135,7 +138,13 @@ type eq = {
   eq_rhs    : exp;
   eq_unsafe : bool;
   eq_base_ck : Clocks.ck;
-  eq_loc    : location }
+  eq_loc    : location;
+
+  (* Lopht annotation - disabled by default / only used for CG gen *)
+  eq_partition : string option ;
+  eq_preemptive : bool ;
+  eq_release : int option ;
+  eq_deadline : int option }
 
 type var_dec = {
   v_ident     : var_ident;
@@ -179,7 +188,10 @@ type node_dec = {
   n_loc               : location;
   n_params            : param list;
   n_param_constraints : constrnt list;
-  n_mem_alloc         : (ty * Interference_graph.ivar list) list; }
+  n_mem_alloc         : (ty * Interference_graph.ivar list) list;
+
+  (* Lopht annotation - disabled by default / only used for CG gen *)
+  n_period            : int option }
 
 type kernel_dec = {
   k_namekernel  : qualname;
@@ -271,7 +283,11 @@ let mk_extvalue_exp ?(clock = fresh_clock())
     (Eextvalue (mk_extvalue ~clock:clock ~loc:loc ~linearity:linearity ~ty:ty desc))
 
 let mk_equation ?(loc = no_location) ?(base_ck=fresh_clock()) unsafe pat exp =
-  { eq_lhs = pat; eq_rhs = exp; eq_unsafe = unsafe; eq_base_ck = base_ck; eq_loc = loc }
+  { eq_lhs = pat; eq_rhs = exp; eq_unsafe = unsafe; eq_base_ck = base_ck; eq_loc = loc;
+
+    (* Lopht annotations - disabled by default *)
+    eq_partition = None; eq_preemptive = false; eq_release = None; eq_deadline = None
+  }
 
 let mk_node
     ?(input = []) ?(output = []) ?(contract = None) ?(typeparams = [])
@@ -291,7 +307,9 @@ let mk_node
     n_loc = loc;
     n_params = param;
     n_param_constraints = constraints;
-    n_mem_alloc = mem_alloc }
+    n_mem_alloc = mem_alloc;
+
+    n_period = None }
 
 let mk_type_dec type_desc name loc =
   { t_name = name; t_desc = type_desc; t_loc = loc }

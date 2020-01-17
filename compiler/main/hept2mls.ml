@@ -246,7 +246,8 @@ let node n =
     n_loc = n.Heptagon.n_loc ;
     n_params = n.Heptagon.n_params;
     n_param_constraints = n.Heptagon.n_param_constraints;
-    n_mem_alloc = [] } in
+    n_mem_alloc = [];
+    n_period = None } in
   n_node
 
 

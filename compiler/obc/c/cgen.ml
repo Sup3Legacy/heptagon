@@ -690,9 +690,9 @@ let generate_kernel_call out_env var_env obj_env ocl outvl objn args =
     (* Disabled alignment option *)
     (Cconst (Ctag "NULL"))::
     (* Info on local_worksize *)
-    (Cstructlit ("size_t", [Cconst (Ccint ocl.copt_gl_worksize)]))::
+    (Cstructlitraw ("size_t[1]", [Cconst (Ccint ocl.copt_gl_worksize)]))::
     (* Info on global_worksize *)
-    (Cstructlit ("size_t", [Cconst (Ccint ocl.copt_loc_worksize)]))::
+    (Cstructlitraw ("size_t[1]", [Cconst (Ccint ocl.copt_loc_worksize)]))::
     (Cconst (Ccint 0))::(Cconst (Ctag "NULL"))::(Cconst (Ctag "NULL"))::[]    (* Disabled options *)
   in
   (* Note for eventual debug: if Cstructlit does not work, do with Ctag "{" ^ ... ^ "}" *)

@@ -91,6 +91,7 @@ and cexpr =
   | Cfun_call of string * cexpr list (** Function call with its parameters. *)
   | Caddrof of cexpr (** Take the address of an expression. *)
   | Cstructlit of string * cexpr list (** Structure literal [{ f1, f2, ... }].*)
+  | Cstructlitraw of string * cexpr list (** Structure literal [{ f1, f2, ... }], with raw pp for the type.*)
   | Carraylit of cexpr list (** Array literal [\[e1, e2, ...\]]. *)
   | Cconst of cconst (** Constants. *)
   | Cvar of string (** A local variable. *)
@@ -272,6 +273,8 @@ and pp_cexpr fmt ce = match ce with
   | Caddrof e -> fprintf fmt "&%a" pp_cexpr e
   | Cstructlit (s, el) ->
       fprintf fmt "(%a){@[%a@]}" pp_string s (pp_list1 pp_cexpr ",") el
+  | Cstructlitraw (s, el) ->
+      fprintf fmt "(%s){@[%a@]}" s (pp_list1 pp_cexpr ",") el
   | Carraylit el -> (* TODO master : WRONG *)
       fprintf fmt "{@[%a@]}" (pp_list1 pp_cexpr ",") el
       (* fprintf fmt "((int []){@[%a@]})" (pp_list1 pp_cexpr ",") el *)

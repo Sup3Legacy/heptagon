@@ -88,6 +88,7 @@ let ctrln_targets =
 let targets =
   [ mk_target ~interface:(IObc Cmain.interface) "c" (Obc_no_params Cmain.program);
     mk_target ~interface:(IObc Cmain.interface) "opencl" (Obc_no_params Cmain.program);
+    mk_target "lopht" (Minils Cg_main.program);
     mk_target ~load_conf:java_conf "java" (Obc Java_main.program);
     mk_target ~load_conf:java_conf "java14" (Obc Java14_main.program);
     mk_target "z3z" (Minils_no_params ignore);

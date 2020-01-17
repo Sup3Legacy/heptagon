@@ -194,6 +194,15 @@ let interf_all = ref false
 
 let time_passes = ref false
 
+
+(* CG generation option (option to be added to heptc?) *)
+let control_partition_name : string option ref = ref None
+let system_partition_id : int option ref = ref None
+let sync_partition_id : int option ref = ref None
+let control_partition_name : string option ref = ref None
+
+
+
 let doc_verbose = "\t\t\tSet verbose mode"
 and doc_version = "\t\tThe version of the compiler"
 and doc_print_types = "\t\t\tPrint types"

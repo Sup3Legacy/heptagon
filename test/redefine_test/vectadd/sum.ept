@@ -1,13 +1,13 @@
 (* Offloaded computation *)
-__clkernel fun vector_add(a : int^1024; b : int^1024) returns (c : int^1024)
+__clkernel fun vector_add(a : int^32; b : int^32) returns (c : int^32)
 	__clsource "sum_vector.cl"
 	__cldim 1
 
 
 (* Main node *)
-node main(i1 : int^1024; i2 : int^1024) returns (o : int^1024)
+node main(i1 : int^32; i2 : int^32) returns (o : int^32)
 let
-	o = __clglobal_worksize 1024 __cllocal_worksize 1
+	o = __clglobal_worksize 32 __cllocal_worksize 1
 		vector_add(i1, i2);
 tel
 
