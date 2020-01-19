@@ -157,6 +157,18 @@ let set_default_cost_func _ = v_constr := 0
 let set_loadbal_cost_func _ = v_constr := 1
 let set_loadbal_bool_cost_func _ = v_constr := 2
 
+let fixed_wcet_ub = ref 0
+let set_fixed_wcet_ub i =
+  fixed_wcet_ub := i
+
+let b_print_wcet_balance = ref false
+let wcet_balance_info_filename : name ref = ref "wcet_balance_info.txt" (* Default name *)
+let set_wcet_balance_info_filename s =
+  b_print_wcet_balance := true;
+  wcet_balance_info_filename := s
+
+
+
 
 
 
@@ -245,6 +257,9 @@ and doc_noconstrbuffby = "\t\tMakes the bufferfby generate no constraint on phas
 and doc_default_cost_func = "\t\tUse no cost function for the phase resolution (enabled by default)."
 and doc_loadbal_cost_func = "\t\tUse the load balancing cost function for the phase resolution."
 and doc_loadbal_bin_cost_func = "\t\tUse the binary load balancing cost function for the phase resolution."
+and doc_set_fixed_wcet_ub = "\t\tUse a given constant upperbound instead of a variable one for loadbal cost function."
+and doc_wcet_lb_info = "\t\tPrint-out information about WCET/ressource repartition across phases in the given filename."
+
 
 and doc_target =
   "<lang>\tGenerate code in language <lang>\n\t\t\t(with <lang>=c,"

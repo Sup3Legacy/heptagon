@@ -156,6 +156,9 @@ let main () =
         "-phcost_loadbal", Arg.Unit set_loadbal_cost_func, doc_loadbal_cost_func;
         "-phcost_loadbal_bin", Arg.Unit set_loadbal_bool_cost_func, doc_loadbal_bin_cost_func;
 
+        "-set_fixed_wcet_ub", Arg.Int set_fixed_wcet_ub, doc_set_fixed_wcet_ub;
+        "-wcet_lb_info", Arg.String set_wcet_balance_info_filename, doc_wcet_lb_info;
+
         "-assert", Arg.String add_assert, doc_assert;
         "-nopervasives", Arg.Unit set_no_pervasives, doc_no_pervasives;
         "-target", Arg.String add_target_language, doc_target;

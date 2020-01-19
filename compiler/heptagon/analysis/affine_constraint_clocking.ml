@@ -34,7 +34,7 @@ open Containers
 open Clocks
 
 (* For debugging *)
-let debug = true  (* DEBUG *)
+let debug = false  (* DEBUG *)
 let ffout = Format.formatter_of_out_channel stdout
 
 let max_default_phase_for_solving = 7777 (* Should be distinctive enough *)
@@ -923,7 +923,7 @@ let convert_ac_to_binary_simplecase mperiods mmbinary ac_int =
   let lac_bool = convert_bool (perT, mbinvarT, mbinvarS) (posvar, negvar, cst) [] perS in
   lac_bool
 
-let debug_ac_bin_fc = true (* DEBUG for the convert_ac_to_binary_fullcase function *)
+let debug_ac_bin_fc = false (* DEBUG for the convert_ac_to_binary_fullcase function *)
 
 let convert_ac_to_binary_fullcase mperiods lbc mmbinary ac_int =
   (* Constraint ac_int might have additional terms coming from the decision variables *)
@@ -1577,6 +1577,70 @@ let recover_integral_var mmbinary msol =
 
   msol
 
+let print_wcet_balance lwcet msol =
+  (* lwcet : (potential phase_variable_name, list of affine terms, shift of ock, period of ock,
+                    potential assigned WCET, list of ressources used *)
+
+  (* We initialize the data structure to collect the contributions of everybody *)
+  let max_phase = get_lcm_period lwcet in
+  let arr_wcet = Array.make max_phase 0 in
+
+  (* Ressources map: m_arr_ress : name_ressource ==> arr_contrib *)
+  let m_arr_ress = List.fold_left (fun mres (_,_,_,_,_,lress) ->
+    List.fold_left (fun mres (name_ress, v) ->
+      if (v=0) then mres else
+      if (StringMap.mem name_ress mres) then mres else
+
+      let ress_max = get_ressource_max name_ress in
+    
+      let arr_contrib = Array.make max_phase 0 in
+      StringMap.add name_ress arr_contrib mres
+    ) mres lress
+  ) StringMap.empty lwcet in
+
+  (* Collection start *)
+  List.iter (fun (ophvar, laffterm, sh, per, owcet, lress) ->
+    (* We evaluate the phase: ophvar + laffterm + sh *)
+    let phase_val = match ophvar with
+      | None -> sh
+      | Some phvar -> StringMap.find phvar msol
+    in
+    let phase_val = List.fold_left (fun acc (c,v) ->
+      let value_v = StringMap.find v msol in
+      acc + c * value_v
+    ) phase_val laffterm in
+
+    (* For every instance of the phase *)
+    assert(max_phase mod per = 0);
+    let ninstance = max_phase / per in
+    for k = 0 to (ninstance-1) do (
+      match owcet with
+      | None -> ()
+      | Some wcet -> arr_wcet.(phase_val + k*per) <- arr_wcet.(phase_val + k*per) + wcet
+      ;
+      List.iter (fun (rname, rval) ->
+        let arr_ress = StringMap.find rname m_arr_ress in
+        arr_ress.(phase_val + k*per) <- arr_ress.(phase_val + k*per) + rval
+      ) lress
+    ) done
+  ) lwcet;
+
+  (* Printing out the infos *)
+  let ocout = open_out !Compiler_options.wcet_balance_info_filename in
+  let ffout = formatter_of_out_channel ocout in
+
+  fprintf ffout "*** Load balancing infos ***\n@?";
+  fprintf ffout "*** WCET ***\n@?";
+  Array.iteri (fun i wcet -> 
+    fprintf ffout "\tPhase %i => %i\n@?" i wcet
+  ) arr_wcet;
+  fprintf ffout "\n*** RESSOURCES ***\n@?";
+  StringMap.iter (fun rname arr_res ->
+    fprintf ffout "* Ressource: %s\n" rname;
+    Array.iteri (fun i rval -> 
+      fprintf ffout "\tPhase %i => %i\n@?" i rval
+    ) arr_res
+  ) m_arr_ress
 
 (* ==================================================== *)
 
@@ -1685,6 +1749,16 @@ let solve_constraints_main bquickres
       load_balancing true b_no_underspec_ops mperiods lwcet lac lbc
   in
 
+  (* Case where we want the WCET of all phase to be smaller than a constant *)
+  let (lac, lgeneral, obj_func) = if ((!Compiler_options.fixed_wcet_ub != 0)
+      && ((version_constr=Load_Balancing_Int) || (version_constr=Load_Balancing_Bin)) ) then
+    let nac = mk_affconstr true [(1,varobj)] !Compiler_options.fixed_wcet_ub in
+    let var_random = (List.hd lbc).varName in
+    (nac::lac, [], [(1, var_random)])
+  else
+    (lac, lgeneral, obj_func)
+  in
+
 
   (* Base case - no affine constraint - simplest resolution *)
   (* Happens when there are no buffer operator used in the program *)
@@ -1706,6 +1780,13 @@ let solve_constraints_main bquickres
     let msol = if (version_constr=Load_Balancing_Bin) then
       recover_integral_var mmbinary msol
     else msol in
+
+    (* If option enabled, we print the balance of WCET/ressource usage
+      across all phases here *)
+    (* lwcet : (potential phase_variable_name, list of affine terms, shift of ock, period of ock,
+                    potential assigned WCET, list of ressources used *)
+    if (!Compiler_options.b_print_wcet_balance) then
+      print_wcet_balance lwcet msol;
 
     msol
   ) else
