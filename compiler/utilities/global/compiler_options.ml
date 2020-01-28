@@ -217,7 +217,6 @@ and doc_stdlib = "<dir>\t\tDirectory for the standard library"
 and doc_calc_deps = "\t\t\tCalculate dependencies for the given files"
 and doc_calc_stats = "\t\t\tCalculate statistics for the given files"
 and doc_scade_array = "\t\t\tManages Scade arrays indices which starts at 1"
-
 and doc_files_to_open = "\t\tFiles to open before compiling"
 and doc_object_file = "\t\t\tOnly generate a .epo object file"
 and doc_sim = "<node>\t\tCreate simulation for node <node>"

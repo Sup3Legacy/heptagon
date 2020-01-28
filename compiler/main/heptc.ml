@@ -183,7 +183,12 @@ let simple_stats modname source_f =
     name_node num_eq num_var_in num_var_out num_var_loc num_const;
   close_all_files ()
 
-
+  let deps = List.sort_uniq String.compare
+               (!Modules.unknown_nodes @ !Modules.unknown_vars) in
+  let { Heptagon.p_desc=pds } = p in
+  let syms = List.map extract_symbol pds in
+  Printf.printf "%s=%s: %s\n" source_f (String.concat " " syms)
+                                       (String.concat " " deps)
 
 let compile source_f =
   let modname = source_f
@@ -230,11 +235,9 @@ let main () =
         "-I", Arg.String add_include, doc_include;
         "-where", Arg.Unit locate_stdlib, doc_locate_stdlib;
         "-stdlib", Arg.String set_stdlib, doc_stdlib;
-        
         "-M", Arg.Set calc_deps, doc_calc_deps;
         "-stats", Arg.Set calc_stats, doc_calc_stats;
         "-safran", Arg.Set scade_array, doc_scade_array; (* TODO: modify option name *)
-        
         "-open", Arg.String new_file_to_open, doc_files_to_open;
         "-c", Arg.Set create_object_file, doc_object_file;
         "-s", Arg.String set_simulation_node, doc_sim;
