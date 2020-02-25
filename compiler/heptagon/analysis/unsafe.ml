@@ -73,10 +73,14 @@ let exp funs unsafe e =
 (* unsafe nodes are rejected if they are not declared unsafe *)
 let node_dec funs _ n = Hept_mapfold.node_dec funs n.n_unsafe n
 
+(* models are always considered as unsafe *)
+let model_dec funs _ md = Hept_mapfold.model_dec funs true md
+
 let funs =
   { Hept_mapfold.defaults with
       exp = exp;
-      node_dec = node_dec; }
+      node_dec = node_dec;
+      model_dec = model_dec; }
 
 let program p =
   let p, _ = Hept_mapfold.program_it funs false p in

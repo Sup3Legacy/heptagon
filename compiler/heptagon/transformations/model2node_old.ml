@@ -342,7 +342,7 @@ let model2node md =
   let ninputs = List.map vdm_2_vd_inout md.m_input in
   let noutputs = List.map vdm_2_vd_inout md.m_output in
 
-  let n_nd = mk_node ~input:ninputs ~output:noutputs ~loc:md.m_loc
+  let n_nd = mk_node ~input:ninputs ~output:noutputs ~unsafe:true ~loc:md.m_loc
     md.m_name n_block in
   
   (* Normalization of the node *)

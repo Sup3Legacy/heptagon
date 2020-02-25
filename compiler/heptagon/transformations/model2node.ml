@@ -767,7 +767,7 @@ let transform_to_node_dec lgr md =
 
   let linputs = List.map vdm_2_vd_inout md.m_input in
   let loutputs = List.map vdm_2_vd_inout md.m_output in
-  let nd = Hept_utils.mk_node ~input:linputs ~output:loutputs md.m_name bl in
+  let nd = Hept_utils.mk_node ~input:linputs ~output:loutputs ~unsafe:true md.m_name bl in
   nd
 
 
