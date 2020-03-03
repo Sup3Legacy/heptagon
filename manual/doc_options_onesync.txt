@@ -1,0 +1,71 @@
+
+*** Documentation on the options on the 1-synchronous extension of Heptagon (English version) ***
+
+* Cost functions:
+ 	-phcost_default     : No cost function (default option)
+ 	-phcost_loadbal     : WCET load-balancing (with integral phase variables)
+ 	-phcost_loadbal_bin : WCET load-balancing (with binary phase variables)
+
+
+* Option to disable the memory saving constraint associated to the "bufferfby":
+    -noconstrbuffby
+
+* Option on the upper-bound of the load-balancing cost function:
+	-set_fixed_wcet_ub [int]  : Search for a valid solution such that the sum of the WCETs of the scheduled tasks on a given phase is below the given value.
+
+* Pretty-printing the WCET repartition and the resource usage per phase:
+	-wcet_lb_info [file_name]  : Pretty-print some information about the WCET repartition and the resource usage per phase in the given file.
+
+
+* A solver was implemented inside the compiler, but is able to solve the constraints only if:
+  - There is no cost function activated (no load-balancing)
+  - There is no resource constraint
+  - There is no underspecified operators ("XXX?")
+
+* Exporting constraints/Importing solution (needed if the internal solver is not enough):
+	-genphconstr [filename.txt]  : Generate a file containing an ILP problem on the phases of the clocks of the program.
+			We use the CPLEX LP format. This option stops the compilation (through a "failwith" exception).
+
+	-solphconstr [nomdefichier.txt]  : Recover a solution to the ILP problem we built internally.
+			This file contains a list of "[phase_var_name] -> [value]".
+			This option is generally used after exporting an ILP problem (during a first compilation) and solving them.
+			It is used during a second compilation, on the same program and the same set of options, except the "-genphconstr" option is replaced by the "-solphconstr" option.
+			The compiler checks the validity of the solution before using it.
+
+=========================================================================================================
+=========================================================================================================
+=========================================================================================================
+
+*** Documentation des options de l'extension 1-synchrones de Heptagon (Version Française) ***
+
+
+* Fonctions de coûts:
+ 	-phcost_default     : Aucune fonction de coût (option par défaut)
+ 	-phcost_loadbal     : Load-balancing du WCET, avec des variables de phase entières
+ 	-phcost_loadbal_bin : Load-balancing du WCET, avec des variables de phase binaires
+
+
+* Option de désactivation de la contrainte d'économie de la mémoire du "bufferfby":
+    -noconstrbuffby
+
+* Option sur la borne supérieure des fonctions de coût load-balancing:
+	-set_fixed_wcet_ub [int]  : Cherche une solution valide telle que la somme des WCETs des tâches ordonnancées sur une phase soit inférieure à la valeur donnée.
+
+* Affichage de la répartition des WCETs et de l'utilisation des ressources par phase:
+	-wcet_lb_info [nom_de_fichier]  : Affiche les données de répartition des WCETs et d'utilisation des ressources par phase dans le fichier spécifié.
+
+
+* Un solveur a été implémenté dans le compilateur, mais résout les contraintes uniquement dans le cas où:
+    - Il n'y a pas de fonction de coût (pas de load-balancing)
+    - Il n'y a pas de contrainte de ressource
+    - Il n'y a pas d'opérateurs sous-spécifiés ("XXX?")
+
+* Exportation des contraintes/Importation des solutions (nécessaire si le solveur interne n'est pas suffisant):
+	-genphconstr [nomdefichier.txt]  : Génère un fichier contenant les contraintes de programmation linéaire sur les phases du programme. Le format utilisé est CPLEX LP. Cette option interrompt la compilation (en utilisant une exception "failwith").
+
+	-solphconstr [nomdefichier.txt]  : Récupère une solution à un problème ILP généré en interne.
+			Le fichier contient juste une liste de "[nom_de_var] -> [valeur]".
+			Cette option est généralement utilisée après avoir exporté les contraintes (pendant une première compilation) et après les avoir résolu.
+			Elle est utilisée dans une seconde compilation, sur le même programme et avec les mêmes options, à l'exception de l'option "-solphconstr" qui remplace l'option "-genphconstr".
+			Le compilateur vérifie la validité de la solution avant de l'utiliser.
+
