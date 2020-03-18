@@ -399,6 +399,12 @@ let mk_annot_eq_model desc loc =
   { anneqm_desc = desc; anneqm_loc = loc }
 
 let mk_equation_model annot plhs erhs loc =
+  let plhs =
+    match plhs with
+    | Etuplepat [(Evarpat x) as vx] -> vx
+      (* In models, allow "(x) = e", i.e., singleton lists at left. *)
+    | _ -> plhs
+  in
   { eqm_annot = annot; eqm_lhs = plhs; eqm_rhs = erhs; eqm_loc = loc }
 
 let mk_var_dec ?(linearity=Linearity.Ltop) name ty ck last loc =
