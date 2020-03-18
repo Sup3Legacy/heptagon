@@ -408,6 +408,7 @@ let add_list context oper expected_kind e_list =
     mapfold aux context e_list
 
 let rec translate kind context oper e =
+  try
   let context, e' = match e.e_desc with
     | Econst _
     | Evar _ -> context, e (* TODO : check oper? *)
@@ -477,9 +478,6 @@ let rec translate kind context oper e =
         | None -> failwith "No period in block model expression"
         | Some pere -> pere
       in
-      (* DEBUG
-      Format.fprintf (Format.formatter_of_out_channel stdout) "pere = %i | per = %i | e = %a\n@?"
-        pere per Hept_printer.print_exp e; *)
       assert(pere mod ratio = 0);
       let context, e1 = translate ExtValue context (Some (pere/ratio)) e1 in
       whenqcmodel context e1 min max ratio oper e
@@ -535,6 +533,11 @@ let rec translate kind context oper e =
     | Elast _ | Efby _ ->
         Error.message e.e_loc Error.Eunsupported_language_construct
   in add context oper kind e'
+  with
+  | (Assert_failure (s, l1, _)) as exc ->
+      Format.eprintf "Assertion failed in %s at line %d@.at %a@."
+        s l1 Location.print_location e.e_loc;
+      failwith "Assertion failure"
 
 and translate_list kind context oper e_list =
   match e_list with
