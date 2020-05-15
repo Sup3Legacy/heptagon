@@ -39,7 +39,7 @@ open Clocks
 
 (** Warning: Whenever Minils ast is modified,
     minils_format_version should be incremented. *)
-let minils_format_version = "4"
+let minils_format_version = "4.OCL.1"
 
 type iterator_type =
   | Imap
@@ -175,6 +175,18 @@ type typeparam_dec =
   { t_nametype    : qualname;
     t_nameclass   : qualname; }
 
+(* Component of a parallel schedule *)
+type parsched_comp =
+  | Comp_eq of eq
+  | Comp_ocl_launch of eq
+  | Comp_ocl_recover of eq
+  | Comp_signal of string        (* signal(s) *)
+  | Comp_wait of string * int    (* wait(s, n) - n-semaphore *)
+
+type parsched_eqs = (parsched_comp list) list (* Outer list = across all computation units *)
+                                              (* Inner list is sorted in chronological order *)
+
+
 type node_dec = {
   n_name              : qualname;
   n_stateful          : bool;
@@ -191,7 +203,11 @@ type node_dec = {
   n_mem_alloc         : (ty * Interference_graph.ivar list) list;
 
   (* Lopht annotation - disabled by default / only used for CG gen *)
-  n_period            : int option }
+  n_period            : int option;
+
+  (* Potential parallel scheduling *)
+  n_parsched          : parsched_eqs option;
+}
 
 type kernel_dec = {
   k_namekernel  : qualname;
@@ -309,7 +325,8 @@ let mk_node
     n_param_constraints = constraints;
     n_mem_alloc = mem_alloc;
 
-    n_period = None }
+    n_period = None;
+    n_parsched = None }
 
 let mk_type_dec type_desc name loc =
   { t_name = name; t_desc = type_desc; t_loc = loc }

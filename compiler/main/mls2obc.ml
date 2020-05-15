@@ -593,6 +593,7 @@ and mk_node_call map call_context app loc (name_list : Obc.pattern list) args ty
           | _ -> assert false
         in
 
+        (* If the funcall is a kernel, match it as an OpenCL kernel *)
         let s = if (Modules.check_kernel f) then
           (match app.a_cloption with
             | None ->

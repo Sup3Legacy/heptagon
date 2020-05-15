@@ -276,8 +276,6 @@ let args_of_var_decs =
                                vd.v_type (Linearity.check_linearity vd.v_linearity)
                                (ck_to_sck (Clocks.ck_repr vd.v_clock)))
 
-
-
 let signature_of_node n =
   let convert_typeparams_to_signature typeparamsnode =
     let {t_nametype = ntype; t_nameclass = nclass } = typeparamsnode in
@@ -292,3 +290,7 @@ let signature_of_node n =
     node_param_constraints = n.n_param_constraints;
     node_external = false;
     node_loc = n.n_loc }
+
+
+module EqSet = Set.Make(struct type t=Minils.eq let compare = Pervasives.compare end)
+module EqMap = Map.Make(struct type t=Minils.eq let compare = Pervasives.compare end)

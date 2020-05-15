@@ -1,3 +1,4 @@
+%{
 (***********************************************************************)
 (*                                                                     *)
 (*                             Heptagon                                *)
@@ -27,23 +28,82 @@
 (*                                                                     *)
 (***********************************************************************)
 
-module ListMap (Ord:Map.OrderedType) =
-struct
-  include Map.Make(Ord)
+(* Author: Guillaume I *)
 
-  let add_element k v m =
-    try
-      add k (v::(find k m)) m
-    with
-      | Not_found -> add k [v] m
+open Parsched
 
-  let add_elements k vl m =
-    try
-      add k (vl @ (find k m)) m
-    with
-      | Not_found -> add k vl m
-end
+%}
 
-module IntMap = Map.Make(struct type t=int let compare = Pervasives.compare end)
-module StringMap = Map.Make(struct type t=string let compare = Pervasives.compare end)
-module StringSet = Set.Make(struct type t=string let compare = Pervasives.compare end)
+%token PROCESSORS DEVICES BLOCKS END_BLOCKS TWODOTS
+
+%token <string> IDENT
+%token <int> INT
+%token EOF
+
+%start parsched
+%type <Parsched.parsched> parsched
+
+%%
+
+/* *** Example of parallel schedule we might parse ***
+PROCESSORS:2 DEVICES:2
+
+BLOCKS:3  CPU_0
+0    1000  f_step
+1000 3000  h_step
+5000 7000  l_step
+END_BLOCKS
+
+BLOCKS:3  CPU_1
+1000 2000  g_step
+4000 6000  k_step
+7000 8000  m_step
+END_BLOCKS
+
+BLOCKS:1  DEVICE_0
+2000 4000  vector_add_1_step
+END_BLOCKS
+
+BLOCKS:1  DEVICE_1
+3000 5000  vector_add_2_step
+END_BLOCKS
+*/
+
+reservation:
+  s=INT e=INT name=IDENT
+  { mk_funcall_res name s e }
+;
+
+lreservations:
+  | reservation                 { [$1] }
+  | reservation lreservations   { $1::$2 }
+;
+
+block_sched:
+  BLOCKS TWODOTS ncomp=INT nature=IDENT lresa=lreservations END_BLOCKS
+  { 
+    if ((List.length lresa)!=ncomp) then (
+      Format.eprintf "Number of reservation in block does not match number declared.@.";
+      raise Errors.Error
+    );
+    mk_block_sched nature lresa
+  }
+;
+
+lblock_sched:
+  | block_sched               { [$1] }
+  | block_sched lblock_sched  { $1::$2 }
+;
+
+parsched:
+  PROCESSORS TWODOTS nproc=INT DEVICES TWODOTS ndevices=INT lbl=lblock_sched EOF
+  {
+   if ((List.length lbl) != (nproc + ndevices)) then (
+      Format.eprintf "Number of blocks does not match number of declared proc and device.@.";
+      raise Errors.Error
+    );
+    mk_parsched nproc ndevices lbl
+  }
+;
+
+%%

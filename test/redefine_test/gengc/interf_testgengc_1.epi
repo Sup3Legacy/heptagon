@@ -1,0 +1,6 @@
+(* ../../../heptc interf_testgengc_1.epi *)
+
+fun read_int() returns (a : int)
+fun f(a : int) returns (b : int)
+fun g(a : int) returns (b : int)
+fun write_int(a : int) returns ()

@@ -1,0 +1,21 @@
+
+(* ../../../heptc -target lopht -mainnode test testgengc_1.ept *)
+
+open Interf_testgengc_1
+
+node test() returns ()   (* Lopht assumes that the main node does not have inputs or outputs *)
+var
+	a : int;
+	x : int;
+	x1 : int;
+	y : int;
+	o : int;
+let
+	a = read_int();
+	x = f(a);
+	x1 = f(x);
+	y = x + 1;
+	(* y = x[1]; *)
+	o = g(y);
+	() = write_int(o);
+tel

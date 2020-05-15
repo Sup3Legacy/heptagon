@@ -69,6 +69,9 @@ let maybe_ctrln_pass p = p
 ;; END
 
 let compile_program p =
+  (* If we go to Lopht to obtain a parallel schedule, preprocessing *)
+  let p = pass "Preprocess node for OpenCL CG before Lopht" !lopht_preprocess Preprocess_lopht.program p pp in
+
   (* Clocking *)
   let p =
     try pass "Clocking" true Clocking.program p pp
@@ -85,7 +88,7 @@ let compile_program p =
   (* Level clocks *)
   let p = pass "Level clock" true Level_clock.program p pp in
 
-  (* Dataglow minimization *)
+  (* Dataflow minimization *)
   let p =
     let call_tomato = !tomato || (List.length !tomato_nodes > 0) in
     let p = pass "Extended value inlining" call_tomato Inline_extvalues.program p pp in
@@ -126,5 +129,12 @@ let compile_program p =
 
   (* Memory allocation *)
   let p = pass "Memory allocation" !do_mem_alloc Interference.program p pp in
-  
+
+  (* Preprocess for Lopht/parallel_schedule obtention *)
+  let p = pass "Unicity function instances"
+    (!parse_parsched_file || !lopht_preprocess) Unicity_fun_instance.program p pp in
+
+  (* If option is activated, get a parallel scheduling and preprocess it *)
+  let p = pass "Parallel schedule obtention" !parse_parsched_file Parsched_preproc.program p pp in
+
   p

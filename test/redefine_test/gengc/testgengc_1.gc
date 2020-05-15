@@ -1,0 +1,67 @@
+/*====================*/
+/**/  ClockedGraph  /**/
+/*====================*/
+
+/*--------------------------*/
+/**/  Global definitions  /**/
+/*--------------------------*/
+
+   Type Table   
+/* ---------- */
+
+Type:0	bool	Predefined
+Type:1	int	Predefined
+Type:2	num	Simple
+
+
+   Function Table   
+/* -------------- */
+
+Function:0	Interf_testgengc_1__read_int_step	() -> (a:Type:1)
+Function:1	Interf_testgengc_1__f_step	(a:Type:1) -> (b:Type:1)
+Function:2	+	(gen1:Type:2 gen2:Type:2) -> (gen3:Type:2)
+Function:3	Interf_testgengc_1__g_step	(a:Type:1) -> (b:Type:1)
+Function:4	Interf_testgengc_1__write_int_step	(a:Type:1) -> ()
+
+
+   Const Table   
+/* ----------- */
+
+
+
+   Functional specification   
+/* ------------------------ */
+
+
+
+   Variable Table   
+/* -------------- */
+
+Variable:0	a	Type:1	Single Assignment	a @ Block:0
+Variable:1	x	Type:1	Single Assignment	b @ Block:1
+Variable:2	x1	Type:1	Single Assignment	b @ Block:2
+Variable:3	y	Type:2	Single Assignment	gen3 @ Block:3
+Variable:4	o	Type:1	Single Assignment	b @ Block:4
+
+
+   Clock Table   
+/* ----------- */
+
+Clock:0	Tick	Primitive	
+Clock:1	Never	Test(Clock:0 False)	
+
+
+   Rel Table   
+/* --------- */
+
+
+
+   Block Table   
+/* ----------- */
+
+Block:0	Interf_testgengc_1__read_int_step	Clock:0	() -> (a Is Variable:0)	Function:0	Not Preemptible
+Block:1	Interf_testgengc_1__f_step	Clock:0	(a Is Variable:0 On Clock:0) -> (b Is Variable:1)	Function:1	Not Preemptible
+Block:2	Interf_testgengc_1__f_step	Clock:0	(a Is Variable:1 On Clock:0) -> (b Is Variable:2)	Function:1	Not Preemptible
+Block:3	+	Clock:0	(gen1 Is Variable:1 On Clock:0 gen2 Is 1 On Clock:0) -> (gen3 Is Variable:3)	Function:2	Not Preemptible
+Block:4	Interf_testgengc_1__g_step	Clock:0	(a Is Variable:3 On Clock:0) -> (b Is Variable:4)	Function:3	Not Preemptible
+Block:5	Interf_testgengc_1__write_int_step	Clock:0	(a Is Variable:4 On Clock:0) -> ()	Function:4	Not Preemptible

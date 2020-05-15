@@ -88,11 +88,15 @@ let boolean = ref false
 
 let nosink = ref false
 
+(* Trigger preprocessing before CG generation *)
+let lopht_preprocess = ref false
+
 (* Target languages list for code generation *)
 let target_languages : string list ref = ref []
 
 let add_target_language s =
   if s = "z3z" then boolean := true; (* TODO use load_conf instead *)
+  if s = "lopht" then lopht_preprocess := true;
   target_languages := s :: !target_languages
 
 let opencl_cg = ref false
@@ -202,6 +206,18 @@ let sync_partition_id : int option ref = ref None
 let control_partition_name : string option ref = ref None
 
 
+(* Options for the parallel schedule obtention *)
+let parse_parsched_file = ref false
+let parsched_filename : name ref = ref "parsched.txt"  (* Default name *)
+let set_parsched_filename s =
+  parse_parsched_file := true;
+  parsched_filename := s
+
+
+
+
+
+
 
 let doc_verbose = "\t\t\tSet verbose mode"
 and doc_version = "\t\tThe version of the compiler"
@@ -222,9 +238,12 @@ and doc_exposeintstate = "\t\tExpose the internal states of nodes as a new first
 and doc_target =
   "<lang>\tGenerate code in language <lang>\n\t\t\t(with <lang>=c,"
   ^ " java, z3z, ctrln or opencl)"
-and doc_cg_memfirst = "\t\t\tPut the internal state in the first position of a step function."
-and doc_cg_outlist = "\t\t\tDo not generate a structure for the outputs of a step function"
+and doc_cg_memfirst = "\t\tPut the internal state in the first position of a step function."
+and doc_cg_outlist = "\t\tDo not generate a structure for the outputs of a step function"
   ^ "but a list of arguments."
+
+and doc_parsched = "<filename>\t\tParse <filename> to get a parallel schedule for the (unique) mainnode."
+
 and doc_full_type_info = "\t\t\tPrint full type information."
 and doc_stateful_info = "\t\tPrint stateful information."
 and doc_full_name = "\t\tPrint full variable name information."
