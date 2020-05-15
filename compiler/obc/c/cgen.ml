@@ -609,7 +609,7 @@ let rec type_to_sizeof ty = match ty with
     [outvl] is a list of lhs where to put the results.
     [args] is the list of expressions to use as arguments.
     [mem] is the lhs where is stored the node's context.*)
-let generate_kernel_call out_env var_env obj_env ocl outvl objn args =
+let generate_kernel_call out_env var_env obj_env blaunch ocl outvl objn args =
   (* Default behavior if the option to generate OpenCL code is disabled *)
   if (not (!Compiler_options.opencl_cg)) then
     generate_function_call out_env var_env obj_env outvl objn args
@@ -625,14 +625,7 @@ let generate_kernel_call out_env var_env obj_env ocl outvl objn args =
   (* Retrieving infos on the buffers *)
   let (_, _, bufferinfos) = Openclprep.IntMap.find idkernel !Openclprep.mBufferCL in
 
-  let bufferInput = Openclprep.BoolIntMap.fold (fun (isIn, pos) (v,_) acc ->
-    if (isIn) then (pos,v)::acc else acc
-  ) bufferinfos [] in
-  let bufferOutput = Openclprep.BoolIntMap.fold (fun (isIn, pos) (v,_) acc ->
-    if (not isIn) then (pos,v)::acc else acc
-  ) bufferinfos [] in
-
-  (* Preparing the inputs *)
+  (* For preparing the inputs *)
   let rec add_targeting l ads = match l, ads with
     | [], [] -> []
     | e::l, ad::ads ->
@@ -641,101 +634,116 @@ let generate_kernel_call out_env var_env obj_env ocl outvl objn args =
           e::(add_targeting l ads)
     | _, _ -> assert false
   in
-  let args = add_targeting args sig_info_kernel.k_input in
-  let args_out = List.map clhs_to_var_conversion outvl in
 
+  if (blaunch) then begin
+    (* Offloading - launch part *)
 
-  (* Step A - Enqueue write buffer *)
-  let lcstm_stepA = List.fold_left (fun acc (posIn, bufferId) ->
-    let argIn = List.nth sig_info_kernel.k_input posIn in
-    let sexprIn = List.nth args posIn in
-    let lcexp_buffIn =
+    let bufferInput = Openclprep.BoolIntMap.fold (fun (isIn, pos) (v,_) acc ->
+      if (isIn) then (pos,v)::acc else acc
+    ) bufferinfos [] in
+    let args = add_targeting args sig_info_kernel.k_input in
+    
+    (* Step A - Enqueue write buffer *)
+    let lcstm_stepA = List.fold_left (fun acc (posIn, bufferId) ->
+      let argIn = List.nth sig_info_kernel.k_input posIn in
+      let sexprIn = List.nth args posIn in
+      let lcexp_buffIn =
+        (* Queue *)
+        (Cfield (Cconst (Ctag Openclprep.icl_data_struct_string), (Modules.current_qual "queue")))::
+        (* Buffer *)
+        (Carray (
+          (Cfield (Cconst (Ctag Openclprep.icl_data_struct_string), (Modules.current_qual "buffers")))
+          ,
+          (Cconst (Ccint bufferId))
+        ))::
+        (* Blocking write *)
+        (Cconst (Ctag "CL_TRUE"))::
+        (* Position as input *)
+        (Cconst (Ccint posIn))::
+        (* Size of the data transfered *)
+        (type_to_sizeof argIn.a_type)::
+        (* Input : always need pointers (even if integer) *)
+        (address_of argIn.a_type sexprIn)::
+        (* Disabled options *)
+        (Cconst (Ccint 0))::(Cconst (Ctag "NULL"))::(Cconst (Ctag "NULL"))::[]
+      in
+      let fun_call_buffIn = Cfun_call ("clEnqueueWriteBuffer", lcexp_buffIn) in
+      let cstm_bufIn = Csexpr fun_call_buffIn in
+      cstm_bufIn::acc
+    ) [] bufferInput in
+
+    (* Step B - Enqueue computation *)
+    let lcexp_comput =
       (* Queue *)
       (Cfield (Cconst (Ctag Openclprep.icl_data_struct_string), (Modules.current_qual "queue")))::
-      (* Buffer *)
+      (* Kernel *)
       (Carray (
-        (Cfield (Cconst (Ctag Openclprep.icl_data_struct_string), (Modules.current_qual "buffers")))
-        ,
-        (Cconst (Ccint bufferId))
-      ))::
-      (* Blocking write *)
-      (Cconst (Ctag "CL_TRUE"))::
-      (* Position as input *)
-      (Cconst (Ccint posIn))::
-      (* Size of the data transfered *)
-      (type_to_sizeof argIn.a_type)::
-      (* Input : always need pointers (even if integer) *)
-      (address_of argIn.a_type sexprIn)::
-      (* Disabled options *)
-      (Cconst (Ccint 0))::(Cconst (Ctag "NULL"))::(Cconst (Ctag "NULL"))::[]
-    in
-    let fun_call_buffIn = Cfun_call ("clEnqueueWriteBuffer", lcexp_buffIn) in
-    let cstm_bufIn = Csexpr fun_call_buffIn in
-    cstm_bufIn::acc
-  ) [] bufferInput in
-
-
-  (* Step B - Enqueue computation *)
-  let lcexp_comput =
-    (* Queue *)
-    (Cfield (Cconst (Ctag Openclprep.icl_data_struct_string), (Modules.current_qual "queue")))::
-    (* Kernel *)
-    (Carray (
-        (Cfield (Cconst (Ctag Openclprep.icl_data_struct_string), (Modules.current_qual "kernels")))
-        ,
-        (Cconst (Ccint idkernel))
-      ))::
-    (* Dimension of the kernel *)
-    (Cconst (Ccint sig_info_kernel.k_dim))::
-    (* Disabled alignment option *)
-    (Cconst (Ctag "NULL"))::
-    (* Info on local_worksize *)
-    (Cstructlitraw ("size_t[1]", [Cconst (Ccint ocl.copt_gl_worksize)]))::
-    (* Info on global_worksize *)
-    (Cstructlitraw ("size_t[1]", [Cconst (Ccint ocl.copt_loc_worksize)]))::
-    (Cconst (Ccint 0))::(Cconst (Ctag "NULL"))::(Cconst (Ctag "NULL"))::[]    (* Disabled options *)
-  in
-  (* Note for eventual debug: if Cstructlit does not work, do with Ctag "{" ^ ... ^ "}" *)
-  let fun_call_comput = Cfun_call ("clEnqueueNDRangeKernel", lcexp_comput) in
-  let cstm_stepB = Csexpr fun_call_comput in
-
-
-  (* Step C - Waiting for completion *)
-  let lcexp_completion =
-    (* Queue *)
-    (Cfield (Cconst (Ctag Openclprep.icl_data_struct_string), (Modules.current_qual "queue")))::[]
-  in
-  let fun_call_completion = Cfun_call ("clFinish", lcexp_completion) in
-  let cstm_stepC = Csexpr fun_call_completion in
-
-  (* Step D - Retrieve data *)
-  let lcstm_stepD = List.fold_left (fun acc (posOut, bufferId) ->
-    let argOut = List.nth sig_info_kernel.k_input posOut in
-    let sexprOut = List.nth args_out posOut in
-    let lcexp_buffOut =
-      (* Queue *)
-      (Cfield (Cconst (Ctag Openclprep.icl_data_struct_string), (Modules.current_qual "queue")))::
-      (* Buffer *)
-      (Carray (
-        (Cfield (Cconst (Ctag Openclprep.icl_data_struct_string), (Modules.current_qual "buffers")))
-        ,
-        (Cconst (Ccint bufferId))
-      ))::
-      (* Blocking read *)
-      (Cconst (Ctag "CL_TRUE"))::
-      (Cconst (Ccint posOut))::
-      (type_to_sizeof argOut.a_type)::
-      (* Output : always need pointers (even if integer) *)
-      (address_of argOut.a_type sexprOut)::
+          (Cfield (Cconst (Ctag Openclprep.icl_data_struct_string), (Modules.current_qual "kernels")))
+          ,
+          (Cconst (Ccint idkernel))
+        ))::
+      (* Dimension of the kernel *)
+      (Cconst (Ccint sig_info_kernel.k_dim))::
+      (* Disabled alignment option *)
+      (Cconst (Ctag "NULL"))::
+      (* Info on local_worksize *)
+      (Cstructlitraw ("size_t[1]", [Cconst (Ccint ocl.copt_gl_worksize)]))::
+      (* Info on global_worksize *)
+      (Cstructlitraw ("size_t[1]", [Cconst (Ccint ocl.copt_loc_worksize)]))::
       (Cconst (Ccint 0))::(Cconst (Ctag "NULL"))::(Cconst (Ctag "NULL"))::[]    (* Disabled options *)
     in
-    let fun_call_buffOut = Cfun_call ("clEnqueueReadBuffer", lcexp_buffOut) in
-    let cstm_bufOut = Csexpr fun_call_buffOut in
-    cstm_bufOut::acc
-  ) [] bufferOutput in
+    (* Note for eventual debug: if Cstructlit does not work, do with Ctag "{" ^ ... ^ "}" *)
+    let fun_call_comput = Cfun_call ("clEnqueueNDRangeKernel", lcexp_comput) in
+    let cstm_stepB = Csexpr fun_call_comput in
 
-  (* Output: list of statements, the order matters *)
-  lcstm_stepA @ [cstm_stepB] @ [cstm_stepC] @ lcstm_stepD
+    (* Output: list of statements, the order matters *)
+    lcstm_stepA @ [cstm_stepB]
+  
+  end else begin
+    (* Offloading - recover part *)
+
+    let bufferOutput = Openclprep.BoolIntMap.fold (fun (isIn, pos) (v,_) acc ->
+      if (not isIn) then (pos,v)::acc else acc
+    ) bufferinfos [] in
+    let args_out = List.map clhs_to_var_conversion outvl in
+
+    (* Step C - Waiting for completion *)
+    let lcexp_completion =
+      (* Queue *)
+      (Cfield (Cconst (Ctag Openclprep.icl_data_struct_string), (Modules.current_qual "queue")))::[]
+    in
+    let fun_call_completion = Cfun_call ("clFinish", lcexp_completion) in
+    let cstm_stepC = Csexpr fun_call_completion in
+
+    (* Step D - Retrieve data *)
+    let lcstm_stepD = List.fold_left (fun acc (posOut, bufferId) ->
+      let argOut = List.nth sig_info_kernel.k_input posOut in
+      let sexprOut = List.nth args_out posOut in
+      let lcexp_buffOut =
+        (* Queue *)
+        (Cfield (Cconst (Ctag Openclprep.icl_data_struct_string), (Modules.current_qual "queue")))::
+        (* Buffer *)
+        (Carray (
+          (Cfield (Cconst (Ctag Openclprep.icl_data_struct_string), (Modules.current_qual "buffers")))
+          ,
+          (Cconst (Ccint bufferId))
+        ))::
+        (* Blocking read *)
+        (Cconst (Ctag "CL_TRUE"))::
+        (Cconst (Ccint posOut))::
+        (type_to_sizeof argOut.a_type)::
+        (* Output : always need pointers (even if integer) *)
+        (address_of argOut.a_type sexprOut)::
+        (Cconst (Ccint 0))::(Cconst (Ctag "NULL"))::(Cconst (Ctag "NULL"))::[]    (* Disabled options *)
+      in
+      let fun_call_buffOut = Cfun_call ("clEnqueueReadBuffer", lcexp_buffOut) in
+      let cstm_bufOut = Csexpr fun_call_buffOut in
+      cstm_bufOut::acc
+    ) [] bufferOutput in
+
+    (* Output: list of statements, the order matters *)
+    [cstm_stepC] @ lcstm_stepD
+  end
 
 
 (** Create the statement dest = c where c = v^n^m... *)
@@ -870,10 +878,10 @@ let rec cstm_of_act out_env var_env obj_env act =
       let outvl = clhs_list_of_pattern_list out_env var_env outvl in
       generate_function_call out_env var_env obj_env outvl objn args
 
-    | Acall (outvl, objn, Mkernel ocl, el) ->
+    | Acall (outvl, objn, Mkernel (ocl, blaunch), el) ->
       let args = cexprs_of_exps out_env var_env el in
       let outvl = clhs_list_of_pattern_list out_env var_env outvl in
-      generate_kernel_call out_env var_env obj_env ocl outvl objn args
+      generate_kernel_call out_env var_env obj_env blaunch ocl outvl objn args
 
 
 

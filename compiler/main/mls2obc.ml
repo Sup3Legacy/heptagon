@@ -604,7 +604,9 @@ and mk_node_call map call_context app loc (name_list : Obc.pattern list) args ty
                 copt_loc_worksize = clo.copt_loc_worksize;
                 copt_id = get_unique_clo_id ()}
               in
-              [Acall (name_list, o, Mkernel nclo, args)])
+              [Acall (name_list, o, Mkernel (nclo, true), args)]      (* Launch offload  *)
+                @ [Acall (name_list, o, Mkernel (nclo, false), args)] (* Recover offload *)
+            )
           else
             [Acall (name_list, o, Mstep, args)]
         in

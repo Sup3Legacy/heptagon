@@ -1,3 +1,5 @@
+(* ../../../heptc -target opencl -mainnode main sum.ept *)
+
 (* Offloaded computation *)
 __clkernel fun vector_add(a : int^32; b : int^32) returns (c : int^32)
 	__clsource "sum_vector.cl"

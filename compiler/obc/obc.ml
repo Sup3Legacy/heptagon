@@ -99,7 +99,7 @@ type cl_option = {
 type method_name =
   | Mreset
   | Mstep
-  | Mkernel of cl_option
+  | Mkernel of cl_option * bool
 
 type act =
   | Aassgn of pattern * exp

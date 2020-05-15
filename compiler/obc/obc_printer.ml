@@ -117,9 +117,11 @@ let print_cloption ff clo =
 let print_method_name ff = function
   | Mstep -> fprintf ff "step"
   | Mreset -> fprintf ff "reset"
-  | Mkernel clo ->
-    fprintf ff "kernel(%a)"
-      print_cloption clo
+  | Mkernel (clo, blaunch) ->
+  if (blaunch) then
+    fprintf ff "kernel(%a, LAUNCH)" print_cloption clo
+  else
+    fprintf ff "kernel(%a, RECOVER)" print_cloption clo
 
 
 let rec print_act ff a =
