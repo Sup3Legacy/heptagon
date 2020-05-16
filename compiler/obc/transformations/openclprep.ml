@@ -35,14 +35,14 @@
   *)
 
 (* Author: Guillaume I *)
+open Containers
 open Obc
 open Obc_mapfold
 
-
-module IntMap = Map.Make(struct type t=int let compare = Pervasives.compare end)
 module BoolIntMap = Map.Make(struct type t=(bool * int) let compare = Pervasives.compare end)
 
 (* Global datastructure to pass informations to all of the specific OpenCL CG parts *)
+let mQueueCL = ref StringMap.empty
 let mKernelCL = ref IntMap.empty
 let mBufferCL = ref IntMap.empty
 let mLocalBuffCL = ref IntMap.empty
@@ -64,6 +64,11 @@ let get_fresh_idbuffer () =
 
 (* ------------------------------------------ *)
 (* Pretty-printer for the global data struct (for debugging) *)
+let print_mQueueCL ff =
+  StringMap.iter (fun kname id ->
+    Format.fprintf ff "[device_name = %s | queue_id = %i]\n@?" kname id
+  ) !mQueueCL
+
 
 let print_mKernelCL ff =
   IntMap.iter (fun k (kernelname, _, clo) ->
@@ -99,6 +104,26 @@ let print_mLocalBuffCL ff =
   ) !mLocalBuffCL
 
 
+(* ------------------------------------------ *)
+
+(* Manage device id to assign a different queue per device *)
+let counter_device_id = ref 0
+let get_new_device_id _ =
+  let temp = !counter_device_id in
+  counter_device_id := !counter_device_id + 1;
+  temp
+
+let get_device_id clo =
+  let devid = try
+      StringMap.find clo.copt_device_id !mQueueCL
+    with Not_found -> (
+      let ndevid = get_new_device_id () in
+      mQueueCL := StringMap.add clo.copt_device_id ndevid !mQueueCL;
+      ndevid
+    )
+  in
+  devid
+
 
 (* ------------------------------------------ *)
 
@@ -106,7 +131,6 @@ let rec find_object obj_id lobjdec = match lobjdec with
   | [] -> raise Not_found
   | h::t ->
     if (h.o_ident = obj_id) then h else (find_object obj_id t)
-
 
 let get_kernel_sign classdef_objs objref = match objref with
   | Oarray _ ->
@@ -118,13 +142,18 @@ let get_kernel_sign classdef_objs objref = match objref with
     with Not_found ->
       failwith ("openclprep internal error : " ^ (Idents.name obj_id) ^ " not found in environment.")
 
-
 (* Targetting *)
 let act_opencl _ acc act = match act with
   | Acall (_, objref, mname, _) -> begin
     match mname with
     | Mkernel clo -> (
       if (clo.copt_is_launch=false) then act,acc else (* Only do it once per kernel *)
+
+      (* Get the device id and update mQueueCL if it is a new one *)
+      let devid = get_device_id clo in
+
+      (* TODO: use the devid information in the rest *)
+
 
       let idkernelcall = clo.copt_id in
       let (qnameKernel, kernelsign) = get_kernel_sign acc objref in

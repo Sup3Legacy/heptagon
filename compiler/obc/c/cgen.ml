@@ -28,6 +28,7 @@
 (***********************************************************************)
 
 open List
+open Containers
 open Misc
 open Names
 open Idents
@@ -618,12 +619,12 @@ let generate_kernel_call out_env var_env obj_env ocl outvl objn args =
   (* Info on the kernel *)
   let idkernel = ocl.copt_id in
   let (_, sig_info_kernel, _) = try
-      Openclprep.IntMap.find idkernel !Openclprep.mKernelCL
+      IntMap.find idkernel !Openclprep.mKernelCL
     with Not_found -> failwith ("OpenCL kernel number " ^ (string_of_int idkernel) ^ " was not found")
   in
   
   (* Retrieving infos on the buffers *)
-  let (_, _, bufferinfos) = Openclprep.IntMap.find idkernel !Openclprep.mBufferCL in
+  let (_, _, bufferinfos) = IntMap.find idkernel !Openclprep.mBufferCL in
 
   (* For preparing the inputs *)
   let rec add_targeting l ads = match l, ads with

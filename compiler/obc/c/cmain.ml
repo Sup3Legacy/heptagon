@@ -28,6 +28,7 @@
 (***********************************************************************)
 
 open List
+open Containers
 open Names
 open Idents
 open Obc
@@ -426,7 +427,7 @@ let get_opencl_prologue () =
 
   (* Step 2 & 3 - Kernel management *)
   (* Preparation *)
-  let lKernelVar = Openclprep.IntMap.fold (fun cloid (qname, sign, _) acc ->
+  let lKernelVar = IntMap.fold (fun cloid (qname, sign, _) acc ->
     let nprogname = program_var_name qname.name cloid in
     let nkername = kernel_var_name qname.name cloid in
     (qname, sign, nprogname, cloid, nkername)::acc
@@ -512,7 +513,7 @@ let get_opencl_prologue () =
   (* Step 4 & 5 - buffer construction + association *)
   
   (* lBufferVar: list of (qnameKernel, kernelsign, buffid, isInput, pos, buffname) *)
-  let lBufferVar = Openclprep.IntMap.fold (fun cloid (qnameKernel, kernelsign, mBuffer) acc ->
+  let lBufferVar = IntMap.fold (fun cloid (qnameKernel, kernelsign, mBuffer) acc ->
     Openclprep.BoolIntMap.fold (fun (isInput, pos) (buffid,_) acc ->
       let buffname = buffer_var_name qnameKernel.name buffid in
       (qnameKernel, kernelsign, cloid, buffid, isInput, pos, buffname)::acc
@@ -571,8 +572,8 @@ let get_opencl_prologue () =
 
   (* Local memory - buffer namangement *)
   (* clSetKernelArg([kernelvar], [pos], [sizebuffer], NULL)  - for local var *)
-  let lstm_step4_local = Openclprep.IntMap.fold (fun cloid (_, mcloid) acc ->
-    Openclprep.IntMap.fold (fun pos argloc acc ->
+  let lstm_step4_local = IntMap.fold (fun cloid (_, mcloid) acc ->
+    IntMap.fold (fun pos argloc acc ->
       let kernelvar = find_kernelvar lKernelVar cloid in
       (* Local buffers comes after all input and output buffers *)
       let npos = numInOutput + pos in
@@ -591,7 +592,7 @@ let get_opencl_prologue () =
   let lstm_step4 = lstm_step4 @ lstm_step4_local in
 
   (* Step 6 - Build global data structure *)
-  let numKernel = Openclprep.IntMap.cardinal !Openclprep.mKernelCL in
+  let numKernel = IntMap.cardinal !Openclprep.mKernelCL in
   let numBuffer = !Openclprep.idbuffer in
   let lvarloc_step6 = 
     ("kernels", Cty_ptr (Cty_id { qual = Pervasives; name = "cl_kernel"}))::
