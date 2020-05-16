@@ -123,8 +123,8 @@ let get_kernel_sign classdef_objs objref = match objref with
 let act_opencl _ acc act = match act with
   | Acall (_, objref, mname, _) -> begin
     match mname with
-    | Mkernel (clo, blaunch) -> (
-      if (blaunch=false) then act,acc else (* Only do it once per kernel *)
+    | Mkernel clo -> (
+      if (clo.copt_is_launch=false) then act,acc else (* Only do it once per kernel *)
 
       let idkernelcall = clo.copt_id in
       let (qnameKernel, kernelsign) = get_kernel_sign acc objref in

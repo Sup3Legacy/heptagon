@@ -40,7 +40,7 @@ open Minils
 open Mls_utils
 open Parsched
 
-open Unicity_fun_instance   (* For access to "mFunname2Eq" *)
+(* Also uses "Unicity_fun_instance.mFunname2Eq" *)
 
 
 (* Parsing function for the solution *)
@@ -555,6 +555,9 @@ let main_node n =
 
   (* Preprocess the parallel schedule *)
   let mls_parsched = preprocess_parsched mVar2Eq parsched in
+
+  (* TODO for later: convert back non-functional equation (cf copy equation) to their previous version here *)
+  (* Cf "preprocess_lopht" in "minils/gc/" *)
 
   (* We return the updated main node *)
   let mls_parsched_info = mk_parsched_info mls_parsched parsched.nproc parsched.ndevice in

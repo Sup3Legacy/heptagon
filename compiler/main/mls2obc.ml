@@ -599,13 +599,23 @@ and mk_node_call map call_context app loc (name_list : Obc.pattern list) args ty
             | None ->
               Misc.unsupported "mls2obc: OpenCL kernel call with no cl option associated"
             | Some clo ->
-              let nclo = {
+              let id_clo = get_unique_clo_id () in
+              let nclo_launch = {
                 copt_gl_worksize = clo.copt_gl_worksize;
                 copt_loc_worksize = clo.copt_loc_worksize;
-                copt_id = get_unique_clo_id ()}
+                copt_is_launch = true;
+                copt_device_id = "Default";
+                copt_id = id_clo}
               in
-              [Acall (name_list, o, Mkernel (nclo, true), args)]      (* Launch offload  *)
-                @ [Acall (name_list, o, Mkernel (nclo, false), args)] (* Recover offload *)
+              let nclo_recover = {
+                copt_gl_worksize = clo.copt_gl_worksize;
+                copt_loc_worksize = clo.copt_loc_worksize;
+                copt_is_launch = false;
+                copt_device_id = "Default";
+                copt_id = id_clo}
+              in
+              [Acall (name_list, o, Mkernel nclo_launch, args)]      (* Launch offload  *)
+                @ [Acall (name_list, o, Mkernel nclo_recover, args)] (* Recover offload *)
             )
           else
             [Acall (name_list, o, Mstep, args)]

@@ -148,9 +148,9 @@ and method_name_it funs acc mn =
   method_name funs acc mn
 and method_name funs acc mn = match mn with
   | Mreset | Mstep -> mn, acc
-  | Mkernel (clo, blaunch) ->
+  | Mkernel clo ->
     let clo, acc = cl_option_it funs acc clo in
-    (Mkernel (clo, blaunch)), acc
+    (Mkernel clo), acc
   
 
 

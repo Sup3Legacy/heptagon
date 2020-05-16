@@ -111,18 +111,18 @@ let print_obj_call ff = function
         (print_list_r print_lhs "[" "][" "]") i
 
 let print_cloption ff clo =
-  fprintf ff "[gl:%i, loc: %i]"
-    clo.copt_gl_worksize  clo.copt_loc_worksize
+  if (clo.copt_is_launch) then
+    fprintf ff "[gl:%i, loc: %i, Launch on %s]"
+      clo.copt_gl_worksize  clo.copt_loc_worksize clo.copt_device_id
+  else
+    fprintf ff "[gl:%i, loc: %i, Recover on %s]"
+      clo.copt_gl_worksize  clo.copt_loc_worksize clo.copt_device_id
 
 let print_method_name ff = function
   | Mstep -> fprintf ff "step"
   | Mreset -> fprintf ff "reset"
-  | Mkernel (clo, blaunch) ->
-  if (blaunch) then
-    fprintf ff "kernel(%a, LAUNCH)" print_cloption clo
-  else
-    fprintf ff "kernel(%a, RECOVER)" print_cloption clo
-
+  | Mkernel clo ->
+    fprintf ff "kernel(%a)" print_cloption clo
 
 let rec print_act ff a =
   let print_lhs_tuple ff var_list = match var_list with

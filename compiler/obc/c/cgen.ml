@@ -609,7 +609,7 @@ let rec type_to_sizeof ty = match ty with
     [outvl] is a list of lhs where to put the results.
     [args] is the list of expressions to use as arguments.
     [mem] is the lhs where is stored the node's context.*)
-let generate_kernel_call out_env var_env obj_env blaunch ocl outvl objn args =
+let generate_kernel_call out_env var_env obj_env ocl outvl objn args =
   (* Default behavior if the option to generate OpenCL code is disabled *)
   if (not (!Compiler_options.opencl_cg)) then
     generate_function_call out_env var_env obj_env outvl objn args
@@ -635,7 +635,7 @@ let generate_kernel_call out_env var_env obj_env blaunch ocl outvl objn args =
     | _, _ -> assert false
   in
 
-  if (blaunch) then begin
+  if (ocl.copt_is_launch) then begin
     (* Offloading - launch part *)
 
     let bufferInput = Openclprep.BoolIntMap.fold (fun (isIn, pos) (v,_) acc ->
@@ -878,10 +878,10 @@ let rec cstm_of_act out_env var_env obj_env act =
       let outvl = clhs_list_of_pattern_list out_env var_env outvl in
       generate_function_call out_env var_env obj_env outvl objn args
 
-    | Acall (outvl, objn, Mkernel (ocl, blaunch), el) ->
+    | Acall (outvl, objn, Mkernel ocl, el) ->
       let args = cexprs_of_exps out_env var_env el in
       let outvl = clhs_list_of_pattern_list out_env var_env outvl in
-      generate_kernel_call out_env var_env obj_env blaunch ocl outvl objn args
+      generate_kernel_call out_env var_env obj_env ocl outvl objn args
 
 
 

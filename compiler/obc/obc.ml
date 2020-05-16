@@ -94,12 +94,14 @@ type obj_ref =
 type cl_option = {
     copt_gl_worksize  : int;
     copt_loc_worksize : int;
+    copt_is_launch : bool; (* bool=true => launch part of an offload / false => recover part *)
+    copt_device_id : string;
     copt_id : int }  (* Unique id to identify different instances of Mkernel calls *)
 
 type method_name =
   | Mreset
   | Mstep
-  | Mkernel of cl_option * bool  (* bool=true => launch part of an offload / false => recover part *)
+  | Mkernel of cl_option
 
 type act =
   | Aassgn of pattern * exp
