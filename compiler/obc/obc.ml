@@ -99,7 +99,7 @@ type cl_option = {
 type method_name =
   | Mreset
   | Mstep
-  | Mkernel of cl_option * bool
+  | Mkernel of cl_option * bool  (* bool=true => launch part of an offload / false => recover part *)
 
 type act =
   | Aassgn of pattern * exp

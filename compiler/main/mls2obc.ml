@@ -746,8 +746,12 @@ let translate_node
     ({ Minils.n_name = f; Minils.n_input = i_list; Minils.n_output = o_list;
       Minils.n_local = d_list; Minils.n_equs = eq_list; Minils.n_stateful = stateful;
       Minils.n_contract = contract; Minils.n_params = params; Minils.n_loc = loc;
-      Minils.n_mem_alloc = mem_alloc
+      Minils.n_mem_alloc = mem_alloc; Minils.n_parsched = oparshed;
     } as n) =
+
+  (* TODO: if oparshed is not None, then activate the alternate code generation (scattered mainnode) *)
+
+
   Idents.enter_node f;
   let mem_var_tys = Mls_utils.node_memory_vars n in
   let c_list, c_locals =

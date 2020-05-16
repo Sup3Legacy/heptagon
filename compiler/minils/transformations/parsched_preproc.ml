@@ -151,7 +151,7 @@ let build_mfun2Table parsched =
     List.fold_left (fun macc (res:reservation) -> match res with
       | Res_funcall (res_name, res_st_date, res_end_date) ->
         StringMap.add res_name (name_block, res_st_date, res_end_date) macc
-      | Res_ocl_launch (res_name, res_date) ->
+      | Res_ocl_launch (res_name, _, res_date) ->
         StringMap.add res_name (name_block, res_date, res_date) macc
       | _ -> macc
     ) macc bl.bls_lreser
@@ -320,7 +320,7 @@ let remove_device_blocks l_event_fun parsched =
         else
           parsched_acc
       in
-      let nres_ocl_launch = mk_ocl_launch_res res_name date_ocl_launch in
+      let nres_ocl_launch = mk_ocl_launch_res res_name bls.bls_name date_ocl_launch in
       let parsched_acc = add_new_reservation_before proc_ocl_launch nres_ocl_launch parsched_acc in
 
 
@@ -331,7 +331,7 @@ let remove_device_blocks l_event_fun parsched =
         else
           parsched_acc
       in
-      let nres_ocl_recover = mk_ocl_recover_res res_name date_ocl_recover in
+      let nres_ocl_recover = mk_ocl_recover_res res_name bls.bls_name date_ocl_recover in
       let parsched_acc = add_new_reservation_before proc_ocl_recover nres_ocl_recover parsched_acc in
 
       parsched_acc
@@ -359,7 +359,7 @@ let trim_name_gc name =
 
 (* Find the equation associated to res *)
 let get_equation_from_res res = match res with
-  | Res_funcall (name, _, _) | Res_ocl_launch (name, _) -> (
+  | Res_funcall (name, _, _) | Res_ocl_launch (name, _, _) -> (
     let name = trim_name_gc name in
     try 
       StringMap.find name !Unicity_fun_instance.mFunname2Eq
@@ -387,7 +387,7 @@ let add_synch_reservation mVar2Eq parsched =
       (* We consider a computation that might need incoming synchronisation *)
 
       match res with
-      | Res_funcall (res_name, res_date, _) | Res_ocl_launch (res_name, res_date) ->
+      | Res_funcall (res_name, res_date, _) | Res_ocl_launch (res_name, _, res_date) ->
         (* a) Get the list of reservations producting data used by "res" *)
         let eq_res = get_equation_from_res res in 
         let lvarid_used = extract_immediate_varid_from_exp eq_res.eq_rhs in
@@ -464,17 +464,17 @@ let get_mls_parsched parsched =
         with
         | Not_found -> failwith ("Funname " ^ funname ^ " not found in mFunname2Eq")
       )
-      | Res_ocl_launch (funname, _) -> (
+      | Res_ocl_launch (funname, deviceid, _) -> (
         try
           let eq = StringMap.find funname !Unicity_fun_instance.mFunname2Eq in
-          Comp_ocl_launch eq
+          Comp_ocl_launch (eq, deviceid)
         with
         | Not_found -> failwith ("Funname " ^ funname ^ " not found in mFunname2Eq")
       )
-      | Res_ocl_recover (funname, _) -> (
+      | Res_ocl_recover (funname, deviceid, _) -> (
         try
           let eq = StringMap.find funname !Unicity_fun_instance.mFunname2Eq in
-          Comp_ocl_recover eq
+          Comp_ocl_recover (eq, deviceid)
         with
         | Not_found -> failwith ("Funname " ^ funname ^ " not found in mFunname2Eq")
       )
@@ -557,7 +557,8 @@ let main_node n =
   let mls_parsched = preprocess_parsched mVar2Eq parsched in
 
   (* We return the updated main node *)
-  { n with n_parsched = Some mls_parsched }
+  let mls_parsched_info = mk_parsched_info mls_parsched parsched.nproc parsched.ndevice in
+  { n with n_parsched = Some mls_parsched_info }
 
 let program p =
   let main_node_name = Misc.assert_1 !Compiler_options.mainnode in

@@ -39,7 +39,7 @@ open Clocks
 
 (** Warning: Whenever Minils ast is modified,
     minils_format_version should be incremented. *)
-let minils_format_version = "4.OCL.1"
+let minils_format_version = "4.OCL.2"
 
 type iterator_type =
   | Imap
@@ -178,13 +178,19 @@ type typeparam_dec =
 (* Component of a parallel schedule *)
 type parsched_comp =
   | Comp_eq of eq
-  | Comp_ocl_launch of eq
-  | Comp_ocl_recover of eq
-  | Comp_signal of string        (* signal(s) *)
-  | Comp_wait of string * int    (* wait(s, n) - n-semaphore *)
+  | Comp_ocl_launch of eq * string  (* Offload equation eq on a given device *)
+  | Comp_ocl_recover of eq * string (* Offload equation eq on a given device *)
+  | Comp_signal of string           (* signal(s) *)
+  | Comp_wait of string * int       (* wait(s, n) - n-semaphore *)
 
 type parsched_eqs = (parsched_comp list) list (* Outer list = across all computation units *)
                                               (* Inner list is sorted in chronological order *)
+
+type parsched_info = {
+  psch_eqs     : parsched_eqs;
+  psch_ncore   : int;
+  psch_ndevice : int;
+}
 
 
 type node_dec = {
@@ -206,7 +212,7 @@ type node_dec = {
   n_period            : int option;
 
   (* Potential parallel scheduling *)
-  n_parsched          : parsched_eqs option;
+  n_parsched          : parsched_info option;
 }
 
 type kernel_dec = {
@@ -338,6 +344,9 @@ let mk_classtype_dec id ltyid loc = { c_nameclass = id; c_insttypes=ltyid; c_loc
 
 let mk_cl_option glws locws =
   { copt_gl_worksize = glws; copt_loc_worksize = locws }
+
+let mk_parsched_info pscheqs ncore ndevice =
+  { psch_eqs = pscheqs; psch_ncore = ncore; psch_ndevice = ndevice }
 
 let mk_app ?(params=[]) ?(ty_subst=[]) ?(unsafe=false) ?(id=None) ?(inlined=false) ?(clopt=None) op =
   { a_op = op; a_params = params; a_ty_subst=ty_subst; a_unsafe = unsafe;

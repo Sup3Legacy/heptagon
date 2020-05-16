@@ -58,8 +58,8 @@ END_BLOCKS
 
 type reservation = 
   | Res_funcall of string * int * int         (* (name, start_date, end_date) / only block on parsing *)
-  | Res_ocl_launch of string * int            (* (name, id, date) *)
-  | Res_ocl_recover of string * int           (* (name, id, date) *)
+  | Res_ocl_launch of string * string * int      (* (name, id_device, date) *)
+  | Res_ocl_recover of string * string * int     (* (name, id_device, date) *)
   | Res_signal of string * int                (* (name, date) *)
   | Res_wait of string * int * int            (* (name, num_signal, date) *)
 
@@ -78,8 +78,8 @@ type parsched = {
 
 (* Constructors *)
 let mk_funcall_res name s e = Res_funcall (name, s, e)
-let mk_ocl_launch_res name d = Res_ocl_launch (name, d)
-let mk_ocl_recover_res name d = Res_ocl_recover (name, d)
+let mk_ocl_launch_res name id_device d = Res_ocl_launch (name, id_device, d)
+let mk_ocl_recover_res name id_device d = Res_ocl_recover (name, id_device, d)
 let mk_signal_res name_sync d = Res_signal (name_sync, d)
 let mk_wait_res name_sync num d = Res_wait (name_sync, num, d)
 
@@ -94,8 +94,8 @@ let mk_parsched nproc ndevice lblock =
 (* Pretty-printer *)
 let print_reservation ff res = match res with
   | Res_funcall (n, s, e) -> fprintf ff "%i\t%i\t%s\n" s e n
-  | Res_ocl_launch (n, d) -> fprintf ff "%i\t%i\tOCL_LAUNCH %s\n" d d n
-  | Res_ocl_recover (n, d) -> fprintf ff "%i\t%i\tOCL_RECOVER %s\n" d d n
+  | Res_ocl_launch (n, iddev, d) -> fprintf ff "%i\t%i\tOCL_LAUNCH(%s) %s\n" d d iddev n
+  | Res_ocl_recover (n, iddev, d) -> fprintf ff "%i\t%i\tOCL_RECOVER(%s) %s\n" d d iddev n
   | Res_signal (n, d) -> fprintf ff "%i\t%i\tSignal %s\n" d d n
   | Res_wait (n, ns, d) -> fprintf ff "%i\t%i\tWait(%i) %s\n" d d ns n
 
@@ -146,8 +146,8 @@ let get_random_core_name parsched =
 (* Get the start date of a reservation *)
 let get_start_date res = match res with
   | Res_funcall (_, d, _) -> d
-  | Res_ocl_launch (_, d) -> d
-  | Res_ocl_recover (_, d) -> d
+  | Res_ocl_launch (_, _, d) -> d
+  | Res_ocl_recover (_, _, d) -> d
   | Res_signal (_, d) -> d
   | Res_wait (_, _, d) -> d
 
@@ -215,7 +215,7 @@ let add_new_reservation_after_funname block_name funname nres parsched =
   let fun_sel = (fun lprev_res d date -> match lprev_res with
     | [] -> false
     | prev_res::_ -> (match prev_res with
-      | Res_funcall (prev_res_name, _, _) | Res_ocl_recover (prev_res_name, _)->
+      | Res_funcall (prev_res_name, _, _) | Res_ocl_recover (prev_res_name, _, _)->
         if (prev_res_name=funname) then
           (assert(d>=date); true)
         else
