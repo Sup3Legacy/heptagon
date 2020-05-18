@@ -362,6 +362,8 @@ let rec act_list param_env act_l acts =
         let acall = Emethod_call (obj_ref param_env obj, "reset", []) in
         Aexp acall::acts
     | Obc.Acall (_, _, Mkernel _, _) -> failwith "OpenCL kernel not supported by Java CG"
+    | Obc.Acall (_, _, Mthread _, _) -> failwith "OpenCL/parallel kernel not supported by Java CG"
+    | Obc.Acall (_, _, Mother _, _) -> failwith "OpenCL/parallel kernel not supported by Java CG"
     | Obc.Acase (e, c_b_l) when e.e_ty = Types.Tid Initial.pbool ->
         (match c_b_l with
           | [] -> acts

@@ -102,6 +102,8 @@ type method_name =
   | Mreset
   | Mstep
   | Mkernel of cl_option
+  | Mthread of int
+  | Mother of string
 
 type act =
   | Aassgn of pattern * exp

@@ -151,7 +151,8 @@ and method_name funs acc mn = match mn with
   | Mkernel clo ->
     let clo, acc = cl_option_it funs acc clo in
     (Mkernel clo), acc
-  
+  | Mthread _ -> mn, acc
+  | Mother _ -> mn, acc
 
 
 and act_it funs acc a =

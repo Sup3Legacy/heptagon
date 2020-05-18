@@ -555,7 +555,7 @@ let step_fun_call out_env var_env sig_info outvl objn out args =
     [outvl] is a list of lhs where to put the results.
     [args] is the list of expressions to use as arguments.
     [mem] is the lhs where is stored the node's context.*)
-let generate_function_call out_env var_env obj_env outvl objn args =
+let generate_function_call out_env var_env obj_env oname_fun outvl objn args =
   (* Class name for the object to step. *)
   let classln = assoc_cn objn obj_env in
   let classn = cname_of_qn classln in
@@ -570,7 +570,11 @@ let generate_function_call out_env var_env obj_env outvl objn args =
           holding structure. *)
       let args = step_fun_call out_env var_env sig_info outvl objn out args in
       (* Our C expression for the function call. *)
-      Cfun_call (classn ^ "_step", args)
+      let name_fun = match oname_fun with
+        | None -> classn ^ "_step"    (* Default case*)
+        | Some name -> name           (* Only happens when Mother *)
+      in
+      Cfun_call (name_fun, args)
   in
 
   (* Act according to the length of our list. Step functions with
@@ -613,7 +617,7 @@ let rec type_to_sizeof ty = match ty with
 let generate_kernel_call out_env var_env obj_env ocl outvl objn args =
   (* Default behavior if the option to generate OpenCL code is disabled *)
   if (not (!Compiler_options.opencl_cg)) then
-    generate_function_call out_env var_env obj_env outvl objn args
+    generate_function_call out_env var_env obj_env None outvl objn args
   else
 
   (* Info on the kernel *)
@@ -877,12 +881,20 @@ let rec cstm_of_act out_env var_env obj_env act =
     | Acall (outvl, objn, Mstep, el) ->
       let args = cexprs_of_exps out_env var_env el in
       let outvl = clhs_list_of_pattern_list out_env var_env outvl in
-      generate_function_call out_env var_env obj_env outvl objn args
+      generate_function_call out_env var_env obj_env None outvl objn args
 
     | Acall (outvl, objn, Mkernel ocl, el) ->
       let args = cexprs_of_exps out_env var_env el in
       let outvl = clhs_list_of_pattern_list out_env var_env outvl in
       generate_kernel_call out_env var_env obj_env ocl outvl objn args
+
+    | Acall (_, _, Mthread _, _) ->
+      failwith "cgen::cstm_of_act : there should not have any direct call to a thread function."
+
+    | Acall (outvl, objn, Mother name, el) ->
+      let args = cexprs_of_exps out_env var_env el in
+      let outvl = clhs_list_of_pattern_list out_env var_env outvl in
+      generate_function_call out_env var_env obj_env (Some name) outvl objn args
 
 
 
@@ -949,10 +961,6 @@ let fun_def_of_step_fun n obj_env mem objs md =
           (List.filter (fun obj -> not (is_op obj.o_class)) 
           (List.filter (fun obj -> not (Modules.check_kernel obj.o_class))
           objs))) in
-
-  (* TODO: another filter for OpenCL kernels !!! *)
-
-
 
   (* The body *)
   let mems = List.map cvar_of_vd (mem@md.m_outputs) in

@@ -123,6 +123,10 @@ let print_method_name ff = function
   | Mreset -> fprintf ff "reset"
   | Mkernel clo ->
     fprintf ff "kernel(%a)" print_cloption clo
+  | Mthread num ->
+    fprintf ff "thread_%i" num
+  | Mother name ->
+    fprintf ff "other(%s)" name
 
 let rec print_act ff a =
   let print_lhs_tuple ff var_list = match var_list with
