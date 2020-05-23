@@ -630,6 +630,9 @@ let generate_kernel_call out_env var_env obj_env ocl outvl objn args =
   (* Retrieving infos on the buffers *)
   let (_, _, bufferinfos) = IntMap.find idkernel !Openclprep.mBufferCL in
 
+  (* Retrieving info on queue *)
+  let queue_num = StringMap.find ocl.copt_device_id !Openclprep.mQueueCL in
+
   (* For preparing the inputs *)
   let rec add_targeting l ads = match l, ads with
     | [], [] -> []
@@ -654,7 +657,11 @@ let generate_kernel_call out_env var_env obj_env ocl outvl objn args =
       let sexprIn = List.nth args posIn in
       let lcexp_buffIn =
         (* Queue *)
-        (Cfield (Cconst (Ctag Openclprep.icl_data_struct_string), (Modules.current_qual "queue")))::
+        (Carray (
+          (Cfield (Cconst (Ctag Openclprep.icl_data_struct_string), (Modules.current_qual "queues")))
+          ,
+          (Cconst (Ccint queue_num))
+        ))::
         (* Buffer *)
         (Carray (
           (Cfield (Cconst (Ctag Openclprep.icl_data_struct_string), (Modules.current_qual "buffers")))
@@ -680,7 +687,11 @@ let generate_kernel_call out_env var_env obj_env ocl outvl objn args =
     (* Step B - Enqueue computation *)
     let lcexp_comput =
       (* Queue *)
-      (Cfield (Cconst (Ctag Openclprep.icl_data_struct_string), (Modules.current_qual "queue")))::
+      (Carray (
+        (Cfield (Cconst (Ctag Openclprep.icl_data_struct_string), (Modules.current_qual "queues")))
+        ,
+        (Cconst (Ccint queue_num))
+      ))::
       (* Kernel *)
       (Carray (
           (Cfield (Cconst (Ctag Openclprep.icl_data_struct_string), (Modules.current_qual "kernels")))
@@ -715,7 +726,11 @@ let generate_kernel_call out_env var_env obj_env ocl outvl objn args =
     (* Step C - Waiting for completion *)
     let lcexp_completion =
       (* Queue *)
-      (Cfield (Cconst (Ctag Openclprep.icl_data_struct_string), (Modules.current_qual "queue")))::[]
+      (Carray (
+        (Cfield (Cconst (Ctag Openclprep.icl_data_struct_string), (Modules.current_qual "queues")))
+        ,
+        (Cconst (Ccint queue_num))
+      ))::[]
     in
     let fun_call_completion = Cfun_call ("clFinish", lcexp_completion) in
     let cstm_stepC = Csexpr fun_call_completion in
@@ -726,7 +741,11 @@ let generate_kernel_call out_env var_env obj_env ocl outvl objn args =
       let sexprOut = List.nth args_out posOut in
       let lcexp_buffOut =
         (* Queue *)
-        (Cfield (Cconst (Ctag Openclprep.icl_data_struct_string), (Modules.current_qual "queue")))::
+        (Carray (
+          (Cfield (Cconst (Ctag Openclprep.icl_data_struct_string), (Modules.current_qual "queues")))
+          ,
+          (Cconst (Ccint queue_num))
+        ))::
         (* Buffer *)
         (Carray (
           (Cfield (Cconst (Ctag Openclprep.icl_data_struct_string), (Modules.current_qual "buffers")))
@@ -896,9 +915,6 @@ let rec cstm_of_act out_env var_env obj_env act =
       let outvl = clhs_list_of_pattern_list out_env var_env outvl in
       generate_function_call out_env var_env obj_env (Some name) outvl objn args
 
-
-
-
 and cstm_of_act_list out_env var_env obj_env b =
   let l = List.map cvar_of_vd b.b_locals in
   let var_env = l @ var_env in
@@ -917,6 +933,61 @@ let global_name = ref "";;
 
 let qn_append q suffix =
   { qual = q.qual; name = q.name ^ suffix }
+
+let build_init_mutex_decl_def cd md_init_mut =
+  let var_env = [] in  (* Method only contains Aop and extval mem => no need for var env here? *)
+  let body_init_mut = cstm_of_act_list IdentSet.empty var_env cd.cd_objs md_init_mut.m_body in
+
+  let init_mut_def = Cfundef {
+    C.f_name = Posixprep.name_init_mutex_func;
+    f_retty = Cty_void;
+    f_args = [];
+    f_body = {
+      var_decls = [];
+      block_body = body_init_mut;
+    }
+  } in
+  let init_mut_decl = C.cdecl_of_cfundef init_mut_def in
+  (init_mut_decl, init_mut_def)
+
+let build_init_sync_decl_def cd md_init_sync =
+  let var_env = [] in  (* Method only contains Aop and extval mem => no need for var env here? *)
+  let body_init_mut = cstm_of_act_list IdentSet.empty var_env cd.cd_objs md_init_sync.m_body in
+  
+  let init_sync_def = Cfundef {
+    C.f_name = Posixprep.name_init_sync_counter_func;
+    f_retty = Cty_void;
+    f_args = [];
+    f_body = {
+      var_decls = [];
+      block_body = body_init_mut;
+    }
+  } in
+  let init_sync_decl = C.cdecl_of_cfundef init_sync_def in
+  (init_sync_decl, init_sync_def)
+
+let build_thread_decl_def cd mdthr =
+  let numthr = match mdthr.Obc.m_name with
+    | Mthread num -> num
+    | _ -> failwith "Internal error: non-thread method given to build_thread_decl_def"
+  in
+
+  let var_env = List.map cvar_of_vd cd.cd_mems in
+  let body_thr = cstm_of_act_list IdentSet.empty var_env cd.cd_objs mdthr.m_body in
+
+  let thr_def = Cfundef {
+    C.f_name = Posixprep.get_name_thread numthr;
+    f_retty = Cty_ptr Cty_void;
+    f_args = [ ("arg", Cty_ptr Cty_void) ]; (* Ignored input argument *)
+    f_body = {
+      var_decls = [];                 (* All variables are shared and outside *)
+      block_body = body_thr;
+    }
+  } in
+  let thr_decl = C.cdecl_of_cfundef thr_def in
+  (thr_decl, thr_def)
+
+
 
 (** Builds the argument list of step function*)
 let step_fun_args n md =
@@ -986,35 +1057,36 @@ let fun_def_of_step_fun n obj_env mem objs md =
     }
   }
 
+
+(* This one just translates the class name to a struct name following the
+    convention we describe in mem_decl_of_class_def. *)
+let struct_field_of_obj_dec l od =
+  if is_stateful od.o_class then
+    let ty = Cty_id (qn_append od.o_class "_mem") in
+    let ty = match od.o_size with
+      | Some nl ->
+        let rec mk_idx nl = match nl with
+          | [] -> ty
+          | n::nl -> Cty_arr (int_of_static_exp n, mk_idx nl)
+        in
+          mk_idx nl
+      | None -> ty in
+      (name od.o_ident, ty)::l
+  else
+    l
+
 (** [mem_decl_of_class_def cd] returns a declaration for a C structure holding
     internal variables and objects of the Obc class definition [cd]. *)
 let mem_decl_of_class_def cd =
-  (* This one just translates the class name to a struct name following the
-     convention we described above. *)
-  let struct_field_of_obj_dec l od =
-    if is_stateful od.o_class then
-      let ty = Cty_id (qn_append od.o_class "_mem") in
-      let ty = match od.o_size with
-        | Some nl ->
-          let rec mk_idx nl = match nl with
-            | [] -> ty
-            | n::nl -> Cty_arr (int_of_static_exp n, mk_idx nl)
-          in
-            mk_idx nl
-        | None -> ty in
-        (name od.o_ident, ty)::l
-    else
-      l
-  in
-    if is_stateful cd.cd_name then (
-      (* Fields corresponding to normal memory variables. *)
-      let mem_fields = List.map cvar_of_vd cd.cd_mems in
-      (* Fields corresponding to object variables. *)
-      let obj_fields = List.fold_left struct_field_of_obj_dec [] cd.cd_objs in
-        [Cdecl_struct ((cname_of_qn cd.cd_name) ^ "_mem",
-                       mem_fields @ obj_fields)]
-    ) else
-      []
+  if is_stateful cd.cd_name then (
+    (* Fields corresponding to normal memory variables. *)
+    let mem_fields = List.map cvar_of_vd cd.cd_mems in
+    (* Fields corresponding to object variables. *)
+    let obj_fields = List.fold_left struct_field_of_obj_dec [] cd.cd_objs in
+      [Cdecl_struct ((cname_of_qn cd.cd_name) ^ "_mem",
+                     mem_fields @ obj_fields)]
+  ) else
+    []
 
 let out_decl_of_class_def cd =
   (* Fields corresponding to output variables. *)
@@ -1044,33 +1116,105 @@ let reset_fun_def_of_class_def cd =
   }
 
 
+
+(* Generation of the main class for pthread parallel CG *)
+let cdefs_and_cdecls_of_class_def_pthread (cd:Obc.class_def) =
+  Idents.enter_node cd.cd_name;
+
+  (* Get the different methods of cd
+    (reset not needed, there is already a fun in Obc_utils that works) *)
+  let extract_methods_pthread cd =
+    let md_init_mut = try
+      List.find (fun md -> match md.Obc.m_name with
+        | Obc.Mother str -> (str=Posixprep.name_init_mutex_func)
+        | _ -> false
+      ) cd.cd_methods
+      with Not_found -> failwith "Cgen : method for init_mutex not found in main class."
+    in
+    let md_init_sync = try
+      List.find (fun md -> match md.Obc.m_name with
+        | Mother str -> (str=Posixprep.name_init_sync_counter_func)
+        | _ -> false
+      ) cd.cd_methods
+      with Not_found -> failwith "Cgen : method for init_mutex not found in main class."
+    in
+    let lmd_thread = List.filter (fun md -> match md.Obc.m_name with
+      | Mthread _ -> true
+      | _ -> false
+    ) cd.cd_methods in
+    (md_init_mut, md_init_sync, lmd_thread)
+  in
+  let (md_init_mut, md_init_sync, lmd_thread) = extract_methods_pthread cd in
+
+  let mem_fields = List.map cvar_of_vd cd.cd_mems in
+  let obj_fields = List.fold_left struct_field_of_obj_dec [] cd.cd_objs in
+  let memvardecl = [Cdecl_struct ((cname_of_qn cd.cd_name) ^ "_mem",
+                       mem_fields @ obj_fields)] in
+
+  (* Building declarations/definitions *)
+  let (init_mut_decl, init_mut_def) = build_init_mutex_decl_def cd md_init_mut in
+  let (init_sync_decl, init_sync_def) = build_init_sync_decl_def cd md_init_sync in
+
+  let reset_def = reset_fun_def_of_class_def cd in
+  let reset_decl = C.cdecl_of_cfundef reset_def in
+
+  let (lpthread_decl, lpthread_def) = List.fold_left (fun (ldecl_acc, ldef_acc) mdthr ->
+    let (ndecl, ndef) = build_thread_decl_def cd mdthr in
+    (ndecl::ldecl_acc, ndef::ldef_acc)
+  ) ([],[]) lmd_thread in
+
+  (* Assemble the result *)
+  (* Note: reset always added, but if not stateful, it is empty *)
+  let ldecl = init_mut_decl :: init_sync_decl :: reset_decl ::lpthread_decl in
+  let ldef = init_mut_def :: init_sync_def :: reset_def :: lpthread_def in
+
+  let ldecl = List.rev_append memvardecl ldecl in
+
+  (* Return the list of function declaration (for .h) and definition (for .c) *)
+  ldecl, ldef
+
+
+
 (** [cdecl_and_cfun_of_class_def cd] translates the class definition [cd] to
     a C program. *)
 let cdefs_and_cdecls_of_class_def cd =
-  (* We keep the state of our class in a structure, holding both internal
-     variables and the state of other nodes. For a class named ["cname"], the
-     structure will be called ["cname_mem"]. *)
-  Idents.enter_node cd.cd_name;
-  let step_m = find_step_method cd in
-  let memory_struct_decl = mem_decl_of_class_def cd in
-  let out_struct_decl =
-    if (!Compiler_options.cg_memfirst) then [] else
-      out_decl_of_class_def cd
-  in
-  let step_fun_def = fun_def_of_step_fun cd.cd_name
-    cd.cd_objs cd.cd_mems cd.cd_objs step_m in
-  (* C function for resetting our memory structure. *)
-  let reset_fun_def = reset_fun_def_of_class_def cd in
-  let res_fun_decl = cdecl_of_cfundef reset_fun_def in
-  let step_fun_decl = cdecl_of_cfundef step_fun_def in
-  let (decls, defs) =
-    if is_stateful cd.cd_name then
-      ([res_fun_decl; step_fun_decl], [reset_fun_def; step_fun_def])
+  let b_pthread_CG = if (!Posixprep.rnum_thread>0) then
+      (* Is it the main class? *)
+      let n = (Misc.assert_1 !Compiler_options.mainnode).name in
+      (cd.cd_name.name = n)
     else
-      ([step_fun_decl], [step_fun_def]) in
+      false
+  in
 
-  memory_struct_decl @ out_struct_decl @ decls,
-  defs
+  if (b_pthread_CG) then
+    (* Posix parallel CG for the main system has a different structure (pthread-based) *)
+    cdefs_and_cdecls_of_class_def_pthread cd
+  else begin
+    (* We keep the state of our class in a structure, holding both internal
+       variables and the state of other nodes. For a class named ["cname"], the
+       structure will be called ["cname_mem"]. *)
+    Idents.enter_node cd.cd_name;
+
+    let step_m = find_step_method cd in
+    let memory_struct_decl = mem_decl_of_class_def cd in
+    let out_struct_decl =
+      if (!Compiler_options.cg_memfirst) then [] else
+        out_decl_of_class_def cd
+    in
+    let step_fun_def = fun_def_of_step_fun cd.cd_name
+      cd.cd_objs cd.cd_mems cd.cd_objs step_m in
+    (* C function for resetting our memory structure. *)
+    let reset_fun_def = reset_fun_def_of_class_def cd in
+    let res_fun_decl = cdecl_of_cfundef reset_fun_def in
+    let step_fun_decl = cdecl_of_cfundef step_fun_def in
+    let (decls, defs) =
+      if is_stateful cd.cd_name then
+        ([res_fun_decl; step_fun_decl], [reset_fun_def; step_fun_def])
+      else
+        ([step_fun_decl], [step_fun_def]) in
+
+    memory_struct_decl @ out_struct_decl @ decls, defs
+  end
 
 (** {2 Type translation} *)
 

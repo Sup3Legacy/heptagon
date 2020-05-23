@@ -39,6 +39,7 @@ open Obc_mapfold
 open Types
 open Clocks
 open Initial
+open Posixprep
 
 
 let build_anon, find_anon =
@@ -740,24 +741,6 @@ and translate_iterator map call_context it name_list app loc n_list xl xdl p_lis
            [ Aassgn (acc_out, acc_in); mk_loop b xdl n_list]
 
 (* ---------------------------- *)
-(* Signal/wait naming conventions for parallel schedule code generation *)
-let signal_fun_call_qname = { qual = Pervasives; name = "decrease_count_condvar" }
-let wait_fun_call_qname = { qual = Pervasives; name = "wait_count_condvar" }
-
-let ty_pthread_condvar = Types.Tid { qual = Pervasives; name = "pthread_cond_t"}
-let ty_pthread_mutvar = Types.Tid { qual = Pervasives; name = "pthread_mutex_t"}
-
-let cond_var_signal_name signame = "cond_" ^ signame
-let mut_var_signal_name signame = "mut_" ^ signame
-let count_var_signal_name signame = "count_" ^ signame
-(* let count_max_var_signal_name signame = "count_max_" ^ signame *)
-let get_ident_of_signal signame =
-  let condvarid = Idents.gen_var "mls2obc" (cond_var_signal_name signame) in
-  let mutvarid = Idents.gen_var "mls2obc" (mut_var_signal_name signame) in
-  let countvarid = Idents.gen_var "mls2obc" (count_var_signal_name signame) in
-  (* let countmaxvarid = Idents.gen_var "mls2obc" (count_max_var_signal_name signame) in *)
-  (condvarid, mutvarid, countvarid)
-
 let build_signal_act mSynchVar sig_name =
   let (condvar, _, countvar, _) = try
       StringMap.find sig_name mSynchVar
@@ -845,12 +828,7 @@ let subst_map inputs outputs controllables c_locals locals mem_tys =
   in
   List.fold_left (fun map (x, x_ty) -> Env.add x (mk_pattern x_ty (Lmem x)) map) map mem_tys
 
-(* Naming convention for the methods for parallel CG *)
-let name_init_mutex_func = "init_mutex"
-let name_init_sync_counter_func = "init_sync_counter"
 
-let qname_pthread_cond_init = { qual = Pervasives; name = "pthread_cond_init" }
-let qname_pthread_mut_init = { qual = Pervasives; name = "pthread_mutex_init" }
 
 let build_init_mutex_meth mSynchVar =
   (* Build pthread_mutex_init(&mut_id, NULL); *)
@@ -863,7 +841,7 @@ let build_init_mutex_meth mSynchVar =
     let null_exp = mk_exp_int (Eextvalue null_extval) in
 
     let largs_init_mutex = [mut_counts_id_ref; null_exp] in
-    Aop (qname_pthread_mut_init, largs_init_mutex)
+    Aop (Posixprep.qname_pthread_mut_init, largs_init_mutex)
   in
   (* Build pthread_cond_init(&cond_id, NULL); *)
   let generate_cond_init_act cond_id =
@@ -875,7 +853,7 @@ let build_init_mutex_meth mSynchVar =
     let null_exp = mk_exp_int (Eextvalue null_extval) in
 
     let largs_init_mutex = [mut_counts_id_ref; null_exp] in
-    Aop (qname_pthread_cond_init, largs_init_mutex)
+    Aop (Posixprep.qname_pthread_cond_init, largs_init_mutex)
   in
 
   (* First thing: pthread_mutex_init(&mut_counts, NULL); *)
@@ -886,7 +864,7 @@ let build_init_mutex_meth mSynchVar =
       ::(generate_pthread_mutex_init_act mutvarid)
       ::lacc
   ) mSynchVar lact_init_mutex in
-  let init_mutex_meth = { m_name = Mother name_init_mutex_func;
+  let init_mutex_meth = { m_name = Mother Posixprep.name_init_mutex_func;
       m_inputs = [];
       m_outputs = [];
       m_body = mk_block lact_init_mutex }
@@ -900,7 +878,7 @@ let build_init_sync_counter_meth mSynchVar =
     let erhs = mk_exp_static_int (Types.mk_static_exp Initial.tint (Sint max_val)) in
     (Aassgn (plhs, erhs))::lacc
   ) mSynchVar [] in
-  let init_counter_meth = { m_name = Mother name_init_sync_counter_func;
+  let init_counter_meth = { m_name = Mother Posixprep.name_init_sync_counter_func;
       m_inputs = [];
       m_outputs = [];
       m_body = mk_block lact_sync_counter }
@@ -908,17 +886,21 @@ let build_init_sync_counter_meth mSynchVar =
   init_counter_meth
 
 let translate_main_parallel_node
-    ({ Minils.n_name = f; Minils.n_input = i_list; Minils.n_output = o_list;
-      Minils.n_local = d_list; Minils.n_equs = _; Minils.n_stateful = stateful;
-      Minils.n_contract = contract; Minils.n_params = params; Minils.n_loc = loc;
-      Minils.n_mem_alloc = mem_alloc; Minils.n_parsched = oparshed;
-    } as n) =
+  ({ Minils.n_name = f; Minils.n_input = i_list; Minils.n_output = o_list;
+    Minils.n_local = d_list; Minils.n_equs = _; Minils.n_stateful = stateful;
+    Minils.n_contract = contract; Minils.n_params = params; Minils.n_loc = loc;
+    Minils.n_mem_alloc = mem_alloc; Minils.n_parsched = oparshed;
+  } as n) =
   
   (* Get the parallel schedule mapping *)
   let parshed = match oparshed with
     | None -> failwith "internal error: oparshed should not be None at that point"
     | Some p -> p
   in
+
+  (* Saving number of device/core used (will not change) *)
+  Posixprep.rnum_thread := parshed.Minils.psch_ncore;
+  (* Posixprep.rnum_device := parshed.Minils.psch_ndevice; *)
 
   Idents.enter_node f;
   let mem_var_tys = Mls_utils.node_memory_vars n in  (* Get memories (ex: fby) *)
@@ -941,7 +923,7 @@ let translate_main_parallel_node
     List.fold_left (fun mAcc psch_comp -> match psch_comp with
       | Minils.Comp_wait (nsig, max_val) ->
         (* Note: we assume that we have exactly 1 wait per signal *)
-        let (condvarid,  mutvarid, countvarid) = get_ident_of_signal nsig in
+        let (condvarid,  mutvarid, countvarid) = Posixprep.get_ident_of_signal nsig in
         StringMap.add nsig (condvarid, mutvarid, countvarid, max_val) mAcc
       | _ -> mAcc
     ) mAcc lpsch_comp
@@ -970,9 +952,11 @@ let translate_main_parallel_node
   (* Assembling the new methods *)
   let init_mutex_meth = build_init_mutex_meth mSynchVar in
   let init_sync_counter_meth = build_init_sync_counter_meth mSynchVar in
-  let reset_meth = { m_name = Mreset; m_inputs = []; m_outputs = [];
-        m_body = mk_block (si (* @ si_contr *) ) } in
-
+  let lreset_meth =  if stateful then
+      [ { m_name = Mreset; m_inputs = []; m_outputs = [];
+        m_body = mk_block (si (* @ si_contr *) ) } ]
+    else []
+  in
   let lthread_id = List.mapi (fun thread_num (act_thr:act list) ->
     (* void* work_CPU_0(void* arg) { ... ; return NULL; } *)
     (*   => The particularity of inputs and outputs will be managed in cgen *)
@@ -981,7 +965,7 @@ let translate_main_parallel_node
       m_outputs = [];
       m_body = mk_block act_thr }
   ) ls_thread in
-  let l_methods = init_mutex_meth :: init_sync_counter_meth :: reset_meth :: lthread_id in
+  let l_methods = init_mutex_meth :: init_sync_counter_meth :: (lreset_meth @ lthread_id) in
 
   (* Memory: put everything (all local vars included) inside lmem *)
   let i_list = translate_var_dec i_list in
@@ -994,7 +978,7 @@ let translate_main_parallel_node
     (* m_contr) *)
   in
 
-  (* Final result - assembling the new class*)
+  (* Final result - assembling the new class *)
   { cd_name = f; cd_stateful = stateful; cd_mems = lmem; cd_params = params;
     cd_objs = j (*@ j_contr*); cd_methods = l_methods; cd_loc = loc; cd_mem_alloc = mem_alloc }
 

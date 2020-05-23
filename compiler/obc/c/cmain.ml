@@ -267,9 +267,9 @@ let main_def_of_class_def cd =
         write_lhs_of_ty (Cfield (Cvar "_res",
                                  local_qn (name vd.v_ident))) vd.v_type in
       if !Compiler_options.hepts_simulation then
-  (stm, vars)
+        (stm, vars)
       else
-  (cprint_string "=> " :: stm, vars)
+        (cprint_string "=> " :: stm, vars)
     in
     split (map write_lhs_of_ty_for_vd stepm.m_outputs) in
   let printf_calls = List.concat printf_calls in
@@ -361,6 +361,85 @@ let main_skel_simul var_list prologue body =
     }
   } 
 
+(* ----- *)
+(* Posix parallel code generation *)
+let main_def_of_class_def_parallel_CG cd =
+  (* Hypothesis: there are no input/output to be managed here (due to the parallel scheduler used) *)
+  (* If you wish to simulate some node, use a function "read_XXX" to implement the scanf
+    and a function "write_XXX" to implement the printf *)
+
+  (* === Form of the generated code ===
+    int result_code;
+
+    init_sync_counter(mem);
+
+    // Lanch the CPU threads other than CPU_0
+    result_code = pthread_create(&threads[1], NULL, (void * (*)(void *)) &work_CPU_1, mem);
+    assert(result_code!=0);
+    result_code = pthread_create(&threads[2], NULL, (void * (*)(void *)) &work_CPU_2, mem);
+    assert(result_code!=0);
+
+    // Launch CPU_0
+    ( *work_CPU_0 )(mem);
+
+    // Synchro with all other threads
+    result_code = pthread_join(threads[1], NULL);
+    assert(result_code!=0);
+    result_code = pthread_join(threads[2], NULL);
+    assert(result_code!=0);
+    }
+  *)
+  let result_code_varname = "_result_code" in
+  let var_result_code = (result_code_varname, Cty_int) in
+
+  let arg_init_counter_fun = Cvar Posixprep.name_var_memory_main in (* Alternative? Cconst Ctag *)
+  let init_counter_fun = Csexpr (Cfun_call (Posixprep.name_init_sync_counter_func, [arg_init_counter_fun])) in
+
+  let rec create_join_thread_instr (lcreate, ljoin) n =
+    assert(n>0);
+
+    let larg_cr_instr = [
+      Caddrof (Carray (Cvar "threads", Cconst (Ccint n)));
+      Cconst (Ctag "NULL");
+      Caddrof(Cvar (Posixprep.get_name_thread n));  (* TODO: (void * (*)(void *)) ??? => warning if do not put it *)
+      Cvar Posixprep.name_var_memory_main
+    ] in
+    let cr_instr = Caffect (CLvar result_code_varname,
+      Cfun_call (Posixprep.name_pthread_create, larg_cr_instr)
+    ) in
+
+    let larg_join_instr = [
+      Carray (Cvar "threads", Cconst (Ccint n));
+      Cconst (Ctag "NULL")
+    ] in
+    let join_instr = Caffect (CLvar result_code_varname,
+      Cfun_call (Posixprep.name_pthread_join, larg_join_instr)
+    ) in
+
+    (* Finishing *)
+    if (n=1) then (cr_instr::lcreate, join_instr::ljoin) else
+    create_join_thread_instr (lcreate, ljoin) (n-1)
+  in
+
+  let (lcreate_thread, ljoin_thread) = create_join_thread_instr ([],[]) !Posixprep.rnum_thread in
+
+  let launch_thread_0 = Csexpr (
+    Cderef ( Cfun_call ( (Posixprep.get_name_thread 0), [Cvar Posixprep.name_var_memory_main] ) )
+  ) in
+
+  let body_while = [init_counter_fun] @ lcreate_thread
+    @ [launch_thread_0] @ ljoin_thread in
+
+  (* Reset function correspond to performing some malloc *)
+  let reset_funcall =  if cd.cd_stateful then
+      let arg_reset_funcall = Cvar Posixprep.name_var_memory_main in
+      [Csexpr (Cfun_call ((cname_of_qn cd.cd_name) ^ "_reset", [arg_reset_funcall]))]
+    else
+      []
+  in
+
+  ([var_result_code], reset_funcall, body_while)
+
 
 (* ----- *)
 (* OpenCL code generation *)
@@ -372,9 +451,8 @@ let buffer_var_name kernel_name buffid = "buffer_" ^ kernel_name ^ "_" ^ (string
 
 (* Remark: global declaration and OpenCL header file include are
  in a common file "hept_opencl.h" which does not change from a CG to another
-    Also, all the info needed are already built in Openclprep*)
-let get_opencl_prologue () =
-
+    Also, all the info needed are already built in Openclprep *)
+let get_opencl_prologue _ =
   (* Step 1 - architecture configuration *)
   let lvarloc_step1 =
     ("platform_id", Cty_id { qual = Pervasives; name = "cl_platform_id"})::
@@ -384,6 +462,18 @@ let get_opencl_prologue () =
     ("context", Cty_id { qual = Pervasives; name = "cl_context"})::
     ("queue", Cty_id { qual = Pervasives; name = "cl_command_queue"})::[] in
 
+  (* queues[i] = clCreateCommandQueue(context, device_id, 0, NULL); *)
+  let (lstm_create_queues, _) = StringMap.fold (fun _ _ (lacc, i) ->
+      let nstm = (Caffect ( CLarray ( (CLvar "queues"), Cconst (Ccint i)), (Cfun_call ("clCreateCommandQueue",
+      [ Cvar "context";
+        Cvar "device_id";
+        Cconst (Ccint 0);
+        Cconst (Ctag "NULL")
+      ]
+      )))) in
+      (nstm::lacc, (i+1))
+    ) !Openclprep.mQueueCL ([],0)
+  in
   let lstm_step1 =
     (* platform_id = NULL; *)
     (Caffect ((CLvar "platform_id"), (Cconst (Ctag "NULL")))) ::
@@ -415,14 +505,7 @@ let get_opencl_prologue () =
         Cconst (Ctag "NULL")
       ]
     ))))::
-    (* queue = clCreateCommandQueue(context, device_id, 0, NULL); *)
-    (Caffect ((CLvar "queue"), (Cfun_call ("clCreateCommandQueue",
-      [ Cvar "context";
-        Cvar "device_id";
-        Cconst (Ccint 0);
-        Cconst (Ctag "NULL")
-      ]
-    ))))::[]
+    lstm_create_queues
   in
 
   (* Step 2 & 3 - Kernel management *)
@@ -642,10 +725,10 @@ let get_opencl_prologue () =
     Caffect (CLarray ( (CLvar "buffers"), Cconst (Ccint buffid)) , Cvar buffname)
   ) lBufferVar) in
 
-  (* [icl_data_struct_string].queue = queue; *)
+  (* [icl_data_struct_string].queues = queues; *)
   let lstm_step6_icl =
-  (Caffect ((CLfield (CLvar (Openclprep.icl_data_struct_string), Modules.current_qual "queue"))
-    , Cvar "queue"
+  (Caffect ((CLfield (CLvar (Openclprep.icl_data_struct_string), Modules.current_qual "queues"))
+    , Cvar "queues"
   )) ::  
   (* [icl_data_struct_string].buffers = buffers; *)
   (Caffect ((CLfield (CLvar (Openclprep.icl_data_struct_string), Modules.current_qual "buffers"))
@@ -663,6 +746,27 @@ let get_opencl_prologue () =
   let lvarloc = lvarloc_step1 @ lvarloc_step2 @ lvarloc_step4 @ lvarloc_step6 in
   (stm, lvarloc)
 
+let get_posix_prologue (type_mem_mainnode:string) num_thread =
+  (* [type_mainnode]* mem; *)
+  let mem_main = 
+    (Posixprep.name_var_memory_main, Cty_ptr (Cty_id (Modules.current_qual type_mem_mainnode)))
+  in
+
+  (* mem = malloc(sizeof(type_mainnode)); *)
+  let arg_malloc_call = Cfun_call ("sizeof", [Cconst (Ctag type_mem_mainnode)]) in
+  let call_malloc = Csexpr (Cfun_call ("malloc", [arg_malloc_call])) in
+
+  (* init_mutex(mem); *)
+  let larg_call_init_mut = [Cvar Posixprep.name_var_memory_main] in
+  let call_init_mutex = Csexpr (Cfun_call (Posixprep.name_init_mutex_func, larg_call_init_mut)) in
+  
+  (* pthread_t threads[NUM_THREADS]; *)
+  let thread_array =
+    ("threads", Cty_arr (num_thread, (Cty_id { qual = Pervasives; name = "pthread_t"})))
+  in
+  let stm = [call_malloc; call_init_mutex] in
+  let lvarloc = [mem_main; thread_array] in
+  (stm, lvarloc)
 
 
 (* Main function for OpenCL is a while loop *)
@@ -688,11 +792,12 @@ let main_skel_opencl var_list prologue body =
 let mk_main name p =
   if (!Compiler_options.simulation || !Compiler_options.opencl_cg) then (
       let classes = program_classes p in
+
+      (* Assert nodes management (Boolean nodes) *)
       let n_names = !Compiler_options.assert_nodes in
       let find_class n =
         List.find (fun cd -> cd.cd_name.name = n) classes
       in
-
       let a_classes = List.fold_left
         (fun acc n -> try find_class n :: acc with Not_found -> acc)
         [] n_names
@@ -703,31 +808,54 @@ let mk_main name p =
         ) a_classes ([], [], [])
       in
 
+
+      (* Get the name of the main node (called by the while loop) *)
       let n =
         if (!Compiler_options.simulation) then
           !Compiler_options.simulation_node
         else
           (Misc.assert_1 !Compiler_options.mainnode).name
       in
-
       
       let (defs, var_l, res_l, step_l) =
-        try
+        if (!Posixprep.rnum_thread>=1) then    (* Parallel CG *)
+          let (nvar_l, res, nstep_l) = main_def_of_class_def_parallel_CG (find_class n) in
+          ([],  nvar_l @ var_l, res, nstep_l @ step_l)
+        else try
           let (mem, nvar_l, res, nstep_l) = main_def_of_class_def (find_class n) in
           let defs = match mem with None -> [] | Some m -> [m] in
           (defs, nvar_l @ var_l, res @ res_l, nstep_l @ step_l)
         with Not_found -> ([],var_l,res_l,step_l)
       in
       
-      let (prologue, var_l) = if (!Compiler_options.opencl_cg) then
-          let (prol_l, extra_var_l) = get_opencl_prologue () in
-          (prol_l @ res_l, extra_var_l @ var_l)
+
+      (* Prologues (in reverse order) *)
+      (* - Reset *)
+      let (prologue, var_l) = (res_l, var_l) in
+      (* - Posix *)
+      let (prologue, var_l) = if (!Compiler_options.parse_parsched_file) then
+          let qname_mainnode = (Misc.assert_1 !Compiler_options.mainnode) in
+          let name_type_mem_mainnode = (C.cname_of_qn qname_mainnode) ^ "_mem" in
+          let (prol_posix, var_posix) =
+            get_posix_prologue name_type_mem_mainnode !Posixprep.rnum_thread in
+          (prol_posix @ prologue, var_posix @ var_l)
         else
-          (res_l, var_l)
+          (prologue, var_l)
       in
+      (* - OpenCL *)
+      let (prologue, var_l) = if (!Compiler_options.opencl_cg) then
+          let (prol_ocl, var_ocl) = get_opencl_prologue () in
+          (prol_ocl @ prologue, var_ocl @ var_l)
+        else
+          (prologue, var_l)
+      in
+
+      (* Select the skeleton *)
       let main_skel = if (!Compiler_options.simulation) then
         main_skel_simul else main_skel_opencl
       in
+
+      (* Final result *)
       [("_main.c", Csource (defs @ [main_skel var_l prologue step_l]));
        ("_main.h", Cheader ([name], []))]
   ) else

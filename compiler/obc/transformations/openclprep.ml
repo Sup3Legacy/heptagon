@@ -113,7 +113,7 @@ let get_new_device_id _ =
   counter_device_id := !counter_device_id + 1;
   temp
 
-let get_device_id clo =
+let update_queueCL clo =
   let devid = try
       StringMap.find clo.copt_device_id !mQueueCL
     with Not_found -> (
@@ -150,10 +150,7 @@ let act_opencl _ acc act = match act with
       if (clo.copt_is_launch=false) then act,acc else (* Only do it once per kernel *)
 
       (* Get the device id and update mQueueCL if it is a new one *)
-      let devid = get_device_id clo in
-
-      (* TODO: use the devid information in the rest *)
-
+      let _ = update_queueCL clo in
 
       let idkernelcall = clo.copt_id in
       let (qnameKernel, kernelsign) = get_kernel_sign acc objref in
