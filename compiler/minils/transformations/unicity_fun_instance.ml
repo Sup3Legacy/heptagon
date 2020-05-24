@@ -43,6 +43,9 @@ open Mls_utils
 let mFunname2Eq = ref StringMap.empty
 let mEq2Funname = ref EqMap.empty
 
+(* ------------------------- *)
+
+let b_rewriting_activated = ref false
 
 let counter = ref 0
 let get_counter _ =
@@ -55,9 +58,23 @@ let make_funname_unique qn =
   let n_name = qn.name ^ "_" ^ (string_of_int id) in
   { qn with name = n_name }
 
+(* Revert the last function - be sure to do it only if the rewriting was activated *)
+let revert_funname qn =
+  if (!b_rewriting_activated) then
+    let name = qn.name in
+    let end_ind = String.rindex name '_' in
+    let n_name = String.sub name 0 end_ind in
+    { qn with name = n_name }
+  else
+    qn
+
+(* ------------------------- *)
+
 
 (* Makes sure that the functions called all have different names *)
 let preprocess_funname bmodify nd =
+  b_rewriting_activated := true;
+
   let nleq = List.map (fun eq ->
     match eq.eq_rhs.e_desc with
       | Eapp (ap, lev, ovid) -> (

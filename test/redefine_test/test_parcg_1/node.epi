@@ -1,0 +1,9 @@
+(* ../../../heptc node.epi *)
+
+(* IO function (because Lopht => no input/output in the main node) *)
+fun read_input_d0() returns (x:int^32)
+fun write_output_d4(x:int^32) returns ()
+
+(* Functions *)
+fun f(x:int^32) returns (y:int^32; z:int^32)
+fun g(x:int^32) returns (y:int^32)

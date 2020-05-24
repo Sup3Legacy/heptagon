@@ -85,10 +85,10 @@ let translate_partition (part_name:string) : int =
   else
     begin
       let new_part_id =
-	StringMap.fold
-	  (fun _ n acc_id -> if n>= acc_id then n+1 else acc_id)
-	  !partition_map
-	  0
+        StringMap.fold
+          (fun _ n acc_id -> if n>= acc_id then n+1 else acc_id)
+          !partition_map
+          0
       in
       partition_map := StringMap.add part_name new_part_id !partition_map
     end ;
@@ -96,11 +96,11 @@ let translate_partition (part_name:string) : int =
 and reverse_translate_partition (part_id:int) : string =
   try 
     fst (StringMap.choose
-	   (StringMap.filter
-	      (fun _ id -> part_id = id)
-	      !partition_map
-	   )
-	)
+           (StringMap.filter
+              (fun _ id -> part_id = id)
+              !partition_map
+           )
+        )
   with Not_found ->
     failwith "Searching for not yet registered partition name.\n"
   
@@ -128,7 +128,7 @@ type intermediate_variable =
        clock_binding * Names.constructor_name * intermediate_variable
    | UnionClock of clock_binding list
    | InterClock of clock_binding list
-				 
+                                 
 
 (* Local environments associating an intermediate variable to each 
  * heptagon local variable and input and output parameter *)
@@ -202,7 +202,7 @@ let print_intermediate_variable iv : string =
       " -> " ;
       print_variable_binding iv.iv_binding ;
       ")" ;
-    ]					       
+    ]                                               
 let print_local_env
       (le:local_environment) : string =
   "Local environment: \n"^
@@ -211,11 +211,11 @@ let print_local_env
      String.concat
        ""
        [
-	 acc ;
-	 Idents.name id ;
-	 "::  " ;
-	 print_intermediate_variable iv ;
-	 "\n";
+         acc ;
+         Idents.name id ;
+         "::  " ;
+         print_intermediate_variable iv ;
+         "\n";
        ]
     )
     le
@@ -249,11 +249,11 @@ module ClEnv = Map.Make (struct
       | BaseClock _, _ -> 1
       | _, BaseClock _ -> -1
       | Union (e1, f1), Union (e2, f2) ->
-	 lex_compare
-	   compare
-	   compare
-	   (e1, f1)
-	   (e2, f2)
+         lex_compare
+           compare
+           compare
+           (e1, f1)
+           (e2, f2)
       | Union _, _ -> 1
       | _, Union _ -> -1
       | Intersection (e1, f1), Intersection (e2, f2) -> lex_compare compare compare (e1, f1) (e2, f2)
@@ -263,7 +263,7 @@ module ClEnv = Map.Make (struct
       | _, _ -> assert false (* Any other case is not used in the current implementation *)
   end)
 
-			
+                        
 type stateful_binding =
   {
     (* The constant used to initialize or reset the state *)
@@ -282,7 +282,7 @@ type function_binding =
     (* The objects used for stateful (node) calls *)
     stateful : stateful_binding option ;
   }
-			
+                        
 
 type cg_environment = {
   (* Association of Heptagon type expression and symbols to cg equivalent *)
@@ -292,7 +292,7 @@ type cg_environment = {
   mutable function_bindings : function_binding QualEnv.t;
   (* Bindings produced at the end of the first pass which must be resolved *)
   mutable input_bindings :
-	    (block * clock_binding * ((argument*(string option)) list) * variable_binding list) list;
+            (block * clock_binding * ((argument*(string option)) list) * variable_binding list) list;
   (* Associate cg clock expressions to cg clocks to detects double definitions *)
   mutable clock_definitions : clk ClEnv.t;
   (* Generated C functions *)
@@ -435,14 +435,14 @@ let add_cdecl_constant
        | Types.Sbool b -> if b then C.Ccint 1 else C.Ccint 0
        | Types.Sstring s -> C.Cstrlit s
        | _ ->
-	  failwith "MLS2CG: constant expression not handled.\n"
+          failwith "MLS2CG: constant expression not handled.\n"
       )
   in
   genv.cheader <- (C.Cdecl_constant (const_name,
-				     const_type,
-				     Some cexpr)
-		  )::genv.cheader
-		       
+                                     const_type,
+                                     Some cexpr)
+                  )::genv.cheader
+                       
 let build_operator (genv:cg_environment) op_name fun_inputs fun_outputs cdef = 
   try
     StringMap.find op_name genv.operators
@@ -648,11 +648,11 @@ let build_block
         add_variable genv.cg var_name arg_type arg_name gblock
       in
       (
-	Defined_Variable gvar,
-	{
-	  output_port_name = arg_name;
-	  output_port_var = gvar;
-	}
+        Defined_Variable gvar,
+        {
+          output_port_name = arg_name;
+          output_port_var = gvar;
+        }
       )
     in
     List.split (List.map bind_output fun_outputs)
@@ -713,31 +713,31 @@ let translate_var
   with Not_found ->
     begin
       Printf.fprintf
-	stderr
-	"translate_var : searching for missing variable %s in lenv:\n%s\n"
-	(Idents.name var_ident)
-	(print_local_env lenv) ;
+        stderr
+        "translate_var : searching for missing variable %s in lenv:\n%s\n"
+        (Idents.name var_ident)
+        (print_local_env lenv) ;
       failwith "translate_var : exiting."
     end
-		  
+                  
 let rec translate_ck
-	  (lenv:local_environment) = function
+          (lenv:local_environment) = function
   | Clocks.Cbase -> PrimitiveClock
   | Clocks.Cvar _ -> raise (Not_implemented "translate_ck")
   | Clocks.Con (base_ck, constructor_name, var_ident) ->
      DerivedClock
        (translate_ck lenv base_ck,
-	constructor_name,
-	translate_var lenv var_ident)
+        constructor_name,
+        translate_var lenv var_ident)
 
 let rec translate_extvalue
-	  (genv:cg_environment)
-	  (lenv:local_environment)
-	  (eq_partition:int option)
-	  (eq_preemptive: bool)
-	  (eq_release:int option)
-	  (eq_deadline:int option)
-	  extvalue =
+          (genv:cg_environment)
+          (lenv:local_environment)
+          (eq_partition:int option)
+          (eq_preemptive: bool)
+          (eq_release:int option)
+          (eq_deadline:int option)
+          extvalue =
   match extvalue.w_desc with
   | Wconst static_exp -> translate_const genv static_exp eq_partition
   | Wvar var_ident ->
@@ -752,7 +752,7 @@ let rec translate_extvalue
 
 let generated_arg_counter = ref 0
 
-                            	    
+                                        
 let translate_arg (genv:cg_environment) param : argument =
   let open Signature in
   if param.a_clock <> Cbase then
@@ -807,10 +807,8 @@ and translate_output_arg (genv:cg_environment) (param:Signature.arg) : (argument
                  
 (* JP: translate a function call, currently without using any context
  * information, just the signature of the function and its name. *)
-let translate_function
-      (genv:cg_environment)
-      (name:Names.qualname)
-      (hnode:Signature.node) : function_binding =
+let translate_function_aux (genv:cg_environment) (name:Names.qualname)
+  linputs loutputs bstateful : function_binding =
   try
     let old_function_binding = 
       QualEnv.find name genv.function_bindings
@@ -832,26 +830,26 @@ let translate_function
     let open Signature in
     let fun_id = qname_to_id name in
     let fun_inputs_no_state:(argument*(string option)) list =
-      List.map (translate_input_arg genv) hnode.node_inputs
+      List.map (translate_input_arg genv) linputs
     and fun_outputs_no_state:(argument*(string option)) list =
-      List.map (translate_output_arg genv) hnode.node_outputs
+      List.map (translate_output_arg genv) loutputs
     in
     let fun_step_id =
       fun_id ^
-	(if  (name.Names.qual = Names.Pervasives) && not hnode.node_stateful then "" else "_step")
+        (if  (name.Names.qual = Names.Pervasives) && not bstateful then "" else "_step")
     and fun_reset_id = fun_id ^ "_reset"
     in
     let (fun_inputs:(argument*(string option)) list),
         (fun_outputs:(argument*(string option)) list),
         stateful_objects =
-      if hnode.node_stateful then
-	(* The type of the state variables *)
-	let ty_name = { Names.qual = Names.LocalModule ; Names.name = fun_id ^ "_mem" } in
-	let ty = Types.Tid ty_name in
+      if bstateful then
+        (* The type of the state variables *)
+        let ty_name = { Names.qual = Names.LocalModule ; Names.name = fun_id ^ "_mem" } in
+        let ty = Types.Tid ty_name in
         let state_ty = translate_ty genv ty in
-	(* The two state variables that go in and out of the 
-	 * state, as well as the output parameter of the init 
-	 * function *)
+        (* The two state variables that go in and out of the 
+         * state, as well as the output parameter of the init 
+         * function *)
         let state_out_param =
           (
             {
@@ -860,7 +858,7 @@ let translate_function
             },
             Some "state_in"
           )
-	and state_in_param =
+        and state_in_param =
           (
             {
               arg_name = "state_in" ;
@@ -868,7 +866,7 @@ let translate_function
             },
             Some "state_in"
           )
-	and reset_out_param =
+        and reset_out_param =
           (
             {
               arg_name = "state_out" ;
@@ -876,41 +874,41 @@ let translate_function
             },
             None (* because the reset function has no input *)
           )
-	in
-	(fun_inputs_no_state@[state_in_param],
-	 fun_outputs_no_state@[state_out_param],
-	 Some
-	   {
-	     state_init  =
-	       begin 
-		 (* The function needed to initialize the constant *)
-		 let gfunc_reset =
-		   add_function genv.cg fun_reset_id [] [reset_out_param]
-		 in
-		 let const_name = { Names.qual = Names.LocalModule ;
+        in
+        (fun_inputs_no_state@[state_in_param],
+         fun_outputs_no_state@[state_out_param],
+         Some
+           {
+             state_init  =
+               begin 
+                 (* The function needed to initialize the constant *)
+                 let gfunc_reset =
+                   add_function genv.cg fun_reset_id [] [reset_out_param]
+                 in
+                 let const_name = { Names.qual = Names.LocalModule ;
                                     Names.name = fun_id ^ "_init_state" } in
-		 translate_const_ref genv const_name ty (InitFunctionConst (gfunc_reset,[]))
-	       end ;
-	     state_type = state_ty ;
-	     state_seq = ref 0 ; (* always start at index 0 *)
-	   }
-	)
+                 translate_const_ref genv const_name ty (InitFunctionConst (gfunc_reset,[]))
+               end ;
+             state_type = state_ty ;
+             state_seq = ref 0 ; (* always start at index 0 *)
+           }
+        )
       else
         (fun_inputs_no_state,
-	 fun_outputs_no_state,
-	 None)
+         fun_outputs_no_state,
+         None)
     in
     let gfunc_step = add_function genv.cg fun_step_id fun_inputs fun_outputs in
     (* Put all constructed objects in the environment, and build the C 
      * wrappers *)
     genv.function_bindings <-
       QualEnv.add
-	name
-	{
-	  step = gfunc_step ;
-	  stateful = stateful_objects ;
-	}
-	genv.function_bindings;
+        name
+        {
+          step = gfunc_step ;
+          stateful = stateful_objects ;
+        }
+        genv.function_bindings;
     (* This piece of code creates wrappers for 
     let _ =
       let cdefs = build_c_wrappers fun_step_id fun_reset_id name hnode in
@@ -922,7 +920,26 @@ let translate_function
       stateful = stateful_objects ;
     }
       
-      
+let translate_function (genv:cg_environment) (name:Names.qualname) (hnode:Signature.node) : function_binding =
+  translate_function_aux genv name hnode.node_inputs hnode.node_outputs hnode.node_stateful
+
+let translate_kernel (genv:cg_environment) (name:Names.qualname) (hkern:Signature.kernel) : function_binding =
+  translate_function_aux genv name hkern.k_input hkern.k_output false
+
+let translate_fun_or_kernel (genv:cg_environment) (fun_name:Names.qualname) : function_binding =
+  let rev_fun_name = Unicity_fun_instance.revert_funname fun_name in
+  try
+    let hnode = Modules.find_value rev_fun_name in
+    translate_function genv fun_name hnode
+  with Not_found -> (
+    try
+      let knode = Modules.find_kernel rev_fun_name in
+      translate_kernel genv fun_name knode
+    with
+    | _ -> failwith ("Signature " ^ rev_fun_name.name ^ " was not found as node or kernel")
+  )
+
+
 let translate_fby
       (genv:cg_environment)
       (lenv:local_environment)
@@ -940,19 +957,19 @@ let translate_fby
     and block_id = None
     and block_fun =
       let init_const = match init with
-	| Some static_exp ->
+        | Some static_exp ->
            (* FBY with constant (static expression) initial value *)
            translate_static_exp genv static_exp
-	| None ->
+        | None ->
            (* If the initial value is not a static expression, cannot handle *)
            raise (Not_implemented "translate_fby")
       in
       let gdelay =
         {
-	  delay_ty;
-	  delay_depth = 1;
-	  delay_init = [ init_const ];
-	}
+          delay_ty;
+          delay_depth = 1;
+          delay_init = [ init_const ];
+        }
       in
       DelayBlock gdelay
     and fun_inputs =
@@ -980,13 +997,13 @@ let translate_fby
     and input_bindings =
       (* Input binding *)
       [ translate_extvalue
-	  genv
-	  lenv
-	  fby_partition
-	  fby_preemptive
-	  fby_release
-	  fby_deadline
-	  extvalue
+          genv
+          lenv
+          fby_partition
+          fby_preemptive
+          fby_release
+          fby_deadline
+          extvalue
       ]
     in
     build_block
@@ -1024,13 +1041,13 @@ let translate_merge
   and l' =
     List.map
       (fun (n, e) -> n, translate_extvalue
-			  genv
-			  lenv
-			  merge_partition
-			  merge_preemptive
-			  merge_release
-			  merge_deadline
-			  e
+                          genv
+                          lenv
+                          merge_partition
+                          merge_preemptive
+                          merge_release
+                          merge_deadline
+                          e
       )
       l
   in
@@ -1053,15 +1070,15 @@ let translate_app_ifthenelse
        match sel_extval.w_desc with
        | Wvar var_ident -> var_ident
        | _ ->
-	  raise (Not_implemented "translate_app_ifthenelse - bad w_desc(selector).")
+          raise (Not_implemented "translate_app_ifthenelse - bad w_desc(selector).")
      in
      translate_merge
        genv
        lenv
        selector_var_ident
        [
-	 (Names.pervasives_qn "true",then_extval);
-	 (Names.pervasives_qn "false",else_extval);
+         (Names.pervasives_qn "true",then_extval);
+         (Names.pervasives_qn "false",else_extval);
        ]
        app_partition
        app_preemptive
@@ -1088,42 +1105,42 @@ let fby_eq
     eq_lhs    = Evarpat state_in_var_ident ;
     eq_rhs    =
       {
-	e_desc            = Efby
-			      (
-				Some
-				  {
-				    Types.se_desc = Types.Svar (Names.local_qn stateful_binding.state_init.cst_id) ;
-				    Types.se_ty = ty ;
-				    Types.se_loc = Location.no_location ;
-				  },
-				{
-				  w_desc      = Wvar fby_in_var_id ;
-				  w_ck        = ck ;
-				  w_ty        = Types.Tid (Names.local_qn stateful_binding.state_type.ty_id) ;
-				  w_linearity = Linearity.Ltop ;
-				  w_loc       = Location.no_location ;
-				}
-			      ) ;
-	e_level_ck        = ck ;
-	e_ct              = Clocks.Ck ck ; (* here, we are only using scalars, so the clock type is
-				     * a scalar of the current clock *)
-	e_ty              = ty ;
-	e_linearity       = Linearity.Ltop ;
-	e_loc             = Location.no_location ;
+        e_desc            = Efby
+                              (
+                                Some
+                                  {
+                                    Types.se_desc = Types.Svar (Names.local_qn stateful_binding.state_init.cst_id) ;
+                                    Types.se_ty = ty ;
+                                    Types.se_loc = Location.no_location ;
+                                  },
+                                {
+                                  w_desc      = Wvar fby_in_var_id ;
+                                  w_ck        = ck ;
+                                  w_ty        = Types.Tid (Names.local_qn stateful_binding.state_type.ty_id) ;
+                                  w_linearity = Linearity.Ltop ;
+                                  w_loc       = Location.no_location ;
+                                }
+                              ) ;
+        e_level_ck        = ck ;
+        e_ct              = Clocks.Ck ck ; (* here, we are only using scalars, so the clock type is
+                                     * a scalar of the current clock *)
+        e_ty              = ty ;
+        e_linearity       = Linearity.Ltop ;
+        e_loc             = Location.no_location ;
       } ;
     eq_unsafe     = false ;
     eq_base_ck    = ck ;
     eq_loc        = Location.no_location;
     eq_partition  =
       begin
-	match app_partition with
-	| None -> None
-	| Some x -> Some (reverse_translate_partition x)
+        match app_partition with
+        | None -> None
+        | Some x -> Some (reverse_translate_partition x)
       end ;
     eq_preemptive = app_preemptive ;
     eq_release    = app_release ;
     eq_deadline   = app_deadline ; 
-  }		
+  }                
 and merge_eq 
       fby_in_var_ident
       (reset_var : Idents.ident)
@@ -1139,62 +1156,62 @@ and merge_eq
     eq_lhs    = Evarpat fby_in_var_ident ;
     eq_rhs    =
       {
-	e_desc            = Emerge
-			      (
-				reset_var,
-				[
-				  (
-				    { Names.qual = Names.Pervasives ; name = "true"},
-				    {
-				      w_desc      = Wconst
-						      {
-							Types.se_desc =
-							  Types.Svar (Names.local_qn stateful_binding.state_init.cst_id) ;
-							Types.se_ty = ty ;
-							Types.se_loc = Location.no_location ;
-						      } ;
-				      w_ck        = Clocks.Con
-						      (
-							ck,
-							{ Names.qual = Names.Pervasives ; name = "true"},
-							reset_var
-						      ) ;
-				      w_ty        = ty ;
-				      w_linearity = Linearity.Ltop ;
-				      w_loc       = Location.no_location ;
-				    }
-				  ) ;
-				  (
-				    { Names.qual = Names.Pervasives ; name = "false"},
-				    {
-				      w_desc      = Wvar state_out_var_ident ;
-				      w_ck        = Clocks.Con
-						      (
-							ck,
-							{ Names.qual = Names.Pervasives ; name = "false"},
-							reset_var
-						      ) ;
-				      w_ty        = ty ;
-				      w_linearity = Linearity.Ltop ;
-				      w_loc       = Location.no_location ;
-				    }					   
-				  ) ;
-				]
-			      ) ;
-	e_level_ck        = ck ;
-	e_ct              = Clocks.Ck ck ;
-	e_ty              = ty ;
-	e_linearity       = Linearity.Ltop ;
-	e_loc             = Location.no_location ;
+        e_desc            = Emerge
+                              (
+                                reset_var,
+                                [
+                                  (
+                                    { Names.qual = Names.Pervasives ; name = "true"},
+                                    {
+                                      w_desc      = Wconst
+                                                      {
+                                                        Types.se_desc =
+                                                          Types.Svar (Names.local_qn stateful_binding.state_init.cst_id) ;
+                                                        Types.se_ty = ty ;
+                                                        Types.se_loc = Location.no_location ;
+                                                      } ;
+                                      w_ck        = Clocks.Con
+                                                      (
+                                                        ck,
+                                                        { Names.qual = Names.Pervasives ; name = "true"},
+                                                        reset_var
+                                                      ) ;
+                                      w_ty        = ty ;
+                                      w_linearity = Linearity.Ltop ;
+                                      w_loc       = Location.no_location ;
+                                    }
+                                  ) ;
+                                  (
+                                    { Names.qual = Names.Pervasives ; name = "false"},
+                                    {
+                                      w_desc      = Wvar state_out_var_ident ;
+                                      w_ck        = Clocks.Con
+                                                      (
+                                                        ck,
+                                                        { Names.qual = Names.Pervasives ; name = "false"},
+                                                        reset_var
+                                                      ) ;
+                                      w_ty        = ty ;
+                                      w_linearity = Linearity.Ltop ;
+                                      w_loc       = Location.no_location ;
+                                    }                                           
+                                  ) ;
+                                ]
+                              ) ;
+        e_level_ck        = ck ;
+        e_ct              = Clocks.Ck ck ;
+        e_ty              = ty ;
+        e_linearity       = Linearity.Ltop ;
+        e_loc             = Location.no_location ;
       } ;
     eq_unsafe     = false ;
     eq_base_ck    = ck ;
     eq_loc        = Location.no_location;
     eq_partition  =
       begin
-	match app_partition with
-	| None -> None
-	| Some x -> Some (reverse_translate_partition x)
+        match app_partition with
+        | None -> None
+        | Some x -> Some (reverse_translate_partition x)
       end ;
     eq_preemptive = app_preemptive ;
     eq_release    = app_release ;
@@ -1210,27 +1227,27 @@ let split_last (l:'a list) : 'a*('a list) =
     
     
 let rec translate_app_fun_stateful
-	  (genv:cg_environment)
-	  (lenv:local_environment)
-	  (reset_vars:Idents.ident list)
-	  (ck:Clocks.ck)
-	  (app_partition:int option)
-	  (app_release:int option)
-	  (app_deadline:int option)
-	  (app_preemptive:bool)
-	  (extra_var_ids:Idents.var_ident list)	  
-	  input_bindings_no_state
-	  fb
-	  step_clkb
-	  stateful_binding
-	: variable_binding list
+          (genv:cg_environment)
+          (lenv:local_environment)
+          (reset_vars:Idents.ident list)
+          (ck:Clocks.ck)
+          (app_partition:int option)
+          (app_release:int option)
+          (app_deadline:int option)
+          (app_preemptive:bool)
+          (extra_var_ids:Idents.var_ident list)          
+          input_bindings_no_state
+          fb
+          step_clkb
+          stateful_binding
+        : variable_binding list
   =
   (*
   Printf.printf
     ">>translate_app_fun_stateful entered with extra vars = %s.\n"
     (List.fold_left
        (fun acc id ->
-	acc^(Idents.name id)^"; "
+        acc^(Idents.name id)^"; "
        )
        ""
        extra_var_ids
@@ -1247,44 +1264,44 @@ let rec translate_app_fun_stateful
     | [] ->
        (* Printf.printf ">>translate_app no reset branch.\n" ;*)
        (* This stateful node is only initialized at the beginning,
-	* and never reset. *)
+        * and never reset. *)
        let fby_equation : eq =
-	 fby_eq
-	   state_out_var_ident
-	   ck
-	   state_in_var_ident
-	   stateful_binding
-	   ty
-	   app_partition
-	   app_preemptive
-	   app_release
-	   app_deadline
+         fby_eq
+           state_out_var_ident
+           ck
+           state_in_var_ident
+           stateful_binding
+           ty
+           app_partition
+           app_preemptive
+           app_release
+           app_deadline
        in
        translate_eq genv lenv [] fby_equation [] ;
        (* Printf.printf
-	 "After translation of fby equation:\n%s\n"
-	 (print_local_env lenv) ;*)
+         "After translation of fby equation:\n%s\n"
+         (print_local_env lenv) ;*)
        (* Now the fby has been translated, I still have to create the
-	* function call. This one is more complicated, as I cannot resort
-	* to calling translate_eq (half the work has been already done, and
-	* the function call does not match the interface declaration.
-	*)
+        * function call. This one is more complicated, as I cannot resort
+        * to calling translate_eq (half the work has been already done, and
+        * the function call does not match the interface declaration.
+        *)
        let input_bindings =
-	 input_bindings_no_state@[(translate_var lenv state_in_var_ident).iv_binding]
+         input_bindings_no_state@[(translate_var lenv state_in_var_ident).iv_binding]
        in
        let (var_binding_list : variable_binding list) = 
-	 build_block_from_func
-	   fb.step
-	   genv
-	   step_clkb
-	   input_bindings
-	   app_partition
-	   app_preemptive
-	   app_release
-	   app_deadline
+         build_block_from_func
+           fb.step
+           genv
+           step_clkb
+           input_bindings
+           app_partition
+           app_preemptive
+           app_release
+           app_deadline
        in
        let state_out_binding,other_bindings =
-	 split_last var_binding_list 
+         split_last var_binding_list 
        in
        (translate_var lenv state_out_var_ident).iv_binding <- state_out_binding ;
        other_bindings
@@ -1293,62 +1310,62 @@ let rec translate_app_fun_stateful
        (* Printf.printf ">>translate_app reset branch.\n" ; *)
        (* This stateful node is reset by variable reset_var *)
        let fby_in_var_ident =
-	 match fby_in_var_ident_maybe with
-	 | [x] -> x
-	 | _ -> failwith "Bad construction (2)."
+         match fby_in_var_ident_maybe with
+         | [x] -> x
+         | _ -> failwith "Bad construction (2)."
        in
        let merge_equation : eq =
-	 merge_eq 
-	   fby_in_var_ident
-	   reset_var
-	   ck
-	   state_out_var_ident
-	   stateful_binding
-	   ty
-	   app_partition
-	   app_preemptive
-	   app_release
-	   app_deadline
+         merge_eq 
+           fby_in_var_ident
+           reset_var
+           ck
+           state_out_var_ident
+           stateful_binding
+           ty
+           app_partition
+           app_preemptive
+           app_release
+           app_deadline
        and fby_equation : eq =
-	 fby_eq
-	   fby_in_var_ident
-	   ck 
-	   state_in_var_ident
-	   stateful_binding
-	   ty
-	   app_partition
-	   app_preemptive
-	   app_release
-	   app_deadline
+         fby_eq
+           fby_in_var_ident
+           ck 
+           state_in_var_ident
+           stateful_binding
+           ty
+           app_partition
+           app_preemptive
+           app_release
+           app_deadline
        in
        translate_eq genv lenv [] fby_equation [] ;
        translate_eq genv lenv [] merge_equation [] ;
        (* Now the fby and the merge have been translated, I still have to 
-	* create the function call. This one is more complicated, as I 
-	* cannot resort to calling translate_eq (half the work has been 
-	* already done, and the function call does not match the interface 
-	* declaration.
-	*)
+        * create the function call. This one is more complicated, as I 
+        * cannot resort to calling translate_eq (half the work has been 
+        * already done, and the function call does not match the interface 
+        * declaration.
+        *)
        let input_bindings =
-	 input_bindings_no_state@[(translate_var lenv state_in_var_ident).iv_binding]
+         input_bindings_no_state@[(translate_var lenv state_in_var_ident).iv_binding]
        in
        let (var_binding_list : variable_binding list) = 
-	 build_block_from_func
-	   fb.step
-	   genv
-	   step_clkb
-	   input_bindings
-	   app_partition
-	   app_preemptive
-	   app_release
-	   app_deadline
+         build_block_from_func
+           fb.step
+           genv
+           step_clkb
+           input_bindings
+           app_partition
+           app_preemptive
+           app_release
+           app_deadline
        in
        let state_out_binding,other_bindings =
-	 split_last var_binding_list 
+         split_last var_binding_list 
        in
        (translate_var lenv state_out_var_ident).iv_binding <- state_out_binding ;
        other_bindings
-	 
+         
     | _ ->
        failwith "Cannot handle multiple reset levels."
   in
@@ -1367,35 +1384,32 @@ and translate_app_fun
       (app_preemptive:bool)
       (app_release:int option)
       (app_deadline:int option)
-      (extra_var_ids:Idents.var_ident list)	: variable_binding list =
+      (extra_var_ids:Idents.var_ident list)        : variable_binding list =
   (* Printf.printf ">>translate_app node/fun branch.\n" ;*)
   (* Compute function name and input bindings. *)
   let step_clkb = translate_ck lenv ck in
   let input_bindings_no_state:variable_binding list =
     List.map
       (translate_extvalue
-	 genv
-	 lenv
-	 app_partition
-	 app_preemptive
-	 app_release
-	 app_deadline
+         genv
+         lenv
+         app_partition
+         app_preemptive
+         app_release
+         app_deadline
       )
       inputs
   in
-  let function_binding =
-    let hnode = Modules.find_value fun_name in
-    translate_function genv fun_name hnode
-  in
+  let function_binding = translate_fun_or_kernel genv fun_name in
   let input_bindings =
     List.map
       (translate_extvalue
-	 genv
-	 lenv
-	 app_partition
-	 app_preemptive
-	 app_release
-	 app_deadline
+         genv
+         lenv
+         app_partition
+         app_preemptive
+         app_release
+         app_deadline
       )
       inputs
   in
@@ -1408,42 +1422,39 @@ and translate_app_fun
   else
     begin
       (* Printf.printf ">>translate_app non-inlined branch.\n" ;*)
-      let (fb : function_binding) =
-	let hnode = Modules.find_value fun_name in
-	translate_function genv fun_name hnode
-      in
+      let (fb : function_binding) = translate_fun_or_kernel genv fun_name in
       match fb.stateful with
       | None ->
-	 begin 
-	   (* Printf.printf ">>translate_app non-stateful branch.\n" ;*)
-	   (* If there is no state, then the bindings are exactly
-	    * those corresponding to the inputs. *)
-	   build_block_from_func
-	     function_binding.step
-	     genv
-	     step_clkb
-	     input_bindings_no_state
-	     app_partition
-	     app_preemptive
-	     app_release
-	     app_deadline
-	 end
-	   
+         begin 
+           (* Printf.printf ">>translate_app non-stateful branch.\n" ;*)
+           (* If there is no state, then the bindings are exactly
+            * those corresponding to the inputs. *)
+           build_block_from_func
+             function_binding.step
+             genv
+             step_clkb
+             input_bindings_no_state
+             app_partition
+             app_preemptive
+             app_release
+             app_deadline
+         end
+           
       | Some stateful_binding  ->
-	 translate_app_fun_stateful
-	   genv
-	   lenv
-	   reset_vars
-	   ck
-	   app_partition
-	   app_release
-	   app_deadline
-	   app_preemptive
-	   extra_var_ids
-	   input_bindings_no_state
-	   fb
-	   step_clkb
-	   stateful_binding
+         translate_app_fun_stateful
+           genv
+           lenv
+           reset_vars
+           ck
+           app_partition
+           app_release
+           app_deadline
+           app_preemptive
+           extra_var_ids
+           input_bindings_no_state
+           fb
+           step_clkb
+           stateful_binding
     end
       
 and translate_app
@@ -1463,7 +1474,7 @@ and translate_app
     ">>translate_app called with reset_vars = %s.\n"
     (List.fold_left
        (fun acc var ->
-	acc^(Idents.name var)^"; "
+        acc^(Idents.name var)^"; "
        )
        ""
        reset_vars
@@ -1486,29 +1497,29 @@ and translate_app
        raise (Not_implemented "translate_app")
     | Eifthenelse ->
        translate_app_ifthenelse
-	 genv
-	 lenv
-	 inputs
-	 app_partition
-	 app_preemptive
-	 app_release
-	 app_deadline
+         genv
+         lenv
+         inputs
+         app_partition
+         app_preemptive
+         app_release
+         app_deadline
 
     | Efun fun_name
       | Enode fun_name ->
        translate_app_fun
-	 genv
-	 lenv
-	 reset_vars
-	 ck
-	 app
-	 inputs
-	 fun_name
-	 app_partition
-	 app_preemptive
-	 app_release
-	 app_deadline
-	 extra_var_ids
+         genv
+         lenv
+         reset_vars
+         ck
+         app
+         inputs
+         fun_name
+         app_partition
+         app_preemptive
+         app_release
+         app_deadline
+         extra_var_ids
   in
   (* Printf.printf ">>translate_app completed.\n" ;*)
   result_var_bindings
@@ -1527,18 +1538,18 @@ and translate_eq
     | Evarpat var_ident -> [ var_ident ]
     | Etuplepat l ->
        List.map
-	 (function
-	    Evarpat var_ident -> var_ident
-	  | Etuplepat _ ->
+         (function
+            Evarpat var_ident -> var_ident
+          | Etuplepat _ ->
              raise (Not_implemented "translate_eq on equations with hierarchic tuples")
-	 )
-	 l
+         )
+         l
   and sources:variable_binding list =
     let partition_id_opt =
       match eq.eq_partition with
       | None ->
-	 (* Printf.fprintf stderr "MiniLS equation without partition...\n" ;*)
-	 None
+         (* Printf.fprintf stderr "MiniLS equation without partition...\n" ;*)
+         None
       | Some s -> Some (translate_partition s)
     in
     translate_exp
@@ -1557,19 +1568,19 @@ and translate_eq
     Printf.printf
       "translate_eq will bind %s\n"
       (List.fold_left2
-	 (fun acc_str d s ->
-	  String.concat
-	    ""
-	    [
-	      Idents.name d ;
-	      "=>" ;
-	      print_variable_binding s ;
-	      "\n" ;
-	    ]
-	 )
-	 ""
-	 destinations
-	 sources
+         (fun acc_str d s ->
+          String.concat
+            ""
+            [
+              Idents.name d ;
+              "=>" ;
+              print_variable_binding s ;
+              "\n" ;
+            ]
+         )
+         ""
+         destinations
+         sources
       )
   in
    *)
@@ -1596,14 +1607,14 @@ and translate_eq
   with Invalid_argument _ ->
     failwith
       (String.concat
-	 ""
-	 [
-	   "translate_eq: Incompatible list lengths: destinations: " ;
-	   string_of_int (List.length destinations) ;
-	   " sources: " ;
-	   string_of_int (List.length sources) ;
-	   "\n" ;
-	 ]
+         ""
+         [
+           "translate_eq: Incompatible list lengths: destinations: " ;
+           string_of_int (List.length destinations) ;
+           " sources: " ;
+           string_of_int (List.length sources) ;
+           "\n" ;
+         ]
       )
     
 and translate_exp
@@ -1621,13 +1632,13 @@ and translate_exp
      (* Printf.printf "Translate EXTVAL.\n" ;*)
      [
        translate_extvalue
-	 genv
-	 lenv
-	 eq_partition
-	 eq_preemptive
-	 eq_release
-	 eq_deadline
-	 extvalue
+         genv
+         lenv
+         eq_partition
+         eq_preemptive
+         eq_release
+         eq_deadline
+         extvalue
      ]
   | Efby (static_exp_opt, extvalue) ->
      (* Printf.printf "Translate FBY.\n" ;*)
@@ -1714,9 +1725,9 @@ and translate_node
    * new variables. It is only called at node level. *)
   print_endline "CG::translate_node start" ;
   let add_var_to_lenv
-	(lenv:local_environment)
-	binding
-	var_dec
+        (lenv:local_environment)
+        binding
+        var_dec
       : local_environment =
     (*
     cg_debug_print
@@ -1729,8 +1740,8 @@ and translate_node
     VarEnv.add
       var_dec.v_ident
       {
-	iv_ident = var_dec.v_ident ;
-	iv_binding = binding
+        iv_ident = var_dec.v_ident ;
+        iv_binding = binding
       }
       lenv
   in
@@ -1795,11 +1806,11 @@ and translate_node
   let lenv,extra_var_idents =
     (* Aux function for building new variables *)
     let build_aux_variables
-	  ((lenv:local_environment),
-	   (extra_var_idents:Idents.var_ident list list),
+          ((lenv:local_environment),
+           (extra_var_idents:Idents.var_ident list list),
            (cnt:int))
-	  (eq:eq)
-	: local_environment*(Idents.var_ident list list)*int =
+          (eq:eq)
+        : local_environment*(Idents.var_ident list list)*int =
       if cnt mod 1000 = 0 then
         begin
           Printf.printf "\tTraversed %d nodes\n" cnt ;
@@ -1807,93 +1818,90 @@ and translate_node
         end ;
       match eq.eq_rhs.e_desc with
       | Eapp (app, extvalue_list, reset_ident_opt) ->
-	 begin
-	   match app.a_op with
-	   | ( Efun fun_name | Enode fun_name) ->
+         begin
+           match app.a_op with
+           | ( Efun fun_name | Enode fun_name) ->
               (*
               print_endline
                 ("build_aux_variables - traversing fun with name "
                  ^(Names.fullname fun_name)^".\n") ;
                *)
-	      if app.a_inlined then
+              if app.a_inlined then
                 (lenv,extra_var_idents@[[]],cnt+1) 
               else
                 begin
-		  let (fb : function_binding) =
-		    let hnode = Modules.find_value fun_name in
-		    translate_function genv fun_name hnode
-		  in
-		  match fb.stateful with
-		  | None -> (lenv,extra_var_idents@[[]],cnt+1)
-		  | Some stateful_binding ->
-		     let base_name =
-		       let curr_seq = !(stateful_binding.state_seq) in
-		       stateful_binding.state_seq := curr_seq + 1 ;
-		       String.concat
-		         ""
-		         [
-			   qname_to_id fun_name ;
-			   if curr_seq = 0 then "" else ("_"^(string_of_int curr_seq)) ;
-		         ]
-		     in
-		     let state_in_var_name = base_name^"_state_in"
-		     and state_out_var_name = base_name^"_state_out"
-		     in
-		     let state_out_var_ident =
-		       Idents.ident_of_name ~reset:false state_out_var_name
-		     and state_in_var_ident =
-		       Idents.ident_of_name ~reset:false state_in_var_name
-		     in
-		     let lenv_no_reset =
-		       VarEnv.add
-		         state_in_var_ident
-		         {
-			   iv_ident = state_in_var_ident ;
-			   iv_binding = Unbound
-		         }
-		         (VarEnv.add
-			    state_out_var_ident
-			    {
-			      iv_ident = state_out_var_ident ;
-			      iv_binding = Unbound
-			    }
-			    lenv
-		         )
-		     in
-		     let new_reset_vars =
-		       match reset_ident_opt with
-		       | None -> reset_vars
-		       | Some new_reset_var ->
-			  new_reset_var::reset_vars
-		     in
-		     match new_reset_vars with
-		     | [] ->
-		        (
-			  lenv_no_reset,
-			  extra_var_idents@[[state_out_var_ident;state_in_var_ident]],
+                  let (fb : function_binding) = translate_fun_or_kernel genv fun_name in
+                  match fb.stateful with
+                  | None -> (lenv,extra_var_idents@[[]],cnt+1)
+                  | Some stateful_binding ->
+                     let base_name =
+                       let curr_seq = !(stateful_binding.state_seq) in
+                       stateful_binding.state_seq := curr_seq + 1 ;
+                       String.concat
+                         ""
+                         [
+                           qname_to_id fun_name ;
+                           if curr_seq = 0 then "" else ("_"^(string_of_int curr_seq)) ;
+                         ]
+                     in
+                     let state_in_var_name = base_name^"_state_in"
+                     and state_out_var_name = base_name^"_state_out"
+                     in
+                     let state_out_var_ident =
+                       Idents.ident_of_name ~reset:false state_out_var_name
+                     and state_in_var_ident =
+                       Idents.ident_of_name ~reset:false state_in_var_name
+                     in
+                     let lenv_no_reset =
+                       VarEnv.add
+                         state_in_var_ident
+                         {
+                           iv_ident = state_in_var_ident ;
+                           iv_binding = Unbound
+                         }
+                         (VarEnv.add
+                            state_out_var_ident
+                            {
+                              iv_ident = state_out_var_ident ;
+                              iv_binding = Unbound
+                            }
+                            lenv
+                         )
+                     in
+                     let new_reset_vars =
+                       match reset_ident_opt with
+                       | None -> reset_vars
+                       | Some new_reset_var ->
+                          new_reset_var::reset_vars
+                     in
+                     match new_reset_vars with
+                     | [] ->
+                        (
+                          lenv_no_reset,
+                          extra_var_idents@[[state_out_var_ident;state_in_var_ident]],
                           cnt+1
-		        )
-		     | [reset_var] ->
-		        let fby_in_var_name = base_name^"_fby_in" in
-		        let fby_in_var_ident =
-			  Idents.ident_of_name ~reset:false fby_in_var_name
-		        in
-		        (
-			  VarEnv.add
-			    fby_in_var_ident
-			    {
-			      iv_ident = state_in_var_ident ;
-			      iv_binding = Unbound
-			    }
-			    lenv_no_reset,
-			  extra_var_idents@[[state_out_var_ident;state_in_var_ident;fby_in_var_ident]],
+                        )
+                     | [reset_var] ->
+                        let fby_in_var_name = base_name^"_fby_in" in
+                        let fby_in_var_ident =
+                          Idents.ident_of_name ~reset:false fby_in_var_name
+                        in
+                        (
+                          VarEnv.add
+                            fby_in_var_ident
+                            {
+                              iv_ident = state_in_var_ident ;
+                              iv_binding = Unbound
+                            }
+                            lenv_no_reset,
+                          extra_var_idents@[[state_out_var_ident;state_in_var_ident;fby_in_var_ident]],
                           cnt+1
-		        )
-		     | _ ->
-		        failwith "Cannot handle more than one reset var."
+                        )
+                     | _ ->
+                        failwith "Cannot handle more than one reset var."
                 end
-	   | _ -> (lenv,extra_var_idents@[[]],cnt+1)
-	 end
+           | _ -> (lenv,extra_var_idents@[[]],cnt+1)
+         end
       | _ -> (lenv,extra_var_idents@[[]],cnt+1)
     in
     print_endline ("CG::translate_node processing "
@@ -1918,22 +1926,22 @@ and translate_node
   begin
     try
       List.iter2
-	(translate_eq genv lenv reset_vars)
-	hnode.n_equs
-	extra_var_idents
+        (translate_eq genv lenv reset_vars)
+        hnode.n_equs
+        extra_var_idents
     with
       Invalid_argument _ ->
       failwith
-	(String.concat
-	   ""
-	   [
-	     "translate_node: Incompatible list lengths: eqs: " ;
-	     string_of_int (List.length hnode.n_equs) ;
-	     " lsts: " ;
-	     string_of_int (List.length extra_var_idents) ;
-	     "\n" ;
-	   ]
-	)
+        (String.concat
+           ""
+           [
+             "translate_node: Incompatible list lengths: eqs: " ;
+             string_of_int (List.length hnode.n_equs) ;
+             " lsts: " ;
+             string_of_int (List.length extra_var_idents) ;
+             "\n" ;
+           ]
+        )
   end ;
   print_endline "CG::translate_node intermediate 5" ;
 
@@ -1976,7 +1984,7 @@ let rec evaluate_ivar_in_cklb ivar clkb =
      then Some constructor_name
      else evaluate_ivar_in_cklb ivar base_clkb
   | _ -> assert false
-		
+                
 let build_clk_term constructor_name (rvalue, clock) =
   let predicate =
     match constructor_name with
@@ -2006,48 +2014,48 @@ let rec resolve_clock (genv:cg_environment) (c:clock_binding) : clk =
     | DerivedClock (base_clkb, constructor_name, ivar) ->
        (* Printf.fprintf stderr "resolve_clock_exp::DerivedClock\n" ;*)
        let clk_dependencies : clock_rvalue list =
-	 resolve_binding
-	   genv
-	   base_clkb
-	   ivar.iv_binding
+         resolve_binding
+           genv
+           base_clkb
+           ivar.iv_binding
        in
        let clk_exp =
-	 let tmp =
-	   List.map
-	      (build_clk_term constructor_name)
-	      clk_dependencies
-	 in
-	 if tmp = [] then
-	   failwith "mk_union on empty list."
-	 else
-	   mk_union tmp
+         let tmp =
+           List.map
+              (build_clk_term constructor_name)
+              clk_dependencies
+         in
+         if tmp = [] then
+           failwith "mk_union on empty list."
+         else
+           mk_union tmp
        in
        (clk_exp,clk_dependencies)
     | UnionClock l ->
        (* Printf.fprintf stderr "resolve_clock_exp::UnionClock\n" ;*)
        let nvl = List.filter (fun c -> c <> NeverClock) l in
        if nvl = [] then
-	 (BaseClock genv.never_clock, [])
+         (BaseClock genv.never_clock, [])
        else
-	 let clk_exps, dependencies =
-	   List.split (List.map resolve_clock_exp nvl)
-	 in
-	 let clk_exp = mk_union clk_exps
-	 and clk_dependencies = List.fold_left (@) [] dependencies
-	 in
-	 (clk_exp,clk_dependencies)
+         let clk_exps, dependencies =
+           List.split (List.map resolve_clock_exp nvl)
+         in
+         let clk_exp = mk_union clk_exps
+         and clk_dependencies = List.fold_left (@) [] dependencies
+         in
+         (clk_exp,clk_dependencies)
     | InterClock l ->
        (* Printf.fprintf stderr "resolve_clock_exp::InterClock\n" ;*)
        if l = [] then
-	 failwith "mk_inter on empty list."
+         failwith "mk_inter on empty list."
        else 
-	 let clk_exps, dependencies =
-	   List.split (List.map resolve_clock_exp l)
-	 in
-	 let clk_exp = mk_inter clk_exps
-	 and clk_dependencies = List.fold_left (@) [] dependencies
-	 in
-	 (clk_exp,clk_dependencies)
+         let clk_exps, dependencies =
+           List.split (List.map resolve_clock_exp l)
+         in
+         let clk_exp = mk_inter clk_exps
+         and clk_dependencies = List.fold_left (@) [] dependencies
+         in
+         (clk_exp,clk_dependencies)
   in
   match c with
   | PrimitiveClock -> genv.primitive_clock
@@ -2058,12 +2066,12 @@ let rec resolve_clock (genv:cg_environment) (c:clock_binding) : clk =
      in
      match clk_exp with
      | BaseClock _ ->
-	(* This case only occurs when the construction process 
-	 * produces a never clock. *)
-	genv.never_clock
+        (* This case only occurs when the construction process 
+         * produces a never clock. *)
+        genv.never_clock
      | _ -> 
-	memo_clock_exp genv clk_exp clk_dependencies
-		    
+        memo_clock_exp genv clk_exp clk_dependencies
+                    
 and resolve_binding
       (genv:cg_environment)
       (clkb:clock_binding)
@@ -2071,27 +2079,27 @@ and resolve_binding
   (* Recursively build a list of variables with clocks. *)
   (* Clocks are built during the recursion and solved at leaves. *)
   let rec resolve
-	    (clkb:clock_binding)
-	    (r:clock_rvalue list)
-	    (x:variable_binding) : clock_rvalue list =
+            (clkb:clock_binding)
+            (r:clock_rvalue list)
+            (x:variable_binding) : clock_rvalue list =
     match x with 
     | Unbound ->
        assert false
-	      
+              
     | Alias (ivar) ->
        if ivar.iv_binding == x then
-	 failwith "Recursive binding. Aborting...\n"
+         failwith "Recursive binding. Aborting...\n"
        else 
-	 resolve clkb r ivar.iv_binding
-		 
+         resolve clkb r ivar.iv_binding
+                 
     | Merge (ivar, l) ->
        let merge r (constr, binding) =
          match evaluate_ivar_in_cklb ivar clkb with
          | Some constr' when constr' = constr ->
-	    (* The variable is already evaluated *)
+            (* The variable is already evaluated *)
             resolve clkb r binding
          | Some _ ->
-	    (* The path is unfeasible, ignore it *)
+            (* The path is unfeasible, ignore it *)
             r
          | None ->
             resolve (DerivedClock (clkb, constr, ivar)) r binding
@@ -2103,7 +2111,7 @@ and resolve_binding
 
     | Constant_Binding clk_exp ->
        (Const clk_exp,resolve_clock genv clkb)::r
-						  
+                                                  
   in
   resolve clkb [] binding
 
@@ -2158,12 +2166,12 @@ let build_predef_genv (constants : (const_dec*Types.static_exp) list) =
       clk_index = 1 ;
       clk_id = Some "Never" ;
       clk_desc = Derived
-		   (Test
-		      (
-			BaseClock primitive_clock,
-			Predicate (Const (Boolean false))
-		      )
-		   )  ;
+                   (Test
+                      (
+                        BaseClock primitive_clock,
+                        Predicate (Const (Boolean false))
+                      )
+                   )  ;
       clk_dependencies = []
     }
   and ty_bool = { ty_index = 0 ; ty_id = "bool" ; ty_desc = PredefinedType }
@@ -2172,9 +2180,9 @@ let build_predef_genv (constants : (const_dec*Types.static_exp) list) =
   {
     type_bindings =
       List.fold_left
-	(fun env (n, t) -> TyEnv.add (Types.Tid n) t env)
-	TyEnv.empty
-	type_list ;
+        (fun env (n, t) -> TyEnv.add (Types.Tid n) t env)
+        TyEnv.empty
+        type_list ;
     constant_bindings = QualEnv.empty ;
     valued_mls_constants = build_valued_const_env constants ;
     function_bindings = QualEnv.empty ;
@@ -2186,14 +2194,14 @@ let build_predef_genv (constants : (const_dec*Types.static_exp) list) =
     never_clock = never_clock ; 
     cg =
       {
-	types = List.map snd type_list ;
-	functions = [] ;
-	constants = [] ;
-	variables = [];
-	clocks = [never_clock;primitive_clock];
-	relations = [];
-	partitions = [];
-	blocks = [];
+        types = List.map snd type_list ;
+        functions = [] ;
+        constants = [] ;
+        variables = [];
+        clocks = [never_clock;primitive_clock];
+        relations = [];
+        partitions = [];
+        blocks = [];
         period = None ;
       };
     cdependencies = [];
@@ -2224,15 +2232,15 @@ let build_init_var (genv:cg_environment) =
   let va_init =
     match
       translate_fby
-	genv
-	(VarEnv.empty)
-	Clocks.Cbase
-	(Some (Types.mk_static_exp Initial.tbool (Types.Sbool true)))
-	(extvalue_false Clocks.Cbase)
-	init_code_partition_opt
-	false (* non-preemptive *)
-	None (* No release date *)
-	None (* No deadline *)
+        genv
+        (VarEnv.empty)
+        Clocks.Cbase
+        (Some (Types.mk_static_exp Initial.tbool (Types.Sbool true)))
+        (extvalue_false Clocks.Cbase)
+        init_code_partition_opt
+        false (* non-preemptive *)
+        None (* No release date *)
+        None (* No deadline *)
     with 
     | [Defined_Variable va] -> va
     | _ -> assert false
@@ -2275,7 +2283,7 @@ let find_target_node { p_desc } =
   let qname = List.hd lqname in
   let node =
     try
-      let desc = List.find (function Pnode n -> n.n_name = qname | _ -> false) p_desc in
+      let desc = List.find (function Pnode n -> n.n_name.name = qname.name | _ -> false) p_desc in
       match desc with
       | Pnode n -> n
       | _ -> assert false
@@ -2379,17 +2387,17 @@ let program p =
   let cg_without_variable_at =
     let partition_set = 
       StringMap.fold
-	(fun pname pid acc_part_table ->
-	 IntMap.add
-	   pid
-	   {
-	     part_index = pid ;
-	     part_id = pname ;
-	   }
-	   acc_part_table
-	)
-	!partition_map
-	IntMap.empty
+        (fun pname pid acc_part_table ->
+         IntMap.add
+           pid
+           {
+             part_index = pid ;
+             part_id = pname ;
+           }
+           acc_part_table
+        )
+        !partition_map
+        IntMap.empty
     in
     let _,ordered_partition_list =
       List.split (IntMap.bindings partition_set)
