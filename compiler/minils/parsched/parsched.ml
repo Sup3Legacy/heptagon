@@ -121,11 +121,13 @@ let device_prefix = "DEVICE_"
 let core_prefix = "CPU_"
 
 let is_device_block block_name =
+  if ( (String.length block_name) <= (String.length device_prefix)) then false else
   let prefix = String.sub block_name 0 (String.length device_prefix) in
   (prefix = device_prefix)
 
 let is_core_block block_name =
-  let prefix = String.sub block_name 0 (String.length device_prefix) in
+  if ( (String.length block_name) <= (String.length core_prefix)) then false else
+  let prefix = String.sub block_name 0 (String.length core_prefix) in
   (prefix = core_prefix)
 
 (* Assert that a reservation is a funcall and extract infos *)

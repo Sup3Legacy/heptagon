@@ -43,7 +43,16 @@ open Parsched
 (* Also uses "Unicity_fun_instance.mFunname2Eq" *)
 
 let debug = true
+let ffout = Format.formatter_of_out_channel stdout
 
+let print_sfunCons ff (sfunCons:StringSet.t) =
+  Format.fprintf ff "sfunCons = { ";
+  let lfunCons = StringSet.elements sfunCons in
+  List.iter (fun elemstr -> Format.fprintf ff "%s, " elemstr) lfunCons;
+  Format.fprintf ff "}\n@?"
+
+
+(* ==================================================== *)
 
 (* Parsing function for the solution *)
 let parse_file parse filename =
@@ -74,10 +83,24 @@ let qualify_value_or_kernel funname =
     let qv = Modules.qualify_value funname in
     (qv, false)
 
+(* Correspondance between a qualname of a function in the mls and the parsched funname *)
+let qname_to_parsched_name qfunname =
+  let nfnname = C.cname_of_qn qfunname in
+  nfnname ^ "_step"
+
 
 (* ==================================================== *)
 
 (* Integrity check - Is the proposed schedule valid (in term of dependences) ? *)
+
+(* Extract the funname of an equation. Return None if not an funcall equation *)
+let extract_funcall_eq eq = match eq.eq_rhs.e_desc with
+  | Eapp (ap, _, _) -> (match ap.a_op with
+    | Enode fname | Efun fname -> Some fname
+    | _ -> None
+    )
+  | _ -> None
+
 
 (* Get the list of varid from the external value *)
 let extract_varid_from_extval eval =
@@ -121,19 +144,15 @@ let rec get_consumed_fun_from_var mVar2Eq svid_visited sres sresEq lvarid =
 
   (* Check equations *)
   let (nlvarid, nsres, nsresEq) = List.fold_left (fun (lvarid_acc, sres_acc, sresEq_acc) eq ->
-    match eq.eq_rhs.e_desc with
-    | Eapp (ap, _, _) -> (match ap.a_op with
-      | Enode fname | Efun fname ->
-        (lvarid_acc,
-          StringSet.add fname.name sres_acc,
-          EqSet.add eq sresEq_acc)  (* Function detected ! *)
-      | _ ->
-        let nlvarid = extract_immediate_varid_from_exp eq.eq_rhs in
-        ((List.rev_append nlvarid lvarid_acc), sres_acc, sresEq_acc)
-      )
-    | _ ->
+    let ofuncall = extract_funcall_eq eq in
+    match ofuncall with
+    | None -> (* Not a function call *)
       let nlvarid = extract_immediate_varid_from_exp eq.eq_rhs in
       ((List.rev_append nlvarid lvarid_acc), sres_acc, sresEq_acc)
+    | Some fname -> (* Function detected ! *)
+        (lvarid_acc,
+          StringSet.add fname.name sres_acc,
+          EqSet.add eq sresEq_acc)
   ) ([], sres, sresEq) lEq in
 
   (* Redundancy management - remove the encountered vid & redundancies *)
@@ -189,9 +208,10 @@ let integrity_check mVar2Eq parsched n =
   (* Integrity checks *)
   List.iter (fun eq -> match eq.eq_rhs.e_desc with
     | Eapp (ap, lextval, _) -> begin match ap.a_op with
-      | Efun fn | Enode fn ->
+      | Efun fn | Enode fn -> begin
         (* Is that equation scheduled? *)
-        let nfnname = EqMap.find eq !Unicity_fun_instance.mEq2Funname in
+        let nqfnname = EqMap.find eq !Unicity_fun_instance.mEq2Funname in
+        let nfnname = qname_to_parsched_name nqfnname in
         let (blname, beg_cons, _) = try
             StringMap.find nfnname mfun2Table
           with Not_found -> (
@@ -204,30 +224,45 @@ let integrity_check mVar2Eq parsched n =
         if (Modules.check_kernel fn) then (
           (* OpenCL kernel *)
           if (not (is_device_block blname)) then (
-            Printf.eprintf ("Parsched integrity check failed - Function \"%s\" is schedule on %s which is not a device block.\n") fn.name blname;
-            failwith "Integrity check failed" );
-          assert(is_core_block blname)
+            Format.fprintf ffout "Parsched integrity check failed - Function \"%s\" is scheduled on %s which is not a device block.\n" fn.name blname;
+            failwith "Integrity check failed" )
         ) else (
           (* Not a kernel *)
           if (not (is_core_block blname)) then (
-            Printf.eprintf ("Parsched integrity check failed - Function \"%s\" is schedule on %s which is not a core block.\n") fn.name blname;
-            failwith "Integrity check failed" );
-          assert(is_device_block blname)
+            Format.fprintf ffout "Parsched integrity check failed - Function \"%s\" is scheduled on %s which is not a core block.\n" fn.name blname;
+            failwith "Integrity check failed" )
+          (* DEBUG
+          Format.fprintf ffout "Integrity - fn = %a\n@?" Global_printer.print_qualname fn;
+          Format.fprintf ffout "Integrity - blname = %s\n@?" blname;
+          *)
         );
 
         (* Dependency checks *)
         let lvaridUsed = List.concat (List.map extract_varid_from_extval lextval) in
-        let ((sfunCons : StringSet.t), _) =
+        let (_, (seqCons : EqSet.t)) =
           get_consumed_fun_from_var mVar2Eq IdentSet.empty StringSet.empty EqSet.empty lvaridUsed in
 
         (* Get the end date of all producer functions *)
-        StringSet.iter (fun fname ->
-          let (_,_, ed) = StringMap.find fname mfun2Table in
+        EqSet.iter (fun (eqCons:Minils.eq) ->
+          (* Recover the funname given to the scheduler *)
+          let nqfname = try
+              EqMap.find eqCons !Unicity_fun_instance.mEq2Funname
+            with Not_found -> failwith "Parsched integrity check failed - Equation not found in mEq2Funname"
+          in
+          let nfname = qname_to_parsched_name nqfname in
+
+          let (_,_, ed) = StringMap.find nfname mfun2Table in
           if (ed > beg_cons) then (
             Printf.eprintf "Parsched integrity check failed - Dependence from %s to %s is not respected.\n"
-              fname fn.name;
+              nfname fn.name;
             failwith "Integrity check failed" )
-        ) sfunCons
+        ) seqCons;
+
+        (* DEBUG *)
+        if (debug) then
+          Format.fprintf ffout "Integrity - equation passed!\n@?"
+
+      end
       | _ -> ()
     end
     | Eiterator _ -> failwith "Iterators are not supported for parallel schedule (yet?)"
@@ -359,11 +394,20 @@ let trim_name_gc name =
   assert((String.sub name (namelen-suflen-1) suflen)="_step");
   String.sub name 0 (namelen-suflen)
 
+(* TODO: move previous function to "unicity_fun_instance" ? *)
+
 
 (* Find the equation associated to res *)
 let get_equation_from_res res = match res with
   | Res_funcall (name, _, _) | Res_ocl_launch (name, _, _) -> (
+
+    (* Remove the "_step" at the end of the name *)
     let name = trim_name_gc name in
+
+    (* TODO: qual to remove at the start of the name !!! (cf Str. ... in doc) *)
+
+
+
     try 
       StringMap.find name !Unicity_fun_instance.mFunname2Eq
     with
@@ -399,17 +443,17 @@ let add_synch_reservation mVar2Eq parsched =
         in
         (* List of (res_fun_name, (name_block, res_st_date, res_end_date)) *)
         let lres_info_prod = EqSet.fold (fun eq_used lresname_acc ->
-          let nresname = try
+          let nqresname = try
               EqMap.find eq_used !Unicity_fun_instance.mEq2Funname
             with
               | Not_found -> failwith "add_synch_reservation: Unknown equation in mEq2Funname"
           in
           let nres = try
-              StringMap.find nresname mfun2Table
+              StringMap.find nqresname.name mfun2Table
             with Not_found ->
-              failwith ("add_synch_reservation: Reservation name " ^ nresname ^ " was not found in mfun2Table")
+              failwith ("add_synch_reservation: Reservation name " ^ nqresname.name ^ " was not found in mfun2Table")
           in
-          (nresname, nres)::lresname_acc
+          (nqresname.name, nres)::lresname_acc
         ) sEq_used [] in
 
         (* b) Check the number of threads outside of current one
@@ -534,11 +578,24 @@ let preprocess_parsched mVar2Eq (parsched:Parsched.parsched) =
   (* Note: no need to update "l_event_fun" in the future, if parsched is updated *)
   (* This is just to know where and when are the functions. It should not be used for signal/other stuffs *)
 
+
+  (* DEBUG *)
+  if (debug) then
+    Format.fprintf ffout " ~> l_event_fun built\n@?";
+
   (* 2) Remove Devices blocks (launch/recover reserv) *)
   let parsched = remove_device_blocks l_event_fun parsched in
 
+  (* DEBUG *)
+  if (debug) then
+    Format.fprintf ffout " ~> Device block removed\n@?";
+
   (* 3) Add Synchronisations *)
   let parsched = add_synch_reservation mVar2Eq parsched in
+
+  (* DEBUG *)
+  if (debug) then
+    Format.fprintf ffout " ~> Synchronisation added\n@?";
 
   (* 4) Extend current schedule to a parsched_eqs schedule *)
   let (mls_parsched:Minils.parsched_eqs) = get_mls_parsched parsched in
@@ -554,7 +611,7 @@ let main_node n =
 
   (* DEBUG *)
   if (debug) then
-    Format.fprintf (Format.formatter_of_out_channel stdout) "parsched = %a\n@?"
+    Format.fprintf ffout "parsched = %a\n@?"
       Parsched.print_parsched parsched;
 
 
@@ -562,8 +619,17 @@ let main_node n =
   let mVar2Eq = build_mVar2Eq n in
   integrity_check mVar2Eq parsched n;
 
+  (* DEBUG *)
+  if (debug) then
+    Format.fprintf ffout "Integrity passed!\n@?";
+
+
   (* Preprocess the parallel schedule *)
   let mls_parsched = preprocess_parsched mVar2Eq parsched in
+
+  (* DEBUG *)
+  if (debug) then
+    Format.fprintf ffout "Preprocess passed!\n@?";
 
   (* TODO for later: convert back non-functional equation (cf copy equation) to their previous version here *)
   (* Cf "preprocess_lopht" in "minils/gc/" *)

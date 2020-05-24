@@ -41,7 +41,7 @@ open Mls_utils
 (* Mapping between the funname and the corresponding Minils equation *)
 (* These mapping will be used later in parshed_preproc.ml to translate back the parallel schedule from Lopht *)
 let mFunname2Eq = ref StringMap.empty
-let mEq2Funname = ref EqMap.empty
+let mEq2Funname = ref EqMap.empty   (* Gives back a qualname *)
 
 (* ------------------------- *)
 
@@ -90,7 +90,7 @@ let preprocess_funname bmodify nd =
             eq
           in
           mFunname2Eq := StringMap.add nfn.name neq !mFunname2Eq;
-          mEq2Funname := EqMap.add neq nfn.name !mEq2Funname;
+          mEq2Funname := EqMap.add neq nfn !mEq2Funname;
           neq
 
         | Enode fn ->
@@ -103,7 +103,7 @@ let preprocess_funname bmodify nd =
             eq
           in
           mFunname2Eq := StringMap.add nfn.name neq !mFunname2Eq;
-          mEq2Funname := EqMap.add neq nfn.name !mEq2Funname;
+          mEq2Funname := EqMap.add neq nfn !mEq2Funname;
           neq
         | _ -> eq
       )
