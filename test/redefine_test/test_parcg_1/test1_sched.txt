@@ -1,16 +1,16 @@
 PROCESSORS:2 DEVICES:1
 
-BLOCKS:3  CPU_0
-0    1     read_input_d0
-1    2     f_step
+BLOCKS:2  CPU_0
+0    1     Node__read_input_d0_0_step
+1    2     Node__f_1_step
 END_BLOCKS
 
-BLOCKS:3  CPU_1
-3    4     g_step
-4    5     write_output_d4
+BLOCKS:2  CPU_1
+3    4     Node__g_3_step
+4    5     Node__write_output_d4_4_step
 END_BLOCKS
 
 BLOCKS:1  DEVICE_0
-2    3  vector_add
+2    3  Test1__vector_add_2_step
 END_BLOCKS
 

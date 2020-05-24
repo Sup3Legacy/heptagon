@@ -1,6 +1,6 @@
 
 (* ../../../heptc -target lopht -v -mainnode test1 test1.ept *)
-(* ../../../heptc -target opencl -mainnode test1 -parsched test1_sched.txt test1.ept  *)
+(* ../../../heptc -target opencl -mainnode test1 -parsched test1_sched.txt test1.ept *)
 
 open Node
 

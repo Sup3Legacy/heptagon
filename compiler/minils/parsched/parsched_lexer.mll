@@ -58,7 +58,7 @@ rule token = parse
   | ':'             { TWODOTS }
 
 
-  | (['A'-'Z' 'a'-'z' '_']('_' ? ['A'-'Z' 'a'-'z' ''' '0'-'9']) * as id)
+  | (['A'-'Z' 'a'-'z' '_'](['_' 'A'-'Z' 'a'-'z' ''' '0'-'9']) * as id)
       { let s = Lexing.lexeme lexbuf in
         begin try Hashtbl.find keyword_table s
           with Not_found -> IDENT id

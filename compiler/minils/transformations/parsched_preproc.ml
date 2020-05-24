@@ -42,6 +42,8 @@ open Parsched
 
 (* Also uses "Unicity_fun_instance.mFunname2Eq" *)
 
+let debug = true
+
 
 (* Parsing function for the solution *)
 let parse_file parse filename =
@@ -189,11 +191,12 @@ let integrity_check mVar2Eq parsched n =
     | Eapp (ap, lextval, _) -> begin match ap.a_op with
       | Efun fn | Enode fn ->
         (* Is that equation scheduled? *)
+        let nfnname = EqMap.find eq !Unicity_fun_instance.mEq2Funname in
         let (blname, beg_cons, _) = try
-            StringMap.find fn.name mfun2Table
+            StringMap.find nfnname mfun2Table
           with Not_found -> (
-            Printf.eprintf "Parsched integrity check failed - Function \"%s\" is not scheduled.\n"
-              fn.name;
+            Printf.eprintf "Parsched integrity check failed - Function \"%s\" (\"%s\") is not scheduled.\n"
+              fn.name nfnname;
             failwith "Integrity check failed" )
         in
 
@@ -549,6 +552,12 @@ let main_node n =
   let parsched = parse_parsched (!Compiler_options.parsched_filename) in
   let parsched = Parsched.sort_reservation parsched in
 
+  (* DEBUG *)
+  if (debug) then
+    Format.fprintf (Format.formatter_of_out_channel stdout) "parsched = %a\n@?"
+      Parsched.print_parsched parsched;
+
+
   (* Check the integrity of the parallel schedule *)
   let mVar2Eq = build_mVar2Eq n in
   integrity_check mVar2Eq parsched n;
@@ -569,7 +578,7 @@ let program p =
   (* We trigger the transformation only on the main node *)
   let nlpdesc = List.map (fun pd -> match pd with
     | Pnode nd ->
-      if (nd.n_name = main_node_name) then
+      if (nd.n_name.name = main_node_name.name) then
         Pnode (main_node nd)
       else
         Pnode nd
