@@ -228,6 +228,36 @@ let print_eq ff {eq_lhs = lhs;
 let print_eqs ff leqs =
   fprintf ff "@[<v2>@ %a@]" (print_list_r print_eq "" ";" "") leqs
 
+(******************************)
+(* *** Parallel scheduler *** *)
+(******************************)
+
+let print_parsched_comp ff psch_comp = match psch_comp with
+  | Comp_eq eq ->
+    fprintf ff "Comp_eq(%a)" print_eq eq
+  | Comp_ocl_launch (eq, ndev) ->
+    fprintf ff "Comp_ocl_launch(%s, %a)" ndev print_eq eq
+  | Comp_ocl_recover (eq, ndev) ->
+    fprintf ff "Comp_ocl_recover(%s, %a)" ndev print_eq eq
+  | Comp_signal signame ->
+    fprintf ff "Comp_signal(%s)" signame
+  | Comp_wait (signame, n) ->
+    fprintf ff "Comp_wait(%s, %i)" signame n
+
+let print_parsched_eqs ff psch_eqs =
+  List.iteri (fun k lcomp ->
+    fprintf ff "=> Core_%i:\n@?" k;
+    List.iter (fun comp ->
+      fprintf ff "\t- %a\n@?" print_parsched_comp comp
+    ) lcomp
+  ) psch_eqs
+
+
+let print_parsched_info ff psch_info =
+  fprintf ff "[ncore = %i | ndevice = %i]\n@?"
+    psch_info.psch_ncore psch_info.psch_ndevice;
+  fprintf ff "%a" print_parsched_eqs psch_info.psch_eqs
+
 
 
 (*********************************)

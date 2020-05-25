@@ -42,7 +42,7 @@ open Parsched
 
 (* Also uses "Unicity_fun_instance.mFunname2Eq" *)
 
-let debug = true
+let debug = false
 let ffout = Format.formatter_of_out_channel stdout
 
 let print_sfunCons ff (sfunCons:StringSet.t) =
@@ -50,6 +50,13 @@ let print_sfunCons ff (sfunCons:StringSet.t) =
   let lfunCons = StringSet.elements sfunCons in
   List.iter (fun elemstr -> Format.fprintf ff "%s, " elemstr) lfunCons;
   Format.fprintf ff "}\n@?"
+
+let print_mfun2Table ff mfun2Table =
+  Format.fprintf ff "mfun2Table =\n";
+  StringMap.iter (fun k (blname, sd, ed) ->
+    Format.fprintf ff "\t- %s -> (%s, %i, %i)\n" k blname sd ed
+  ) mfun2Table;
+  Format.fprintf ff "@?"
 
 
 (* ==================================================== *)
@@ -165,14 +172,14 @@ let rec get_consumed_fun_from_var mVar2Eq svid_visited sres sresEq lvarid =
   get_consumed_fun_from_var mVar2Eq n_svid_visited nsres nsresEq nlvarid
 
 (* mfun2Table: [fun_name --> (block_name, start_date, end_date) ] *)
-(* Only take into account Res_funcall and Res_ocl_launch *)
+(* Only take into account Res_funcall and Res_ocl_recover (to know where the value produced are) *)
 let build_mfun2Table parsched =
   let mfun2Table = List.fold_left (fun macc (bl:block_sched) -> 
     let name_block = bl.bls_name in
     List.fold_left (fun macc (res:reservation) -> match res with
       | Res_funcall (res_name, res_st_date, res_end_date) ->
         StringMap.add res_name (name_block, res_st_date, res_end_date) macc
-      | Res_ocl_launch (res_name, _, res_date) ->
+      | Res_ocl_recover (res_name, _, res_date) ->
         StringMap.add res_name (name_block, res_date, res_date) macc
       | _ -> macc
     ) macc bl.bls_lreser
@@ -258,9 +265,9 @@ let integrity_check mVar2Eq parsched n =
             failwith "Integrity check failed" )
         ) seqCons;
 
-        (* DEBUG *)
+        (* DEBUG
         if (debug) then
-          Format.fprintf ffout "Integrity - equation passed!\n@?"
+          Format.fprintf ffout "Integrity - equation passed!\n@?" *)
 
       end
       | _ -> ()
@@ -363,14 +370,14 @@ let remove_device_blocks l_event_fun parsched =
 
 
       (* c) We add the ocl_recover *)
+      let nres_ocl_recover = mk_ocl_recover_res res_name bls.bls_name date_ocl_recover in
+      let parsched_acc = add_new_reservation_before proc_ocl_recover nres_ocl_recover parsched_acc in
       let parsched_acc = if (b_sig_needed) then
           let nres_wait_offload = mk_wait_res signal_name 1 date_ocl_recover in
           add_new_reservation_before proc_ocl_recover nres_wait_offload parsched_acc
         else
           parsched_acc
       in
-      let nres_ocl_recover = mk_ocl_recover_res res_name bls.bls_name date_ocl_recover in
-      let parsched_acc = add_new_reservation_before proc_ocl_recover nres_ocl_recover parsched_acc in
 
       parsched_acc
     ) parsched_acc bls.bls_lreser
@@ -384,31 +391,24 @@ let remove_device_blocks l_event_fun parsched =
 
 (* ==================================================== *)
 
-(* Remove "_step" from the end of a name *)
-(* Opposite of the name modification found in cg_main::translate_function *)
-let trim_name_gc name =
-  let suffix = "_step" in
-  let suflen = String.length suffix in
-  let namelen = String.length name in
-  assert(namelen>5);
-  assert((String.sub name (namelen-suflen-1) suflen)="_step");
-  String.sub name 0 (namelen-suflen)
+(* Reverse of "qname_to_parsched_name": from a pasched_name, get back the function name *)
+let trim_name_gc_to_orig name_psch =
+  let r = Str.regexp "[A-Za-z0-9_]+__\\([A-Za-z0-9_]+\\)_[0-9]+_step" in
+  let name_orig = Str.replace_first r "\\1" name_psch in
+  name_orig
 
-(* TODO: move previous function to "unicity_fun_instance" ? *)
+let trim_name_gc_to_unique name_psch =
+  let r = Str.regexp "[A-Za-z0-9_]+__\\([A-Za-z0-9_]+\\)_step" in
+  let name_unique = Str.replace_first r "\\1" name_psch in
+  name_unique
 
 
 (* Find the equation associated to res *)
 let get_equation_from_res res = match res with
   | Res_funcall (name, _, _) | Res_ocl_launch (name, _, _) -> (
-
     (* Remove the "_step" at the end of the name *)
-    let name = trim_name_gc name in
-
-    (* TODO: qual to remove at the start of the name !!! (cf Str. ... in doc) *)
-
-
-
-    try 
+    let name = trim_name_gc_to_unique name in
+    try
       StringMap.find name !Unicity_fun_instance.mFunname2Eq
     with
       Not_found -> failwith "parsched_preproc::get_equation_from_res : Equation not found in mFunname2Eq"
@@ -420,6 +420,9 @@ let get_equation_from_res res = match res with
 let add_synch_reservation mVar2Eq parsched =
   (* Map to accelerate search of where a given fun or Ocl_launch is *)
   let mfun2Table = build_mfun2Table parsched in
+
+  (* DEBUG
+  Format.fprintf ffout "(addsynch - start) %a" print_mfun2Table mfun2Table; *)
 
   (* Algorithm:
     -> Detect equations where data consumed was produced on different thread
@@ -448,13 +451,28 @@ let add_synch_reservation mVar2Eq parsched =
             with
               | Not_found -> failwith "add_synch_reservation: Unknown equation in mEq2Funname"
           in
+          (* DEBUG
+          Format.fprintf ffout "ping - nqresname = %a\n%a@?"
+            Global_printer.print_qualname nqresname  print_mfun2Table mfun2Table; *)
+
           let nres = try
-              StringMap.find nqresname.name mfun2Table
+              StringMap.find (qname_to_parsched_name nqresname) mfun2Table
             with Not_found ->
               failwith ("add_synch_reservation: Reservation name " ^ nqresname.name ^ " was not found in mfun2Table")
           in
           (nqresname.name, nres)::lresname_acc
         ) sEq_used [] in
+
+        (* DEBUG
+        let print_lres_info_prod ff lres_info_prod =
+          Format.fprintf ff "lres_info_prod (%s) =\n" res_name;
+          List.iter (fun (res_fun_name, (nblock, sd, ed)) ->
+            Format.fprintf ff "\t- %s (%s, %i, %i)\n" res_fun_name nblock sd ed;
+          ) lres_info_prod;
+          Format.fprintf ff "@?"
+        in
+        print_lres_info_prod ffout lres_info_prod; *)
+
 
         (* b) Check the number of threads outside of current one
             where there is at least an element of lres_prod
@@ -473,6 +491,9 @@ let add_synch_reservation mVar2Eq parsched =
 
         (* Filter-out the current block *)
         let mLastRes = StringMap.remove current_block_name mLastRes in
+
+        (* If mLastRes is empty, no need for synchronisation *)
+        if (StringMap.is_empty mLastRes) then parsched_acc else
 
         (* c) Place wait & signal reservations *)
         let signame = get_signal_name res_name in
@@ -496,8 +517,6 @@ let add_synch_reservation mVar2Eq parsched =
   nparsched
 
 
-
-
 (* ==================================================== *)
 
 (* Enrich a schedule to all the equations of n *)
@@ -505,6 +524,7 @@ let get_mls_parsched parsched =
   let (mls_parsched:Minils.parsched_eqs) = List.map (fun (pschbl:Parsched.block_sched) ->
     let lcomp = List.map (fun (res:Parsched.reservation) -> match res with
       | Res_funcall (funname, _, _) -> (
+        let funname = trim_name_gc_to_unique funname in
         try
           let eq = StringMap.find funname !Unicity_fun_instance.mFunname2Eq in
           Comp_eq eq
@@ -512,6 +532,7 @@ let get_mls_parsched parsched =
         | Not_found -> failwith ("Funname " ^ funname ^ " not found in mFunname2Eq")
       )
       | Res_ocl_launch (funname, deviceid, _) -> (
+        let funname = trim_name_gc_to_unique funname in
         try
           let eq = StringMap.find funname !Unicity_fun_instance.mFunname2Eq in
           Comp_ocl_launch (eq, deviceid)
@@ -519,6 +540,7 @@ let get_mls_parsched parsched =
         | Not_found -> failwith ("Funname " ^ funname ^ " not found in mFunname2Eq")
       )
       | Res_ocl_recover (funname, deviceid, _) -> (
+        let funname = trim_name_gc_to_unique funname in
         try
           let eq = StringMap.find funname !Unicity_fun_instance.mFunname2Eq in
           Comp_ocl_recover (eq, deviceid)
@@ -542,9 +564,13 @@ let get_sorted_event_list parsched =
     let bls_name = bls.bls_name in
     List.fold_left (fun lacc res ->
       let (fun_name, st_date, end_date) = assert_funcall res in
+      let orig_fun_name = trim_name_gc_to_orig fun_name in
+
+      (* DEBUG
+      Format.fprintf ffout "ping - fun_name = %s |orig_fun_name = %s\n@?" fun_name orig_fun_name; *)
 
       (* We ignore device events *)
-      let (_, b_is_kernel) = qualify_value_or_kernel fun_name in
+      let (_, b_is_kernel) = qualify_value_or_kernel orig_fun_name in
 
       (* TODO: qualify fun_name... which might or might not be a kernel... :/ *)
       if (b_is_kernel) then lacc else
@@ -590,6 +616,10 @@ let preprocess_parsched mVar2Eq (parsched:Parsched.parsched) =
   if (debug) then
     Format.fprintf ffout " ~> Device block removed\n@?";
 
+  (* DEBUG
+  Format.fprintf ffout "parsched (after device block removal) = %a\n@?"
+    Parsched.print_parsched parsched; *)
+
   (* 3) Add Synchronisations *)
   let parsched = add_synch_reservation mVar2Eq parsched in
 
@@ -597,8 +627,14 @@ let preprocess_parsched mVar2Eq (parsched:Parsched.parsched) =
   if (debug) then
     Format.fprintf ffout " ~> Synchronisation added\n@?";
 
+  (* DEBUG
+  Format.fprintf ffout "parsched (after synchro) = %a\n@?" Parsched.print_parsched parsched; *)
+
   (* 4) Extend current schedule to a parsched_eqs schedule *)
   let (mls_parsched:Minils.parsched_eqs) = get_mls_parsched parsched in
+
+  (* DEBUG
+  Format.fprintf ffout "mls_parsched = %a\n@?" Mls_printast.print_parsched_eqs mls_parsched; *)
 
   mls_parsched
 
