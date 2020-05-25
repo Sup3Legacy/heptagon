@@ -124,11 +124,13 @@ let output_names_list sig_info =
     List.map remove_option outputs
 
 let is_stateful n =
+  (* OpenCL kernel are not stateful... *)
+  if (check_kernel n) then false else
   try
     let sig_info = find_value n in
       sig_info.node_stateful
   with
-      Not_found -> Error.message no_location (Error.Enode (fullname n))
+    Not_found ->Error.message no_location (Error.Enode (fullname n))
 
 (******************************)
 
@@ -1116,9 +1118,16 @@ let reset_fun_def_of_class_def cd =
   }
 
 
+let debug_pthread = false
 
 (* Generation of the main class for pthread parallel CG *)
 let cdefs_and_cdecls_of_class_def_pthread (cd:Obc.class_def) =
+
+  (* DEBUG *)
+  if (debug_pthread) then
+    Format.fprintf (Format.formatter_of_out_channel stdout)
+      "~> Entering cdefs_and_cdecls_of_class_def_pthread\n@?";
+
   Idents.enter_node cd.cd_name;
 
   (* Get the different methods of cd
@@ -1151,17 +1160,38 @@ let cdefs_and_cdecls_of_class_def_pthread (cd:Obc.class_def) =
   let memvardecl = [Cdecl_struct ((cname_of_qn cd.cd_name) ^ "_mem",
                        mem_fields @ obj_fields)] in
 
+  (* DEBUG *)
+  if (debug_pthread) then
+    Format.fprintf (Format.formatter_of_out_channel stdout)
+      "~> cdefs_and_cdecls_of_class_def_pthread : memory structure done!\n@?";
+
   (* Building declarations/definitions *)
   let (init_mut_decl, init_mut_def) = build_init_mutex_decl_def cd md_init_mut in
   let (init_sync_decl, init_sync_def) = build_init_sync_decl_def cd md_init_sync in
 
+  (* DEBUG *)
+  if (debug_pthread) then
+    Format.fprintf (Format.formatter_of_out_channel stdout)
+      "~> cdefs_and_cdecls_of_class_def_pthread : init functions done!\n@?";
+
+
   let reset_def = reset_fun_def_of_class_def cd in
   let reset_decl = C.cdecl_of_cfundef reset_def in
+
+  (* DEBUG *)
+  if (debug_pthread) then
+    Format.fprintf (Format.formatter_of_out_channel stdout)
+      "~> cdefs_and_cdecls_of_class_def_pthread : reset function done!\n@?";
 
   let (lpthread_decl, lpthread_def) = List.fold_left (fun (ldecl_acc, ldef_acc) mdthr ->
     let (ndecl, ndef) = build_thread_decl_def cd mdthr in
     (ndecl::ldecl_acc, ndef::ldef_acc)
   ) ([],[]) lmd_thread in
+
+  (* DEBUG *)
+  if (debug_pthread) then
+    Format.fprintf (Format.formatter_of_out_channel stdout)
+      "~> cdefs_and_cdecls_of_class_def_pthread : all built!\n@?";
 
   (* Assemble the result *)
   (* Note: reset always added, but if not stateful, it is empty *)

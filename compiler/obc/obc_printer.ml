@@ -112,11 +112,11 @@ let print_obj_call ff = function
 
 let print_cloption ff clo =
   if (clo.copt_is_launch) then
-    fprintf ff "[gl:%i, loc: %i, Launch on %s]"
-      clo.copt_gl_worksize  clo.copt_loc_worksize clo.copt_device_id
+    fprintf ff "[gl:%i, loc: %i, Launch on %s, id=%i]"
+      clo.copt_gl_worksize  clo.copt_loc_worksize clo.copt_device_id clo.copt_id
   else
-    fprintf ff "[gl:%i, loc: %i, Recover on %s]"
-      clo.copt_gl_worksize  clo.copt_loc_worksize clo.copt_device_id
+    fprintf ff "[gl:%i, loc: %i, Recover on %s, id=%i]"
+      clo.copt_gl_worksize  clo.copt_loc_worksize clo.copt_device_id clo.copt_id
 
 let print_method_name ff = function
   | Mstep -> fprintf ff "step"

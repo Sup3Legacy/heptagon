@@ -82,6 +82,15 @@ let get_unique_clo_id () =
   clo_id := !clo_id +1;
   id
 
+let mKernelCall = ref Mls_utils.EqMap.empty
+let get_kernel_call_id eq =
+  try
+    Mls_utils.EqMap.find eq !mKernelCall
+  with Not_found ->
+    let id = get_unique_clo_id () in
+    mKernelCall := Mls_utils.EqMap.add eq id !mKernelCall;
+    id
+
 
 let gen_obj_ident n = Idents.gen_var "mls2obc" ((shortname n) ^ "_inst")
 let fresh_for = fresh_for "mls2obc"
@@ -598,15 +607,17 @@ and mk_node_call map call_context app loc (name_list : Obc.pattern list) args ty
         in
 
         (* If the funcall is a kernel, match it as an OpenCL kernel *)
-        let s = if (Modules.check_kernel f) then
+        let (lobj, s) = if (Modules.check_kernel f) then
           (match app.Minils.a_cloption with
             | None ->
               Misc.unsupported "mls2obc: OpenCL kernel call with no cl option associated"
             | Some clo ->
-              let id_clo = get_unique_clo_id () in
-              let (devid, blaunch, brecover) = match odevid with
-                | None -> ("Default", true, true)  (* Kernel launch outside of a parsched *)
-                | Some (id, blaunch) -> (id, blaunch, not blaunch)
+              let (devid, id_clo, blaunch, brecover) = match odevid with
+                | None ->
+                  let kercallid = get_unique_clo_id () in
+                  ("Default", kercallid, true, true)  (* Kernel launch outside of a parsched *)
+                | Some (devid, kercallid, blaunch) ->
+                (devid, kercallid, blaunch, not blaunch)
               in
               let nclo_launch = {
                 Obc.copt_gl_worksize = clo.Minils.copt_gl_worksize;
@@ -632,13 +643,16 @@ and mk_node_call map call_context app loc (name_list : Obc.pattern list) args ty
                 else
                   lres
               in
-              lres
+
+              (* To avoid duplicating the object if it is a offload recover *)
+              let lobj = if brecover then [] else [obj] in
+              (lobj, lres)
             )
           else
-            [Acall (name_list, o, Mstep, args)]
+            ([obj], [Acall (name_list, o, Mstep, args)])
         in
 
-        [], si, [obj], s
+        [], si, lobj, s
     | _ -> assert false
 
 and translate_iterator map call_context it name_list app loc n_list xl xdl p_list c_list ty =
@@ -756,7 +770,7 @@ let build_signal_act mSynchVar sig_name =
   let count_var_ref = mk_exp Initial.tint (Eextvalue count_var_eval) in
 
   let (largs : exp list) = cond_var_ref :: count_var_ref :: [] in
-  let sig_act = Aop (signal_fun_call_qname, largs) in
+  let sig_act = Aop (Posixprep.signal_fun_call_qname, largs) in
   sig_act
 
 let build_wait_act mSynchVar sig_name =
@@ -777,7 +791,7 @@ let build_wait_act mSynchVar sig_name =
   let mut_var_ref = mk_exp ty_pthread_mutvar (Eextvalue mut_var_eval) in
 
   let (largs : exp list) = count_var_exp :: cond_var_ref :: mut_var_ref :: [] in
-  let wait_act = Aop (signal_fun_call_qname, largs) in
+  let wait_act = Aop (Posixprep.wait_fun_call_qname, largs) in
   wait_act
 
 let rec translate_parsched_comp map call_context mSynchVar parsched_comp (v, si, j, s) =
@@ -785,15 +799,17 @@ let rec translate_parsched_comp map call_context mSynchVar parsched_comp (v, si,
   | Minils.Comp_eq eq ->
     translate_eq map call_context None eq (v, si, j, s)
   | Minils.Comp_ocl_launch (eq, device_name) ->
-    translate_eq map call_context (Some (device_name, true)) eq (v, si, j, s)
+    let kernel_call_id = get_kernel_call_id eq in
+    translate_eq map call_context (Some (device_name, kernel_call_id, true)) eq (v, si, j, s)
   | Minils.Comp_ocl_recover (eq, device_name) ->
-    translate_eq map call_context (Some (device_name, false)) eq (v, si, j, s)
+    let kernel_call_id = get_kernel_call_id eq in
+    translate_eq map call_context (Some (device_name, kernel_call_id, false)) eq (v, si, j, s)
   | Minils.Comp_signal sig_name ->
     let act_signal = build_signal_act mSynchVar sig_name in
-    (v, si, j, s @ [act_signal])
+    (v, si, j, [act_signal] @ s)
   | Minils.Comp_wait (sig_name, _) ->
     let act_wait = build_wait_act mSynchVar sig_name in
-    (v, si, j, s @ [act_wait])
+    (v, si, j, [act_wait] @ s)
 
 and translate_parsched_comp_list map call_context mSynchVar lparsched_comp =
   List.fold_right (translate_parsched_comp map call_context mSynchVar) lparsched_comp ([], [], [], [])
@@ -831,12 +847,13 @@ let subst_map inputs outputs controllables c_locals locals mem_tys =
 
 
 let build_init_mutex_meth mSynchVar =
+  let null_id = Idents.gen_var "mls2obc" "NULL" in
+
   (* Build pthread_mutex_init(&mut_id, NULL); *)
   let generate_pthread_mutex_init_act mut_id =
     let mut_counts_id_eval = mk_ext_value ty_pthread_mutvar (Wmem mut_id) in
     let mut_counts_id_ref = mk_exp ty_pthread_mutvar (Eextvalue mut_counts_id_eval) in
 
-    let null_id = Idents.gen_var "mls2obc" "NULL" in
     let null_extval = mk_ext_value_int (Wvar null_id) in
     let null_exp = mk_exp_int (Eextvalue null_extval) in
 
@@ -848,7 +865,6 @@ let build_init_mutex_meth mSynchVar =
     let mut_counts_id_eval = mk_ext_value ty_pthread_mutvar (Wmem cond_id) in
     let mut_counts_id_ref = mk_exp ty_pthread_mutvar (Eextvalue mut_counts_id_eval) in
 
-    let null_id = Idents.gen_var "mls2obc" "NULL" in
     let null_extval = mk_ext_value_int (Wvar null_id) in
     let null_exp = mk_exp_int (Eextvalue null_extval) in
 
@@ -889,18 +905,22 @@ let translate_main_parallel_node
   ({ Minils.n_name = f; Minils.n_input = i_list; Minils.n_output = o_list;
     Minils.n_local = d_list; Minils.n_equs = _; Minils.n_stateful = stateful;
     Minils.n_contract = contract; Minils.n_params = params; Minils.n_loc = loc;
-    Minils.n_mem_alloc = mem_alloc; Minils.n_parsched = oparshed;
+    Minils.n_mem_alloc = mem_alloc; Minils.n_parsched = oparsched;
   } as n) =
   
   (* Get the parallel schedule mapping *)
-  let parshed = match oparshed with
-    | None -> failwith "internal error: oparshed should not be None at that point"
+  let parsched = match oparsched with
+    | None -> failwith "internal error: oparsched should not be None at that point"
     | Some p -> p
   in
 
+  (* DEBUG
+  Format.fprintf (Format.formatter_of_out_channel stdout)
+    "parsched_mls = %a\n@?" Mls_printast.print_parsched_info parsched; *)
+
   (* Saving number of device/core used (will not change) *)
-  Posixprep.rnum_thread := parshed.Minils.psch_ncore;
-  (* Posixprep.rnum_device := parshed.Minils.psch_ndevice; *)
+  Posixprep.rnum_thread := parsched.Minils.psch_ncore;
+  (* Posixprep.rnum_device := parsched.Minils.psch_ndevice; *)
 
   Idents.enter_node f;
   let mem_var_tys = Mls_utils.node_memory_vars n in  (* Get memories (ex: fby) *)
@@ -920,14 +940,15 @@ let translate_main_parallel_node
   (* Creating the counter variable/mutexes/cond var from all wait signal in parsched *)
   (* mSynchVar : signame |-> (condvar, mutvar, count, count_max) of the signal *)
   let mSynchVar = List.fold_left (fun mAcc lpsch_comp ->
-    List.fold_left (fun mAcc psch_comp -> match psch_comp with
-      | Minils.Comp_wait (nsig, max_val) ->
-        (* Note: we assume that we have exactly 1 wait per signal *)
-        let (condvarid,  mutvarid, countvarid) = Posixprep.get_ident_of_signal nsig in
-        StringMap.add nsig (condvarid, mutvarid, countvarid, max_val) mAcc
-      | _ -> mAcc
-    ) mAcc lpsch_comp
-  ) StringMap.empty parshed.Minils.psch_eqs in
+      List.fold_left (fun mAcc psch_comp -> match psch_comp with
+        | Minils.Comp_wait (nsig, max_val) ->
+          (* Note: we assume that we have exactly 1 wait per signal *)
+          let (condvarid,  mutvarid, countvarid) = Posixprep.get_ident_of_signal nsig in
+          StringMap.add nsig (condvarid, mutvarid, countvarid, max_val) mAcc
+        | _ -> mAcc
+      ) mAcc lpsch_comp
+    ) StringMap.empty parsched.Minils.psch_eqs
+  in
 
   (* Translate the statements according to lparsched *)
   let (v, si, j, ls_thread) = List.fold_left
@@ -939,9 +960,8 @@ let translate_main_parallel_node
       ( (List.rev_append v_acc nv),
         si_acc @ nsi,
         (List.rev_append j_acc nj),
-        nlact_thread @ ls_acc
-      )
-    ) ([],[],[],[]) parshed.Minils.psch_eqs
+        nlact_thread @ ls_acc )
+    ) ([],[],[],[]) parsched.Minils.psch_eqs
   in
 
   (* Translate contracts *)
@@ -964,7 +984,7 @@ let translate_main_parallel_node
       m_inputs = [];
       m_outputs = [];
       m_body = mk_block act_thr }
-  ) ls_thread in
+  ) (List.rev ls_thread) in
   let l_methods = init_mutex_meth :: init_sync_counter_meth :: (lreset_meth @ lthread_id) in
 
   (* Memory: put everything (all local vars included) inside lmem *)
@@ -977,6 +997,12 @@ let translate_main_parallel_node
     d_list)
     (* m_contr) *)
   in
+  (* Adding cond var/mutex and count... in short all synchronisation variables *)
+  let lmem = StringMap.fold (fun _ (condvarid, mutvarid, countvarid, _) lacc ->
+    (Obc_utils.mk_var_dec condvarid Posixprep.ty_pthread_condvar)::
+    (Obc_utils.mk_var_dec mutvarid Posixprep.ty_pthread_mutvar)::
+    (Obc_utils.mk_var_dec countvarid Initial.tint)::lacc
+  ) mSynchVar lmem in
 
   (* Final result - assembling the new class *)
   { cd_name = f; cd_stateful = stateful; cd_mems = lmem; cd_params = params;
@@ -988,11 +1014,11 @@ let translate_node
     ({ Minils.n_name = f; Minils.n_input = i_list; Minils.n_output = o_list;
       Minils.n_local = d_list; Minils.n_equs = eq_list; Minils.n_stateful = stateful;
       Minils.n_contract = contract; Minils.n_params = params; Minils.n_loc = loc;
-      Minils.n_mem_alloc = mem_alloc; Minils.n_parsched = oparshed;
+      Minils.n_mem_alloc = mem_alloc; Minils.n_parsched = oparsched;
     } as n) =
 
-  (* If oparshed is not None, then activate the alternate code generation (scattered mainnode) *)
-  if (oparshed!=None) then translate_main_parallel_node n else begin
+  (* If oparsched is not None, then activate the alternate code generation (scattered mainnode) *)
+  if (oparsched!=None) then translate_main_parallel_node n else begin
     Idents.enter_node f;
     let mem_var_tys = Mls_utils.node_memory_vars n in
     let c_list, c_locals =
