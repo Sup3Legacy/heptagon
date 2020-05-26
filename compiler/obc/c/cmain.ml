@@ -424,7 +424,7 @@ let main_def_of_class_def_parallel_CG cd =
   let (lcreate_thread, ljoin_thread) = create_join_thread_instr ([],[]) !Posixprep.rnum_thread in
 
   let launch_thread_0 = Csexpr (
-    Cderef ( Cfun_call ( (Posixprep.get_name_thread 0), [Cvar Posixprep.name_var_memory_main] ) )
+    Cptr_fun_call ( (Posixprep.get_name_thread 0), [Cvar Posixprep.name_var_memory_main] )
   ) in
 
   let body_while = [init_counter_fun] @ lcreate_thread
@@ -460,16 +460,17 @@ let get_opencl_prologue _ =
     ("device_id", Cty_id { qual = Pervasives; name = "cl_device_id"})::
     ("num_devices", Cty_id { qual = Pervasives; name = "cl_uint"})::
     ("context", Cty_id { qual = Pervasives; name = "cl_context"})::
-    ("queue", Cty_id { qual = Pervasives; name = "cl_command_queue"})::[] in
+    ("queues", Cty_ptr (Cty_id { qual = Pervasives; name = "cl_command_queue"}))::[] in
 
-  (* queues[i] = clCreateCommandQueue(context, device_id, 0, NULL); *)
+  (* queues[i] = clCreateCommandQueueWithProperties(context, device_id, 0, NULL); *)
   let (lstm_create_queues, _) = StringMap.fold (fun _ _ (lacc, i) ->
-      let nstm = (Caffect ( CLarray ( (CLvar "queues"), Cconst (Ccint i)), (Cfun_call ("clCreateCommandQueue",
-      [ Cvar "context";
-        Cvar "device_id";
-        Cconst (Ccint 0);
-        Cconst (Ctag "NULL")
-      ]
+      let nstm = (Caffect ( CLarray ( (CLvar "queues"), Cconst (Ccint i)),
+        (Cfun_call ("clCreateCommandQueueWithProperties",
+          [ Cvar "context";
+            Cvar "device_id";
+            Cconst (Ccint 0);
+            Cconst (Ctag "NULL")
+          ]
       )))) in
       (nstm::lacc, (i+1))
     ) !Openclprep.mQueueCL ([],0)
@@ -486,10 +487,10 @@ let get_opencl_prologue _ =
     )))::
     (* device_id = NULL; *)
     (Caffect ((CLvar "device_id"), (Cconst (Ctag "NULL"))))::
-    (* clGetDeviceIDs(platform_id, CL_DEVICE_TYPE_CUSTOM, 1, &device_id, &num_devices); *)
+    (* clGetDeviceIDs(platform_id, CL_DEVICE_TYPE_GPU, 1, &device_id, &num_devices); *)
     (Csexpr (Cfun_call ("clGetDeviceIDs",
       [ Cvar "platform_id";
-        Cconst (Ctag "CL_DEVICE_TYPE_CUSTOM");
+        Cconst (Ctag "CL_DEVICE_TYPE_GPU");  (* CL_DEVICE_TYPE_CUSTOM *)
         Cconst (Ccint 1);
         Caddrof (Cvar "device_id");
         Caddrof (Cvar "num_devices")
@@ -503,6 +504,13 @@ let get_opencl_prologue _ =
         Cconst (Ctag "NULL");
         Cconst (Ctag "NULL");
         Cconst (Ctag "NULL")
+      ]
+    ))))::
+    (* queues = malloc([numDevices] * sizeof(cl_command_queue)) *)
+    ((Caffect ((CLvar "queues"), Cfun_call ("malloc",
+      [ Cbop ("*", (Cconst (Ccint (StringMap.cardinal !Openclprep.mQueueCL))),
+          Cfun_call ("sizeof", [Cconst (Ctag "cl_command_queue")])
+        )
       ]
     ))))::
     lstm_create_queues
@@ -753,8 +761,10 @@ let get_posix_prologue (type_mem_mainnode:string) num_thread =
   in
 
   (* mem = malloc(sizeof(type_mainnode)); *)
-  let arg_malloc_call = Cfun_call ("sizeof", [Cconst (Ctag type_mem_mainnode)]) in
-  let call_malloc = Csexpr (Cfun_call ("malloc", [arg_malloc_call])) in
+  let qname_mem_mainnode = Modules.current_qual type_mem_mainnode in
+  let cname_mem_mainnode = C.cname_of_qn qname_mem_mainnode in
+  let arg_malloc_call = Cfun_call ("sizeof", [Cconst (Ctag cname_mem_mainnode)]) in
+  let call_malloc = Caffect ((CLvar Posixprep.name_var_memory_main), (Cfun_call ("malloc", [arg_malloc_call]))) in
 
   (* init_mutex(mem); *)
   let larg_call_init_mut = [Cvar Posixprep.name_var_memory_main] in

@@ -355,6 +355,7 @@ and cop_of_op_aux op_name cexps = match op_name with
           | ("~-" | "~-."), [e] -> Cuop ("-", e)
           | ("~~"), [e] -> Cuop ("~", e)
           | "not", [e] -> Cuop ("!", e)
+          | ("&"), [e] -> Cuop ("&", e)
           | (
               "=" | "<>"
             | "&" | "or"
@@ -546,12 +547,12 @@ let step_fun_call out_env var_env sig_info outvl objn out args =
              in
              mk_idx l
       ) in
-      if (!Compiler_options.cg_memfirst) then
-        (Caddrof mem) :: (args@caddrout)
-      else
-        args @ caddrout @ [Caddrof mem]
+    if (!Compiler_options.cg_memfirst) then
+      (Caddrof mem) :: (args@caddrout)
+    else
+      args @ caddrout @ [Caddrof mem]
   ) else
-    args@[Caddrof out]
+    args@caddrout
 
 (** Generate the statement to call [objn].
     [outvl] is a list of lhs where to put the results.
@@ -673,7 +674,8 @@ let generate_kernel_call out_env var_env obj_env ocl outvl objn args =
         (* Blocking write *)
         (Cconst (Ctag "CL_TRUE"))::
         (* Position as input *)
-        (Cconst (Ccint posIn))::
+        (* (Cconst (Ccint posIn)):: *)
+        (Cconst (Ccint 0))::
         (* Size of the data transfered *)
         (type_to_sizeof argIn.a_type)::
         (* Input : always need pointers (even if integer) *)
@@ -943,7 +945,7 @@ let build_init_mutex_decl_def cd md_init_mut =
   let init_mut_def = Cfundef {
     C.f_name = Posixprep.name_init_mutex_func;
     f_retty = Cty_void;
-    f_args = [];
+    f_args = [("self", Cty_ptr (Cty_id (qn_append cd.cd_name "_mem")))];
     f_body = {
       var_decls = [];
       block_body = body_init_mut;
@@ -959,7 +961,7 @@ let build_init_sync_decl_def cd md_init_sync =
   let init_sync_def = Cfundef {
     C.f_name = Posixprep.name_init_sync_counter_func;
     f_retty = Cty_void;
-    f_args = [];
+    f_args = [("self", Cty_ptr (Cty_id (qn_append cd.cd_name "_mem")))];
     f_body = {
       var_decls = [];
       block_body = body_init_mut;
@@ -975,12 +977,16 @@ let build_thread_decl_def cd mdthr =
   in
 
   let var_env = List.map cvar_of_vd cd.cd_mems in
-  let body_thr = cstm_of_act_list IdentSet.empty var_env cd.cd_objs mdthr.m_body in
+  let (body_thr : C.cstm list) = cstm_of_act_list IdentSet.empty var_env cd.cd_objs mdthr.m_body in
+
+  (* Adding the final return statement *)
+  let (ret_stm : C.cstm) = Creturn (Cconst (Ctag "NULL")) in
+  let body_thr = body_thr @ [ret_stm] in
 
   let thr_def = Cfundef {
     C.f_name = Posixprep.get_name_thread numthr;
     f_retty = Cty_ptr Cty_void;
-    f_args = [ ("arg", Cty_ptr Cty_void) ]; (* Ignored input argument *)
+    f_args = [ ("self", Cty_ptr (Cty_id (qn_append cd.cd_name "_mem"))) ];
     f_body = {
       var_decls = [];                 (* All variables are shared and outside *)
       block_body = body_thr;

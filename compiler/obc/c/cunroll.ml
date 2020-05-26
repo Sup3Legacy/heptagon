@@ -37,6 +37,7 @@ let unroll id start stop body =
       | Cuop (s, e) -> Cuop (s, exp e)
       | Cbop (s, e1, e2) -> Cbop (s, exp e1, exp e2)
       | Cfun_call (s, e_l) -> Cfun_call (s, List.map exp e_l)
+      | Cptr_fun_call (s, e_l) -> Cptr_fun_call (s, List.map exp e_l)
       | Caddrof e -> Caddrof (exp e)
       | Cstructlit (s, e_l) -> Cstructlit (s, List.map exp e_l)
       | Cstructlitraw (s, e_l) -> Cstructlitraw (s, List.map exp e_l)

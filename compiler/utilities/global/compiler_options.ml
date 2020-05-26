@@ -88,7 +88,7 @@ let boolean = ref false
 
 let nosink = ref false
 
-(* Trigger preprocessing before CG generation *)
+(* Trigger preprocessing before gengc generation *)
 let lopht_preprocess = ref false
 
 (* Target languages list for code generation *)
@@ -211,6 +211,7 @@ let parse_parsched_file = ref false
 let parsched_filename : name ref = ref "parsched.txt"  (* Default name *)
 let set_parsched_filename s =
   parse_parsched_file := true;
+  cg_outlist := true;
   parsched_filename := s
 
 

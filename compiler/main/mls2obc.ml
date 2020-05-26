@@ -763,11 +763,14 @@ let build_signal_act mSynchVar sig_name =
   in
 
   (* Pattern: decrease_count_condvar(&cond_var, &count_var); *)
+  let qderef_op = { qual = Pervasives; name = "&" } in
   let cond_var_eval = mk_ext_value ty_pthread_condvar (Wmem condvar) in
-  let cond_var_ref = mk_exp ty_pthread_condvar (Eextvalue cond_var_eval) in
-
+  let cond_var = mk_exp ty_pthread_condvar (Eextvalue cond_var_eval) in
+  let cond_var_ref = mk_exp ty_pthread_condvar (Eop (qderef_op, [cond_var])) in
+  
   let count_var_eval = mk_ext_value_int (Wmem countvar) in
-  let count_var_ref = mk_exp Initial.tint (Eextvalue count_var_eval) in
+  let count_var = mk_exp Initial.tint (Eextvalue count_var_eval) in
+  let count_var_ref =  mk_exp Initial.tint (Eop (qderef_op, [count_var])) in
 
   let (largs : exp list) = cond_var_ref :: count_var_ref :: [] in
   let sig_act = Aop (Posixprep.signal_fun_call_qname, largs) in
@@ -781,14 +784,17 @@ let build_wait_act mSynchVar sig_name =
   in
 
   (* Pattern: wait_count_condvar(count_var, &cond_var, &mut_var); *)
-  let count_var_eval = mk_ext_value_int (Wvar countvar) in
+  let count_var_eval = mk_ext_value_int (Wmem countvar) in
   let count_var_exp = mk_exp Initial.tint (Eextvalue count_var_eval) in
 
+  let qderef_op = { qual = Pervasives; name = "&" } in
   let cond_var_eval = mk_ext_value ty_pthread_condvar (Wmem condvar) in
-  let cond_var_ref = mk_exp ty_pthread_condvar (Eextvalue cond_var_eval) in
+  let cond_var = mk_exp ty_pthread_condvar (Eextvalue cond_var_eval) in
+  let cond_var_ref = mk_exp ty_pthread_condvar (Eop (qderef_op, [cond_var])) in
 
   let mut_var_eval = mk_ext_value ty_pthread_mutvar (Wmem mutvar) in
-  let mut_var_ref = mk_exp ty_pthread_mutvar (Eextvalue mut_var_eval) in
+  let mut_var = mk_exp ty_pthread_mutvar (Eextvalue mut_var_eval) in
+  let mut_var_ref = mk_exp ty_pthread_mutvar (Eop (qderef_op, [mut_var])) in
 
   let (largs : exp list) = count_var_exp :: cond_var_ref :: mut_var_ref :: [] in
   let wait_act = Aop (Posixprep.wait_fun_call_qname, largs) in
@@ -844,15 +850,31 @@ let subst_map inputs outputs controllables c_locals locals mem_tys =
   in
   List.fold_left (fun map (x, x_ty) -> Env.add x (mk_pattern x_ty (Lmem x)) map) map mem_tys
 
+(* Same, but everything is in a memory state (used for translate_main_parallel_node) *)
+let subst_map_all_mem inputs outputs controllables c_locals locals mem_tys =
+  (* Create a map that simply maps each var to itself *)
+  let map =
+    List.fold_left
+      (fun m { Minils.v_ident = x; Minils.v_type = ty } -> Env.add x (mk_pattern ty (Lmem x)) m)
+      Env.empty (inputs @ outputs @ controllables @ c_locals @ locals)
+  in
+  List.fold_left (fun map (x, x_ty) -> Env.add x (mk_pattern x_ty (Lmem x)) map) map mem_tys
 
 
 let build_init_mutex_meth mSynchVar =
   let null_id = Idents.gen_var "mls2obc" "NULL" in
 
   (* Build pthread_mutex_init(&mut_id, NULL); *)
-  let generate_pthread_mutex_init_act mut_id =
-    let mut_counts_id_eval = mk_ext_value ty_pthread_mutvar (Wmem mut_id) in
-    let mut_counts_id_ref = mk_exp ty_pthread_mutvar (Eextvalue mut_counts_id_eval) in
+  let generate_pthread_mutex_init_act bself mut_id =
+    let mut_counts_id_eval = if (bself) then
+        mk_ext_value ty_pthread_mutvar (Wmem mut_id)
+      else
+        mk_ext_value ty_pthread_mutvar (Wvar mut_id)
+    in
+    let mut_counts_id = mk_exp ty_pthread_mutvar (Eextvalue mut_counts_id_eval) in
+
+    let qderef_op = { qual = Pervasives; name = "&" } in
+    let mut_counts_id_ref = mk_exp ty_pthread_mutvar (Eop (qderef_op, [mut_counts_id])) in
 
     let null_extval = mk_ext_value_int (Wvar null_id) in
     let null_exp = mk_exp_int (Eextvalue null_extval) in
@@ -863,7 +885,10 @@ let build_init_mutex_meth mSynchVar =
   (* Build pthread_cond_init(&cond_id, NULL); *)
   let generate_cond_init_act cond_id =
     let mut_counts_id_eval = mk_ext_value ty_pthread_mutvar (Wmem cond_id) in
-    let mut_counts_id_ref = mk_exp ty_pthread_mutvar (Eextvalue mut_counts_id_eval) in
+    let mut_counts_id = mk_exp ty_pthread_mutvar (Eextvalue mut_counts_id_eval) in
+
+    let qderef_op = { qual = Pervasives; name = "&" } in
+    let mut_counts_id_ref = mk_exp ty_pthread_mutvar (Eop (qderef_op, [mut_counts_id])) in
 
     let null_extval = mk_ext_value_int (Wvar null_id) in
     let null_exp = mk_exp_int (Eextvalue null_extval) in
@@ -874,10 +899,10 @@ let build_init_mutex_meth mSynchVar =
 
   (* First thing: pthread_mutex_init(&mut_counts, NULL); *)
   let mut_counts_id = Idents.gen_var "mls2obc" "mut_counts" in
-  let lact_init_mutex = [generate_pthread_mutex_init_act mut_counts_id ] in
+  let lact_init_mutex = [generate_pthread_mutex_init_act false mut_counts_id ] in
   let lact_init_mutex = StringMap.fold (fun _ (condvarid, mutvarid, _, _) lacc ->
     (generate_cond_init_act condvarid)
-      ::(generate_pthread_mutex_init_act mutvarid)
+      ::(generate_pthread_mutex_init_act true mutvarid)
       ::lacc
   ) mSynchVar lact_init_mutex in
   let init_mutex_meth = { m_name = Mother Posixprep.name_init_mutex_func;
@@ -890,7 +915,7 @@ let build_init_mutex_meth mSynchVar =
 let build_init_sync_counter_meth mSynchVar =
   let lact_sync_counter = StringMap.fold (fun _ (_,_, var_count_id, max_val) lacc ->
     (* var_count_id = max_val; *)
-    let plhs = mk_pattern_int (Lvar var_count_id) in
+    let plhs = mk_pattern_int (Lmem var_count_id) in
     let erhs = mk_exp_static_int (Types.mk_static_exp Initial.tint (Sint max_val)) in
     (Aassgn (plhs, erhs))::lacc
   ) mSynchVar [] in
@@ -934,7 +959,7 @@ let translate_main_parallel_node
     | Some c -> c.Minils.c_controllables, c.Minils.c_local in *)
 
   (* Mapping associating old vdecl to the new Lvar/Lmem (cf Obc.pattern) *)
-  let (subst_map : Obc.pattern Env.t) = subst_map i_list o_list [] [] (* c_list c_locals *)
+  let (subst_map : Obc.pattern Env.t) = subst_map_all_mem i_list o_list [] [] (* c_list c_locals *)
     d_list mem_var_tys in
 
   (* Creating the counter variable/mutexes/cond var from all wait signal in parsched *)
@@ -1009,14 +1034,12 @@ let translate_main_parallel_node
     cd_objs = j (*@ j_contr*); cd_methods = l_methods; cd_loc = loc; cd_mem_alloc = mem_alloc }
 
 
-
 let translate_node
-    ({ Minils.n_name = f; Minils.n_input = i_list; Minils.n_output = o_list;
-      Minils.n_local = d_list; Minils.n_equs = eq_list; Minils.n_stateful = stateful;
-      Minils.n_contract = contract; Minils.n_params = params; Minils.n_loc = loc;
-      Minils.n_mem_alloc = mem_alloc; Minils.n_parsched = oparsched;
-    } as n) =
-
+  ({ Minils.n_name = f; Minils.n_input = i_list; Minils.n_output = o_list;
+    Minils.n_local = d_list; Minils.n_equs = eq_list; Minils.n_stateful = stateful;
+    Minils.n_contract = contract; Minils.n_params = params; Minils.n_loc = loc;
+    Minils.n_mem_alloc = mem_alloc; Minils.n_parsched = oparsched;
+  } as n) =
   (* If oparsched is not None, then activate the alternate code generation (scattered mainnode) *)
   if (oparsched!=None) then translate_main_parallel_node n else begin
     Idents.enter_node f;
