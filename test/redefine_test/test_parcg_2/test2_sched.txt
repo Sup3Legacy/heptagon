@@ -1,0 +1,24 @@
+PROCESSORS:2 DEVICES:2
+
+BLOCKS:4  CPU_0
+0    0     Node__read_input_d0_0_step
+0    1000  Node__f_1_step
+1000 3000  Node__h_2_step
+5000 7000  Node__l_7_step
+END_BLOCKS
+
+BLOCKS:4  CPU_1
+1000 2000  Node__g_3_step
+4000 6000  Node__k_6_step
+7000 8000  Node__m_8_step
+8000 8000  Node__write_output_d11_9_step
+END_BLOCKS
+
+BLOCKS:1  DEVICE_0
+2000 4000  Test2__vector_add_4_step
+END_BLOCKS
+
+BLOCKS:1  DEVICE_1
+3000 5000  Test2__vector_add_5_step
+END_BLOCKS
+

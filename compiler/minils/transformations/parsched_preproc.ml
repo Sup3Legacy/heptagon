@@ -455,12 +455,13 @@ let add_synch_reservation mVar2Eq parsched =
           Format.fprintf ffout "ping - nqresname = %a\n%a@?"
             Global_printer.print_qualname nqresname  print_mfun2Table mfun2Table; *)
 
+          let psch_name = qname_to_parsched_name nqresname in
           let nres = try
-              StringMap.find (qname_to_parsched_name nqresname) mfun2Table
+              StringMap.find psch_name mfun2Table
             with Not_found ->
-              failwith ("add_synch_reservation: Reservation name " ^ nqresname.name ^ " was not found in mfun2Table")
+              failwith ("add_synch_reservation: Reservation name " ^ psch_name ^ " was not found in mfun2Table")
           in
-          (nqresname.name, nres)::lresname_acc
+          (psch_name, nres)::lresname_acc
         ) sEq_used [] in
 
         (* DEBUG
@@ -478,7 +479,7 @@ let add_synch_reservation mVar2Eq parsched =
             where there is at least an element of lres_prod
             + maintain a list of the last executed element for
               each one of these threads *)
-        let mLastRes = List.fold_left (fun macc (funname, (block_name, date, _)) ->
+        let mLastRes = List.fold_left (fun macc (funname, (block_name, _, date)) ->
           if (StringMap.mem block_name macc) then (
             let (_, date_prev) = StringMap.find block_name macc in
             if (date_prev < date) then

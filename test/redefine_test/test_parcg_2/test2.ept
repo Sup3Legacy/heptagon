@@ -1,0 +1,43 @@
+
+(* ../../../heptc -target lopht -v -mainnode test2 test2.ept *)
+(* ../../../heptc -target opencl -mainnode test2 -parsched test2_sched.txt test2.ept *)
+
+open Node
+
+(* OpenCL offloading *)
+__clkernel fun vector_add(a : int^32; b : int^32) returns (c : int^32)
+  __clsource "sum_vector.cl"
+  __cldim 1
+
+(* Main function *)
+node test2() returns ()
+var
+  d0 : int^32;
+  d1 : int^32;
+  d2 : int^32;
+  d3 : int^32;
+  d4 : int^32;
+  d5 : int^32;
+  d6 : int^32;
+  d7 : int^32;
+  d8 : int^32;
+  d9 : int^32;
+  d10 : int^32;
+  d11 : int^32;
+let
+  d0 = read_input_d0(); (* On Core 0 *)
+  (d1,d2) = f(d0);      (* On Core 0 *)
+  (d3,d4) = g(d1);      (* On Core 1 *)
+  (d5,d6) = h(d2);      (* On Core 0 *)
+
+  d7      = __clglobal_worksize 32 __cllocal_worksize 32
+            vector_add(d1,d3);      (* On Device 0 - instance will be differentiated during compilation *)
+
+  d8      = __clglobal_worksize 32 __cllocal_worksize 32
+            vector_add(d3,d5);      (* On Device 1 - instance will be differentiated during compilation *)
+
+  d9      = k(d4,d7);   (* On Core 1 *)
+  d10     = l(d6,d8);   (* On Core 0 *)
+  d11     = m(d9,d10);  (* On Core 1 *)
+  ()     = write_output_d11(d11); (* On Core 1 *)
+tel

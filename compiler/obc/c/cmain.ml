@@ -397,28 +397,38 @@ let main_def_of_class_def_parallel_CG cd =
 
   let rec create_join_thread_instr (lcreate, ljoin) n =
     assert(n>0);
+    if (n=1) then (lcreate, ljoin) else
 
     let larg_cr_instr = [
-      Caddrof (Carray (Cvar "threads", Cconst (Ccint n)));
+      Caddrof (Carray (Cvar "threads", Cconst (Ccint (n-1))));
       Cconst (Ctag "NULL");
-      Caddrof(Cvar (Posixprep.get_name_thread n));  (* TODO: (void * (*)(void *)) ??? => warning if do not put it *)
+      Caddrof(Cvar (Posixprep.get_name_thread (n-1)));  (* TODO: (void * (*)(void *)) ??? => warning if do not put it *)
       Cvar Posixprep.name_var_memory_main
     ] in
     let cr_instr = Caffect (CLvar result_code_varname,
       Cfun_call (Posixprep.name_pthread_create, larg_cr_instr)
     ) in
+    (* assert(result_code_varname==0); *)
+    let ass_cr = Csexpr (Cfun_call ("assert",
+      [ Cbop ("==", (Cvar result_code_varname), Cconst (Ccint 0)) ]
+    )) in
 
     let larg_join_instr = [
-      Carray (Cvar "threads", Cconst (Ccint n));
+      Carray (Cvar "threads", Cconst (Ccint (n-1)));
       Cconst (Ctag "NULL")
     ] in
     let join_instr = Caffect (CLvar result_code_varname,
       Cfun_call (Posixprep.name_pthread_join, larg_join_instr)
     ) in
+    (* assert(result_code_varname==0); *)
+    let ass_jn = Csexpr (Cfun_call ("assert",
+      [ Cbop ("==", (Cvar result_code_varname), Cconst (Ccint 0)) ]
+    )) in
 
     (* Finishing *)
-    if (n=1) then (cr_instr::lcreate, join_instr::ljoin) else
-    create_join_thread_instr (lcreate, ljoin) (n-1)
+    let nl_cr_inst = [cr_instr; ass_cr] in
+    let nl_jn_inst = [join_instr; ass_jn] in
+    create_join_thread_instr (nl_cr_inst @ lcreate, nl_jn_inst @ ljoin) (n-1)
   in
 
   let (lcreate_thread, ljoin_thread) = create_join_thread_instr ([],[]) !Posixprep.rnum_thread in
@@ -495,6 +505,10 @@ let get_opencl_prologue _ =
         Caddrof (Cvar "device_id");
         Caddrof (Cvar "num_devices")
       ]
+    )))::
+    (* assert(num_devices>=1); *)
+    (Csexpr (Cfun_call ("assert",
+      [ Cbop (">=", (Cvar "num_devices"), Cconst (Ccint 1)) ]
     )))::
     (* context = clCreateContext(NULL, num_devices, &device_id, NULL, NULL, NULL); *)
     (Caffect ((CLvar "context"), (Cfun_call ("clCreateContext",
@@ -610,10 +624,28 @@ let get_opencl_prologue _ =
       (qnameKernel, kernelsign, cloid, buffid, isInput, pos, buffname)::acc
     ) mBuffer acc
   ) !Openclprep.mBufferCL [] in
-  let numInput = List.fold_left (fun acc (_, _, _, _, isInput, _, _) ->
-    if isInput then acc+1 else acc
-  ) 0 lBufferVar in
-  let numInOutput = List.length lBufferVar in
+
+  (* Get the number of input and input/output per kernel *)
+  let (mnumInput, mnumInOutput) = List.fold_left
+    (fun (maccIn, maccInOut) (_, _, cloid, _, isInput, _, _) ->
+      let maccIn = if isInput then
+          try
+            let nInput = IntMap.find cloid maccIn in
+            IntMap.add cloid (nInput+1) maccIn
+          with Not_found ->
+            IntMap.add cloid 1 maccIn
+        else
+          maccIn
+      in
+      let maccInOut = try
+          let nInOutput = IntMap.find cloid maccInOut in
+          IntMap.add cloid (nInOutput+1) maccInOut
+        with Not_found ->
+          IntMap.add cloid 1 maccInOut
+      in
+      (maccIn, maccInOut)
+    ) (IntMap.empty, IntMap.empty) lBufferVar
+  in
 
   let rec find_kernelvar lKernelVar cloid = match lKernelVar with
     | [] -> failwith ("find_kernelvar : kernel occurrence " ^ (string_of_int cloid) ^ " was not found.")
@@ -628,8 +660,6 @@ let get_opencl_prologue _ =
   in
   let lstm_step4 = List.fold_left
     (fun acc (_, kernelsign, cloid, _, isInput, pos, buffname) ->
-      
-
       let flagRW = if isInput then "CL_MEM_READ_ONLY" else "CL_MEM_WRITE_ONLY" in
       let tyBuffer = if isInput then
           (List.nth kernelsign.k_input pos).a_type
@@ -648,6 +678,7 @@ let get_opencl_prologue _ =
 
       let kernelvar = find_kernelvar lKernelVar cloid in
       (* We assume that all the inputs come before all the outputs *)
+      let numInput = try (IntMap.find cloid mnumInput) with Not_found -> 0 in
       let pos_buff = if isInput then pos else (numInput + pos) in
 
       (* clSetKernelArg([kernelvar], [pos], size_of(cl_mem), &[buffname])  - for input/output *)
@@ -667,6 +698,7 @@ let get_opencl_prologue _ =
     IntMap.fold (fun pos argloc acc ->
       let kernelvar = find_kernelvar lKernelVar cloid in
       (* Local buffers comes after all input and output buffers *)
+      let numInOutput = try (IntMap.find cloid mnumInOutput) with Not_found -> 0 in
       let npos = numInOutput + pos in
 
       let nacc = (Csexpr (Cfun_call ("clSetKernelArg",
