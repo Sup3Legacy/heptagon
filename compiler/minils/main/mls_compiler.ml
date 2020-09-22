@@ -64,7 +64,7 @@ let maybe_ctrln_pass p pp =
 
 ;; ELSE
 
-let maybe_ctrln_pass p pp = p
+let maybe_ctrln_pass p _ = p
 
 ;; END
 

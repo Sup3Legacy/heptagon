@@ -221,7 +221,7 @@ and boxed_ty param_env t = match Modules.unalias_type t with
   | Types.Tinvalid -> Misc.internal_error "obc2java invalid type"
 
 and tuple_ty _param_env ty_l =
-  let ln = ty_l |> List.length |> Pervasives.string_of_int in
+  let ln = ty_l |> List.length |> Stdlib.string_of_int in
   Tclass (java_pervasive_class ("Tuple"^ln))
 
 and ty param_env t =

@@ -278,7 +278,7 @@ let typing_contract h0 h contract =
 
 let rec constrain_on loc h = function
   | Clocks.Cbase | Clocks.Cvar _ -> ()
-  | Clocks.Con (ck', c, n) ->
+  | Clocks.Con (ck', _, n) ->
       (try unify_ck (ck_of_name h n) ck'
        with Unify -> error_message loc (Eclockclash (ck_of_name h n, ck')));
       constrain_on loc h ck'
