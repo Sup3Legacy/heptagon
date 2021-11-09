@@ -86,7 +86,8 @@ let ctrln_targets =
 ;; ENDIF
 
 let targets =
-  [ mk_target ~interface:(IObc Cmain.interface) "c" (Obc_no_params Cmain.program);
+  [ mk_target ~interface:(IObc Zigmain.interface) "zig" (Obc_no_params Zigmain.program);
+    mk_target ~interface:(IObc Cmain.interface) "c" (Obc_no_params Cmain.program);
     mk_target ~load_conf:java_conf "java" (Obc Java_main.program);
     mk_target ~load_conf:java_conf "java14" (Obc Java14_main.program);
     mk_target "z3z" (Minils_no_params ignore);

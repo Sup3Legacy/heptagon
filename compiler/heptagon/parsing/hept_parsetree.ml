@@ -225,7 +225,9 @@ type const_dec =
     c_loc   : location; }
 
 type program =
-  { p_modname : dec_name;
+  { 
+    p_header: string;
+    p_modname : dec_name;
     p_opened : module_name list;
     p_desc : program_desc list }
 

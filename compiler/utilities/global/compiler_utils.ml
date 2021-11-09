@@ -36,6 +36,7 @@ type lexical_error =
   | Unterminated_comment
   | Bad_char_constant
   | Unterminated_string
+  | Unterminated_header
 
 let lexical_error err loc =
   Format.eprintf (match err with
@@ -43,6 +44,7 @@ let lexical_error err loc =
     | Unterminated_comment -> "%aUnterminated comment.@."
     | Bad_char_constant -> "%aBad char constant.@."
     | Unterminated_string -> "%aUnterminated string.@."
+    | Unterminated_header -> "%aUnterminated header.@."
      ) print_location loc;
   raise Errors.Error
 

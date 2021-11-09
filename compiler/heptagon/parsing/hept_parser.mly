@@ -38,6 +38,7 @@ open Hept_parsetree
 
 %token DOT LPAREN LESS_LPAREN RPAREN RPAREN_GREATER LBRACE RBRACE COLON COLONCOLON SEMICOL
 %token EQUAL EQUALEQUAL LESS_GREATER BARBAR COMMA BAR ARROW LET TEL
+%token <string> HEADER
 %token <string> Constructor
 %token <string> IDENT
 %token <int> INT
@@ -148,7 +149,9 @@ adelim_slist(S, L, R, x) :
   |/* empty */    { None }
   | P v=x         { Some(v) }
 
-program: o=list(opens) p=list(program_desc) EOF { {p_modname = ""; p_opened = o; p_desc = p} }
+program: h=HEADER? o=list(opens) p=list(program_desc) EOF { 
+  let s = match h with None -> "" | Some s' -> s' in
+  {p_header = s; p_modname = ""; p_opened = o; p_desc = p} }
 
 program_desc:
   | p=PRAGMA     { Ppragma p }

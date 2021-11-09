@@ -124,6 +124,17 @@ let store_string_char c =
 let get_stored_string () =
   Buffer.contents string_buffer
 
+let header_buffer = Buffer.create 256
+
+let reset_header_buffer () =
+  Buffer.reset header_buffer
+
+let store_header_char c =
+  Buffer.add_char header_buffer c
+
+let get_stored_header () =
+  Buffer.contents header_buffer
+
 let char_for_backslash = function
     'n' -> '\010'
   | 'r' -> '\013'
@@ -144,6 +155,11 @@ let char_for_decimal_code lexbuf i =
 let newline = '\n' | '\r' '\n'
 
 rule token = parse
+  | '%' '%' '%'           {
+    reset_header_buffer();
+    header lexbuf;
+    HEADER (get_stored_header())
+  }
   | newline         { new_line lexbuf; token lexbuf }
   | [' ' '\t'] +    { token lexbuf }
   | "."             {DOT}
@@ -180,7 +196,7 @@ rule token = parse
   | "..."           {THREE_DOTS}
   | (['A'-'Z']('_' ? ['A'-'Z' 'a'-'z' ''' '0'-'9']) * as id)
       {Constructor id}
-  | (['A'-'Z' 'a'-'z']('_' ? ['A'-'Z' 'a'-'z' ''' '0'-'9']) * as id)
+  | (['A'-'Z' 'a'-'z']('_' ? ['A'-'Z' 'a'-'z' ''' '0'-'9' '.']) * as id)
       { let s = Lexing.lexeme lexbuf in
           begin try
       Hashtbl.find keyword_table s
@@ -310,6 +326,19 @@ and comment = parse
 and single_line_comment = parse
   | newline      { new_line lexbuf; token lexbuf }
   | _            { single_line_comment lexbuf }
+
+and header = parse
+  | newline 
+      {store_header_char(Lexing.lexeme_char lexbuf 0);
+        new_line lexbuf; header lexbuf}
+  | '%' '%' '%'
+      { () }
+  | eof 
+      { raise(Lexical_error(Unterminated_header, Loc(dummy_pos,
+                            Lexing.lexeme_start_p lexbuf)))}
+  | _
+      {store_header_char(Lexing.lexeme_char lexbuf 0);
+      header lexbuf}
 
 and string = parse
   | newline         { new_line lexbuf; string lexbuf }
