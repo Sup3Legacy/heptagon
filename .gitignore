@@ -34,3 +34,4 @@ config.status
 *.bbl
 auto
 autom4te.cache
+.vscode
