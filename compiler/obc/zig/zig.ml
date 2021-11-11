@@ -69,7 +69,6 @@ and zigstm =
 type zigdecl =
   | Zigdecl_enum of string * string list
   | Zigdecl_struct of string * (string * zigty) list
-  | Zigdecl_function of string * zigty * (string * zigty) list
   | Zigdecl_constant of string * zigty * zigexpr
 
 type zigfundef = {
@@ -135,7 +134,7 @@ let rec pp_vardecl fmt (s, zigty) = match zigty with
   | Zigty_arr _ ->
       let ty, indices = pp_array_decl zigty in
       fprintf fmt "%a %a%s = undefined" pp_zigty ty  pp_string s indices
-  | _ -> fprintf fmt "%a %a = undefined" pp_zigty zigty  pp_string s
+  | _ -> fprintf fmt "%a: %a" pp_string s pp_zigty zigty  
 and pp_param_list fmt l = pp_list1 pp_vardecl "," fmt l
 and pp_var_list fmt l = pp_list pp_vardecl ";" fmt l
 
@@ -183,18 +182,18 @@ and pp_zigexpr fmt ce = match ce with
       fprintf fmt "(%a){@[%a@]}" pp_string s (pp_list1 pp_zigexpr ",") el
   | Zigarraylit el -> (* TODO master : WRONG *)
       fprintf fmt "((int []){@[%a@]})" (pp_list1 pp_zigexpr ",") el
-  | Zigconst c -> pp_cconst fmt c
+  | Zigconst c -> pp_zigconst fmt c
   | Zigvar s -> pp_string fmt s
   | Zigderef e -> fprintf fmt "*%a" pp_zigexpr e
   | Zigfield (Zigderef e, f) -> fprintf fmt "%a->%a" pp_zigexpr e pp_shortname f
   | Zigfield (e, f) -> fprintf fmt "%a.%a" pp_zigexpr e pp_shortname f
   | Zigarray (e1, e2) -> fprintf fmt "%a[%a]" pp_zigexpr e1 pp_zigexpr e2
 
-and pp_cconst_expr fmt ce = match ce with
+and pp_zigconst_expr fmt ce = match ce with
   | Zigstructlit (_, el) ->
-      fprintf fmt "{@[%a@]}" (pp_list1 pp_cconst_expr ",") el
+      fprintf fmt "{@[%a@]}" (pp_list1 pp_zigconst_expr ",") el
   | Zigarraylit el ->
-      fprintf fmt "{@[%a@]}" (pp_list1 pp_cconst_expr ",") el
+      fprintf fmt "{@[%a@]}" (pp_list1 pp_zigconst_expr ",") el
   | _ -> pp_zigexpr fmt ce
 
 and pp_ziglhs fmt ziglhs = match ziglhs with
@@ -207,10 +206,40 @@ and pp_ziglhs fmt ziglhs = match ziglhs with
         pp_ziglhs lhs
         pp_zigexpr e
 
-and pp_cconst fmt cconst = match cconst with
+and pp_zigconst fmt zigconst = match zigconst with
   | Zigint i -> fprintf fmt "%d" i
   | Zigfloat f -> fprintf fmt "%f" f
   | Zigtag t -> pp_string fmt t
   | Zigstrlit t -> fprintf fmt "\"%s\"" (String.escaped t)
 
 
+let pp_zigdecl fmt zigdecl = match zigdecl with
+  | Zigdecl_enum (s, sl) ->
+    (* Original was "@[<v>@[<v 2>typedef enum {@ %a@]@ } %a;@ @]@\n" *)
+      fprintf fmt "@[<v>const %a = struct {@ %a@}]@\n" 
+      pp_string s (pp_list1 pp_string ",") sl
+  | Zigdecl_struct (s, fl) ->
+      let pp_field fmt (s, zigty) =
+        fprintf fmt "@ %a;" pp_vardecl (s,zigty) in
+      fprintf fmt "@[<v>@[<v 2>const %a = struct {"  pp_string s;
+      List.iter (pp_field fmt) fl;
+      fprintf fmt "@]@ } %a;@ @]@\n"  pp_string s
+  | Zigdecl_constant (n, zigty, ce) ->
+      fprintf fmt "@[<v>static const %a = %a;@ @]@\n"
+        pp_vardecl (n, zigty)  pp_zigconst_expr ce
+
+let pp_zigdef fmt zigdef = match zigdef with
+| Zigfundef zigfd ->
+    fprintf fmt
+      "@[<v>@[<v 2>pub fn %a(@[<hov>%a@]) -> %a {%a@]@ }@ @]@\n"
+      pp_string zigfd.f_name  pp_zigty zigfd.f_retty  pp_param_list zigfd.f_args
+      pp_zigblock zigfd.f_body
+| Zigvardef (s, zigty) -> fprintf fmt "var %a: %a = undefined;@\n" pp_string s pp_zigty zigty  
+
+let pp_zigfile_desc fmt filen zigfile =
+  (* [filen_wo_ext] is the file's name without the extension. *)
+  let filen_wo_ext = String.sub filen 0 (String.length filen - 2) in
+  let (deps, zigdecls) = zigfile in
+  iter (fun d -> fprintf fmt "const %s = \@include(\"%s.zig\");@\n" d d)
+          deps;
+  iter (pp_zigdecl fmt) zigdecls;
