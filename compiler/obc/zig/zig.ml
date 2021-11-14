@@ -240,6 +240,30 @@ let pp_zigfile_desc fmt filen zigfile =
   (* [filen_wo_ext] is the file's name without the extension. *)
   let filen_wo_ext = String.sub filen 0 (String.length filen - 2) in
   let (deps, zigdecls) = zigfile in
-  iter (fun d -> fprintf fmt "const %s = \@include(\"%s.zig\");@\n" d d)
-          deps;
-  iter (pp_zigdecl fmt) zigdecls;
+  iter (fun d -> fprintf fmt "const %s = @include(\"%s.zig\");@\n" d d) deps;
+  iter (pp_zigdecl fmt) zigdecls;;
+
+
+let output_zigfile dir (filen, zigfile_desc) =
+  if !Compiler_options.verbose then
+    Format.printf "ZIG generating %s/%s@." dir filen;
+  let oc = open_out (Filename.concat dir filen) in
+  let fmt = Format.formatter_of_out_channel oc in
+  pp_zigfile_desc fmt filen zigfile_desc;
+  pp_print_flush fmt ();
+  close_out oc
+  
+let output dir zigprog =
+  List.iter (output_zigfile dir) zigprog
+
+let is_pointer_type = function
+  | Zigty_ptr _ -> true
+  | _ -> false
+
+let rec ziglhs_of_zigexpr zigexpr =
+  match zigexpr with
+  | Zigvar v -> ZigLvar v
+  | Zigderef e -> ZigLderef (ziglhs_of_zigexpr e)
+  | Zigfield (e,qn) -> ZigLfield (ziglhs_of_zigexpr e, qn)
+  | Zigarray (e1,e2) -> ZigLarray (ziglhs_of_zigexpr e1, e2)
+  | _ -> failwith("Zig expression not translatable to LHS")
