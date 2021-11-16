@@ -66,5 +66,5 @@ let zigdef d = match d with
     Zigfundef { def with f_body = body; }
   | _ -> d
 
-let zigfile (s, d) = 
-  (s, (List.map zigdef d))
+let zigfile ((s, d): Zig.zigfile) : Zig.zigfile = 
+  let (a, b) = d in (s, (a, (List.map zigdef b)))

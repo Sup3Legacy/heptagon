@@ -308,7 +308,7 @@ let main_skel var_list prologue body =
     }
   }
 
-let mk_main name p =
+let mk_main name p : Zig.zigfile =
   if !Compiler_options.simulation then (
       let classes = program_classes p in
       let n_names = !Compiler_options.assert_nodes in
@@ -339,7 +339,7 @@ let mk_main name p =
           (defs, nvar_l @ var_l, res @ res_l, nstep_l @ step_l)
         with Not_found -> ([],var_l,res_l,step_l) in
 
-      [("_main.zig", (defs @ [main_skel var_l res_l step_l]))];
+      [("_main.zig", ([name], (defs @ [main_skel var_l res_l step_l])))];
   ) else
     []
 
@@ -350,7 +350,7 @@ let mk_main name p =
 let translate name prog =
   let modname = (Filename.basename name) in
   global_name := String.capitalize_ascii modname;
-  (global_file_header modname prog) @ (mk_main name prog)
+  (mk_main name prog)
 
 let program p =
   let filename =

@@ -66,11 +66,6 @@ and zigstm =
   | Zigfor of string * zigexpr * zigexpr * zigstm list
   | Zigreturn of zigexpr
 
-type zigdecl =
-  | Zigdecl_enum of string * string list
-  | Zigdecl_struct of string * (string * zigty) list
-  | Zigdecl_constant of string * zigty * zigexpr
-
 type zigfundef = {
   f_name: string;
   f_retty: zigty;
@@ -78,12 +73,15 @@ type zigfundef = {
   f_body: zigblock;
 }
 
-type zigdef =
+type zigdecl =
   | Zigfundef of zigfundef
   | Zigvardef of string * zigty
+  | Zigdecl_enum of string * string list
+  | Zigdecl_struct of string * (string * zigty) list
+  | Zigdecl_constant of string * zigty * zigexpr
 
 (* Here no need for header files! *)
-type zigfile = string * zigdecl list
+type zigfile = string * (string list * zigdecl list)
 
 let rec pp_list1 f sep fmt l = match l with
   | [] -> ()
@@ -227,14 +225,12 @@ let pp_zigdecl fmt zigdecl = match zigdecl with
   | Zigdecl_constant (n, zigty, ce) ->
       fprintf fmt "@[<v>static const %a = %a;@ @]@\n"
         pp_vardecl (n, zigty)  pp_zigconst_expr ce
-
-let pp_zigdef fmt zigdef = match zigdef with
-| Zigfundef zigfd ->
+  | Zigfundef zigfd ->
     fprintf fmt
       "@[<v>@[<v 2>pub fn %a(@[<hov>%a@]) -> %a {%a@]@ }@ @]@\n"
       pp_string zigfd.f_name  pp_zigty zigfd.f_retty  pp_param_list zigfd.f_args
       pp_zigblock zigfd.f_body
-| Zigvardef (s, zigty) -> fprintf fmt "var %a: %a = undefined;@\n" pp_string s pp_zigty zigty  
+  | Zigvardef (s, zigty) -> fprintf fmt "var %a: %a = undefined;@\n" pp_string s pp_zigty zigty  
 
 let pp_zigfile_desc fmt filen zigfile =
   (* [filen_wo_ext] is the file's name without the extension. *)
