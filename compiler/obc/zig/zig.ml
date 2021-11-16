@@ -83,7 +83,7 @@ type zigdef =
   | Zigvardef of string * zigty
 
 (* Here no need for header files! *)
-type zigfile = string * zigdef list
+type zigfile = string * zigdecl list
 
 let rec pp_list1 f sep fmt l = match l with
   | [] -> ()
@@ -267,3 +267,10 @@ let rec ziglhs_of_zigexpr zigexpr =
   | Zigfield (e,qn) -> ZigLfield (ziglhs_of_zigexpr e, qn)
   | Zigarray (e1,e2) -> ZigLarray (ziglhs_of_zigexpr e1, e2)
   | _ -> failwith("Zig expression not translatable to LHS")
+
+let rec array_base_zigtype ty idx_list =
+  match ty, idx_list with
+    | Zigty_arr (_, ty), [_] -> ty
+    | Zigty_arr (_, ty), _::idx_list -> array_base_zigtype ty idx_list
+    | _ ->
+      assert false
