@@ -867,7 +867,7 @@ let global_file_header name prog =
 
   let source =
     (name ^ ".zig", defs) in
-  [source; types_zig]
+  [(source); (types_zig)]
 
 
 let interface_header name i =

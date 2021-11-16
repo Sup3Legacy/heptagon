@@ -350,7 +350,7 @@ let mk_main name p : Zig.zigfile =
 let translate name prog =
   let modname = (Filename.basename name) in
   global_name := String.capitalize_ascii modname;
-  (global_file_header modname prog) @ (mk_main name prog)
+  (global_file_header modname prog) @ ([mk_main name prog])
 
 let program p =
   let filename =
