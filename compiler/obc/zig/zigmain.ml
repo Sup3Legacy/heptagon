@@ -339,9 +339,9 @@ let mk_main name p : Zig.zigfile =
           (defs, nvar_l @ var_l, res @ res_l, nstep_l @ step_l)
         with Not_found -> ([],var_l,res_l,step_l) in
 
-      [("_main.zig", ([name], (defs @ [main_skel var_l res_l step_l])))];
+      ("_main.zig", ([name], (defs @ [main_skel var_l res_l step_l])));
   ) else
-    []
+    ("_lolz.zig", ([], []))
 
 
 
@@ -350,7 +350,7 @@ let mk_main name p : Zig.zigfile =
 let translate name prog =
   let modname = (Filename.basename name) in
   global_name := String.capitalize_ascii modname;
-  (mk_main name prog)
+  (global_file_header modname prog) @ (mk_main name prog)
 
 let program p =
   let filename =
@@ -358,13 +358,13 @@ let program p =
   let dirname = build_path (filename ^ "_zig") in
   let dir = clean_dir dirname in
   let zig_ast = translate filename p in
-  let zig_ast = if !Compiler_options.unroll_loops then List.map Zigunroll.zigfile zig_ast else zig_ast in
-  Zig.output dir zig_ast
+  let zig_ast = if !Compiler_options.unroll_loops then Zigunroll.zigfile zig_ast else zig_ast in
+  Zig.output dir [zig_ast]
 
-let interface i =
-  let filename =
+let interface i = ()
+  (*let filename =
     filename_of_name (zigname_of_name (modul_to_string i.i_modname)) in
   let dirname = build_path (filename ^ "_zig") in
   let dir = clean_dir dirname in
   let zig_ast = interface_header (Filename.basename filename) i in
-    Zig.output dir zig_ast
+  Zig.output dir zig_ast*)

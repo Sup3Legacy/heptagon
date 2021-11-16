@@ -129,8 +129,9 @@ let (has_native_zig_op, native_zig_op_of) =
   Hashtbl.mem ht, Hashtbl.find ht
 
 let zigformat_of_format s =
-  let aux m = match m with
-    | "b" -> "b" (*no booleans in Zig*)
+  let aux m = 
+    match m with
+    | "b" -> "b"
     | _ -> m
   in
   match s with
@@ -747,7 +748,7 @@ let reset_fun_def_of_class_def cd =
 
 (** [zigdecl_and_cfun_of_class_def cd] translates the class definition [cd] to
     a Zig program. *)
-let zigdefs_and_zigdecls_of_class_def cd =
+let zigdecls_of_class_def cd =
   (* We keep the state of our class in a structure, holding both internal
      variables and the state of other nodes. For a class named ["zigname"], the
      structure will be called ["zigname_mem"]. *)
@@ -773,12 +774,12 @@ let zigdefs_and_zigdecls_of_class_def cd =
 (** {2 Type translation} *)
 
 (** Translates an Obc type declaration to its Zig counterpart. *)
-let zigdefs_and_zigdecls_of_type_decl otd =
+let zigdecls_of_type_decl otd =
   let name = zigname_of_qn otd.t_name in
   match otd.t_desc with
-    | Type_abs -> [], [] (*assert false*)
+    | Type_abs -> [] (*assert false*)
     | Type_alias ty ->
-      [], [] (* Zigdecl_typedef (zigtype_of_otype ty, name) *)
+      [] (* Zigdecl_typedef (zigtype_of_otype ty, name) *)
     | Type_enum nl ->
         let of_string_fun = Zigfundef
           { Zig.f_name = name ^ "_of_string";
@@ -811,29 +812,28 @@ let zigdefs_and_zigdecls_of_type_decl otd =
                   [Zigswitch (Zigvar "x", map gen_clause nl);
                    Zigreturn (Zigvar "buf")]; }
           } in
-        ([of_string_fun; to_string_fun],
-         [Zigdecl_enum (name, List.map zigname_of_qn nl)])
+        ([Zigdecl_enum (name, List.map zigname_of_qn nl)])
     | Type_struct fl ->
         let decls = List.map (fun f -> zigname_of_name f.Signature.f_name.name,
                                 zigtype_of_otype f.Signature.f_type) fl in
         let decl = Zigdecl_struct (name, decls) in
-        ([], [decl])
+        ([decl])
 
-let zigdefs_and_zigdecls_of_const_decl cd =
+let zigdecls_of_const_decl cd =
   let name = zigname_of_qn cd.c_name in
   let v = zigexpr_of_static_exp cd.Obc.c_value in
   let cty = zigtype_of_otype cd.Obc.c_type in
-  [], [Zigdecl_constant (name, cty, v)]
+  [Zigdecl_constant (name, cty, v)]
 
-let zigdefs_and_zigdecls_of_interface_decl id = match id with
-  | Itypedef td -> zigdefs_and_zigdecls_of_type_decl td
-  | Iconstdef cd -> zigdefs_and_zigdecls_of_const_decl cd
-  | _ -> [], []
+let zigdecls_of_interface_decl id = match id with
+  | Itypedef td -> zigdecls_of_type_decl td
+  | Iconstdef cd -> zigdecls_of_const_decl cd
+  | _ -> []
 
-let zigdefs_and_zigdecls_of_program_decl id = match id with
-  | Ptype td -> zigdefs_and_zigdecls_of_type_decl td
-  | Pconst cd -> zigdefs_and_zigdecls_of_const_decl cd
-  | _ -> [], []
+let zigdecls_of_program_decl id = match id with
+  | Ptype td -> zigdecls_of_type_decl td
+  | Pconst cd -> zigdecls_of_const_decl cd
+  | _ -> []
 
 let header_of_module m = match m with
   | Module "Iostream" -> "stdio"
@@ -855,15 +855,15 @@ let global_file_header name prog =
 
   let classes = program_classes prog in
   let (decls, defs) =
-    List.split (List.map zigdefs_and_zigdecls_of_class_def classes) in
+    List.split (List.map zigdecls_of_class_def classes) in
   let decls = List.concat decls
   and defs = List.concat defs in
 
   let filename_types = name ^ "_types" in
-  let zigdefs_and_zigdecls = List.map zigdefs_and_zigdecls_of_program_decl prog.p_desc in
+  let zigdecls = List.map zigdecls_of_program_decl prog.p_desc in
 
-  let (cty_defs, cty_decls) = List.split zigdefs_and_zigdecls in
-  let types_zig = (filename_types ^ ".zig", (concat cty_defs)) in
+  let zigty_decls = zigdecls in
+  let types_zig = (filename_types ^ ".zig", (concat zigty_decls)) in
 
   let source =
     (name ^ ".zig", defs) in
@@ -874,10 +874,10 @@ let interface_header name i =
   let dependencies = ModulSet.elements (Obc_utils.Deps.deps_interface i) in
   let dependencies = List.map header_of_module dependencies in
 
-  let zigdefs_and_zigdecls = List.map zigdefs_and_zigdecls_of_interface_decl i.i_desc in
+  let zigdecls = List.map zigdecls_of_interface_decl i.i_desc in
 
-  let (cty_defs, cty_decls) = List.split zigdefs_and_zigdecls in
+  let zigty_decls = zigdecls in
   let filename_types = name ^ "_types" in
-  let types_c = (filename_types ^ ".zig", (concat cty_defs)) in
+  let types_zig = (filename_types ^ ".zig", (concat zigty_decls)) in
   let source = (name ^ ".zig", []) in
-  [source; types_c]
+  [source; types_zig]
