@@ -170,10 +170,11 @@ and pp_zigstm fmt stm = match stm with
         pp_zigexpr c pp_zigstm_list t pp_zigstm_list e
   | Zigfor(x, lower, upper, e) ->
       fprintf fmt
-        "@[<v>@[<v 2>{@\nint %a;@\n@[<v 2>for (%a = %a; %a < %a; ++%a) {%a@]@ }@]@\n}@]"
-        pp_string x
-        pp_string x  pp_zigexpr lower  pp_string x
-        pp_zigexpr upper  pp_string x  pp_zigstm_list e
+        "@[<v>@[<v 2>{@\nint %a = %a;@\n@[<v 2>while (%a < %a) : (%a += 1) {%a@]@ }@]@\n}@]"
+        pp_string x pp_zigexpr lower  
+        pp_string x pp_zigexpr upper  
+        pp_string x  
+        pp_zigstm_list e
   | Zigwhile (e, b) ->
       fprintf fmt "@[<v>@[<v 2>while (%a) {%a@]@ }@]" pp_zigexpr e pp_zigstm_list b
   | Zigsblock cb -> pp_zigblock fmt cb
