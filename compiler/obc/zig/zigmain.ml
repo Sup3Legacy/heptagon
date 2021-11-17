@@ -195,8 +195,8 @@ let main_def_of_class_def cd =
                                         [lhs;
                                          Zigvar varn])] in
             ([Zigsexpr (Zigfun_call ("printf",
-                                 Zigconst (Zigstrlit (format_s))
-                                 :: ep))],
+                                 [Zigconst (Zigstrlit (format_s)); 
+                                 ZigUnnamedStruct ep]))],
              match nbuf_opt with
              | None -> []
              | Some _ -> [(varn, Zigty_arr (20, Zigty_char))])

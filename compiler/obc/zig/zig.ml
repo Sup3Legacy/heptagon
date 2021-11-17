@@ -42,6 +42,7 @@ and zigexpr =
   | Zigderef of zigexpr
   | Zigfield of zigexpr * qualname
   | Zigarray of zigexpr * zigexpr
+  | ZigUnnamedStruct of zigexpr list
 
 and zigconst =
   | Zigint of int
@@ -97,7 +98,7 @@ let pp_string fmt s =
 
 let rec modul_to_zigname q is_module = match q with
   | Pervasives | LocalModule -> ""
-  | Module m -> m ^ (if is_module then "." else "__")
+  | Module m -> m ^ (if is_module then "__" else "__") (* "." *)
   | QualModule { qual = q; name = n } ->
       (modul_to_zigname q is_module)^n^"__"
 
@@ -193,6 +194,7 @@ and pp_zigexpr fmt ce = match ce with
   | Zigfield (Zigderef e, f) -> fprintf fmt "%a.*.%a" pp_zigexpr e pp_shortname f
   | Zigfield (e, f) -> fprintf fmt "%a.%a" pp_zigexpr e pp_shortname f
   | Zigarray (e1, e2) -> fprintf fmt "%a[%a]" pp_zigexpr e1 pp_zigexpr e2
+  | ZigUnnamedStruct l -> fprintf fmt ".{%a}" (pp_list1 pp_zigexpr ",") l
 
 and pp_zigconst_expr fmt ce = match ce with
   | Zigstructlit (_, el) ->

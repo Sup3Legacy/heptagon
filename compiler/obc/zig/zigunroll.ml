@@ -14,6 +14,7 @@ let unroll id start stop body =
       | Zigderef e -> Zigderef (exp e)
       | Zigfield (e, qn) -> Zigfield (exp e, qn)
       | Zigarray (e1, e2) -> Zigarray (exp e1, exp e2)
+      | ZigUnnamedStruct l -> ZigUnnamedStruct (List.map exp l)
 
     and lhs l = match l with
       | ZigLvar s -> ZigLvar s
