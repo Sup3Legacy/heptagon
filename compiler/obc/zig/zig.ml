@@ -1,6 +1,11 @@
 open Format
 open List
 open Names
+open Map
+
+module StructMap = Map.Make(String);;
+
+let structs = ref StructMap.empty;;
 
 let zigname_of_name name = 
   let buf = Buffer.create (String.length name) in
@@ -83,6 +88,12 @@ type zigdecl =
 
 (* Here no need for header files! *)
 type zigfile = string * (string list * zigdecl list)
+
+let rec pp_double_list f fmt l1 l2 =
+  match l1, l2 with
+  | t1::q1, t2::q2 -> 
+    fprintf fmt "@%a%a" (fun fmt t -> f fmt t1 t) t2 (fun fmt q -> pp_double_list f fmt q1 q) q2
+  | _, _ -> ()
 
 let rec pp_list1 f sep fmt l = match l with
   | [] -> ()
@@ -180,6 +191,9 @@ and pp_zigstm fmt stm = match stm with
   | Zigsblock cb -> pp_zigblock fmt cb
   | Zigskip -> fprintf fmt ""
   | Zigreturn e -> fprintf fmt "return %a;" pp_zigexpr e
+
+and pp_structs fmt name value =
+  fprintf fmt ".%s=%a, " name pp_zigexpr value
 and pp_zigexpr fmt ce = match ce with
   | Ziguop (s, e) -> fprintf fmt "%s(%a)" s  pp_zigexpr e
   | Zigbop (s, l, r) -> fprintf fmt "(%a%s%a)" pp_zigexpr l s pp_zigexpr r
@@ -189,9 +203,12 @@ and pp_zigexpr fmt ce = match ce with
   | Zigderef (Zigaddrof e) -> pp_zigexpr fmt e
   | Zigaddrof e -> fprintf fmt "&%a" pp_zigexpr e
   | Zigstructlit (s, el) ->
-      fprintf fmt "(%a){@[%a@]}" pp_string s (pp_list1 pp_zigexpr ",") el
+      let fields = StructMap.find s !structs in
+      fprintf fmt "%a {@[%a@]}"
+        pp_string s 
+        (fun fmt el -> pp_double_list pp_structs fmt fields el) el
   | Zigarraylit el -> (* TODO master : WRONG *)
-      fprintf fmt "((int []){@[%a@]})" (pp_list1 pp_zigexpr ",") el
+      fprintf fmt "({@[%a@]})" (pp_list1 pp_zigexpr ",") el
   | Zigconst c -> pp_zigconst fmt c
   | Zigvar s -> pp_string fmt s
   | Zigderef e -> fprintf fmt "*%a" pp_zigexpr e
@@ -224,12 +241,17 @@ and pp_zigconst fmt zigconst = match zigconst with
   | Zigstrlit t -> fprintf fmt "\"%s\"" (String.escaped t)
 
 
+let add_struct struct_name fields =
+  structs := StructMap.add struct_name fields !structs;;
+
 let pp_zigdecl fmt zigdecl = match zigdecl with
   | Zigdecl_enum (s, sl) ->
     (* Original was "@[<v>@[<v 2>typedef enum {@ %a@]@ } %a;@ @]@\n" *)
       fprintf fmt "@[<v>const %a = struct {@ %a@}]@\n" 
       pp_string s (pp_list1 pp_string ",") sl
   | Zigdecl_struct (s, fl) ->
+      let fields, _ = List.split fl in
+      add_struct s fields;
       let pp_field fmt (s, zigty) =
         fprintf fmt "@ %a," pp_paramdecl (s,zigty) in
       fprintf fmt "@[<v>@[<v 2>const %a = struct {"  pp_string s;
