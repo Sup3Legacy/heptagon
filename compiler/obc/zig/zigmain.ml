@@ -21,16 +21,16 @@ let assert_node_res cd =
   let stepm = find_step_method cd in
   if List.length stepm.m_inputs > 0 then
     (Format.eprintf "Cannot generate run-time check for node %s with inputs.@."
-       (zigname_of_qn cd.cd_name);
+       (zigname_of_qn cd.cd_name false);
      exit 1);
   if (match stepm.m_outputs with
         | [{ v_type = Tid nbool; }] when nbool = Initial.pbool -> false
         | _ -> true) then
     (Format.eprintf
        "Cannot generate run-time check for node %s with non-boolean output.@."
-       (zigname_of_qn cd.cd_name);
+       (zigname_of_qn cd.cd_name false);
      exit 1);
-  let name = zigname_of_qn cd.cd_name in
+  let name = zigname_of_qn cd.cd_name false in
   let out =
     (fresh ("out_for_" ^ name),
       Zigty_id (qn_append cd.cd_name "_out")) in
@@ -83,7 +83,7 @@ let main_def_of_class_def cd =
     | Types.Tid id when id = Initial.pfloat -> None
     | Types.Tid id when id = Initial.pint -> None
     | Types.Tid id when id = Initial.pbool -> None
-    | Tid tn -> Some (zigname_of_qn tn)
+    | Tid tn -> Some (zigname_of_qn tn true)
   in
   let cprint_string s = Zigsexpr (Zigfun_call ("printf", [Zigconst (Zigstrlit s)])) in
 
@@ -246,7 +246,7 @@ let main_def_of_class_def cd =
         map (fun vd -> Zigvar (name vd.v_ident)) stepm.m_inputs
         @ (Zigaddrof (Zigvar "_res")
            :: if cd.cd_stateful then [Zigaddrof (Zigvar "mem")] else []) in
-      Zigfun_call ((zigname_of_qn cd.cd_name) ^ "_step", args) in
+      Zigfun_call ((zigname_of_qn cd.cd_name true) ^ "_step", args) in
     concat scanf_calls
     @ [Zigsexpr funcall]
     @ printf_calls
@@ -259,7 +259,7 @@ let main_def_of_class_def cd =
   (* Do not forget to initialize memory via reset if needed. *)
   let rst_i =
     if cd.cd_stateful
-    then [Zigsexpr (Zigfun_call ((zigname_of_qn cd.cd_name) ^ "_reset",
+    then [Zigsexpr (Zigfun_call ((zigname_of_qn cd.cd_name true) ^ "_reset",
                              [Zigaddrof (Zigvar "mem")]))]
     else [] in
 

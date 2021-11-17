@@ -245,7 +245,7 @@ let rec zigexpr_of_static_exp se =
     | Sbool b -> Zigconst (Zigtag (if b then "true" else "false"))
     | Sstring s -> Zigconst (Zigstrlit s)
     | Sfield _ -> assert false
-    | Sconstructor c -> Zigconst (Zigtag (zigname_of_qn c))
+    | Sconstructor c -> Zigconst (Zigtag (zigname_of_qn c true))
     | Sarray sl -> Zigarraylit (List.map zigexpr_of_static_exp sl)
     | Srecord fl ->
         let ty_name =
@@ -262,7 +262,7 @@ let rec zigexpr_of_static_exp se =
       if !Compiler_options.unroll_loops && se.se_ty = Initial.tint
       then zigexpr_of_static_exp
         (Static.simplify QualEnv.empty (find_const ln).Signature.c_value)
-      else Zigvar (zigname_of_qn ln)
+      else Zigvar (zigname_of_qn ln false)
     | Sop _ ->
         let se' = Static.simplify QualEnv.empty se in
           if se = se' then
@@ -290,7 +290,7 @@ and zigexpr_of_struct tyn cexps_assoc =
     (fun cexps { Signature.f_name = f } -> List.assoc f cexps_assoc :: cexps)
     [] (find_struct tyn) in
   (* Reverse `cexps' here because of the previous use of `List.fold_left'. *)
-  Zigstructlit (zigname_of_qn tyn, List.rev cexps)
+  Zigstructlit (zigname_of_qn tyn true, List.rev cexps)
 
 and zigexprs_of_exps out_env var_env exps =
   List.map (zigexpr_of_exp out_env var_env) exps
@@ -456,7 +456,7 @@ let step_fun_call out_env var_env sig_info objn out args =
 let generate_function_call out_env var_env obj_env outvl objn args =
   (* Class name for the object to step. *)
   let classln = assoc_cn objn obj_env in
-  let classn = zigname_of_qn classln in
+  let classn = zigname_of_qn classln false in
   let sig_info = find_value classln in
   let out = Zigvar (out_var_name_of_objn classn) in
 
@@ -553,7 +553,7 @@ let rec cstm_of_act out_env var_env obj_env act =
         (* [ccl_of_obccl] translates an Obc clause to a Zig clause. *)
         let ccl =
           List.map
-            (fun (c,act) -> zigname_of_qn c,
+            (fun (c,act) -> zigname_of_qn c false,
                cstm_of_act_list out_env var_env obj_env act) cl in
         [Zigswitch (zigexpr_of_exp out_env var_env e, ccl)]
 
@@ -592,7 +592,7 @@ let rec cstm_of_act out_env var_env obj_env act =
         assert_empty args;
         let on = obj_ref_name o in
         let obj = assoc_obj on obj_env in
-        let classn = zigname_of_qn obj.o_class in
+        let classn = zigname_of_qn obj.o_class true in
         let field = Zigfield (Zigderef (Zigvar "self"), local_qn (name on)) in
         (match o with
           | Oobj _ ->
@@ -655,7 +655,7 @@ let step_fun_args n md =
     not allow such functions. When it is the case, we declare a structure with a
     field by return value. *)
 let fun_def_of_step_fun n obj_env mem objs md =
-  let fun_name = (zigname_of_qn n) ^ "_step" in
+  let fun_name = (zigname_of_qn n false) ^ "_step" in
   (* Its arguments, translating Obc types to Zig types and adding our internal
       memory structure. *)
   let args = step_fun_args n md in
@@ -663,7 +663,7 @@ let fun_def_of_step_fun n obj_env mem objs md =
   (* Out vars for function calls *)
   let out_vars =
     unique
-      (List.map (fun obj -> out_var_name_of_objn (zigname_of_qn obj.o_class),
+      (List.map (fun obj -> out_var_name_of_objn (zigname_of_qn obj.o_class false),
                    Zigty_id (qn_append obj.o_class "_out"))
          (List.filter (fun obj -> not (is_op obj.o_class)) objs)) in
 
@@ -713,7 +713,7 @@ let mem_decl_of_class_def cd =
       let mem_fields = List.map zigvar_of_vd cd.cd_mems in
       (* Fields corresponding to object variables. *)
       let obj_fields = List.fold_left struct_field_of_obj_dec [] cd.cd_objs in
-        [Zigdecl_struct ((zigname_of_qn cd.cd_name) ^ "_mem",
+        [Zigdecl_struct ((zigname_of_qn cd.cd_name false) ^ "_mem",
                        mem_fields @ obj_fields)]
     ) else
       []
@@ -722,7 +722,7 @@ let out_decl_of_class_def cd =
   (* Fields corresponding to output variables. *)
   let step_m = find_step_method cd in
   let out_fields = List.map zigvar_of_vd step_m.m_outputs in
-    [Zigdecl_struct ((zigname_of_qn cd.cd_name) ^ "_out", out_fields)]
+    [Zigdecl_struct ((zigname_of_qn cd.cd_name false) ^ "_out", out_fields)]
 
 (** [reset_fun_def_of_class_def cd] returns the defintion of the Zig function
     tasked to reset the class [cd]. *)
@@ -736,7 +736,7 @@ let reset_fun_def_of_class_def cd =
       []
   in
   Zigfundef {
-    Zig.f_name = (zigname_of_qn cd.cd_name) ^ "_reset";
+    Zig.f_name = (zigname_of_qn cd.cd_name false) ^ "_reset";
     f_retty = Zigty_void;
     f_args = [("self", Zigty_ptr (Zigty_id (qn_append cd.cd_name "_mem")))];
     f_body = {
@@ -774,7 +774,7 @@ let zigdecls_of_class_def cd =
 
 (** Translates an Obc type declaration to its Zig counterpart. *)
 let zigdecls_of_type_decl otd =
-  let name = zigname_of_qn otd.t_name in
+  let name = zigname_of_qn otd.t_name true in
   match otd.t_desc with
     | Type_abs -> [] (*assert false*)
     | Type_alias ty ->
@@ -788,7 +788,7 @@ let zigdecls_of_type_decl otd =
               { var_decls = [];
                 block_body =
                   let gen_if t =
-                    let t = zigname_of_qn t and t' = t.name in
+                    let t = zigname_of_qn t true and t' = t.name in
                     let funcall = Zigfun_call ("strcmp", [Zigvar "s";
                                                         Zigconst (Zigstrlit t')]) in
                     let cond = Zigbop ("==", funcall, Zigconst (Zigint 0)) in
@@ -803,7 +803,7 @@ let zigdecls_of_type_decl otd =
               { var_decls = [];
                 block_body =
                   let gen_clause t =
-                    let t = zigname_of_qn t and t' = t.name in
+                    let t = zigname_of_qn t true and t' = t.name in
                     let fun_call =
                       Zigfun_call ("strcpy", [Zigvar "buf";
                                             Zigconst (Zigstrlit t')]) in
@@ -811,7 +811,7 @@ let zigdecls_of_type_decl otd =
                   [Zigswitch (Zigvar "x", map gen_clause nl);
                    Zigreturn (Zigvar "buf")]; }
           } in
-        ([Zigdecl_enum (name, List.map zigname_of_qn nl)])
+        ([Zigdecl_enum (name, List.map (fun nl -> zigname_of_qn nl true) nl)])
     | Type_struct fl ->
         let decls = List.map (fun f -> zigname_of_name f.Signature.f_name.name,
                                 zigtype_of_otype f.Signature.f_type) fl in
@@ -819,7 +819,7 @@ let zigdecls_of_type_decl otd =
         ([decl])
 
 let zigdecls_of_const_decl cd =
-  let name = zigname_of_qn cd.c_name in
+  let name = zigname_of_qn cd.c_name false in
   let v = zigexpr_of_static_exp cd.Obc.c_value in
   let cty = zigtype_of_otype cd.Obc.c_type in
   [Zigdecl_constant (name, cty, v)]

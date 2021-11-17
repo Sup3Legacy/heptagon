@@ -6,7 +6,7 @@ let zigname_of_name name =
   let buf = Buffer.create (String.length name) in
   let convert c =
     match c with
-      | 'A'..'Z' | 'a'..'z' | '0'..'9' | '_' ->
+      | 'A'..'Z' | 'a'..'z' | '0'..'9' | '_' | '.' ->
           Buffer.add_char buf c
       | '\'' -> Buffer.add_string buf "_prime"
       | _ ->
@@ -95,17 +95,17 @@ let rec pp_list f sep fmt l = match l with
 let pp_string fmt s =
   fprintf fmt "%s" (zigname_of_name s)
 
-let rec modul_to_zigname q = match q with
+let rec modul_to_zigname q is_module = match q with
   | Pervasives | LocalModule -> ""
-  | Module m -> m ^ "__"
+  | Module m -> m ^ (if is_module then "." else "__")
   | QualModule { qual = q; name = n } ->
-      (modul_to_zigname q)^n^"__"
+      (modul_to_zigname q is_module)^n^"__"
 
-let zigname_of_qn qn =
-  (modul_to_zigname qn.qual) ^ qn.name
+let zigname_of_qn qn is_module =
+  (modul_to_zigname qn.qual is_module) ^ qn.name
 
-let pp_qualname fmt q =
-  pp_string fmt (zigname_of_qn q)
+let pp_qualname fmt q is_module =
+  pp_string fmt (zigname_of_qn q is_module)
 
 let pp_shortname fmt q =
   pp_string fmt q.name
@@ -114,7 +114,7 @@ let rec pp_zigty fmt zigty = match zigty with
   | Zigty_int -> fprintf fmt "isize" (* Kinda important! *)
   | Zigty_float -> fprintf fmt "f32"
   | Zigty_char -> fprintf fmt "u8" (* ! Or maybe signed ? *)
-  | Zigty_id s -> pp_qualname fmt s
+  | Zigty_id s -> pp_qualname fmt s true
   | Zigty_ptr zigty' -> fprintf fmt "*%a" pp_zigty zigty'
   | Zigty_arr (n, zigty') -> fprintf fmt "%a[%d]" pp_zigty zigty' n
   | Zigty_void -> fprintf fmt "void"
@@ -128,12 +128,19 @@ let rec pp_array_decl zigty =
 
 let truc = 0;;
 
+let rec pp_paramdecl fmt (s, zigty) = match zigty with
+  | Zigty_arr _ ->
+    let ty, indices = pp_array_decl zigty in
+    fprintf fmt "%a %a%s = undefined" pp_zigty ty  pp_string s indices
+  | _ -> fprintf fmt "%a: %a" pp_string s pp_zigty zigty  
+
+
 let rec pp_vardecl fmt (s, zigty) = match zigty with
   | Zigty_arr _ ->
       let ty, indices = pp_array_decl zigty in
       fprintf fmt "%a %a%s = undefined" pp_zigty ty  pp_string s indices
-  | _ -> fprintf fmt "%a: %a" pp_string s pp_zigty zigty  
-and pp_param_list fmt l = pp_list1 pp_vardecl "," fmt l
+  | _ -> fprintf fmt "var %a: %a = undefined" pp_string s pp_zigty zigty  
+and pp_param_list fmt l = pp_list1 pp_paramdecl "," fmt l
 and pp_var_list fmt l = pp_list pp_vardecl ";" fmt l
 
 let rec pp_zigblock fmt cb =
@@ -218,7 +225,7 @@ let pp_zigdecl fmt zigdecl = match zigdecl with
       pp_string s (pp_list1 pp_string ",") sl
   | Zigdecl_struct (s, fl) ->
       let pp_field fmt (s, zigty) =
-        fprintf fmt "@ %a;" pp_vardecl (s,zigty) in
+        fprintf fmt "@ %a," pp_paramdecl (s,zigty) in
       fprintf fmt "@[<v>@[<v 2>const %a = struct {"  pp_string s;
       List.iter (pp_field fmt) fl;
       fprintf fmt "@]@ };@ @]@\n"
