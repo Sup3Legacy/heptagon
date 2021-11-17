@@ -115,7 +115,7 @@ let rec pp_zigty fmt zigty = match zigty with
   | Zigty_float -> fprintf fmt "f32"
   | Zigty_char -> fprintf fmt "u8" (* ! Or maybe signed ? *)
   | Zigty_id s -> pp_qualname fmt s
-  | Zigty_ptr zigty' -> fprintf fmt "%a*" pp_zigty zigty'
+  | Zigty_ptr zigty' -> fprintf fmt "*%a" pp_zigty zigty'
   | Zigty_arr (n, zigty') -> fprintf fmt "%a[%d]" pp_zigty zigty' n
   | Zigty_void -> fprintf fmt "void"
 
@@ -183,7 +183,7 @@ and pp_zigexpr fmt ce = match ce with
   | Zigconst c -> pp_zigconst fmt c
   | Zigvar s -> pp_string fmt s
   | Zigderef e -> fprintf fmt "*%a" pp_zigexpr e
-  | Zigfield (Zigderef e, f) -> fprintf fmt "%a->%a" pp_zigexpr e pp_shortname f
+  | Zigfield (Zigderef e, f) -> fprintf fmt "%a.*.%a" pp_zigexpr e pp_shortname f
   | Zigfield (e, f) -> fprintf fmt "%a.%a" pp_zigexpr e pp_shortname f
   | Zigarray (e1, e2) -> fprintf fmt "%a[%a]" pp_zigexpr e1 pp_zigexpr e2
 
@@ -197,7 +197,7 @@ and pp_zigconst_expr fmt ce = match ce with
 and pp_ziglhs fmt ziglhs = match ziglhs with
   | ZigLvar s -> pp_string fmt s
   | ZigLderef lhs' -> fprintf fmt "*%a" pp_ziglhs lhs'
-  | ZigLfield (ZigLderef lhs, f) -> fprintf fmt "%a->%a" pp_ziglhs lhs  pp_shortname f
+  | ZigLfield (ZigLderef lhs, f) -> fprintf fmt "%a.*.%a" pp_ziglhs lhs  pp_shortname f
   | ZigLfield (lhs, f) -> fprintf fmt "%a.%a" pp_ziglhs lhs  pp_shortname f
   | ZigLarray (lhs, e) ->
       fprintf fmt "%a[%a]"
@@ -221,14 +221,14 @@ let pp_zigdecl fmt zigdecl = match zigdecl with
         fprintf fmt "@ %a;" pp_vardecl (s,zigty) in
       fprintf fmt "@[<v>@[<v 2>const %a = struct {"  pp_string s;
       List.iter (pp_field fmt) fl;
-      fprintf fmt "@]@ } %a;@ @]@\n"  pp_string s
+      fprintf fmt "@]@ };@ @]@\n"
   | Zigdecl_constant (n, zigty, ce) ->
       fprintf fmt "@[<v>static const %a = %a;@ @]@\n"
         pp_vardecl (n, zigty)  pp_zigconst_expr ce
   | Zigfundef zigfd ->
     fprintf fmt
-      "@[<v>@[<v 2>pub fn %a(@[<hov>%a@]) -> %a {%a@]@ }@ @]@\n"
-      pp_string zigfd.f_name  pp_zigty zigfd.f_retty  pp_param_list zigfd.f_args
+      "@[<v>@[<v 2>pub fn %a(@[<hov>%a@]) %a {%a@]@ }@ @]@\n"
+      pp_string zigfd.f_name pp_param_list zigfd.f_args pp_zigty zigfd.f_retty
       pp_zigblock zigfd.f_body
   | Zigvardef (s, zigty) -> fprintf fmt "var %a: %a = undefined;@\n" pp_string s pp_zigty zigty  
 

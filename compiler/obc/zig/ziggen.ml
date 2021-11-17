@@ -764,12 +764,11 @@ let zigdecls_of_class_def cd =
   let step_fun_decl = zigdecl_of_zigfundef step_fun_def in*)
   let (decls, defs) =
     if is_stateful cd.cd_name then
-      ([], [reset_fun_def; step_fun_def])
+      ([reset_fun_def; step_fun_def], [])
     else
-      ([], [step_fun_def]) in
+      ([step_fun_def], []) in
 
-  memory_struct_decl @ out_struct_decl @ decls,
-  defs
+  memory_struct_decl @ out_struct_decl @ decls
 
 (** {2 Type translation} *)
 
@@ -854,30 +853,15 @@ let global_file_header name prog =
       dependencies in
 
   let classes = program_classes prog in
-  let (decls, defs) =
-    List.split (List.map zigdecls_of_class_def classes) in
-  let decls = List.concat decls
-  and defs = List.concat defs in
+  let decls = List.map zigdecls_of_class_def classes in
+  let decls = List.concat decls in
 
   let filename_types = name ^ "_types" in
   let zigdecls = List.map zigdecls_of_program_decl prog.p_desc in
 
   let zigty_decls = zigdecls in
-  let types_zig = (filename_types ^ ".zig", (concat zigty_decls)) in
+  let types_zig = (filename_types ^ ".zig", ([], concat zigty_decls)) in
 
   let source =
-    (name ^ ".zig", defs) in
+    (name ^ ".zig", ([], decls)) in
   [(source); (types_zig)]
-
-
-let interface_header name i =
-  let dependencies = ModulSet.elements (Obc_utils.Deps.deps_interface i) in
-  let dependencies = List.map header_of_module dependencies in
-
-  let zigdecls = List.map zigdecls_of_interface_decl i.i_desc in
-
-  let zigty_decls = zigdecls in
-  let filename_types = name ^ "_types" in
-  let types_zig = (filename_types ^ ".zig", (concat zigty_decls)) in
-  let source = (name ^ ".zig", []) in
-  [source; types_zig]

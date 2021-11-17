@@ -358,8 +358,8 @@ let program p =
   let dirname = build_path (filename ^ "_zig") in
   let dir = clean_dir dirname in
   let zig_ast = translate filename p in
-  let zig_ast = if !Compiler_options.unroll_loops then Zigunroll.zigfile zig_ast else zig_ast in
-  Zig.output dir [zig_ast]
+  let zig_ast = if !Compiler_options.unroll_loops then List.map Zigunroll.zigfile zig_ast else zig_ast in
+  Zig.output dir zig_ast
 
 let interface i = ()
   (*let filename =
