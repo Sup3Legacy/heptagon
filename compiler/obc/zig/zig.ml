@@ -89,8 +89,9 @@ let rec pp_list1 f sep fmt l = match l with
   | [x] -> fprintf fmt "%a" f x
   | h :: t -> fprintf fmt "%a%s@ %a" f h sep (pp_list1 f sep) t
 
-let rec pp_list f sep fmt l = match l with
+and pp_list f sep fmt l = match l with
   | [] -> ()
+  | [x] -> fprintf fmt "@ %a%s" f x sep
   | h :: t -> fprintf fmt "@ %a%s%a" f h sep (pp_list f sep) t
 
 let pp_string fmt s =
@@ -146,10 +147,12 @@ and pp_var_list fmt l = pp_list pp_vardecl ";" fmt l
 
 let rec pp_zigblock fmt cb =
   let pp_varlist = pp_list pp_vardecl ";" in
-  fprintf fmt "%a%a" pp_varlist cb.var_decls pp_zigstm_list cb.block_body
-and pp_zigstm_list fmt stml = pp_list pp_zigstm ";" fmt stml
+  fprintf fmt "%a \n %a" 
+    pp_varlist cb.var_decls 
+    pp_zigstm_list cb.block_body
+and pp_zigstm_list fmt stml = pp_list pp_zigstm "" fmt stml
 and pp_zigstm fmt stm = match stm with
-  | Zigsexpr e -> fprintf fmt "%a" pp_zigexpr e
+  | Zigsexpr e -> fprintf fmt "%a;" pp_zigexpr e
   | Zigswitch (e, cl) ->
       let pp_clause fmt (tag, stml) =
         fprintf fmt "@[<v 2>case %a:%a@ break;@]"
@@ -158,7 +161,7 @@ and pp_zigstm fmt stm = match stm with
         "@[<v>@[<v 2>switch (%a) {%a@ @[<v 2>default:@ break;@]@]@ }@]"
         pp_zigexpr e (pp_list pp_clause "") cl
   | Zigaffect (lhs, e) ->
-      fprintf fmt "%a = %a" pp_ziglhs lhs pp_zigexpr e
+      fprintf fmt "%a = %a;" pp_ziglhs lhs pp_zigexpr e
   | Zigif (c, t, []) ->
       fprintf fmt "@[<v>@[<v 2>if (%a) {%a@]@ }@]"
         pp_zigexpr c pp_zigstm_list t
@@ -175,7 +178,7 @@ and pp_zigstm fmt stm = match stm with
       fprintf fmt "@[<v>@[<v 2>while (%a) {%a@]@ }@]" pp_zigexpr e pp_zigstm_list b
   | Zigsblock cb -> pp_zigblock fmt cb
   | Zigskip -> fprintf fmt ""
-  | Zigreturn e -> fprintf fmt "return %a" pp_zigexpr e
+  | Zigreturn e -> fprintf fmt "return %a;" pp_zigexpr e
 and pp_zigexpr fmt ce = match ce with
   | Ziguop (s, e) -> fprintf fmt "%s(%a)" s  pp_zigexpr e
   | Zigbop (s, l, r) -> fprintf fmt "(%a%s%a)" pp_zigexpr l s pp_zigexpr r
@@ -236,10 +239,15 @@ let pp_zigdecl fmt zigdecl = match zigdecl with
         pp_vardecl (n, zigty)  pp_zigconst_expr ce
   | Zigfundef zigfd ->
     fprintf fmt
-      "@[<v>@[<v 2>pub fn %a(@[<hov>%a@]) %a {%a@]@ }@ @]@\n"
-      pp_string zigfd.f_name pp_param_list zigfd.f_args pp_zigty zigfd.f_retty
+      "@[<v>@[<v 2>pub fn %a(@[<hov>%a@]) %a {%a @]@ }@ @]@\n"
+      pp_string zigfd.f_name 
+      pp_param_list zigfd.f_args 
+      pp_zigty zigfd.f_retty
       pp_zigblock zigfd.f_body
-  | Zigvardef (s, zigty) -> fprintf fmt "var %a: %a = undefined;@\n" pp_string s pp_zigty zigty  
+  | Zigvardef (s, zigty) -> 
+    fprintf fmt "var %a: %a = undefined;@\n" 
+      pp_string s 
+      pp_zigty zigty  
 
 let pp_zigfile_desc fmt filen zigfile =
   (* [filen_wo_ext] is the file's name without the extension. *)
