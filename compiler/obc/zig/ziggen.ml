@@ -238,64 +238,64 @@ and create_affect_stm dest src ty =
           | _ -> [Zigaffect (dest, src)])
     | _ -> [Zigaffect (dest, src)]
 
-let rec zigexpr_of_static_exp se =
+let rec zigexpr_of_static_exp (topname: string) se =
   match se.se_desc with
     | Sint i -> Zigconst (Zigint i)
     | Sfloat f -> Zigconst (Zigfloat f)
     | Sbool b -> Zigconst (Zigtag (if b then "true" else "false"))
     | Sstring s -> Zigconst (Zigstrlit s)
     | Sfield _ -> assert false
-    | Sconstructor c -> Zigconst (Zigtag (zigname_of_qn c true))
-    | Sarray sl -> Zigarraylit (List.map zigexpr_of_static_exp sl)
+    | Sconstructor c -> Zigconst (Zigtag (zigname_of_qn topname c true))
+    | Sarray sl -> Zigarraylit (List.map (fun x -> zigexpr_of_static_exp topname x) sl)
     | Srecord fl ->
         let ty_name =
           match Modules.unalias_type se.se_ty with
             | Types.Tid n -> n
             | _ -> assert false
         in
-        let cexps_assoc = List.rev_map (fun (f, e) -> f, zigexpr_of_static_exp e) fl in
-        zigexpr_of_struct ty_name cexps_assoc
+        let cexps_assoc = List.rev_map (fun (f, e) -> f, zigexpr_of_static_exp topname e) fl in
+        zigexpr_of_struct topname ty_name cexps_assoc
     | Sarray_power(c,n_list) ->
           (List.fold_left (fun cc n -> Zigarraylit (repeat_list cc (int_of_static_exp n)))
-                     (zigexpr_of_static_exp c) n_list)
+                     (zigexpr_of_static_exp topname c) n_list)
     | Svar ln ->
       if !Compiler_options.unroll_loops && se.se_ty = Initial.tint
-      then zigexpr_of_static_exp
+      then zigexpr_of_static_exp topname
         (Static.simplify QualEnv.empty (find_const ln).Signature.c_value)
-      else Zigvar (zigname_of_qn ln false)
+      else Zigvar (zigname_of_qn topname ln false)
     | Sop _ ->
         let se' = Static.simplify QualEnv.empty se in
           if se = se' then
             Error.message se.se_loc Error.Estatic_exp_compute_failed
           else
-            zigexpr_of_static_exp se'
+            zigexpr_of_static_exp topname se'
     | Stuple _ -> Misc.internal_error "cgen: static tuple"
 
 (** [zigexpr_of_exp exp] translates the Obj action [exp] to a Zig expression. *)
-and zigexpr_of_exp out_env var_env exp =
+and zigexpr_of_exp (topname: string) out_env var_env exp =
   match exp.e_desc with
-    | Eextvalue w  -> zigexpr_of_ext_value out_env var_env w
+    | Eextvalue w  -> zigexpr_of_ext_value topname out_env var_env w
     (* Operators *)
-    | Eop(op, exps) -> cop_of_op out_env var_env op exps
+    | Eop(op, exps) -> cop_of_op topname out_env var_env op exps
     (* Structure literals. *)
     | Estruct (tyn, fl) ->
-        let zigexpr = zigexpr_of_exp out_env var_env in
+        let zigexpr = zigexpr_of_exp topname out_env var_env in
         let cexps_assoc = List.rev_map (fun (f, e) -> f, zigexpr e) fl in
-        zigexpr_of_struct tyn cexps_assoc
+        zigexpr_of_struct topname tyn cexps_assoc
     | Earray e_list ->
-        Zigarraylit (zigexprs_of_exps out_env var_env e_list)
+        Zigarraylit (zigexprs_of_exps topname out_env var_env e_list)
 
-and zigexpr_of_struct tyn cexps_assoc =
+and zigexpr_of_struct (topname: string) tyn cexps_assoc =
   let cexps = List.fold_left
     (fun cexps { Signature.f_name = f } -> List.assoc f cexps_assoc :: cexps)
     [] (find_struct tyn) in
   (* Reverse `cexps' here because of the previous use of `List.fold_left'. *)
-  Zigstructlit (zigname_of_qn tyn true, List.rev cexps)
+  Zigstructlit (zigname_of_qn topname tyn true, List.rev cexps)
 
-and zigexprs_of_exps out_env var_env exps =
-  List.map (zigexpr_of_exp out_env var_env) exps
+and zigexprs_of_exps (topname: string) out_env var_env exps =
+  List.map (zigexpr_of_exp topname out_env var_env) exps
 
-and cop_of_op_aux op_name cexps = match op_name with
+and cop_of_op_aux (topname: string) op_name cexps = match op_name with
     | { qual = Pervasives; name = op } ->
         begin match op,cexps with
           | "=>", [el;er] ->
@@ -317,11 +317,11 @@ and cop_of_op_aux op_name cexps = match op_name with
       Zigfun_call("fprintf", file::s::args)
     | { name = op } -> Zigfun_call(op,cexps)
 
-and cop_of_op out_env var_env op_name exps =
-  let cexps = zigexprs_of_exps out_env var_env exps in
-  cop_of_op_aux op_name cexps
+and cop_of_op (topname: string) out_env var_env op_name exps =
+  let cexps = zigexprs_of_exps topname out_env var_env exps in
+  cop_of_op_aux topname op_name cexps
 
-and ziglhs_of_pattern out_env var_env l = match l.pat_desc with
+and ziglhs_of_pattern (topname: string) out_env var_env l = match l.pat_desc with
   (* Each Obc variable corresponds to a real local Zig variable. *)
   | Lvar v ->
       let n = name v in
@@ -342,15 +342,15 @@ and ziglhs_of_pattern out_env var_env l = match l.pat_desc with
   (* Dereference our [self] struct holding the node's memory. *)
   | Lmem v -> ZigLfield (ZigLderef (ZigLvar "self"), local_qn (name v))
   (* Field access. /!\ Indexed Obj expression should be a valid lhs!  *)
-  | Lfield (l, fn) -> ZigLfield(ziglhs_of_pattern out_env var_env l, fn)
+  | Lfield (l, fn) -> ZigLfield(ziglhs_of_pattern topname out_env var_env l, fn)
   | Larray (l, idx) ->
-      ZigLarray(ziglhs_of_pattern out_env var_env l,
-              zigexpr_of_exp out_env var_env idx)
+      ZigLarray(ziglhs_of_pattern topname out_env var_env l,
+              zigexpr_of_exp topname out_env var_env idx)
 
-and ziglhs_list_of_pattern_list out_env var_env lhss =
-  List.map (ziglhs_of_pattern out_env var_env) lhss
+and ziglhs_list_of_pattern_list (topname: string) out_env var_env lhss =
+  List.map (ziglhs_of_pattern topname out_env var_env) lhss
 
-and zigexpr_of_pattern out_env var_env l = match l.pat_desc with
+and zigexpr_of_pattern (topname: string) out_env var_env l = match l.pat_desc with
   (* Each Obc variable corresponds to a real local Zig variable. *)
   | Lvar v ->
       let n = name v in
@@ -371,13 +371,13 @@ and zigexpr_of_pattern out_env var_env l = match l.pat_desc with
   (* Dereference our [self] struct holding the node's memory. *)
   | Lmem v -> Zigfield (Zigderef (Zigvar "self"), local_qn (name v))
   (* Field access. /!\ Indexed Obj expression should be a valid lhs!  *)
-  | Lfield (l, fn) -> Zigfield(zigexpr_of_pattern out_env var_env l, fn)
+  | Lfield (l, fn) -> Zigfield(zigexpr_of_pattern topname out_env var_env l, fn)
   | Larray (l, idx) ->
-      Zigarray(zigexpr_of_pattern out_env var_env l,
-             zigexpr_of_exp out_env var_env idx)
+      Zigarray(zigexpr_of_pattern topname out_env var_env l,
+             zigexpr_of_exp topname out_env var_env idx)
 
-and zigexpr_of_ext_value out_env var_env w = match w.w_desc with
-  | Wconst c -> zigexpr_of_static_exp c
+and zigexpr_of_ext_value (topname: string) out_env var_env w = match w.w_desc with
+  | Wconst c -> zigexpr_of_static_exp topname c
   (* Each Obc variable corresponds to a plain local Zig variable. *)
   | Wvar v ->
     let n = name v in
@@ -397,10 +397,10 @@ and zigexpr_of_ext_value out_env var_env w = match w.w_desc with
   (* Dereference our [self] struct holding the node's memory. *)
   | Wmem v -> Zigfield (Zigderef (Zigvar "self"), local_qn (name v))
   (* Field access. /!\ Indexed Obj expression should be a valid lhs!  *)
-  | Wfield (l, fn) -> Zigfield(zigexpr_of_ext_value out_env var_env l, fn)
+  | Wfield (l, fn) -> Zigfield(zigexpr_of_ext_value topname out_env var_env l, fn)
   | Warray (l, idx) ->
-    Zigarray(zigexpr_of_ext_value out_env var_env l,
-           zigexpr_of_exp out_env var_env idx)
+    Zigarray(zigexpr_of_ext_value topname out_env var_env l,
+           zigexpr_of_exp topname out_env var_env idx)
 
 let rec assoc_obj instance obj_env =
   match obj_env with
@@ -423,7 +423,7 @@ let out_var_name_of_objn o =
 (** Creates the list of arguments to call a node. [targeting] is the targeting
     of the called node, [mem] represents the node context and [args] the
     argument list.*)
-let step_fun_call out_env var_env sig_info objn out args =
+let step_fun_call topname out_env var_env sig_info objn out args =
   let rec add_targeting l ads = match l, ads with
     | [], [] -> []
     | e::l, ad::ads ->
@@ -441,7 +441,7 @@ let step_fun_call out_env var_env sig_info objn out args =
              let f = Zigfield (Zigderef (Zigvar "self"), local_qn (name o)) in
              let rec mk_idx pl = match pl with
               | [] -> f
-              | p::pl -> Zigarray (mk_idx pl, zigexpr_of_pattern out_env var_env p)
+              | p::pl -> Zigarray (mk_idx pl, zigexpr_of_pattern topname out_env var_env p)
              in
              mk_idx l
       ) in
@@ -453,20 +453,21 @@ let step_fun_call out_env var_env sig_info objn out args =
     [outvl] is a list of lhs where to put the results.
     [args] is the list of expressions to use as arguments.
     [mem] is the lhs where is stored the node's context.*)
-let generate_function_call out_env var_env obj_env outvl objn args =
+let generate_function_call topname out_env var_env obj_env outvl objn args =
   (* Class name for the object to step. *)
   let classln = assoc_cn objn obj_env in
-  let classn = zigname_of_qn classln false in
+  let classn = zigname_of_qn topname classln true in
+  let classn_args = zigname_of_qn topname classln false in
   let sig_info = find_value classln in
-  let out = Zigvar (out_var_name_of_objn classn) in
+  let out = Zigvar (out_var_name_of_objn classn_args) in
 
   let fun_call =
     if is_op classln then
-      cop_of_op_aux classln args
+      cop_of_op_aux topname classln args
     else
       (* The step function takes scalar arguments and its own internal memory
           holding structure. *)
-      let args = step_fun_call out_env var_env sig_info objn out args in
+      let args = step_fun_call topname out_env var_env sig_info objn out args in
       (* Our Zig expression for the function call. *)
       Zigfun_call (classn ^ "_step", args)
   in
@@ -489,11 +490,11 @@ let generate_function_call out_env var_env obj_env outvl objn args =
           (Zigsexpr fun_call)::(List.flatten (map2 create_affect outvl out_sig))
 
 (** Create the statement dest = c where c = v^n^m... *)
-let rec create_affect_const var_env (dest : ziglhs) c =
+let rec create_affect_const topname var_env (dest : ziglhs) c =
   match c.se_desc with
     | Svar ln ->
         let se = Static.simplify QualEnv.empty (find_const ln).Signature.c_value in
-        create_affect_const var_env dest se
+        create_affect_const topname var_env dest se
     | Sarray_power(c, n_list) ->
         let rec make_loop power_list replace = match power_list with
           | [] -> dest, replace
@@ -501,46 +502,46 @@ let rec create_affect_const var_env (dest : ziglhs) c =
             let x = gen_symbol () in
             let e, replace =
               make_loop power_list
-                        (fun y -> [Zigfor(x, Zigconst (Zigint 0), zigexpr_of_static_exp p, replace y)]) in
+                        (fun y -> [Zigfor(x, Zigconst (Zigint 0), zigexpr_of_static_exp topname p, replace y)]) in
             let e =  (ZigLarray (e, Zigvar x)) in
             e, replace
         in
         let e, b = make_loop n_list (fun y -> y) in
-        b (create_affect_const var_env e c)
+        b (create_affect_const topname var_env e c)
     | Sarray cl ->
         let create_affect_idx c (i, affl) =
           let dest = ZigLarray (dest, Zigconst (Zigint i)) in
-            (i - 1, create_affect_const var_env dest c @ affl)
+            (i - 1, create_affect_const topname var_env dest c @ affl)
         in
           snd (List.fold_right create_affect_idx cl (List.length cl - 1, []))
     | Srecord f_se_list ->
         let affect_field affl (f, se) =
           let dest_f = ZigLfield (dest, f) in
-            (create_affect_const var_env dest_f se) @ affl
+            (create_affect_const topname var_env dest_f se) @ affl
         in
           List.fold_left affect_field [] f_se_list
-    | _ -> [Zigaffect (dest, zigexpr_of_static_exp c)]
+    | _ -> [Zigaffect (dest, zigexpr_of_static_exp topname c)]
 
 (** [cstm_of_act obj_env mods act] translates the Obj action [act] to a list of
     Zig statements, using the association list [obj_env] to map object names to
     class names.  *)
-let rec cstm_of_act out_env var_env obj_env act =
+let rec cstm_of_act topname out_env var_env obj_env act =
   match act with
       (* Cosmetic : cases on boolean values are converted to if statements. *)
     | Acase (c, [({name = "true"}, te); ({ name = "false" }, fe)])
     | Acase (c, [({name = "false"}, fe); ({ name = "true"}, te)]) ->
-        let cc = zigexpr_of_exp out_env var_env c in
-        let cte = cstm_of_act_list out_env var_env obj_env te in
-        let cfe = cstm_of_act_list out_env var_env obj_env fe in
+        let cc = zigexpr_of_exp topname out_env var_env c in
+        let cte = cstm_of_act_list topname out_env var_env obj_env te in
+        let cfe = cstm_of_act_list topname out_env var_env obj_env fe in
         [Zigif (cc, cte, cfe)]
     | Acase (c, [({name = "true"}, te)]) ->
-        let cc = zigexpr_of_exp out_env var_env c in
-        let cte = cstm_of_act_list out_env var_env obj_env te in
+        let cc = zigexpr_of_exp topname out_env var_env c in
+        let cte = cstm_of_act_list topname out_env var_env obj_env te in
         let cfe = [] in
         [Zigif (cc, cte, cfe)]
     | Acase (c, [({name = "false"}, fe)]) ->
-        let cc = Ziguop ("!", (zigexpr_of_exp out_env var_env c)) in
-        let cte = cstm_of_act_list out_env var_env obj_env fe in
+        let cc = Ziguop ("!", (zigexpr_of_exp topname out_env var_env c)) in
+        let cte = cstm_of_act_list topname out_env var_env obj_env fe in
         let cfe = [] in
         [Zigif (cc, cte, cfe)]
 
@@ -553,37 +554,37 @@ let rec cstm_of_act out_env var_env obj_env act =
         (* [ccl_of_obccl] translates an Obc clause to a Zig clause. *)
         let ccl =
           List.map
-            (fun (c,act) -> zigname_of_qn c false,
-               cstm_of_act_list out_env var_env obj_env act) cl in
-        [Zigswitch (zigexpr_of_exp out_env var_env e, ccl)]
+            (fun (c,act) -> zigname_of_qn topname c false,
+               cstm_of_act_list topname out_env var_env obj_env act) cl in
+        [Zigswitch (zigexpr_of_exp topname out_env var_env e, ccl)]
 
     | Ablock b ->
-        cstm_of_act_list out_env var_env obj_env b
+        cstm_of_act_list topname out_env var_env obj_env b
 
     (* For composition of statements, just recursively apply our
        translation function on sub-statements. *)
     | Afor ({ v_ident = x }, i1, i2, act) ->
-        [Zigfor(name x, zigexpr_of_exp out_env var_env i1,
-              zigexpr_of_exp out_env var_env i2,
-              cstm_of_act_list out_env var_env obj_env act)]
+        [Zigfor(name x, zigexpr_of_exp topname out_env var_env i1,
+              zigexpr_of_exp topname out_env var_env i2,
+              cstm_of_act_list topname out_env var_env obj_env act)]
 
     (* Translate constant assignment *)
     | Aassgn (vn, { e_desc = Eextvalue { w_desc = Wconst c }; }) ->
-        let vn = ziglhs_of_pattern out_env var_env vn in
-        create_affect_const var_env vn c
+        let vn = ziglhs_of_pattern topname out_env var_env vn in
+        create_affect_const topname var_env vn c
 
     (* Purely syntactic translation from an Obc local variable to a Zig
        local one, with recursive translation of the rhs expression. *)
     | Aassgn (vn, e) ->
-        let vn = ziglhs_of_pattern out_env var_env vn in
+        let vn = ziglhs_of_pattern topname out_env var_env vn in
         let ty = assoc_type_lhs vn var_env in
-        let ce = zigexpr_of_exp out_env var_env e in
+        let ce = zigexpr_of_exp topname out_env var_env e in
         create_affect_stm vn ce ty
 
     (* Our Aop marks an operator invocation that will perform side effects. Just
        translate to a simple Zig statement. *)
     | Aop (op_name, args) ->
-        [Zigsexpr (cop_of_op out_env var_env op_name args)]
+        [Zigsexpr (cop_of_op topname out_env var_env op_name args)]
 
     (* Reinitialization of an object variable, extracting the reset
        function's name from our environment [obj_env]. *)
@@ -592,7 +593,7 @@ let rec cstm_of_act out_env var_env obj_env act =
         assert_empty args;
         let on = obj_ref_name o in
         let obj = assoc_obj on obj_env in
-        let classn = zigname_of_qn obj.o_class true in
+        let classn = zigname_of_qn topname obj.o_class true in
         let field = Zigfield (Zigderef (Zigvar "self"), local_qn (name on)) in
         (match o with
           | Oobj _ ->
@@ -602,7 +603,7 @@ let rec cstm_of_act out_env var_env obj_env act =
                 | [] ->
                     [Zigsexpr (Zigfun_call (classn ^ "_reset", [Zigaddrof field]))]
                 | p::pl ->
-                    mk_loop pl (Zigarray(field, zigexpr_of_pattern out_env var_env p))
+                    mk_loop pl (Zigarray(field, zigexpr_of_pattern topname out_env var_env p))
               in
                  mk_loop pl field
         )
@@ -611,15 +612,15 @@ let rec cstm_of_act out_env var_env obj_env act =
        local structure to hold the results, before allocating to our
        variables. *)
     | Acall (outvl, objn, Mstep, el) ->
-        let args = zigexprs_of_exps out_env var_env el in
-        let outvl = ziglhs_list_of_pattern_list out_env var_env outvl in
-        generate_function_call out_env var_env obj_env outvl objn args
+        let args = zigexprs_of_exps topname out_env var_env el in
+        let outvl = ziglhs_list_of_pattern_list topname out_env var_env outvl in
+        generate_function_call topname out_env var_env obj_env outvl objn args
 
 
-and cstm_of_act_list out_env var_env obj_env b =
+and cstm_of_act_list topname out_env var_env obj_env b =
   let l = List.map zigvar_of_vd b.b_locals in
   let var_env = l @ var_env in
-  let cstm = List.flatten (List.map (cstm_of_act out_env var_env obj_env) b.b_body) in
+  let cstm = List.flatten (List.map (cstm_of_act topname out_env var_env obj_env) b.b_body) in
     match l with
       | [] -> cstm
       | _ ->
@@ -634,6 +635,9 @@ let global_name = ref "";;
 
 let qn_append q suffix =
   { qual = q.qual; name = q.name ^ suffix }
+
+let qn_prepend prefix q =
+  {qual = q.qual; name = prefix ^ q.name}
 
 (** Builds the argument list of step function*)
 let step_fun_args n md =
@@ -654,8 +658,8 @@ let step_fun_args n md =
     reset calls. A step function can have multiple return values, whereas Zig does
     not allow such functions. When it is the case, we declare a structure with a
     field by return value. *)
-let fun_def_of_step_fun n obj_env mem objs md =
-  let fun_name = (zigname_of_qn n false) ^ "_step" in
+let fun_def_of_step_fun topname n obj_env mem objs md =
+  let fun_name = (zigname_of_qn topname n false) ^ "_step" in
   (* Its arguments, translating Obc types to Zig types and adding our internal
       memory structure. *)
   let args = step_fun_args n md in
@@ -663,7 +667,7 @@ let fun_def_of_step_fun n obj_env mem objs md =
   (* Out vars for function calls *)
   let out_vars =
     unique
-      (List.map (fun obj -> out_var_name_of_objn (zigname_of_qn obj.o_class false),
+      (List.map (fun obj -> out_var_name_of_objn (zigname_of_qn topname obj.o_class false),
                    Zigty_id (qn_append obj.o_class "_out"))
          (List.filter (fun obj -> not (is_op obj.o_class)) objs)) in
 
@@ -676,7 +680,7 @@ let fun_def_of_step_fun n obj_env mem objs md =
       IdentSet.empty
       md.m_outputs
   in
-  let body = cstm_of_act_list out_env var_env obj_env md.m_body in
+  let body = cstm_of_act_list topname out_env var_env obj_env md.m_body in
 
   Zigfundef {
     Zig.f_name = fun_name;
@@ -690,7 +694,7 @@ let fun_def_of_step_fun n obj_env mem objs md =
 
 (** [mem_decl_of_class_def cd] returns a declaration for a Zig structure holding
     internal variables and objects of the Obc class definition [cd]. *)
-let mem_decl_of_class_def cd =
+let mem_decl_of_class_def topname cd =
   (* This one just translates the class name to a struct name following the
      convention we described above. *)
   let struct_field_of_obj_dec l od =
@@ -713,30 +717,30 @@ let mem_decl_of_class_def cd =
       let mem_fields = List.map zigvar_of_vd cd.cd_mems in
       (* Fields corresponding to object variables. *)
       let obj_fields = List.fold_left struct_field_of_obj_dec [] cd.cd_objs in
-        [Zigdecl_struct ((zigname_of_qn cd.cd_name false) ^ "_mem",
+        [Zigdecl_struct ((zigname_of_qn topname cd.cd_name false) ^ "_mem",
                        mem_fields @ obj_fields)]
     ) else
       []
 
-let out_decl_of_class_def cd =
+let out_decl_of_class_def topname cd =
   (* Fields corresponding to output variables. *)
   let step_m = find_step_method cd in
   let out_fields = List.map zigvar_of_vd step_m.m_outputs in
-    [Zigdecl_struct ((zigname_of_qn cd.cd_name false) ^ "_out", out_fields)]
+    [Zigdecl_struct ((zigname_of_qn topname cd.cd_name false) ^ "_out", out_fields)]
 
 (** [reset_fun_def_of_class_def cd] returns the defintion of the Zig function
     tasked to reset the class [cd]. *)
-let reset_fun_def_of_class_def cd =
+let reset_fun_def_of_class_def topname cd =
   let body =
     if cd.cd_stateful then
       let var_env = List.map zigvar_of_vd cd.cd_mems in
       let reset = find_reset_method cd in
-      cstm_of_act_list IdentSet.empty var_env cd.cd_objs reset.m_body
+      cstm_of_act_list topname IdentSet.empty var_env cd.cd_objs reset.m_body
     else
       []
   in
   Zigfundef {
-    Zig.f_name = (zigname_of_qn cd.cd_name false) ^ "_reset";
+    Zig.f_name = (zigname_of_qn topname cd.cd_name false) ^ "_reset";
     f_retty = Zigty_void;
     f_args = [("self", Zigty_ptr (Zigty_id (qn_append cd.cd_name "_mem")))];
     f_body = {
@@ -748,18 +752,18 @@ let reset_fun_def_of_class_def cd =
 
 (** [zigdecl_and_cfun_of_class_def cd] translates the class definition [cd] to
     a Zig program. *)
-let zigdecls_of_class_def cd =
+let zigdecls_of_class_def topname cd =
   (* We keep the state of our class in a structure, holding both internal
      variables and the state of other nodes. For a class named ["zigname"], the
      structure will be called ["zigname_mem"]. *)
   Idents.enter_node cd.cd_name;
   let step_m = find_step_method cd in
-  let memory_struct_decl = mem_decl_of_class_def cd in
-  let out_struct_decl = out_decl_of_class_def cd in
-  let step_fun_def = fun_def_of_step_fun cd.cd_name
+  let memory_struct_decl = mem_decl_of_class_def topname cd in
+  let out_struct_decl = out_decl_of_class_def topname cd in
+  let step_fun_def = fun_def_of_step_fun topname cd.cd_name
     cd.cd_objs cd.cd_mems cd.cd_objs step_m in
   (* Zig function for resetting our memory structure. *)
-  let reset_fun_def = reset_fun_def_of_class_def cd in
+  let reset_fun_def = reset_fun_def_of_class_def topname cd in
 (**  let res_fun_decl = zigdecl_of_zigfundef reset_fun_def in
   let step_fun_decl = zigdecl_of_zigfundef step_fun_def in*)
   let (decls, defs) =
@@ -773,8 +777,8 @@ let zigdecls_of_class_def cd =
 (** {2 Type translation} *)
 
 (** Translates an Obc type declaration to its Zig counterpart. *)
-let zigdecls_of_type_decl otd =
-  let name = zigname_of_qn otd.t_name true in
+let zigdecls_of_type_decl topname otd =
+  let name = zigname_of_qn topname otd.t_name true in
   match otd.t_desc with
     | Type_abs -> [] (*assert false*)
     | Type_alias ty ->
@@ -788,7 +792,7 @@ let zigdecls_of_type_decl otd =
               { var_decls = [];
                 block_body =
                   let gen_if t =
-                    let t = zigname_of_qn t true and t' = t.name in
+                    let t = zigname_of_qn topname t true and t' = t.name in
                     let funcall = Zigfun_call ("strcmp", [Zigvar "s";
                                                         Zigconst (Zigstrlit t')]) in
                     let cond = Zigbop ("==", funcall, Zigconst (Zigint 0)) in
@@ -803,7 +807,7 @@ let zigdecls_of_type_decl otd =
               { var_decls = [];
                 block_body =
                   let gen_clause t =
-                    let t = zigname_of_qn t true and t' = t.name in
+                    let t = zigname_of_qn topname t true and t' = t.name in
                     let fun_call =
                       Zigfun_call ("strcpy", [Zigvar "buf";
                                             Zigconst (Zigstrlit t')]) in
@@ -811,27 +815,27 @@ let zigdecls_of_type_decl otd =
                   [Zigswitch (Zigvar "x", map gen_clause nl);
                    Zigreturn (Zigvar "buf")]; }
           } in
-        ([Zigdecl_enum (name, List.map (fun nl -> zigname_of_qn nl true) nl)])
+        ([Zigdecl_enum (name, List.map (fun nl -> zigname_of_qn topname nl true) nl)])
     | Type_struct fl ->
         let decls = List.map (fun f -> zigname_of_name f.Signature.f_name.name,
                                 zigtype_of_otype f.Signature.f_type) fl in
         let decl = Zigdecl_struct (name, decls) in
         ([decl])
 
-let zigdecls_of_const_decl cd =
-  let name = zigname_of_qn cd.c_name false in
-  let v = zigexpr_of_static_exp cd.Obc.c_value in
+let zigdecls_of_const_decl topname cd =
+  let name = zigname_of_qn topname cd.c_name true in
+  let v = zigexpr_of_static_exp topname cd.Obc.c_value in
   let cty = zigtype_of_otype cd.Obc.c_type in
   [Zigdecl_constant (name, cty, v)]
 
-let zigdecls_of_interface_decl id = match id with
-  | Itypedef td -> zigdecls_of_type_decl td
-  | Iconstdef cd -> zigdecls_of_const_decl cd
+let zigdecls_of_interface_decl topname id = match id with
+  | Itypedef td -> zigdecls_of_type_decl topname td
+  | Iconstdef cd -> zigdecls_of_const_decl topname cd
   | _ -> []
 
-let zigdecls_of_program_decl id = match id with
-  | Ptype td -> zigdecls_of_type_decl td
-  | Pconst cd -> zigdecls_of_const_decl cd
+let zigdecls_of_program_decl topname id = match id with
+  | Ptype td -> zigdecls_of_type_decl topname td
+  | Pconst cd -> zigdecls_of_const_decl topname cd
   | _ -> []
 
 let header_of_module m = match m with
@@ -841,27 +845,18 @@ let header_of_module m = match m with
 (* Header files included in all generated XXX_types.h headers.  *)
 let common_types_c_headers = ["stdbool"; "assert"; "pervasives"]
 
-let global_file_header name prog =
+let global_file_header topname name prog =
   let dependencies = ModulSet.elements (Obc_utils.Deps.deps_program prog) in
   let dependencies = List.map header_of_module dependencies in
 
-  let dependencies_types =
-    List.map
-      (function
-          "stdio" as s -> s
-        | s -> s ^ "_types")
-      dependencies in
+  let dependencies_types = List.map 
+    (fun s -> s)  
+  dependencies in
 
   let classes = program_classes prog in
-  let decls = List.map zigdecls_of_class_def classes in
+  let decls = List.map (fun x -> zigdecls_of_class_def (String.capitalize_ascii name) x) classes in
   let decls = List.concat decls in
 
-  let filename_types = name ^ "_types" in
-  let zigdecls = List.map zigdecls_of_program_decl prog.p_desc in
-
-  let zigty_decls = zigdecls in
-  let types_zig = (filename_types ^ ".zig", ([], concat zigty_decls)) in
-
   let source =
-    (name ^ ".zig", ([], decls)) in
-  [(source); (types_zig)]
+    (name ^ ".zig", (dependencies_types, decls)) in
+  [(source)]

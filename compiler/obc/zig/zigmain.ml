@@ -17,20 +17,20 @@ let mk_float f = Zigconst (Zigfloat f)
 let step_counter = fresh "step_zig"
 and max_step = fresh"step_max"
 
-let assert_node_res cd =
+let assert_node_res topname cd =
   let stepm = find_step_method cd in
   if List.length stepm.m_inputs > 0 then
     (Format.eprintf "Cannot generate run-time check for node %s with inputs.@."
-       (zigname_of_qn cd.cd_name false);
+       (zigname_of_qn topname cd.cd_name false);
      exit 1);
   if (match stepm.m_outputs with
         | [{ v_type = Tid nbool; }] when nbool = Initial.pbool -> false
         | _ -> true) then
     (Format.eprintf
        "Cannot generate run-time check for node %s with non-boolean output.@."
-       (zigname_of_qn cd.cd_name false);
+       (zigname_of_qn topname cd.cd_name false);
      exit 1);
-  let name = zigname_of_qn cd.cd_name false in
+  let name = zigname_of_qn topname cd.cd_name false in
   let out =
     (fresh ("out_for_" ^ name),
       Zigty_id (qn_append cd.cd_name "_out")) in
@@ -67,7 +67,7 @@ let assert_node_res cd =
       } in
   (out :: mem, reset_i, step_i);;
 
-let main_def_of_class_def cd =
+let main_def_of_class_def topname cd =
   let format_for_type ty = match ty with
     | Tarray _ | Tprod _ | Tinvalid -> assert false
     | Types.Tid id when id = Initial.pfloat -> "{f}"
@@ -83,7 +83,7 @@ let main_def_of_class_def cd =
     | Types.Tid id when id = Initial.pfloat -> None
     | Types.Tid id when id = Initial.pint -> None
     | Types.Tid id when id = Initial.pbool -> None
-    | Tid tn -> Some (zigname_of_qn tn true)
+    | Tid tn -> Some (zigname_of_qn topname tn true)
   in
   let cprint_string s = Zigsexpr (Zigfun_call ("printf", [Zigconst (Zigstrlit s)])) in
 
@@ -94,7 +94,7 @@ let main_def_of_class_def cd =
         let iter_var = fresh "i" in
         let lhs = Zigarray (lhs, Zigvar iter_var) in
         let (reads, bufs) = read_lhs_of_ty lhs ty in
-        ([Zigfor (iter_var, mk_int 0, zigexpr_of_static_exp n, reads)], bufs)
+        ([Zigfor (iter_var, mk_int 0, zigexpr_of_static_exp topname n, reads)], bufs)
     | (Tid tn) as ty ->
         begin match Modules.find_type tn with
         | Talias ty -> read_lhs_of_ty lhs ty
@@ -162,7 +162,7 @@ let main_def_of_class_def cd =
         let lhs = Zigarray (lhs, Zigvar iter_var) in
         let (writes, bufs) = write_lhs_of_ty lhs ty in
         let writes_loop =
-          Zigfor (iter_var, mk_int 0, zigexpr_of_static_exp n, writes) in
+          Zigfor (iter_var, mk_int 0, zigexpr_of_static_exp topname n, writes) in
         if !Compiler_options.hepts_simulation then
           ([writes_loop], bufs)
         else
@@ -246,7 +246,7 @@ let main_def_of_class_def cd =
         map (fun vd -> Zigvar (name vd.v_ident)) stepm.m_inputs
         @ (Zigaddrof (Zigvar "_res")
            :: if cd.cd_stateful then [Zigaddrof (Zigvar "mem")] else []) in
-      Zigfun_call ((zigname_of_qn cd.cd_name true) ^ "_step", args) in
+      Zigfun_call ((zigname_of_qn topname cd.cd_name true) ^ "_step", args) in
     concat scanf_calls
     @ [Zigsexpr funcall]
     @ printf_calls
@@ -259,7 +259,7 @@ let main_def_of_class_def cd =
   (* Do not forget to initialize memory via reset if needed. *)
   let rst_i =
     if cd.cd_stateful
-    then [Zigsexpr (Zigfun_call ((zigname_of_qn cd.cd_name true) ^ "_reset",
+    then [Zigsexpr (Zigfun_call ((zigname_of_qn topname cd.cd_name true) ^ "_reset",
                              [Zigaddrof (Zigvar "mem")]))]
     else [] in
 
@@ -308,7 +308,7 @@ let main_skel var_list prologue body =
     }
   }
 
-let mk_main name p : Zig.zigfile =
+let mk_main topname name p : Zig.zigfile =
   if !Compiler_options.simulation then (
       let classes = program_classes p in
       let n_names = !Compiler_options.assert_nodes in
@@ -327,39 +327,45 @@ let mk_main name p : Zig.zigfile =
 
       let (var_l, res_l, step_l) =
         let add cd (var_l, res_l, step_l) =
-          let (var, res, step) = assert_node_res cd in
+          let (var, res, step) = assert_node_res topname cd in
           (var @ var_l, res @ res_l, step :: step_l) in
         List.fold_right add a_classes ([], [], []) in
 
       let n = !Compiler_options.simulation_node in
       let (defs, var_l, res_l, step_l) =
         try
-          let (mem, nvar_l, res, nstep_l) = main_def_of_class_def (find_class n) in
+          let (mem, nvar_l, res, nstep_l) = main_def_of_class_def topname (find_class n) in
           let defs = match mem with None -> [] | Some m -> [m] in
           (defs, nvar_l @ var_l, res @ res_l, nstep_l @ step_l)
         with Not_found -> ([],var_l,res_l,step_l) in
 
-      ("_main.zig", ([name], (defs @ [main_skel var_l res_l step_l])));
+      ("main.zig", ([name], (defs @ [main_skel var_l res_l step_l])));
   ) else
-    ("_lolz.zig", ([], []))
+    ("null.zig", ([], []))
 
 
 
 (******************************)
 
-let translate name prog =
+let translate topname name prog =
   let modname = (Filename.basename name) in
   global_name := String.capitalize_ascii modname;
-  (global_file_header modname prog) @ ([mk_main name prog])
+  (global_file_header topname modname prog) @ ([mk_main "Main" name prog])
 
 let program p =
   let filename =
     filename_of_name (zigname_of_name (modul_to_string p.p_modname)) in
   let dirname = build_path (filename ^ "_zig") in
   let dir = clean_dir dirname in
-  let zig_ast = translate filename p in
-  let zig_ast = if !Compiler_options.unroll_loops then List.map Zigunroll.zigfile zig_ast else zig_ast in
-  Zig.output dir zig_ast
+  let topname = String.capitalize_ascii filename in
+  let modname = (Filename.basename filename) in
+  global_name := String.capitalize_ascii modname;
+  let glob = (global_file_header topname modname p) in
+  let main = ([mk_main "Main" filename p]) in
+  let glob = if !Compiler_options.unroll_loops then List.map Zigunroll.zigfile glob else glob in
+  let main = if !Compiler_options.unroll_loops then List.map Zigunroll.zigfile main else main in
+  Zig.output topname dir glob;
+  Zig.output "main" dir main
 
 let interface i = ()
   (*let filename =

@@ -52,6 +52,8 @@ let pervasives_qn name = { qual = Pervasives; name = name }
 
 let local_qn name = { qual = LocalModule; name = name }
 
+let namespaced_name name = { qual = Module "l"; name = name}
+
 
 module NamesEnv = struct
   include (Map.Make(struct type t = name let compare = compare end))

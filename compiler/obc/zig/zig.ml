@@ -108,28 +108,31 @@ and pp_list f sep fmt l = match l with
 let pp_string fmt s =
   fprintf fmt "%s" (zigname_of_name s)
 
-let rec modul_to_zigname q is_module = match q with
+let rec modul_to_zigname name q is_module = match q with
   | Pervasives | LocalModule -> ""
-  | Module m -> m ^ (if is_module then "__" else "__") (* "." *)
+  | Module m -> 
+    (* Horrible fix *)
+    if m = name then m ^ "__" else
+      m ^ (if is_module then "." else "__") (* "." *)
   | QualModule { qual = q; name = n } ->
-      (modul_to_zigname q is_module)^n^"__"
+      (modul_to_zigname name q is_module)^n^"__"
 
-let zigname_of_qn qn is_module =
-  (modul_to_zigname qn.qual is_module) ^ qn.name
+let zigname_of_qn name qn is_module =
+  (modul_to_zigname name qn.qual is_module) ^ qn.name
 
-let pp_qualname fmt q is_module =
-  pp_string fmt (zigname_of_qn q is_module)
+let pp_qualname fmt name q is_module =
+  pp_string fmt (zigname_of_qn name q is_module)
 
 let pp_shortname fmt q =
   pp_string fmt q.name
 
-let rec pp_zigty fmt zigty = match zigty with
+let rec pp_zigty fmt topname zigty = match zigty with
   | Zigty_int -> fprintf fmt "isize" (* Kinda important! *)
   | Zigty_float -> fprintf fmt "f32"
   | Zigty_char -> fprintf fmt "u8" (* ! Or maybe signed ? *)
-  | Zigty_id s -> pp_qualname fmt s true
-  | Zigty_ptr zigty' -> fprintf fmt "*%a" pp_zigty zigty'
-  | Zigty_arr (n, zigty') -> fprintf fmt "%a[%d]" pp_zigty zigty' n
+  | Zigty_id s -> pp_qualname fmt topname s true
+  | Zigty_ptr zigty' -> fprintf fmt "*%a" (fun x y -> pp_zigty x topname y) zigty'
+  | Zigty_arr (n, zigty') -> fprintf fmt "%a[%d]" (fun x y -> pp_zigty x topname y) zigty' n
   | Zigty_void -> fprintf fmt "void"
 
 let rec pp_array_decl zigty =
@@ -141,33 +144,33 @@ let rec pp_array_decl zigty =
 
 let truc = 0;;
 
-let rec pp_paramdecl fmt (s, zigty) = match zigty with
+let rec pp_paramdecl fmt topname (s, zigty) = match zigty with
   | Zigty_arr _ ->
     let ty, indices = pp_array_decl zigty in
-    fprintf fmt "%a %a%s = undefined" pp_zigty ty  pp_string s indices
-  | _ -> fprintf fmt "%a: %a" pp_string s pp_zigty zigty  
+    fprintf fmt "%a %a%s = undefined" (fun x y -> pp_zigty x topname y) ty  pp_string s indices
+  | _ -> fprintf fmt "%a: %a" pp_string s (fun x y -> pp_zigty x topname y) zigty  
 
 
-let rec pp_vardecl fmt (s, zigty) = match zigty with
+let rec pp_vardecl fmt topname (s, zigty) = match zigty with
   | Zigty_arr _ ->
       let ty, indices = pp_array_decl zigty in
-      fprintf fmt "%a %a%s = undefined" pp_zigty ty  pp_string s indices
-  | _ -> fprintf fmt "var %a: %a = undefined" pp_string s pp_zigty zigty  
-and pp_param_list fmt l = pp_list1 pp_paramdecl "," fmt l
-and pp_var_list fmt l = pp_list pp_vardecl ";" fmt l
+      fprintf fmt "%a %a%s = undefined" (fun x y -> pp_zigty x topname y) ty  pp_string s indices
+  | _ -> fprintf fmt "var %a: %a = undefined" pp_string s (fun x y -> pp_zigty x topname y) zigty  
+and pp_param_list fmt topname l = pp_list1 (fun x y -> pp_paramdecl x topname y) "," fmt l
+and pp_var_list fmt topname l = pp_list (fun x y -> pp_paramdecl x topname y) ";" fmt l
 
-let rec pp_zigblock fmt cb =
-  let pp_varlist = pp_list pp_vardecl ";" in
+let rec pp_zigblock fmt topname cb =
+  let pp_varlist = pp_list (fun x y -> pp_vardecl x topname y) ";" in
   fprintf fmt "%a \n %a" 
     pp_varlist cb.var_decls 
-    pp_zigstm_list cb.block_body
-and pp_zigstm_list fmt stml = pp_list pp_zigstm "" fmt stml
-and pp_zigstm fmt stm = match stm with
+    (fun x y -> pp_zigstm_list x topname y) cb.block_body
+and pp_zigstm_list fmt topname stml = pp_list (fun x y -> pp_zigstm x topname y) "" fmt stml
+and pp_zigstm fmt topname stm = match stm with
   | Zigsexpr e -> fprintf fmt "%a;" pp_zigexpr e
   | Zigswitch (e, cl) ->
       let pp_clause fmt (tag, stml) =
         fprintf fmt "@[<v 2>case %a:%a@ break;@]"
-          pp_zigexpr (Zigconst (Zigtag tag)) pp_zigstm_list stml in
+          pp_zigexpr (Zigconst (Zigtag tag)) (fun x y -> pp_zigstm_list x topname y) stml in
       fprintf fmt
         "@[<v>@[<v 2>switch (%a) {%a@ @[<v 2>default:@ break;@]@]@ }@]"
         pp_zigexpr e (pp_list pp_clause "") cl
@@ -175,20 +178,20 @@ and pp_zigstm fmt stm = match stm with
       fprintf fmt "%a = %a;" pp_ziglhs lhs pp_zigexpr e
   | Zigif (c, t, []) ->
       fprintf fmt "@[<v>@[<v 2>if (%a) {%a@]@ }@]"
-        pp_zigexpr c pp_zigstm_list t
+        pp_zigexpr c (fun x y -> pp_zigstm_list x topname y) t
   | Zigif (c, t, e) ->
       fprintf fmt "@[<v>@[<v 2>if (%a) {%a@]@ @[<v 2>} else {%a@]@ }@]"
-        pp_zigexpr c pp_zigstm_list t pp_zigstm_list e
+        pp_zigexpr c (fun x y -> pp_zigstm_list x topname y) t (fun x y -> pp_zigstm_list x topname y) e
   | Zigfor(x, lower, upper, e) ->
       fprintf fmt
         "@[<v>@[<v 2>{@\nint %a = %a;@\n@[<v 2>while (%a < %a) : (%a += 1) {%a@]@ }@]@\n}@]"
         pp_string x pp_zigexpr lower  
         pp_string x pp_zigexpr upper  
         pp_string x  
-        pp_zigstm_list e
+        (fun x y -> pp_zigstm_list x topname y) e
   | Zigwhile (e, b) ->
-      fprintf fmt "@[<v>@[<v 2>while (%a) {%a@]@ }@]" pp_zigexpr e pp_zigstm_list b
-  | Zigsblock cb -> pp_zigblock fmt cb
+      fprintf fmt "@[<v>@[<v 2>while (%a) {%a@]@ }@]" pp_zigexpr e (fun x y -> pp_zigstm_list x topname y) b
+  | Zigsblock cb -> (fun x y -> pp_zigblock x topname y) fmt cb
   | Zigskip -> fprintf fmt ""
   | Zigreturn e -> fprintf fmt "return %a;" pp_zigexpr e
 
@@ -244,7 +247,7 @@ and pp_zigconst fmt zigconst = match zigconst with
 let add_struct struct_name fields =
   structs := StructMap.add struct_name fields !structs;;
 
-let pp_zigdecl fmt zigdecl = match zigdecl with
+let pp_zigdecl fmt topname zigdecl = match zigdecl with
   | Zigdecl_enum (s, sl) ->
     (* Original was "@[<v>@[<v 2>typedef enum {@ %a@]@ } %a;@ @]@\n" *)
       fprintf fmt "@[<v>const %a = struct {@ %a@}]@\n" 
@@ -253,44 +256,45 @@ let pp_zigdecl fmt zigdecl = match zigdecl with
       let fields, _ = List.split fl in
       add_struct s fields;
       let pp_field fmt (s, zigty) =
-        fprintf fmt "@ %a," pp_paramdecl (s,zigty) in
+        fprintf fmt "@ %a," (fun x y -> pp_paramdecl x topname y) (s,zigty) in
       fprintf fmt "@[<v>@[<v 2>const %a = struct {"  pp_string s;
       List.iter (pp_field fmt) fl;
       fprintf fmt "@]@ };@ @]@\n"
   | Zigdecl_constant (n, zigty, ce) ->
       fprintf fmt "@[<v>static const %a = %a;@ @]@\n"
-        pp_vardecl (n, zigty)  pp_zigconst_expr ce
+      (fun x y -> pp_vardecl x topname y) (n, zigty)  pp_zigconst_expr ce
   | Zigfundef zigfd ->
     fprintf fmt
       "@[<v>@[<v 2>pub fn %a(@[<hov>%a@]) %a {%a @]@ }@ @]@\n"
       pp_string zigfd.f_name 
-      pp_param_list zigfd.f_args 
-      pp_zigty zigfd.f_retty
-      pp_zigblock zigfd.f_body
+      (fun x y -> pp_param_list x topname y) zigfd.f_args 
+      (fun x y -> pp_zigty x topname y) zigfd.f_retty
+      (fun x y -> pp_zigblock x topname y) zigfd.f_body
   | Zigvardef (s, zigty) -> 
     fprintf fmt "var %a: %a = undefined;@\n" 
       pp_string s 
-      pp_zigty zigty  
+      (fun x y -> pp_zigty x topname y) zigty  
 
-let pp_zigfile_desc fmt filen zigfile =
+let pp_zigfile_desc fmt topname filen zigfile =
   (* [filen_wo_ext] is the file's name without the extension. *)
   let filen_wo_ext = String.sub filen 0 (String.length filen - 2) in
   let (deps, zigdecls) = zigfile in
-  iter (fun d -> fprintf fmt "const %s = @include(\"%s.zig\");@\n" d d) deps;
-  iter (pp_zigdecl fmt) zigdecls;;
+  iter (fun d -> fprintf fmt "const %s = @import(\"%s.zig\");@\n" (String.capitalize_ascii d) d) deps;
+  fprintf fmt "\n";
+  iter ((fun x y -> pp_zigdecl x topname y) fmt) zigdecls;;
 
 
-let output_zigfile dir (filen, zigfile_desc) =
+let output_zigfile topname dir (filen, zigfile_desc) =
   if !Compiler_options.verbose then
     Format.printf "ZIG generating %s/%s@." dir filen;
   let oc = open_out (Filename.concat dir filen) in
   let fmt = Format.formatter_of_out_channel oc in
-  pp_zigfile_desc fmt filen zigfile_desc;
+  pp_zigfile_desc fmt topname filen zigfile_desc;
   pp_print_flush fmt ();
   close_out oc
   
-let output dir zigprog =
-  List.iter (output_zigfile dir) zigprog
+let output topname dir zigprog =
+  List.iter (output_zigfile topname dir) zigprog
 
 let is_pointer_type = function
   | Zigty_ptr _ -> true
