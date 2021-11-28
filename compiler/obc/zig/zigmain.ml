@@ -85,7 +85,7 @@ let main_def_of_class_def topname cd =
     | Types.Tid id when id = Initial.pbool -> None
     | Tid tn -> Some (zigname_of_qn topname tn true)
   in
-  let cprint_string s = Zigsexpr (Zigfun_call ("printf", [Zigconst (Zigstrlit s)])) in
+  let cprint_string s = Zigsexpr (Zigfun_call ("printf", [Zigconst (Zigstrlit s); ZigUnnamedStruct ([])])) in
 
   (* Generates scanf statements. *)
   let rec read_lhs_of_ty lhs ty =
@@ -135,7 +135,7 @@ let main_def_of_class_def topname cd =
                 else
                   Zigsexpr (Zigfun_call ("printf",
                                      Zigconst (Zigstrlit printf_s)
-                                     :: args_format_s))
+                                     :: [ZigUnnamedStruct args_format_s]))
                   :: body in
               Zigsblock { var_decls = [];
                         block_body = body; } in

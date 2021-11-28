@@ -279,6 +279,7 @@ let pp_zigfile_desc fmt topname filen zigfile =
   (* [filen_wo_ext] is the file's name without the extension. *)
   let filen_wo_ext = String.sub filen 0 (String.length filen - 2) in
   let (deps, zigdecls) = zigfile in
+  fprintf fmt "const print = @import(\"std\").debug.print;\n";
   iter (fun d -> fprintf fmt "const %s = @import(\"%s.zig\");@\n" (String.capitalize_ascii d) d) deps;
   fprintf fmt "\n";
   iter ((fun x y -> pp_zigdecl x topname y) fmt) zigdecls;;

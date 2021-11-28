@@ -314,7 +314,7 @@ and cop_of_op_aux (topname: string) op_name cexps = match op_name with
     | { qual = Module "Iostream"; name = "fprintf" } ->
       let file, s, args = assert_2min cexps in
       let s = zigformat_of_format s in
-      Zigfun_call("fprintf", file::s::args)
+      Zigfun_call("fprintf", [ZigUnnamedStruct(file::s::args)])
     | { name = op } -> Zigfun_call(op,cexps)
 
 and cop_of_op (topname: string) out_env var_env op_name exps =
