@@ -23,6 +23,7 @@ let zigname_of_name name =
 
 type zigty =
   | Zigty_int
+  | Zigty_bool
   | Zigty_float
   | Zigty_char
   | Zigty_id of qualname
@@ -51,6 +52,7 @@ and zigexpr =
 
 and zigconst =
   | Zigint of int
+  | Zigbool of bool
   | Zigfloat of float
   | Zigtag of string
   | Zigstrlit of string
@@ -128,6 +130,7 @@ let pp_shortname fmt q =
 
 let rec pp_zigty fmt topname zigty = match zigty with
   | Zigty_int -> fprintf fmt "isize" (* Kinda important! *)
+  | Zigty_bool -> fprintf fmt "bool"
   | Zigty_float -> fprintf fmt "f32"
   | Zigty_char -> fprintf fmt "u8" (* ! Or maybe signed ? *)
   | Zigty_id s -> pp_qualname fmt topname s true
@@ -238,6 +241,7 @@ and pp_ziglhs fmt ziglhs = match ziglhs with
         pp_zigexpr e
 
 and pp_zigconst fmt zigconst = match zigconst with
+  | Zigbool b -> fprintf fmt "%s" (if b then "true" else "false")
   | Zigint i -> fprintf fmt "%d" i
   | Zigfloat f -> fprintf fmt "%f" f
   | Zigtag t -> pp_string fmt t
@@ -257,7 +261,7 @@ let pp_zigdecl fmt topname zigdecl = match zigdecl with
       add_struct s fields;
       let pp_field fmt (s, zigty) =
         fprintf fmt "@ %a," (fun x y -> pp_paramdecl x topname y) (s,zigty) in
-      fprintf fmt "@[<v>@[<v 2>const %a = struct {"  pp_string s;
+      fprintf fmt "@[<v>@[<v 2>pub const %a = struct {"  pp_string s;
       List.iter (pp_field fmt) fl;
       fprintf fmt "@]@ };@ @]@\n"
   | Zigdecl_constant (n, zigty, ce) ->

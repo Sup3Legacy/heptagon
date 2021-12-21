@@ -88,7 +88,7 @@ let rec zigtype_of_otype oty =
   match oty with
     | Types.Tid id when id = Initial.pint -> Zigty_int
     | Types.Tid id when id = Initial.pfloat -> Zigty_float
-    | Types.Tid id when id = Initial.pbool -> Zigty_int
+    | Types.Tid id when id = Initial.pbool -> Zigty_bool
     | Tid id -> Zigty_id id
     | Tarray(ty, n) -> Zigty_arr(int_of_static_exp n, zigtype_of_otype ty)
     | Tprod _ -> assert false
@@ -103,8 +103,8 @@ let (has_native_zig_op, native_zig_op_of) =
 
       (["="], "==");
       (["<>"], "!=");
-      (["&"], "&&");
-      (["or"], "||");
+      (["&"], " and ");
+      (["or"], " or ");
       (["xor"], "^");
 
       (["+"; "+."], "+");
