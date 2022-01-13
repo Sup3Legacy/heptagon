@@ -123,7 +123,6 @@ let generate_target p out s =
         let p_list = callgraph p in
         do_silent_pass "Code generation from Minils (w/o params)" (List.iter convert_fun) p_list
     | Obc_no_params convert_fun ->
-      print_endline "Ousp";
         let p_list = callgraph p in
         let o_list = mls2obc_list p_list in
         let o_list = List.map (Obc_compiler.compile_program out) o_list in
